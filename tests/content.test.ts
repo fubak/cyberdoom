@@ -32,6 +32,59 @@ function reachableExit(m: Mission): boolean {
   return false;
 }
 
+/** Protected gates deliberately keep the critical path inaccessible without a badge. */
+function reachableGatedExit(m: Mission): boolean {
+  const grid = m.map.grid;
+  const h = grid.length;
+  const w = grid[0].length;
+  const passable = (x: number, y: number) => {
+    const c = m.map.legend[grid[y][x]];
+    return c && c.kind !== 'wall' &&
+      !(c.kind === 'door' && (c.locked || (c.accessRole && !c.secret)));
+  };
+  const sx = Math.floor(m.map.spawn.x);
+  const sy = Math.floor(m.map.spawn.y);
+  const seen = new Set<string>([`${sx},${sy}`]);
+  const q: [number, number][] = [[sx, sy]];
+  while (q.length) {
+    const [x, y] = q.shift()!;
+    if (m.map.legend[grid[y][x]]?.kind === 'exit') return true;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = x + dx;
+      const ny = y + dy;
+      if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+      if (seen.has(`${nx},${ny}`) || !passable(nx, ny)) continue;
+      seen.add(`${nx},${ny}`);
+      q.push([nx, ny]);
+    }
+  }
+  return false;
+}
+
+function reachableArea(m: Mission, area: [number, number, number, number]): boolean {
+  const grid = m.map.grid;
+  const h = grid.length;
+  const w = grid[0].length;
+  const sx = Math.floor(m.map.spawn.x);
+  const sy = Math.floor(m.map.spawn.y);
+  const seen = new Set<string>([`${sx},${sy}`]);
+  const q: [number, number][] = [[sx, sy]];
+  while (q.length) {
+    const [x, y] = q.shift()!;
+    if (x >= area[0] && x <= area[2] && y >= area[1] && y <= area[3]) return true;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = x + dx;
+      const ny = y + dy;
+      if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+      const cell = m.map.legend[grid[ny][nx]];
+      if (seen.has(`${nx},${ny}`) || cell?.kind === 'wall') continue;
+      seen.add(`${nx},${ny}`);
+      q.push([nx, ny]);
+    }
+  }
+  return false;
+}
+
 describe('objective catalog', () => {
   it('covers all 5 domains', () => {
     for (let d = 1; d <= 5; d++) {
@@ -46,8 +99,8 @@ describe('objective catalog', () => {
 
 describe('missions', () => {
   const missions = missionRegistry.all();
-  it('has at least 3 missions', () => {
-    expect(missions.length).toBeGreaterThanOrEqual(3);
+  it('has at least 4 missions', () => {
+    expect(missions.length).toBeGreaterThanOrEqual(4);
   });
   it('difficulty increases', () => {
     const d = missions.map((m) => m.difficulty);
@@ -76,6 +129,20 @@ describe('missions', () => {
       });
       it('exit is reachable from spawn', () => {
         expect(reachableExit(m)).toBe(true);
+      });
+      it('critical path is gated', () => {
+        expect(reachableGatedExit(m)).toBe(false);
+      });
+      it('has two reachable secrets with doors open', () => {
+        const secrets = m.script?.secrets ?? [];
+        expect(secrets.length).toBeGreaterThanOrEqual(2);
+        for (const secret of secrets.slice(0, 2)) {
+          expect(reachableArea(m, secret.area)).toBe(true);
+        }
+      });
+      it('is at least 40 by 28 tiles', () => {
+        expect(m.map.grid[0].length).toBeGreaterThanOrEqual(40);
+        expect(m.map.grid.length).toBeGreaterThanOrEqual(28);
       });
       it('entities sit on non-wall cells inside the map', () => {
         for (const e of m.entities) {

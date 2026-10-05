@@ -1,10 +1,17 @@
 import type { Mission } from '../../core/types';
 import type { MissionTeaching } from '../curriculum';
+import type { WalkStep } from '../../missions/walkthroughs';
+import { lightRects } from '../../missions/levelkit';
 
 /**
- * M1 "Patch Tuesday" — malware indicators, endpoint protection, removable media.
- * Difficulty 1. Clean infected workstations with the USB scanner (slot 3),
- * do NOT plug in the found USB, reach the exit.
+ * M1 "Patch Tuesday" — antimalware, endpoint hygiene, removable media.
+ * Difficulty 1 (rookie). Critical path, two concept gates:
+ *   1. Turn the found USB in at the Security Desk → IT OPS badge role →
+ *      server room (patient zero lives there). Plugging it into the spare PC
+ *      FAILS the mission.
+ *   2. QUARANTINE exit door opens only once every infected host is clean.
+ * Loop: hub → IT OPS door → server room → back door → south corridor → hub.
+ * Secrets: lobby supply closet (brick), cable crawlspace above the racks.
  */
 export const m01: Mission = {
   id: 'm01',
@@ -21,38 +28,95 @@ export const m01: Mission = {
   authorizedRoles: ['staff'],
   map: {
     grid: [
-      '############',
-      '#..........#',
-      '#.##....##.#',
-      '#.#......#.#',
-      '#.#......#.#',
-      '#.##.##.##.#',
-      '#..........#',
-      '#....E.....#',
-      '############',
+      '###############################SSSSSSSSS',
+      '################...EE...#######S.......S',
+      '################........#######S.......S',
+      '################........######SSSSSSS2SS',
+      '################........######S........S',
+      '###################QQ#########S........S',
+      '##.......#....................S..SSSS..S',
+      '##.......#....................S........S',
+      '##.......#...##..........##...S........S',
+      '##.......d....................S..SSSS..S',
+      '##.......#.........SS.........I........S',
+      '##.......#.........SS.........S........S',
+      '##.......#...##..........##...S..SSSS..S',
+      '##########....................S........S',
+      '######........................S........S',
+      '######........................SSSSJSSSSS',
+      '######..##############oo##########.#####',
+      '######..##############..##########.#####',
+      '######..##############...............###',
+      '######..##############...............###',
+      '###BBB..BBBBBBB###############rr########',
+      '###B..........B###############..########',
+      'BBBB..........B#......................##',
+      'B..B..........B#......................##',
+      'B..1..........B#....##.....##.........##',
+      'B..B..........p.....##.....##.........##',
+      'BBBB..........B#......................##',
+      '###B..........B#......................##',
+      '###B..........B#########################',
+      '###BBBBBBBBBBBB#########################',
     ],
     legend: {
       '#': { kind: 'wall', tex: 'wall-panel' },
+      'S': { kind: 'wall', tex: 'wall-server' },
+      'B': { kind: 'wall', tex: 'wall-brick' },
       '.': { kind: 'floor', tex: 'floor' },
       'E': { kind: 'exit', tex: 'exit' },
+      'd': { kind: 'door', tex: 'door', doorId: 'secdesk' },
+      'o': { kind: 'door', tex: 'door', doorId: 'south' },
+      'p': { kind: 'door', tex: 'door', doorId: 'print' },
+      'r': { kind: 'door', tex: 'door', doorId: 'print-north' },
+      'I': { kind: 'door', tex: 'door', doorId: 'itops', accessRole: 'itops' },
+      'J': { kind: 'door', tex: 'door', doorId: 'itops-back', accessRole: 'itops' },
+      'Q': {
+        kind: 'door', tex: 'door', doorId: 'quarantine', locked: true,
+        lockText: 'QUARANTINE: exit stays sealed until every infected host is clean',
+      },
+      '1': { kind: 'door', tex: 'wall-brick', doorId: 'secret-closet', secret: true },
+      '2': { kind: 'door', tex: 'wall-server', doorId: 'secret-crawl', secret: true },
     },
-    spawn: { x: 2, y: 1.5, angle: Math.PI / 2 },
-    defaultLight: 0.85,
+    spawn: { x: 7.0, y: 26.5, angle: -Math.PI / 2 },
+    defaultLight: 0.8,
+    lights: lightRects([[10, 6, 29, 15, 0.85], [4, 21, 13, 28, 0.9], [6, 14, 7, 20, 0.55], [6, 16, 7, 18, 1.0], [2, 6, 8, 12, 0.8], [31, 4, 38, 14, 0.45], [36, 12, 38, 14, 0.7], [32, 1, 38, 2, 0.35], [1, 23, 2, 25, 0.35], [16, 1, 23, 4, 1.0], [22, 16, 36, 19, 0.5], [16, 21, 37, 27, 0.6]]),
   },
   entities: [
     {
-      id: 'ws1', kind: 'workstation', x: 5, y: 3.5, sprite: 'workstation-infected',
-      infected: true, tags: ['infected'],
+      id: 'found-usb', kind: 'item', x: 6.5, y: 17.5, sprite: 'usb', carry: true,
+      tags: ['found-usb'],
       inspect: {
-        label: 'WS-04 (accounts payable)',
-        detail: 'Pop-ups: "VIRUS DETECTED, call 1-800 support". Browser homepage changed overnight. New toolbar; proxy log shows it contacting tr4ck-cdn.biz every 60 s, even when idle.',
-        category: 'malware',
-        objectives: ['2.4'],
-        flags: ['unexpected pop-ups', 'changed settings', 'unknown outbound beacon'],
+        label: 'USB stick labeled "Q3 BONUSES"',
+        detail: 'Found on the corridor floor near the lifts. No name, no asset tag. Generic 32 GB drive.',
+        category: 'item',
+        objectives: ['2.2', '5.6'],
       },
     },
     {
-      id: 'ws2', kind: 'workstation', x: 8, y: 4.5, sprite: 'workstation-infected',
+      id: 'sec-desk', kind: 'console', x: 3.5, y: 9.5, sprite: 'console',
+      tags: ['security-desk'], accepts: 'found-usb', grants: { resource: 'role:itops', amount: 1 },
+      log: 'SECURITY DESK: lost & found / unknown media drop.\nHand over found devices. Do NOT plug them in.',
+      inspect: {
+        label: 'Security Desk',
+        detail: 'Drop point for found or suspicious devices. Security analyses them in an isolated sandbox.',
+        category: 'legit',
+        objectives: ['2.2', '5.6'],
+      },
+    },
+    {
+      id: 'spare-pc', kind: 'workstation', x: 16.5, y: 7.5, sprite: 'workstation',
+      tags: ['plug-usb'], accepts: 'found-usb',
+      log: 'Spare PC: nobody logged in, front USB port free.',
+      inspect: {
+        label: 'Unlocked spare PC',
+        detail: 'Logged-in session, no owner, open USB port.',
+        category: 'legit',
+        objectives: ['2.2'],
+      },
+    },
+    {
+      id: 'ws1', kind: 'workstation', x: 12.5, y: 10.5, sprite: 'workstation-infected',
       infected: true, tags: ['infected'],
       inspect: {
         label: 'WS-07 (finance)',
@@ -63,7 +127,18 @@ export const m01: Mission = {
       },
     },
     {
-      id: 'ws3', kind: 'workstation', x: 2, y: 6.5, sprite: 'workstation-infected',
+      id: 'ws2', kind: 'workstation', x: 27.5, y: 14.5, sprite: 'workstation-infected',
+      infected: true, tags: ['infected'],
+      inspect: {
+        label: 'WS-04 (accounts payable)',
+        detail: 'Pop-ups: "VIRUS DETECTED, call 1-800 support". Browser homepage changed overnight. New toolbar; proxy log shows it contacting tr4ck-cdn.biz every 60 s, even when idle.',
+        category: 'malware',
+        objectives: ['2.4'],
+        flags: ['unexpected pop-ups', 'changed settings', 'unknown outbound beacon'],
+      },
+    },
+    {
+      id: 'ws3', kind: 'workstation', x: 37.5, y: 13.5, sprite: 'workstation-infected',
       infected: true, tags: ['infected'],
       inspect: {
         label: 'WS-12 (reception)',
@@ -74,31 +149,61 @@ export const m01: Mission = {
       },
     },
     {
-      id: 'found-usb', kind: 'item', x: 6, y: 1.5, sprite: 'usb',
-      tags: ['found-usb'],
+      id: 'ws-clean', kind: 'workstation', x: 23.5, y: 6.5, sprite: 'workstation',
       inspect: {
-        label: 'USB stick labeled "Q3 BONUSES"',
-        detail: 'Found on the corridor floor near the lifts. No name, no asset tag. Generic 32 GB drive.',
-        category: 'item',
-        objectives: ['2.2', '5.6'],
+        label: 'Workstation MKT-11',
+        detail: 'Patched last night, AV signatures current, no unusual processes.',
+        category: 'legit',
       },
     },
-    {
-      id: 'charge1', kind: 'item', x: 10, y: 1.5, sprite: 'charge',
-      tags: ['charge'], grants: { resource: 'usb-charge', amount: 4 },
-      inspect: {
-        label: 'Scanner charges',
-        detail: 'Fresh antimalware definitions. Signature-based protection is only as good as its latest update (2.5).',
-        category: 'item',
-        objectives: ['2.5'],
-      },
-    },
+    { id: 'worm-hub', kind: 'enemy', x: 21.5, y: 13.5, sprite: 'worm', ai: 'chase', hp: 1, infected: true, tags: ['malware'],
+      inspect: { label: 'Worm', detail: 'Self-replicating: spreads host to host with no user action.', category: 'malware', objectives: ['2.4'] } },
+    { id: 'worm-print', kind: 'enemy', x: 33.5, y: 23.5, sprite: 'worm', ai: 'wander', hp: 1, infected: true, tags: ['malware'],
+      inspect: { label: 'Worm', detail: 'Scanning the print VLAN for open SMB shares.', category: 'malware', objectives: ['2.4'] } },
+    { id: 'worm-lobby', kind: 'enemy', x: 11.5, y: 22.5, sprite: 'worm', ai: 'chase', hp: 1, infected: true, dormant: true, tags: ['malware'],
+      inspect: { label: 'Worm', detail: 'Followed you in from the lobby kiosk.', category: 'malware', objectives: ['2.4'] } },
+    { id: 'trojan-a', kind: 'enemy', x: 37.5, y: 4.5, sprite: 'trojan', ai: 'chase', hp: 2, infected: true, dormant: true, tags: ['malware'],
+      inspect: { label: 'Trojan', detail: 'Posed as a "driver update". Needs the user to run it; does not self-spread.', category: 'malware', objectives: ['2.4'] } },
+    { id: 'trojan-b', kind: 'enemy', x: 31.5, y: 13.5, sprite: 'trojan', ai: 'chase', hp: 2, infected: true, dormant: true, tags: ['malware'],
+      inspect: { label: 'Trojan', detail: 'Posed as a "driver update". Needs the user to run it; does not self-spread.', category: 'malware', objectives: ['2.4'] } },
+    { id: 'chg-hub', kind: 'item', x: 10.5, y: 6.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 4 },
+      inspect: { label: 'Scanner charges', detail: 'Fresh antimalware definitions: ammo for the USB scanner.', category: 'item' } },
+    { id: 'chg-desk', kind: 'item', x: 7.5, y: 7.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 4 },
+      inspect: { label: 'Scanner charges', detail: 'Fresh antimalware definitions: ammo for the USB scanner.', category: 'item' } },
+    { id: 'chg-south', kind: 'item', x: 36.5, y: 18.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 4 },
+      inspect: { label: 'Scanner charges', detail: 'Fresh antimalware definitions: ammo for the USB scanner.', category: 'item' } },
+    { id: 'chg-print', kind: 'item', x: 17.5, y: 26.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 4 },
+      inspect: { label: 'Scanner charges', detail: 'Fresh antimalware definitions: ammo for the USB scanner.', category: 'item' } },
+    { id: 'med-closet', kind: 'item', x: 1.5, y: 24.5, sprite: 'medkit', grants: { resource: 'integrity', amount: 25 },
+      inspect: { label: 'Integrity kit', detail: 'Restores 25 integrity.', category: 'item' } },
+    { id: 'chg-closet', kind: 'item', x: 1.5, y: 23.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 4 },
+      inspect: { label: 'Scanner charges', detail: 'Fresh antimalware definitions: ammo for the USB scanner.', category: 'item' } },
+    { id: 'chg-crawl', kind: 'item', x: 33.5, y: 1.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 6 },
+      inspect: { label: 'Scanner charges', detail: 'Fresh antimalware definitions: ammo for the USB scanner.', category: 'item' } },
+    { id: 'med-crawl', kind: 'item', x: 37.5, y: 1.5, sprite: 'medkit', grants: { resource: 'integrity', amount: 25 },
+      inspect: { label: 'Integrity kit', detail: 'Restores 25 integrity.', category: 'item' } },
   ],
   missionObjectives: [
+    { id: 'turn-in', text: 'Turn the found USB in at the Security Desk', kind: 'interact', tag: 'security-desk' },
     { id: 'clean-all', text: 'Clean all 3 infected workstations', kind: 'clean', tag: 'infected', count: 3 },
-    { id: 'no-usb', text: 'Handle the found USB stick per policy', kind: 'avoid', tag: 'found-usb' },
+    { id: 'no-plug', text: 'Never plug in unknown media', kind: 'avoid', tag: 'plug-usb' },
     { id: 'exit', text: 'Reach the exit', kind: 'reach-exit' },
   ],
+  script: {
+    par: 150,
+    triggers: [
+      { id: 'usb-ambush', area: [6, 17, 7, 17], spawn: ['worm-lobby'], kind: 'warn',
+        message: 'Worm alert: lateral movement behind you in the lobby!' },
+      { id: 'server-ambush', area: [31, 9, 32, 11], spawn: ['trojan-a', 'trojan-b'], kind: 'bad',
+        message: 'Trojans were hiding between the racks!' },
+      { id: 'containment', after: ['clean-all'], openDoors: ['quarantine'], kind: 'good',
+        message: 'All hosts clean: quarantine lifted, exit unsealed.' },
+    ],
+    secrets: [
+      { id: 'closet', area: [1, 23, 2, 25], label: 'Supply closet' },
+      { id: 'crawl', area: [32, 1, 38, 2], label: 'Cable crawlspace' },
+    ],
+  },
   debriefQuestions: [
     {
       id: 'q1',
@@ -158,6 +263,23 @@ export const m01: Mission = {
   ],
 };
 
+export const m01Walkthrough: WalkStep[] = [
+  { goto: [6, 17] },
+  { goto: [10, 9] },
+  { use: [9, 9] },
+  { goto: [4, 9] },
+  { interact: 'sec-desk' },
+  { clean: 'ws1' },
+  { goto: [29, 10] },
+  { badge: [30, 10] },
+  { goto: [31, 10] },
+  { goto: [36, 13] },
+  { clean: 'ws3' },
+  { clean: 'ws2' },
+  { wait: 0.2 },
+  { goto: [19, 1] },
+];
+
 export const m01Teach: MissionTeaching = {
   situation:
     'Patch Tuesday went wrong. Three workstations on the 4th floor are throwing indicators of malicious activity, and someone left a USB stick in the corridor. You are first on scene.',
@@ -174,15 +296,20 @@ export const m01Teach: MissionTeaching = {
       done: 'All infected hosts were cleaned. Endpoint protection is a hardening control (2.5), but cleaning only fixes the symptom. Patch the hole the worm used, or it comes back.',
       missed: 'Some infected hosts are still live. A worm on WS-12 keeps scanning port 445 and infecting peers, so every minute you wait adds hosts to clean up. Contain and clean first.',
     },
-    'no-usb': {
+    'no-plug': {
       objective: '2.2',
       done: 'You left the found drive alone. Removable devices are a listed threat vector (2.2). The correct awareness response is to hand them to security and report (5.6).',
       missed: 'You plugged in unknown media. A "Q3 BONUSES" label is bait, and the drive could install malware or pose as a keyboard the moment it is connected. Never connect found media; report it (5.6).',
     },
-    exit: {
+    'exit': {
       objective: '5.6',
       done: 'Floor cleared and reported.',
       missed: 'You did not reach the exit, so the incident was never reported.',
+    },
+    'turn-in': {
+      objective: '5.6',
+      done: 'You carried the unknown drive to the Security Desk instead of connecting it. Removable devices are a threat vector (2.2), and handing found media to security is the trained awareness response (5.6).',
+      missed: 'The found drive never reached the Security Desk. Leaving it on the floor means the next person may plug it in. Report and hand over found media (5.6).',
     },
   },
   examTip: 'Exam questions identify malware by its behavior. Self-spreads with no user action = worm. Disguised and run by the user = trojan. Encrypts files and demands payment = ransomware. Hides and collects data = spyware. Triggers on a condition = logic bomb.',

@@ -15,6 +15,7 @@ import { missionRegistry } from './content/missions';
 import { toolForSlot } from './tools';
 import { Arsenal } from './tools/arsenal';
 import { characterSelect } from './ui/characterSelect';
+import { markCompleted } from './missions/progress';
 
 /**
  * main.ts — boot + top-level state machine:
@@ -85,17 +86,9 @@ class Game {
     });
     this.bus.on('badge-door', ({ doorId, allowed }) => {
       if (allowed) {
-        if (this.map && this.map.doorFrac(doorId) < 1) {
-          const firstOpen = this.map.doorFrac(doorId) === 0;
-          this.map.startOpening(doorId);
-          if (firstOpen) {
-            this.renderer.setDoorOpen(doorId);
-            const cell = this.map.def.grid.flatMap((row, y) =>
-              [...row].map((ch, x) => ({ ch, x, y })),
-            ).find(({ ch }) => this.map?.def.legend[ch]?.doorId === doorId);
-            this.audio.sfx('door', cell ? { x: cell.x + 0.5, y: cell.y + 0.5 } : {});
-          }
-        }
+        this.openDoor(doorId);
+      } else {
+        this.audio.sfx('denied');
       }
     });
     this.bus.on('inspect', () => this.audio.sfx('inspect', this.player ? { x: this.player.x, y: this.player.y } : {}));
@@ -244,7 +237,7 @@ class Game {
           x: this.player.weaponBobX,
           y: this.player.weaponBobY + (lostEnd ? 240 : 0),
         },
-        credentials: this.role,
+        credentials: this.runtime.roles[this.runtime.roles.length - 1] ?? this.role,
         objectives: this.runtime.objectiveSummary(),
       });
     }
@@ -281,6 +274,12 @@ class Game {
     }
     this.useCd = Math.max(0, this.useCd - dt);
     this.hud.tick(dt);
+    this.runtime.update(dt, {
+      player: p,
+      map: this.map,
+      use: this.input.usePressed,
+      openDoor: (doorId) => this.openDoor(doorId),
+    });
 
     // fire (windup → impact → recover, ammo, auto-repeat and input buffering live in the arsenal)
     const fired = !ending && (this.input.firePressed || this.debugFire);
@@ -291,8 +290,8 @@ class Game {
       const ctx = this.toolCtx();
       const door = ctx.isDoorAhead();
       if (door && !map.isDoorOpen(door.doorId)) {
-        this.audio.sfx('oof');
-        this.hud.pushMessage('Door is badge-controlled — switch to BADGE (4)', 'warn');
+        // runtime.update() opens plain doors and explains badge/locked ones
+        if (door.accessRole !== undefined) this.audio.sfx('oof');
       } else if (!ctx.aimEntity(1.4, 0.5) && ctx.wallDistance < 1.2) {
         this.audio.sfx('oof');
       } else {
@@ -352,7 +351,15 @@ class Game {
       if (Math.hypot(e.x - p.x, e.y - p.y) < 0.6) {
         e.alive = false;
         const { resource, amount } = e.def.grants;
-        const text = this.arsenal.grant(resource, amount);
+        let text: string;
+        if (resource === 'integrity') {
+          p.integrity = Math.min(100, p.integrity + amount);
+          text = `+${amount} INTEGRITY`;
+        } else if (resource.startsWith('role:')) {
+          text = `Access granted: ${resource.slice(5).toUpperCase()}`;
+        } else {
+          text = this.arsenal.grant(resource, amount);
+        }
         this.bus.emit('pickup', { entityId: e.def.id });
         this.hud.pushMessage(text, 'good');
       }
@@ -367,6 +374,7 @@ class Game {
 
     if (runtime.finished && this.endTimer === null) {
       this.endTimer = runtime.finished === 'lost' ? 1.6 : 0.5;
+      if (runtime.finished === 'won') markCompleted(runtime.mission.id);
     }
     if (this.endTimer !== null) {
       if (runtime.finished === 'lost') {
@@ -419,18 +427,13 @@ class Game {
       isDoorAhead: () => {
         const r = map.raycast(p.x, p.y, p.angle, 1.6);
         const c = r.cell;
-        if (c?.kind === 'door') {
+        if (c?.kind === 'door' && !c.locked) {
           return { doorId: c.doorId ?? '', accessRole: c.accessRole, dist: r.dist };
         }
         return null;
       },
       openDoor: (doorId: string) => {
-        const firstOpen = map.doorFrac(doorId) === 0;
-        map.startOpening(doorId);
-        if (firstOpen) {
-          this.renderer.setDoorOpen(doorId);
-          this.audio.sfx('door', { x: p.x, y: p.y });
-        }
+        this.openDoor(doorId);
       },
       bus: this.bus,
       fireProjectile: (proj: Omit<Projectile, 'alive' | 'traveled'>) => {
@@ -455,8 +458,8 @@ class Game {
         }
         return best;
       },
-      authorizedRoles: this.runtime!.mission.authorizedRoles,
-      role: this.role,
+      authorizedRoles: rt.roles,
+      role: rt.roles[rt.roles.length - 1] ?? this.role,
       lineOfSight: (x0: number, y0: number, x1: number, y1: number) => {
         const d = Math.hypot(x1 - x0, y1 - y0);
         return map.raycast(x0, y0, Math.atan2(y1 - y0, x1 - x0), d).dist >= d - 0.3;
@@ -481,6 +484,10 @@ class Game {
           owned: [...g.arsenal.owned],
           ammo: Object.fromEntries(g.arsenal.ammo),
           score: g.runtime?.score ?? null,
+          stats: g.runtime?.stats() ?? null,
+          roles: g.runtime?.roles ?? [],
+          inventory: [...(g.runtime?.inventory ?? [])],
+          lossReason: g.runtime?.lossReason ?? null,
           objectives:
             g.runtime?.objectives.map((o) => ({
               id: o.def.id,
@@ -527,6 +534,20 @@ class Game {
       },
     };
   }
+
+  private openDoor(doorId: string): void {
+    const map = this.map;
+    if (!map || map.doorFrac(doorId) >= 1) return;
+    const firstOpen = map.doorFrac(doorId) === 0;
+    map.startOpening(doorId);
+    if (!firstOpen) return;
+    this.renderer.setDoorOpen(doorId);
+    const cell = map.def.grid
+      .flatMap((row, y) => [...row].map((ch, x) => ({ ch, x, y })))
+      .find(({ ch }) => map.def.legend[ch]?.doorId === doorId);
+    this.audio.sfx('door', cell ? { x: cell.x + 0.5, y: cell.y + 0.5 } : {});
+  }
+
 }
 
 const app = document.getElementById('app')!;

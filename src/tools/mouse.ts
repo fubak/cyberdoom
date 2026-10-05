@@ -99,6 +99,10 @@ export const mouseTool: ToolDef = {
       ctx.bus.emit('message', { text: `${e.def.inspect?.label ?? 'Target'} is already flagged.`, kind: 'info' });
       return;
     }
+    if (e.def.inspect?.category === 'person') {
+      ctx.bus.emit('message', { text: 'People are not triaged. Correlate the logs, then report through the security console.', kind: 'info' });
+      return;
+    }
     const verdictCorrect = isMalicious(e);
     e.state.flagged = true;
     e.state.flagCorrect = verdictCorrect;

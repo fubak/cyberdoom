@@ -121,7 +121,7 @@ export const ARC: ArcMission[] = [
     ],
   },
   {
-    id: 'm09', title: 'LOCKED OUT', difficulty: 8, built: false,
+    id: 'm09', title: 'LOCKED OUT', difficulty: 8, built: true,
     briefing: 'Ransomware is encrypting the finance VLAN right now. The CFO wants payroll back by morning.',
     objectives: [
       w('4.8', 'Run incident response in order: contain (isolate the VLAN) -> eradicate -> recover; out-of-order actions reinfect hosts. Bag evidence with chain of custody.'),
