@@ -1,15 +1,21 @@
 import type { ToolDef } from '../core/types';
+import { damageEntity } from '../engine/ai';
 import { hash, impactBurst, usePhase } from './anim';
 import { bevel, glow, poly, rect, shade } from './pixel';
 import { flatHand, handLook, sleeve } from './shared';
 
 const WINDUP = 0.09;
 
+/** Damage of one keyboard strike: enough to kill a worm in one hit, a trojan or ransomware in two. */
+export const KEYBOARD_DAMAGE = 2;
+export const KEYBOARD_RANGE = 1.5;
+
 /**
- * Slot 1 — KEYBOARD (admin console / CLI).
- * Melee range: the keyboard is slammed onto the host in front of you to run
- * a manual remediation (patch / isolate), file a report at a console, or
- * mark a suspect. Infinite use but short range and slow — Doom's fist.
+ * Slot 1 — KEYBOARD (admin console / CLI), the arsenal's Doom fist.
+ * Point-blank incident-response containment (SY0-701 4.8): kill the malicious
+ * process / isolate it. Never runs out, but you have to get close. Hosts are
+ * not cleaned with it (that is the scanner stick) and people are not accused
+ * with it (that is the mouse + report-console flow).
  */
 export const keyboardTool: ToolDef = {
   id: 'keyboard',
@@ -20,12 +26,12 @@ export const keyboardTool: ToolDef = {
   windup: WINDUP,
   auto: true,
   control: {
-    name: 'Admin console (manual remediation & reporting)',
+    name: 'Incident response containment (kill process / isolate)',
     category: 'technical',
     types: ['corrective'],
-    objectives: ['2.5', '4.8'],
-    use: 'Point-blank only. Slam it on an infected host to patch it by hand, on a console to file an incident report, or on a person to mark them as a suspect.',
-    lesson: 'Hands-on remediation works but does not scale; incident response also means documenting and reporting what you found through the proper channel.',
+    objectives: ['4.8'],
+    use: 'Point-blank only (1.5 tiles). Each strike runs a kill-process / isolate command on the malware in front of you: one strike stops a worm, two stop a trojan or ransomware. Infinite, but you must get close. Also runs commands on a console.',
+    lesson: 'Containment comes before eradication and recovery in the incident response process: stop the malicious process spreading first, then clean and restore the host.',
   },
   drawViewmodel(g, w, _h, _bob, gender, _cd, anim) {
     const look = handLook(gender, anim);
@@ -98,11 +104,40 @@ export const keyboardTool: ToolDef = {
     impactBurst(g, w / 2, 92, anim.sinceConfirm, anim.confirmGood, 0.8);
   },
   use(ctx) {
-    const e = ctx.aimEntity(1.5, 0.5);
+    // point-blank targets fill more of the view, so the strike cone widens up close
+    const e = ctx.aimEntity(KEYBOARD_RANGE, 0.5) ?? ctx.aimEntity(0.9, 1.0);
     ctx.bus.emit('tool-used', { toolId: 'keyboard' });
-    if (e) {
+    if (!e) return;
+    const name = e.def.inspect?.label ?? e.def.id;
+    if (e.def.kind === 'enemy') {
+      if (!e.infected) return;
+      const result = damageEntity(e, KEYBOARD_DAMAGE, e.x - ctx.playerX, e.y - ctx.playerY);
       ctx.bus.emit('tool-hit', { toolId: 'keyboard', entityId: e.def.id, good: true });
-      ctx.bus.emit('interact', { entityId: e.def.id });
+      if (result === 'killed') {
+        ctx.bus.emit('message', { text: `kill -9: ${name} contained.`, kind: 'good' });
+        ctx.bus.emit('cleaned', { entityId: e.def.id });
+      } else {
+        ctx.bus.emit('entity-hurt', { entityId: e.def.id, fromX: ctx.playerX, fromY: ctx.playerY, applied: true });
+        ctx.bus.emit('message', { text: `Process isolated, still running: ${name} needs another strike.`, kind: 'info' });
+      }
+      return;
     }
+    if (e.def.kind === 'npc') {
+      ctx.bus.emit('message', {
+        text: 'You do not accuse people with a keyboard. Gather evidence with the MOUSE (2), then file the report at the security console.',
+        kind: 'info',
+      });
+      return;
+    }
+    if (e.def.kind === 'workstation' && e.infected) {
+      ctx.bus.emit('tool-hit', { toolId: 'keyboard', entityId: e.def.id, good: false });
+      ctx.bus.emit('message', {
+        text: `${name}: killing the process will not remove a persistent infection. Plug in the SCANNER stick (3).`,
+        kind: 'warn',
+      });
+      return;
+    }
+    ctx.bus.emit('tool-hit', { toolId: 'keyboard', entityId: e.def.id, good: true });
+    ctx.bus.emit('interact', { entityId: e.def.id });
   },
 };

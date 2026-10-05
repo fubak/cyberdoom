@@ -1,4 +1,7 @@
 import type { ToolDef } from '../core/types';
+
+/** Max distance (tiles) at which the scanner stick can be plugged into a workstation. */
+export const USB_PLUG_RANGE = 2;
 import { hash, impactBurst, screenFlash, usePhase } from './anim';
 import { bevel, poly, rect, shade } from './pixel';
 import { drawText, textWidth } from './pixelfont';
@@ -8,8 +11,9 @@ const WINDUP = 0.05;
 
 /**
  * Slot 3 — USB SCANNER (antimalware / endpoint protection).
- * Your own org-issued, write-protected scanner stick: fires an antimalware
- * charge that cleans infected hosts and malware processes. Uses
+ * Your own org-issued, write-protected, bootable antimalware stick. A
+ * WORKSTATION is cleaned only at arm's length (you plug the stick in); the
+ * ranged charge only hits roaming malware (running processes). Uses
  * "usb-charge" ammo (definition updates). Contrast: UNKNOWN found media is
  * a baiting vector and must never be plugged in (2.2).
  */
@@ -26,8 +30,8 @@ export const usbTool: ToolDef = {
     category: 'technical',
     types: ['detective', 'corrective'],
     objectives: ['2.5', '2.4'],
-    use: 'Fires an antimalware charge. Each hit removes one infection; flagged threats take two. Charges (signature updates) are limited, so do not waste them on clean hosts.',
-    lesson: 'Endpoint protection is a core hardening technique. Only use known-good, organisation-issued media; a stick you find lying around is a baiting attack.',
+    use: 'Plug it into an infected workstation at arm\'s length (2 tiles) to boot a scan and clean it; fire it at roaming malware processes from range. Each charge removes one infection, flagged threats take two. Charges (signature updates) are limited, so do not waste them on clean hosts.',
+    lesson: 'Endpoint protection is a core hardening technique. Removable media must be known-good: write-protected and issued by IT. A stick you find lying around is a baiting attack.',
   },
   drawViewmodel(g, w, _h, _bob, gender, _cd, anim) {
     const look = handLook(gender, anim);
@@ -80,30 +84,19 @@ export const usbTool: ToolDef = {
   },
   drawFx(g, w, h, anim) {
     const ph = usePhase(anim.sinceUse, WINDUP);
-    // connector tip of the held scanner art (src/render/viewmodels.ts usbArt)
-    const tipX = Math.round(w / 2);
-    const tipY = h - 92;
-    if (ph.phase === 'wind') {
-      for (let i = 0; i < Math.ceil(ph.u * 3); i++) rect(g, tipX - 1, tipY + 8 - i * 3, 2, 2, '#bff8ff');
-    }
-    if (ph.phase === 'impact') {
-      // Doom-style flash: 3 discrete hard-edged frames, no soft blob over the target
-      const f = Math.min(2, Math.floor(ph.u * 3));
-      const len = [13, 9, 5][f];
-      const core = [8, 6, 2][f];
-      if (f === 0) screenFlash(g, w, h, '160,240,255', 0.06);
-      for (let i = 0; i < 8; i++) {
-        const a = (i / 8) * Math.PI * 2 + (f === 1 ? Math.PI / 8 : 0);
-        const l = i % 2 ? Math.round(len * 0.6) : len;
-        for (let r = core / 2 + 1; r < core / 2 + l; r += 2) {
-          rect(g, Math.round(tipX + Math.cos(a) * r) - 1, Math.round(tipY + Math.sin(a) * r * 0.8) - 1, 2, 2, r < core + 2 ? '#ffffff' : '#5affff');
-        }
-      }
-      rect(g, tipX - core / 2, tipY - core / 2, core, core, '#ffffff');
-    }
+    // the hard-edged muzzle flash is part of the held art (viewmodels.ts usbArt), at the stick tip
+    if (ph.phase === 'impact' && ph.u < 0.34) screenFlash(g, w, h, '160,240,255', 0.05);
     impactBurst(g, w / 2, 92, anim.sinceConfirm, anim.confirmGood);
   },
   use(ctx) {
+    const aim = ctx.aimEntity(12, 0.12);
+    if (aim?.def.kind === 'workstation' && Math.hypot(aim.x - ctx.playerX, aim.y - ctx.playerY) > USB_PLUG_RANGE) {
+      ctx.bus.emit('message', {
+        text: 'Too far: a workstation is cleaned by plugging the stick in. Walk up to it (arm\'s length).',
+        kind: 'info',
+      });
+      return false;
+    }
     ctx.fireProjectile({
       x: ctx.playerX,
       y: ctx.playerY,

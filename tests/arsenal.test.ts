@@ -234,3 +234,63 @@ describe('analyst voices', () => {
     expect(f.q).not.toEqual(m.q);
   });
 });
+
+describe('round 3: keyboard containment and arm\'s-length scanning', () => {
+  const near = (es: Entity[]) => (max: number) =>
+    es.filter((e) => e.alive && Math.hypot(e.x - 1, e.y - 1) <= max)
+      .sort((a, b) => Math.hypot(a.x - 1, a.y - 1) - Math.hypot(b.x - 1, b.y - 1))[0] ?? null;
+  const malware = (id: string, sprite: string, hp: number, x: number): Entity => ({
+    def: { id, kind: 'enemy', x, y: 1, sprite, hp, infected: true },
+    x, y: 1, hp, alive: true, infected: true, state: {},
+  });
+  const strike = (e: Entity, n = 1) => {
+    const bus = new EventBus();
+    const cleaned: string[] = [];
+    bus.on('cleaned', ({ entityId }) => cleaned.push(entityId));
+    const kb = toolForSlot(1)!;
+    for (let i = 0; i < n; i++) kb.use(ctx({ bus, entities: [e], aimEntity: near([e]) }));
+    return cleaned;
+  };
+
+  it('one keyboard hit within 1.5 tiles kills a 2-hp worm', () => {
+    const worm = malware('w', 'worm', 2, 2.4);
+    expect(strike(worm)).toEqual(['w']);
+    expect(worm.hp).toBeLessThanOrEqual(0);
+  });
+  it('a worm 3 tiles away is untouched', () => {
+    const worm = malware('w', 'worm', 2, 4);
+    expect(strike(worm)).toEqual([]);
+    expect(worm.hp).toBe(2);
+  });
+  it('a 3-hp trojan and 4-hp ransomware each take two hits, and the keyboard never runs out', () => {
+    for (const [sprite, hp] of [['trojan', 3], ['ransomware', 4]] as const) {
+      const e = malware(sprite, sprite, hp, 2);
+      expect(strike(e, 1)).toEqual([]);
+      expect(e.hp).toBe(hp - 2);
+      expect(strike(e, 1)).toEqual([sprite]);
+    }
+    expect(toolForSlot(1)!.ammo).toBeNull();
+    expect(toolForSlot(1)!.control?.objectives).toContain('4.8');
+  });
+  it('keyboard does not mark people as suspects', () => {
+    const bus = new EventBus();
+    const interacts: string[] = [];
+    bus.on('interact', ({ entityId }) => interacts.push(entityId));
+    const npc = ent('greg', { def: { id: 'greg', kind: 'npc', x: 2, y: 1, sprite: 'npc', reportable: true } });
+    toolForSlot(1)!.use(ctx({ bus, aimEntity: () => npc }));
+    expect(interacts).toEqual([]);
+  });
+  it('USB cleans a workstation only at arm\'s length; a far one refunds the charge', () => {
+    const usb = toolForSlot(3)!;
+    const shots: unknown[] = [];
+    const far = ent('pc-far', { infected: true, x: 6, y: 1 });
+    expect(usb.use(ctx({ aimEntity: () => far, fireProjectile: (p) => shots.push(p) }))).toBe(false);
+    expect(shots).toHaveLength(0);
+    const close = ent('pc-near', { infected: true, x: 2.5, y: 1 });
+    usb.use(ctx({ aimEntity: () => close, fireProjectile: (p) => shots.push(p) }));
+    expect(shots).toHaveLength(1);
+    const worm = malware('w', 'worm', 2, 9);
+    usb.use(ctx({ aimEntity: () => worm, fireProjectile: (p) => shots.push(p) }));
+    expect(shots).toHaveLength(2);
+  });
+});

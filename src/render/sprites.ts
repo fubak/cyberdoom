@@ -638,7 +638,16 @@ export function buildSprites(): void {
   }]);
 
   // Projectile (scanner charge) + impact puff
-  makeSet('fx-scan', 16, 16, 0.24, 'flicker', [0, 1].map((f) => ({
+  makeSet('fx-scan-trail', 8, 8, 0.12, 'static', [0, 1].map((f) => ({
+    key: `f${f}`,
+    draw: (p: PaintCtx) => {
+      p.g.fillStyle = f ? '#18a8d8' : '#7af8ff';
+      p.g.fillRect(2 + f, 2 + f, 4 - 2 * f, 4 - 2 * f);
+      p.glow.fillStyle = '#fff';
+      p.glow.fillRect(0, 0, 8, 8);
+    },
+  })));
+  makeSet('fx-scan', 16, 16, 0.34, 'flicker', [0, 1].map((f) => ({
     key: `f${f}`,
     draw: (p: PaintCtx) => {
       pxEllipse(p.g, 8, 8, 7 - f, 7 - f, '#18a8d8');

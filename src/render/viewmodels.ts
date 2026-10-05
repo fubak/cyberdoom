@@ -178,12 +178,13 @@ function mouseArt(gender: Gender, fire: boolean): Art {
 function usbArt(gender: Gender, fire: boolean): Art {
   return paint(96, 108, 48, (px) => {
     if (fire) {
-      // fullbright scan burst at the connector (drawn before outline pass)
-      px('#e8ffff', 38, 0, 20, 14);
-      px('#5affff', 32, 4, 32, 8);
-      px('#2ac8ff', 28, 6, 40, 4);
-      px('#ffffff', 44, 2, 8, 10);
-      px('#5affff', 46, 14, 4, 4);
+      // small hard-edged muzzle flash at the connector tip (drawn before outline pass)
+      px('#5affff', 46, 2, 4, 14);
+      px('#5affff', 42, 9, 12, 4);
+      px('#ffffff', 47, 6, 2, 10);
+      px('#ffffff', 44, 10, 8, 2);
+      px('#bff8ff', 42, 5, 2, 2);
+      px('#bff8ff', 52, 5, 2, 2);
     }
     // metal connector
     px('#c8ccd8', 40, 16, 16, 16);

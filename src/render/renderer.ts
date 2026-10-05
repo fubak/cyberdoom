@@ -570,6 +570,14 @@ export class Renderer {
         };
         this.projSprites.set(p, st);
       }
+      if (!p.hostile) {
+        // scanner charge leaves a short trail so its whole flight reads
+        st.moveT += Math.hypot(p.x - st.lastX, p.y - st.lastY);
+        if (st.moveT > 0.3) {
+          st.moveT = 0;
+          this.spawnFx('fx-scan-trail', ['f0', 'f1'], st.lastX, st.lastY, EYE_H - 0.2, 0.2);
+        }
+      }
       st.lastX = p.x;
       st.lastY = p.y;
       st.mesh.position.set(p.x, EYE_H - 0.2, p.y);
