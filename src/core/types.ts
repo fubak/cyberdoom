@@ -43,6 +43,9 @@ export interface CellDef {
   /** For doors: opened only by a MissionTrigger (`openDoors`), never by
    *  Use or the badge. `lockText` is shown when the player tries it. */
   locked?: boolean;
+  /** For doors: badge alone is not enough; the MFA token must complete a
+   *  second factor (ARSENAL, SY0-701 4.6). */
+  mfa?: boolean;
   lockText?: string;
 }
 
@@ -242,7 +245,7 @@ export interface ToolUseContext {
   projectiles: Projectile[];
   /** Distance to the wall along the facing ray. */
   wallDistance: number;
-  isDoorAhead: () => { doorId: string; accessRole?: string; dist: number } | null;
+  isDoorAhead: () => { doorId: string; accessRole?: string; dist: number; mfa?: boolean } | null;
   openDoor: (doorId: string) => void;
   bus: import('./events').EventBus;
   fireProjectile: (p: Omit<Projectile, 'alive' | 'traveled'>) => void;
@@ -306,7 +309,8 @@ export interface ToolDef {
   ) => void;
   /** Optional additive effects (flashes, bursts) drawn after the viewmodel outline pass. */
   drawFx?: (g: CanvasRenderingContext2D, w: number, h: number, anim: ViewmodelAnim) => void;
-  use: (ctx: ToolUseContext) => void;
+  /** Return `false` when nothing was affected so the arsenal refunds the ammo. */
+  use: (ctx: ToolUseContext) => void | boolean;
 }
 
 /** Security-control metadata for a tool (SY0-701 1.1 categories/types). */

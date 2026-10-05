@@ -21,7 +21,7 @@ export const edrTool: ToolDef = {
   ammo: { resource: 'edr-cell', start: 1, max: 3 },
   cooldown: 1.2,
   windup: WINDUP,
-  unlock: { difficulty: 6 },
+  unlock: { difficulty: 9 },
   control: {
     name: 'EDR/XDR (automated detection and containment)',
     category: 'technical',
@@ -34,35 +34,30 @@ export const edrTool: ToolDef = {
     const look = handLook(gender, anim);
     const ph = usePhase(anim?.sinceUse ?? 9, WINDUP);
     const t = anim?.time ?? 0;
-    const shake = ph.phase === 'wind' ? (hash(Math.floor(t * 60)) - 0.5) * 3 * ph.u : 0;
+    const shake = ph.phase === 'wind' ? Math.round((hash(Math.floor(t * 60)) - 0.5) * 3 * ph.u) : 0;
     const kick = ph.phase === 'impact' ? 1 : ph.phase === 'recover' ? 1 - ph.u : 0;
-    const x0 = w / 2 - 54 + shake;
-    const y0 = _h - 82 + kick * 14;
+    const x0 = Math.round(w / 2 - 28 + shake);
+    const y0 = Math.round(_h - 48 + kick * 10);
     // tablet
-    bevel(g, x0, y0, 108, 64, '#2a2e3a', 2);
-    rect(g, x0 + 4, y0 + 4, 100, 48, '#071018');
+    bevel(g, x0, y0, 56, 40, '#2a2e3a', 2);
+    rect(g, x0 + 3, y0 + 3, 50, 28, '#071018');
     const charge = ph.phase === 'wind' ? ph.u : ph.phase === 'impact' ? 1 : 0;
-    // shield emblem
-    const cx = x0 + 54;
-    const cy = y0 + 10;
+    const cx = x0 + 28;
+    const cy = y0 + 5;
     const sc = charge > 0 ? '#5df2ff' : '#2f8fbf';
-    poly(g, [[cx - 14, cy], [cx + 14, cy], [cx + 14, cy + 14], [cx, cy + 26], [cx - 14, cy + 14]], sc);
-    poly(g, [[cx - 10, cy + 3], [cx + 10, cy + 3], [cx + 10, cy + 13], [cx, cy + 22], [cx - 10, cy + 13]], '#071018');
-    drawText(g, 'EDR', cx - 8, cy + 7, sc);
+    poly(g, [[cx - 9, cy], [cx + 9, cy], [cx + 9, cy + 9], [cx, cy + 17], [cx - 9, cy + 9]], sc);
+    poly(g, [[cx - 6, cy + 2], [cx + 6, cy + 2], [cx + 6, cy + 8], [cx, cy + 13], [cx - 6, cy + 8]], '#071018');
+    rect(g, cx - 1, cy + 4, 2, 6, sc);
     // charge bar
-    rect(g, x0 + 10, y0 + 40, 88, 6, '#0f2230');
-    rect(g, x0 + 10, y0 + 40, Math.round(88 * charge), 6, charge >= 1 ? '#ffffff' : '#5df2ff');
-    // endpoint list
-    for (let i = 0; i < 3; i++) {
-      const on = (anim?.ammo ?? 0) > i;
-      rect(g, x0 + 10 + i * 10, y0 + 55, 7, 4, on ? '#5df2ff' : '#203040');
-    }
-    drawText(g, 'CELLS', x0 + 44, y0 + 54, '#7a8aa0');
-    // two hands holding the sides
-    sleeve(g, x0 - 4, y0 + 80, 20, -1, look);
-    sleeve(g, x0 + 112, y0 + 80, 20, 1, look);
-    fist(g, x0 - 12, y0 + 20, 16, look, -1);
-    fist(g, x0 + 104, y0 + 20, 16, look, 1);
+    rect(g, x0 + 5, y0 + 25, 46, 4, '#0f2230');
+    rect(g, x0 + 5, y0 + 25, Math.round(46 * charge), 4, charge >= 1 ? '#ffffff' : '#5df2ff');
+    // cells
+    for (let i = 0; i < 3; i++) rect(g, x0 + 6 + i * 8, y0 + 34, 6, 3, (anim?.ammo ?? 0) > i ? '#5df2ff' : '#203040');
+    drawText(g, 'EDR', x0 + 34, y0 + 33, '#7a8aa0');
+    sleeve(g, x0 - 3, y0 + 54, 12, -1, look);
+    sleeve(g, x0 + 59, y0 + 54, 12, 1, look);
+    fist(g, x0 - 8, y0 + 14, 11, look, -1);
+    fist(g, x0 + 53, y0 + 14, 11, look, 1);
   },
   drawFx(g, w, h, anim) {
     const ph = usePhase(anim.sinceUse, WINDUP);

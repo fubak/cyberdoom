@@ -6,6 +6,8 @@ import { usbTool } from './usb';
 import { badgeTool } from './badge';
 import { tapTool } from './tap';
 import { edrTool } from './edr';
+import { mfaTool } from './mfa';
+import { patchTool } from './patch';
 
 /**
  * ARSENAL: the tool registry. Add new tools as modules in this directory and
@@ -13,7 +15,7 @@ import { edrTool } from './edr';
  */
 export const toolRegistry = new Registry<ToolDef>();
 
-for (const t of [keyboardTool, mouseTool, usbTool, badgeTool, tapTool, edrTool]) {
+for (const t of [keyboardTool, mouseTool, usbTool, badgeTool, tapTool, edrTool, mfaTool, patchTool]) {
   toolRegistry.register(t.id, t);
 }
 

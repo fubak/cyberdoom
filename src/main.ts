@@ -231,6 +231,8 @@ class Game {
         gender: this.gender,
         anim: ars.anim(),
         owned: [...ars.owned],
+        resources: ars.resources(),
+        got: ars.got(),
         face: (g, x, y) => ars.drawFace(g, x, y, integrity),
         // lower/raise on switch comes from anim.lower; death drops the hands off-screen
         viewmodelOffset: {
@@ -428,7 +430,7 @@ class Game {
         const r = map.raycast(p.x, p.y, p.angle, 1.6);
         const c = r.cell;
         if (c?.kind === 'door' && !c.locked) {
-          return { doorId: c.doorId ?? '', accessRole: c.accessRole, dist: r.dist };
+          return { doorId: c.doorId ?? '', accessRole: c.accessRole, dist: r.dist, mfa: c.mfa };
         }
         return null;
       },

@@ -1,6 +1,6 @@
 import type { ToolDef } from '../core/types';
 import { hash, impactBurst, screenFlash, usePhase } from './anim';
-import { bevel, glow, poly, rect, shade } from './pixel';
+import { bevel, poly, rect, shade } from './pixel';
 import { drawText, textWidth } from './pixelfont';
 import { fist, handLook, sleeve } from './shared';
 
@@ -81,23 +81,25 @@ export const usbTool: ToolDef = {
   drawFx(g, w, h, anim) {
     const ph = usePhase(anim.sinceUse, WINDUP);
     // connector tip of the held scanner art (src/render/viewmodels.ts usbArt)
-    const tipX = w / 2 + 20;
+    const tipX = Math.round(w / 2);
     const tipY = h - 92;
-    if (ph.phase === 'wind') glow(g, tipX, tipY + 6, 10 * ph.u, '80,220,255', 0.6 * ph.u);
+    if (ph.phase === 'wind') {
+      for (let i = 0; i < Math.ceil(ph.u * 3); i++) rect(g, tipX - 1, tipY + 8 - i * 3, 2, 2, '#bff8ff');
+    }
     if (ph.phase === 'impact') {
-      // 4-frame "muzzle flash": bright core + ring of sparks
-      glow(g, tipX, tipY, 46, '90,230,255', 0.95);
-      glow(g, w / 2, 92, 90, '60,200,255', 0.25);
-      screenFlash(g, w, h, '120,220,255', 0.12);
-      const f = Math.floor(ph.u * 4);
-      for (let i = 0; i < 10; i++) {
-        const a = (i / 10) * Math.PI * 2 + f;
-        const r = 8 + f * 5 + hash(i + f * 13) * 6;
-        rect(g, tipX + Math.cos(a) * r, tipY + Math.sin(a) * r * 0.7, 2, 2, i % 2 ? '#ffffff' : '#7ae8ff');
+      // Doom-style flash: 3 discrete hard-edged frames, no soft blob over the target
+      const f = Math.min(2, Math.floor(ph.u * 3));
+      const len = [13, 9, 5][f];
+      const core = [8, 6, 2][f];
+      if (f === 0) screenFlash(g, w, h, '160,240,255', 0.06);
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2 + (f === 1 ? Math.PI / 8 : 0);
+        const l = i % 2 ? Math.round(len * 0.6) : len;
+        for (let r = core / 2 + 1; r < core / 2 + l; r += 2) {
+          rect(g, Math.round(tipX + Math.cos(a) * r) - 1, Math.round(tipY + Math.sin(a) * r * 0.8) - 1, 2, 2, r < core + 2 ? '#ffffff' : '#5affff');
+        }
       }
-      rect(g, tipX - 3, tipY - 3, 6, 6, '#ffffff');
-    } else if (ph.phase === 'recover' && ph.u < 0.4) {
-      glow(g, tipX, tipY, 20, '90,230,255', 0.5 * (1 - ph.u / 0.4));
+      rect(g, tipX - core / 2, tipY - core / 2, core, core, '#ffffff');
     }
     impactBurst(g, w / 2, 92, anim.sinceConfirm, anim.confirmGood);
   },

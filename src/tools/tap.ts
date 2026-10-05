@@ -1,9 +1,8 @@
-import type { ToolDef, ToolUseContext } from '../core/types';
+import type { Entity, ToolDef, ToolUseContext } from '../core/types';
 import { hash, impactBurst, usePhase } from './anim';
 import { bevel, glow, rect } from './pixel';
 import { drawText } from './pixelfont';
 import { fist, handLook, sleeve } from './shared';
-import { isMalicious } from './mouse';
 
 const WINDUP = 0.1;
 const RANGE = 12;
@@ -11,9 +10,10 @@ const CONE = 0.55;
 
 /**
  * Slot 5 — NETWORK TAP (passive monitoring, out-of-band).
- * Sweeps a wide cone and captures traffic from every host/process in view,
- * auto-flagging the ones beaconing malicious traffic. It is PASSIVE: a tap
- * copies traffic, it cannot block or clean anything (3.2 inline vs tap).
+ * Sweeps a cone and captures a COPY of the traffic of every host/process in
+ * view, then shows the raw flows. It makes no verdict: detection is the
+ * analyst's call (or an IDS's). It cannot block or clean anything (3.2
+ * inline vs tap, IDS vs IPS).
  * Finite capture buffer ("pcap" ammo).
  */
 export const tapTool: ToolDef = {
@@ -23,62 +23,54 @@ export const tapTool: ToolDef = {
   ammo: { resource: 'pcap', start: 6, max: 12 },
   cooldown: 0.7,
   windup: WINDUP,
-  unlock: { difficulty: 3 },
+  unlock: { difficulty: 6 },
   control: {
     name: 'Network tap / passive sensor (packet capture)',
     category: 'technical',
     types: ['detective'],
     objectives: ['3.2', '4.9'],
-    use: 'Sweeps a wide cone and captures traffic from everything in view. Hosts sending malicious traffic are flagged automatically. A tap is passive: it cannot block or clean, so you still have to respond with the scanner or EDR.',
-    lesson: 'Taps and monitor ports sit out of band and only see copies of traffic; inline devices such as an IPS can block. Packet captures are a key data source for an investigation.',
+    use: 'Sweeps a cone and copies the traffic of every host in view, then shows you the raw flows. It decides nothing: read the flows and make the call yourself (MOUSE flags a captured host in one click). It cannot block or clean.',
+    lesson: 'A tap or SPAN port only delivers a copy of traffic. Detection is a separate job (an IDS or an analyst reading the capture), and only inline devices such as an IPS can block. Packet captures are a key data source for an investigation.',
   },
   drawViewmodel(g, w, _h, _bob, gender, _cd, anim) {
     const look = handLook(gender, anim);
     const ph = usePhase(anim?.sinceUse ?? 9, WINDUP);
     const t = anim?.time ?? 0;
     const sweep = ph.phase !== 'idle';
-    const lift = ph.k > 0 ? ph.k * 10 : ph.k * 4;
-    const x0 = w / 2 - 40;
-    const y0 = _h - 80 - lift;
+    const lift = ph.k > 0 ? ph.k * 8 : ph.k * 3;
+    const x0 = Math.round(w / 2 - 24);
+    const y0 = Math.round(_h - 46 - lift);
     // cables
-    for (let i = 0; i < 16; i++) {
-      rect(g, x0 + 12 - i * 0.6, y0 - i * 3, 3, 3, '#2a7bd8');
-      rect(g, x0 + 66 + i * 0.8, y0 - i * 3, 3, 3, '#d8a02a');
+    for (let i = 0; i < 6; i++) {
+      rect(g, x0 + 7 - i * 0.6, y0 - i * 3, 3, 3, '#2a7bd8');
+      rect(g, x0 + 38 + i * 0.6, y0 - i * 3, 3, 3, '#d8a02a');
     }
     // housing
-    bevel(g, x0, y0, 80, 56, '#4a505e', 2);
-    rect(g, x0 + 2, y0 + 2, 76, 4, '#5e6576');
-    // RJ45 ports
-    for (const px of [x0 + 8, x0 + 62]) {
-      rect(g, px, y0 - 4, 10, 7, '#1a1c22');
-      rect(g, px + 2, y0 - 2, 6, 3, '#c0c6d0');
+    bevel(g, x0, y0, 48, 36, '#4a505e', 2);
+    rect(g, x0 + 2, y0 + 2, 44, 3, '#5e6576');
+    for (const px of [x0 + 4, x0 + 36]) {
+      rect(g, px, y0 - 3, 8, 5, '#1a1c22');
+      rect(g, px + 2, y0 - 2, 4, 2, '#c0c6d0');
     }
-    drawText(g, 'TAP', x0 + 30, y0 + 7, '#c0c6d0');
-    // screen with packet waveform
-    const sx = x0 + 6;
-    const sy = y0 + 17;
-    rect(g, sx - 1, sy - 1, 70, 26, '#0b0d12');
-    rect(g, sx, sy, 68, 24, '#04170d');
-    for (let i = 0; i < 68; i += 1) {
-      const speed = sweep ? 90 : 20;
-      const v = hash(Math.floor(i / 2) + Math.floor(t * speed / 4));
-      const amp = sweep ? 10 : 3;
-      const hgt = Math.max(1, Math.round(v * amp));
-      const mal = sweep && hash(i * 3 + Math.floor(t * 8)) > 0.92;
-      rect(g, sx + i, sy + 12 - hgt / 2, 1, hgt, mal ? '#ff5040' : '#3dff8a');
+    drawText(g, 'TAP', x0 + 15, y0 + 5, '#c0c6d0');
+    // screen with packet waveform (copied traffic: one colour, no verdict)
+    const sx = x0 + 4;
+    const sy = y0 + 13;
+    rect(g, sx - 1, sy - 1, 42, 15, '#0b0d12');
+    rect(g, sx, sy, 40, 13, '#04170d');
+    for (let i = 0; i < 40; i += 1) {
+      const v = hash(Math.floor(i / 2) + Math.floor(t * (sweep ? 90 : 20) / 4));
+      const hgt = Math.max(1, Math.round(v * (sweep ? 11 : 3)));
+      rect(g, sx + i, sy + 6 - hgt / 2, 1, hgt, '#3dff8a');
     }
-    if (sweep) {
-      const scan = Math.floor(((t * 3) % 1) * 68);
-      rect(g, sx + scan, sy, 1, 24, '#d0ffe0');
-    }
+    if (sweep) rect(g, sx + Math.floor(((t * 3) % 1) * 40), sy, 1, 13, '#d0ffe0');
     // capture buffer LEDs
     const ammo = anim?.ammo ?? 0;
-    for (let i = 0; i < 6; i++) rect(g, x0 + 8 + i * 6, y0 + 46, 4, 3, i < Math.ceil(ammo / 2) ? '#ffb000' : '#3a2a10');
-    // two hands holding the sides
-    sleeve(g, x0 - 2, y0 + 70, 18, -1, look);
-    sleeve(g, x0 + 82, y0 + 70, 18, 1, look);
-    fist(g, x0 - 10, y0 + 26, 14, look, -1);
-    fist(g, x0 + 76, y0 + 26, 14, look, 1);
+    for (let i = 0; i < 6; i++) rect(g, x0 + 5 + i * 6, y0 + 30, 4, 2, i < Math.ceil(ammo / 2) ? '#ffb000' : '#3a2a10');
+    sleeve(g, x0 - 2, y0 + 50, 12, -1, look);
+    sleeve(g, x0 + 50, y0 + 50, 12, 1, look);
+    fist(g, x0 - 7, y0 + 16, 10, look, -1);
+    fist(g, x0 + 45, y0 + 16, 10, look, 1);
   },
   drawFx(g, w, _h, anim) {
     const ph = usePhase(anim.sinceUse, WINDUP);
@@ -96,37 +88,50 @@ export const tapTool: ToolDef = {
   },
   use(ctx: ToolUseContext) {
     ctx.bus.emit('tool-used', { toolId: 'tap' });
-    let malicious = 0;
-    let benign = 0;
+    const seen: Entity[] = [];
     for (const e of ctx.entities) {
-      if (!e.alive || e.def.kind === 'item' || e.def.kind === 'prop') continue;
+      if (!e.alive || e.def.kind === 'item' || e.def.kind === 'npc' || e.def.kind === 'prop') continue;
       const dx = e.x - ctx.playerX;
       const dy = e.y - ctx.playerY;
-      const d = Math.hypot(dx, dy);
-      if (d > RANGE) continue;
+      if (Math.hypot(dx, dy) > RANGE) continue;
       let da = Math.atan2(dy, dx) - ctx.playerAngle;
       da = Math.atan2(Math.sin(da), Math.cos(da));
       if (Math.abs(da) > CONE) continue;
       if (ctx.lineOfSight && !ctx.lineOfSight(ctx.playerX, ctx.playerY, e.x, e.y)) continue;
-      // Behavioural flags (people) are not visible in packet captures.
-      const beaconing = e.infected || e.def.inspect?.category === 'malware';
-      if (beaconing) {
-        malicious++;
-        if (!e.state.flagged) {
-          e.state.flagged = true;
-          e.state.flagCorrect = true;
-          if (!e.state.inspected) {
-            e.state.inspected = true;
-            ctx.bus.emit('inspect', { entityId: e.def.id });
-          }
-        }
-      } else if (!isMalicious(e) || e.def.kind === 'npc') {
-        benign++;
-      }
+      e.state.captured = true;
+      seen.push(e);
     }
-    ctx.bus.emit('tool-hit', { toolId: 'tap', good: malicious > 0 });
-    ctx.bus.emit('message', malicious > 0
-      ? { text: `PCAP: ${malicious} host(s) beaconing to C2, flagged. ${benign} clean flow(s). A tap only observes, so respond with SCANNER or EDR.`, kind: 'good' }
-      : { text: `PCAP: ${benign} flow(s), no malicious traffic in view. Insider behaviour will not show up in packets.`, kind: 'info' });
+    ctx.bus.emit('tool-hit', { toolId: 'tap', good: seen.length > 0 });
+    if (!seen.length) {
+      ctx.bus.emit('message', { text: 'PCAP: nothing captured. Point the tap at hosts in view.', kind: 'warn' });
+      return;
+    }
+    seen.sort((a, b) => Math.hypot(a.x - ctx.playerX, a.y - ctx.playerY) - Math.hypot(b.x - ctx.playerX, b.y - ctx.playerY));
+    for (const e of seen.slice(0, 2)) ctx.bus.emit('message', { text: flowLine(e), kind: 'info' });
+    ctx.bus.emit('message', {
+      text: `${seen.length} host(s) copied. No verdict: MOUSE (2) decides.`,
+      kind: 'info',
+    });
   },
 };
+
+function idHash(s: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619) >>> 0;
+  return h;
+}
+
+/** One raw flow summary. Indicators are visible; interpreting them is the player's job. */
+export function flowLine(e: Entity): string {
+  const name = (e.def.inspect?.label ?? e.def.id).split(' (')[0];
+  const h = idHash(e.def.id);
+  const src = `10.0.${h % 40}.${10 + (h >> 8) % 200}`;
+  const cat = e.def.inspect?.category;
+  if (e.infected || cat === 'malware') {
+    return `PCAP ${name}: ${src} > 185.${(h >> 4) % 250}.${(h >> 12) % 250}.7:443, ${180 + (h % 60)} B every 60 s, also while idle`;
+  }
+  if (cat === 'suspicious' || cat === 'phishing') {
+    return `PCAP ${name}: ${src} > newly registered domain, TLS, irregular bursts`;
+  }
+  return `PCAP ${name}: ${src} > intranet:443 and the update server, bursty, follows user activity`;
+}

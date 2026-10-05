@@ -26,6 +26,7 @@ export const m01: Mission = {
     'is in front of you; on a device, that means connecting it. Charges are limited. ' +
     'Work out what is wrong, deal with it, and reach the exit.',
   authorizedRoles: ['staff'],
+  loadout: ['keyboard', 'mouse', 'usb', 'badge'],
   map: {
     grid: [
       '###############################SSSSSSSSS',
@@ -193,6 +194,21 @@ export const m01: Mission = {
       inspect: { label: 'Scanner charges', detail: 'Fresh antimalware definitions: ammo for the USB scanner.', category: 'item' } },
     { id: 'med-crawl', kind: 'item', x: 37.5, y: 1.5, sprite: 'medkit', grants: { resource: 'integrity', amount: 25 },
       inspect: { label: 'Integrity kit', detail: 'Restores 25 integrity.', category: 'item' } },
+    {
+      id: 'find-patch', kind: 'item', x: 22.5, y: 22.5, sprite: 'tool-patch',
+      tags: ['arsenal-pickup'], grants: { resource: 'tool:patch', amount: 1 },
+      inspect: { label: 'Patch disk (found)', detail: 'Vendor security updates for the floor\'s workstations.', category: 'item', objectives: ['2.5'] },
+    },
+    {
+      id: 'disk-hub', kind: 'item', x: 13.5, y: 7.5, sprite: 'patch-disk',
+      tags: ['arsenal-pickup'], grants: { resource: 'patch-disk', amount: 2 },
+      inspect: { label: 'Patch disks', detail: 'Signed vendor updates (verify the signature before you install).', category: 'item', objectives: ['2.5'] },
+    },
+    {
+      id: 'disk-south', kind: 'item', x: 36.5, y: 19.5, sprite: 'patch-disk',
+      tags: ['arsenal-pickup'], grants: { resource: 'patch-disk', amount: 2 },
+      inspect: { label: 'Patch disks', detail: 'Signed vendor updates (verify the signature before you install).', category: 'item', objectives: ['2.5'] },
+    },
   ],
   missionObjectives: [
     { id: 'turn-in', text: 'Turn the found USB in at the Security Desk', kind: 'interact', tag: 'security-desk' },

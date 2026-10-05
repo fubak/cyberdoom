@@ -27,6 +27,7 @@ briefing:
     'Your kit: MOUSE (2) inspects, KEYBOARD (1) operates consoles, USB SCANNER (3) cleans hosts, ' +
     'BADGE (4) opens doors your IR role covers.',
   authorizedRoles: ['analyst', 'ir'],
+  loadout: ['keyboard', 'mouse', 'usb', 'badge', 'mfa', 'tap', 'patch'],
   map: {
     grid: [
       'SSSSSSSSSS#####SSSSSSSSSS#####SSSSSSSSSS',
@@ -67,7 +68,7 @@ briefing:
       '.': { kind: 'floor', tex: 'floor' },
       'E': { kind: 'exit', tex: 'exit' },
       'e': { kind: 'door', tex: 'door', doorId: 'warroom-east' },
-      'N': { kind: 'door', tex: 'door', doorId: 'netcloset', accessRole: 'ir' },
+      'N': { kind: 'door', tex: 'door', doorId: 'netcloset', accessRole: 'ir', mfa: true },
       'V': {
         kind: 'door', tex: 'door', doorId: 'vault', locked: true,
         lockText: 'BACKUP VAULT: sealed until every infected host is eradicated. Restoring onto live malware re-encrypts backups',
@@ -155,6 +156,46 @@ briefing:
       inspect: { label: 'Integrity kit', detail: 'Restores 25 integrity.', category: 'item' } },
     { id: 'chg-closet', kind: 'item', x: 37.5, y: 18.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 6 },
       inspect: { label: 'Scanner charges', detail: 'Antimalware definitions.', category: 'item' } },
+    {
+      id: 'find-edr', kind: 'item', x: 3.5, y: 4.5, sprite: 'tool-edr',
+      tags: ['arsenal-pickup'], grants: { resource: 'tool:edr', amount: 1 },
+      inspect: { label: 'EDR console (found)', detail: 'Endpoint detection and response console with containment.', category: 'item', objectives: ['4.5'] },
+    },
+    {
+      id: 'cell-west', kind: 'item', x: 8.5, y: 13.5, sprite: 'edr-cell',
+      tags: ['arsenal-pickup'], grants: { resource: 'edr-cell', amount: 1 },
+      inspect: { label: 'EDR cell', detail: 'Licence/compute for one EDR containment pulse.', category: 'item', objectives: ['4.5'] },
+    },
+    {
+      id: 'cell-east', kind: 'item', x: 31.5, y: 17.5, sprite: 'edr-cell',
+      tags: ['arsenal-pickup'], grants: { resource: 'edr-cell', amount: 1 },
+      inspect: { label: 'EDR cell', detail: 'Licence/compute for one EDR containment pulse.', category: 'item', objectives: ['4.5'] },
+    },
+    {
+      id: 'cell-vault', kind: 'item', x: 36.5, y: 4.5, sprite: 'edr-cell',
+      tags: ['arsenal-pickup'], grants: { resource: 'edr-cell', amount: 1 },
+      inspect: { label: 'EDR cell', detail: 'Licence/compute for one EDR containment pulse.', category: 'item', objectives: ['4.5'] },
+    },
+    {
+      id: 'pcap-n', kind: 'item', x: 19.5, y: 8.5, sprite: 'pcap',
+      tags: ['arsenal-pickup'], grants: { resource: 'pcap', amount: 3 },
+      inspect: { label: 'Capture buffer', detail: 'Blank capture storage for the network tap.', category: 'item', objectives: ['3.2'] },
+    },
+    {
+      id: 'pcap-floor', kind: 'item', x: 26.5, y: 17.5, sprite: 'pcap',
+      tags: ['arsenal-pickup'], grants: { resource: 'pcap', amount: 3 },
+      inspect: { label: 'Capture buffer', detail: 'Blank capture storage for the network tap.', category: 'item', objectives: ['3.2'] },
+    },
+    {
+      id: 'disk-west', kind: 'item', x: 13.5, y: 12.5, sprite: 'patch-disk',
+      tags: ['arsenal-pickup'], grants: { resource: 'patch-disk', amount: 2 },
+      inspect: { label: 'Patch disks', detail: 'Signed vendor updates (verify the signature before you install).', category: 'item', objectives: ['2.5'] },
+    },
+    {
+      id: 'disk-east', kind: 'item', x: 28.5, y: 19.5, sprite: 'patch-disk',
+      tags: ['arsenal-pickup'], grants: { resource: 'patch-disk', amount: 2 },
+      inspect: { label: 'Patch disks', detail: 'Signed vendor updates (verify the signature before you install).', category: 'item', objectives: ['2.5'] },
+    },
   ],
   missionObjectives: [
     { id: 'identify', text: 'Identify patient zero and the C2 in NetFlow (war room)', kind: 'interact', tag: 'netflow' },

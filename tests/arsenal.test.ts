@@ -4,6 +4,7 @@ import { Arsenal, defaultLoadout } from '../src/tools/arsenal';
 import { useDuration } from '../src/tools/anim';
 import { EventBus } from '../src/core/events';
 import { objectiveById } from '../src/content/objectives';
+import { VOICES } from '../src/tools/sfx';
 import type { Entity, ToolUseContext } from '../src/core/types';
 
 function ctx(over: Partial<ToolUseContext> = {}): ToolUseContext {
@@ -22,8 +23,8 @@ function ent(id: string, over: Partial<Entity> = {}, inspectCat?: string): Entit
 }
 
 describe('arsenal contracts', () => {
-  it('registers six tools on slots 1-6', () => {
-    expect([1, 2, 3, 4, 5, 6].map((s) => toolForSlot(s)?.id)).toEqual(['keyboard', 'mouse', 'usb', 'badge', 'tap', 'edr']);
+  it('registers eight tools on slots 1-8', () => {
+    expect([1, 2, 3, 4, 5, 6, 7, 8].map((s) => toolForSlot(s)?.id)).toEqual(['keyboard', 'mouse', 'usb', 'badge', 'tap', 'edr', 'mfa', 'patch']);
   });
   it('every tool maps to a SY0-701 control with real objective ids', () => {
     for (const t of toolRegistry.all()) {
@@ -44,9 +45,11 @@ describe('arsenal contracts', () => {
   });
   it('loadout grows with difficulty', () => {
     expect(defaultLoadout({ difficulty: 1 })).toEqual(['keyboard', 'mouse', 'usb', 'badge']);
-    expect(defaultLoadout({ difficulty: 3 })).toContain('tap');
-    expect(defaultLoadout({ difficulty: 3 })).not.toContain('edr');
-    expect(defaultLoadout({ difficulty: 6 })).toContain('edr');
+    expect(defaultLoadout({ difficulty: 3 })).toContain('mfa');
+    expect(defaultLoadout({ difficulty: 3 })).not.toContain('tap');
+    expect(defaultLoadout({ difficulty: 6 })).toContain('tap');
+    expect(defaultLoadout({ difficulty: 6 })).not.toContain('edr');
+    expect(defaultLoadout({ difficulty: 9 })).toContain('edr');
     expect(defaultLoadout({ difficulty: 9, loadout: ['keyboard', 'badge'] })).toEqual(['keyboard', 'badge']);
   });
 });
@@ -119,16 +122,93 @@ describe('tool mechanics', () => {
     expect(logged).toEqual([false]);
   });
 
-  it('tap flags beaconing hosts in the cone but never cleans them', () => {
+  it('tap copies traffic in the cone but makes no verdict and never cleans', () => {
     const bus = new EventBus();
     const cleaned: string[] = [];
+    const msgs: string[] = [];
     bus.on('cleaned', ({ entityId }) => cleaned.push(entityId));
+    bus.on('message', ({ text }) => msgs.push(text));
     const host = ent('h', { infected: true }, 'malware');
+    const benign = ent('b', { y: 1.3 }, 'legit');
     const behind = ent('x', { infected: true, x: -5 }, 'malware');
-    toolForSlot(5)!.use(ctx({ bus, entities: [host, behind] }));
-    expect(host.state.flagged).toBe(true);
-    expect(behind.state.flagged).toBeUndefined();
+    toolForSlot(5)!.use(ctx({ bus, entities: [host, benign, behind] }));
+    expect(host.state.captured).toBe(true);
+    expect(benign.state.captured).toBe(true);
+    expect(behind.state.captured).toBeUndefined();
+    for (const e of [host, benign]) {
+      expect(e.state.flagged).toBeUndefined();
+      expect(e.state.inspected).toBeUndefined();
+    }
     expect(cleaned).toEqual([]);
+    expect(msgs.some((m) => m.includes('every 60 s'))).toBe(true);
+  });
+
+  it('mouse flags a tap-captured host in one click, graded by the analyst call', () => {
+    const bus = new EventBus();
+    const verdicts: boolean[] = [];
+    bus.on('triage', ({ correct }) => verdicts.push(correct));
+    const host = ent('h', { infected: true, state: { captured: true } }, 'malware');
+    toolForSlot(2)!.use(ctx({ bus, aimEntity: () => host }));
+    expect(verdicts).toEqual([true]);
+  });
+
+  it('mfa: an MFA door needs the badge AND the token; token alone fails', () => {
+    const bus = new EventBus();
+    const opened: string[] = [];
+    bus.on('badge-door', ({ doorId, allowed }) => { if (allowed) opened.push(doorId); });
+    const entities: Entity[] = [];
+    const door = () => ({ doorId: 'srv', accessRole: 'netops', dist: 1, mfa: true });
+    const c = ctx({ bus, entities, authorizedRoles: ['netops'], isDoorAhead: door });
+    toolForSlot(7)!.use(c);
+    expect(opened).toEqual([]);
+    toolForSlot(4)!.use(c);
+    expect(opened).toEqual([]);
+    toolForSlot(7)!.use(c);
+    expect(opened).toEqual(['srv']);
+  });
+
+  it('mfa: refuses phishing prompts and shared accounts', () => {
+    const bus = new EventBus();
+    const hits: boolean[] = [];
+    bus.on('tool-hit', ({ good }) => hits.push(good));
+    const phish = ent('p', {}, 'phishing');
+    const shared = ent('s');
+    shared.def.tags = ['shared-account'];
+    for (const e of [phish, shared]) toolForSlot(7)!.use(ctx({ bus, aimEntity: () => e }));
+    expect(hits).toEqual([false, false]);
+    expect(phish.state.mfaRefused).toBe(true);
+  });
+
+  it('patch disk: patches clean hosts, refuses infected ones, refunds misses', () => {
+    const tool = toolForSlot(8)!;
+    const clean = ent('c');
+    const infected = ent('i', { infected: true });
+    expect(tool.use(ctx({ aimEntity: () => clean }))).toBe(true);
+    expect(clean.state.patched).toBe(true);
+    expect(tool.use(ctx({ aimEntity: () => infected }))).toBe(false);
+    expect(infected.state.patched).toBeUndefined();
+    expect(tool.use(ctx())).toBe(false);
+    const a = new Arsenal(new EventBus());
+    a.reset({ difficulty: 1, loadout: ['patch'] }, 'male');
+    for (let i = 0; i < 40; i++) a.update(1 / 60, false, false, () => ctx());
+    const before = a.ammoFor();
+    a.update(1 / 60, true, true, () => ctx());
+    for (let i = 0; i < 40; i++) a.update(1 / 60, false, false, () => ctx());
+    expect(a.ammoFor()).toBe(before);
+  });
+
+  it('a found tool lights its ARMS slot and every resource reports current/max', () => {
+    const a = new Arsenal(new EventBus());
+    a.reset({ difficulty: 1 }, 'female');
+    expect(a.grant('tool:tap', 1)).toBe('YOU GOT THE NETWORK TAP!');
+    expect(a.got()?.slot).toBe(5);
+    const res = a.resources();
+    expect(res.map((r) => r.id)).toEqual(['usb-charge', 'pcap', 'edr-cell', 'patch-disk']);
+    const pcap = res.find((r) => r.id === 'pcap')!;
+    expect(pcap.owned).toBe(true);
+    expect(pcap.cur).toBeGreaterThan(0);
+    expect(pcap.max).toBe(12);
+    expect(res.find((r) => r.id === 'edr-cell')!.owned).toBe(false);
   });
 
   it('edr contains infected endpoints in radius', () => {
@@ -140,5 +220,17 @@ describe('tool mechanics', () => {
     const clean = ent('c');
     toolForSlot(6)!.use(ctx({ bus, entities: [near, far, clean] }));
     expect(cleaned).toEqual(['n']);
+  });
+});
+
+describe('analyst voices', () => {
+  it('each analyst has a distinct formant set, not one table pitch-scaled', () => {
+    const m = VOICES.male;
+    const f = VOICES.female;
+    const ratios = (['a', 'e', 'o', 'u'] as const).flatMap((v) => m.vowels[v].map((hz, i) => f.vowels[v][i] / hz));
+    const spread = Math.max(...ratios) - Math.min(...ratios);
+    expect(spread).toBeGreaterThan(0.1);
+    expect(f.breath).toBeGreaterThan(m.breath * 2);
+    expect(f.q).not.toEqual(m.q);
   });
 });
