@@ -172,7 +172,8 @@ export class Dossier {
     } else {
       this.drawFile(entries);
     }
-    drawText(g, 'A/D PAGE  W/S FILE  TAB LOG  ESC CLOSE', 21, 177, '#8a7868', 'small', null);
+    const hint = this.mode === 'log' ? 'W/S SELECT  ENTER OPEN  ESC BACK' : 'A/D PAGE  TAB LOG  ESC CLOSE';
+    drawText(g, hint, 21, 177, '#8a7868', 'small', null);
   }
 
   private drawFile(entries: EvidenceEntry[]): void {
