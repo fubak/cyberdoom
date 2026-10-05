@@ -197,3 +197,15 @@ html, body {
 .objlist .done { color: var(--green); }
 .objlist .failed { color: var(--red); }
 .objlist .pending { color: #887; }
+
+/* LOOK: pixel-art title/menu canvas fills the viewport at 320x200 */
+.screen.title { padding: 0; background: #000; overflow: hidden; }
+.screen.title canvas.title-px {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  cursor: pointer;
+}

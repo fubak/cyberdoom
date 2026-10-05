@@ -74,7 +74,7 @@ export class Hud {
 
   clearMessages(): void {
     this.messages = [];
-    this.objShowT = 6;
+    this.objShowT = 3.5;
     this.lastObjKey = '';
   }
 

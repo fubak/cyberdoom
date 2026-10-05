@@ -66,7 +66,7 @@ void main() {
       fl = r < 0.3 ? 0.4 : 1.0;
     }
     float s = abs(vShade) * uLight * fl;
-    L = s * 1.4 - vDist * (0.2 - s * 0.1);
+    L = s * 1.4 - vDist * (0.18 - s * 0.09);
     L = clamp(L, 0.025, 1.0);
     L = floor(L * 24.0 + 0.5) / 24.0;
   }
@@ -440,7 +440,7 @@ export class Renderer {
           if (d2 < 16) best = Math.max(best, ls * Math.exp(-d2 / 3.2));
         }
         const base = map.lightAt(x, y);
-        this.light[y * w + x] = Math.max(0.06, Math.min(1, base * (0.3 + 0.85 * best)));
+        this.light[y * w + x] = Math.max(0.08, Math.min(1, base * (0.42 + 0.75 * best)));
       }
     }
   }
@@ -489,7 +489,9 @@ export class Renderer {
       st.scale = scale;
       st.mesh.scale.set(set.w * scale, set.h * scale, 1);
       st.mesh.position.set(e.x, hop, e.y);
-      st.mat.uniforms.uLight.value = this.lightAt(e.x, e.y);
+      const lit = this.lightAt(e.x, e.y);
+      // threats stay readable even in black sectors (Doom's monsters are rarely pure silhouette)
+      st.mat.uniforms.uLight.value = e.def.kind === 'enemy' ? Math.max(0.8, lit) : e.def.kind === 'item' ? Math.max(0.7, lit) : lit;
     }
     for (const [id, st] of [...this.sprites]) {
       if (!seen.has(id) && st.entity && st.entity.alive === false) continue;
@@ -595,7 +597,7 @@ export class Renderer {
     // damage → palette red shift
     if (player.integrity < this.lastIntegrity) this.hurt = Math.min(0.62, this.hurt + 0.36 + (this.lastIntegrity - player.integrity) * 0.015);
     this.lastIntegrity = player.integrity;
-    this.hurt = Math.max(0, this.hurt - dt * 0.9);
+    this.hurt = Math.max(0, this.hurt - dt * 0.6);
     const lowHp = player.integrity > 0 && player.integrity < 25 ? 0.06 + Math.sin(this.time * 6) * 0.04 : 0;
     (this.postMat.uniforms.uTint.value as THREE.Vector4).set(1, 0.04, 0.02, Math.max(this.hurt, lowHp));
 
@@ -615,9 +617,23 @@ export class Renderer {
       st.mesh.rotation.set(0, yaw, 0);
       st.mat.uniforms.map.value = this.pickFrame(st, cameraAngle, cameraX, cameraY).tex;
       if (st.entity) {
-        // point-blank clamp: never let a sprite exceed ~90% of view height
-        const d = Math.hypot(st.mesh.position.x - cameraX, st.mesh.position.z - cameraY);
-        const maxH = 0.9 * 2 * Math.max(0.05, d) * Math.tan((this.camera.fov * Math.PI) / 360);
+        // point-blank: keep the sprite just in front of the near plane, and
+        // never taller than ~65% of the view so it still reads as a creature
+        let dx = st.mesh.position.x - cameraX;
+        let dz = st.mesh.position.z - cameraY;
+        let d = Math.hypot(dx, dz);
+        const MIN_D = 0.42;
+        if (d < MIN_D) {
+          if (d < 1e-3) {
+            dx = Math.cos(cameraAngle);
+            dz = Math.sin(cameraAngle);
+            d = 1;
+          }
+          st.mesh.position.x = cameraX + (dx / d) * MIN_D;
+          st.mesh.position.z = cameraY + (dz / d) * MIN_D;
+          d = MIN_D;
+        }
+        const maxH = 0.65 * 2 * d * Math.tan((this.camera.fov * Math.PI) / 360);
         const sc = Math.min(st.scale, maxH / st.set.h);
         st.mesh.scale.set(st.set.w * sc, st.set.h * sc, 1);
       }
