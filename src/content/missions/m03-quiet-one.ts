@@ -1,12 +1,20 @@
 import type { Mission } from '../../core/types';
 import type { MissionTeaching } from '../curriculum';
+import type { WalkStep } from '../../missions/walkthroughs';
+import { lightRects } from '../../missions/levelkit';
 
 /**
- * M3 "The Quiet One" — insider threat, correlating data sources.
- * Difficulty 6. Inspect NPCs with the Mouse to find the insider whose
- * indicators corroborate across data sources (badge, endpoint, DLP), then
- * report the correct person at the console. False accusations cost points.
- * Malware processes roam the floor.
+ * M3 "The Quiet One": insider threat, correlating data sources.
+ * Difficulty 5. Nobody's inspect text gives a verdict. Each log shows raw
+ * entries and three employees each appear in exactly one log with an innocent
+ * explanation. Only the insider appears in all three.
+ * Critical path, two concept gates:
+ *   1. RECORDS door (investigator role) after Legal/HR opens a case, which
+ *      itself needs the badge-log evidence first.
+ *   2. EXIT door opens only after a correct report, which needs all 3
+ *      evidence sources. A false report FAILS the mission.
+ * Loop: lobby → open floor → east hall → security office → lobby.
+ * Secrets: archive behind the floor's west wall, old mail room up north.
  */
 export const m03: Mission = {
   id: 'm03',
@@ -23,32 +31,60 @@ export const m03: Mission = {
   authorizedRoles: ['analyst'],
   map: {
     grid: [
-      '################',
-      '#......#......d#',
-      '#.###..#..###..#',
-      '#.#....#....#..#',
-      '#.#.##.#.##.#..#',
-      '#...#.....#....#',
-      '###.#.###.#.####',
-      '#...#.....#....#',
-      '#.#.#####.#.##.#',
-      '#.#.......#....#',
-      '#....E.........#',
-      '################',
+      '############################SSSSSSSSSSSS',
+      '###BBBBBBBBB################S....EE....S',
+      '###B.......B################S..........S',
+      '###B.......B################SSSSSXXSSSSS',
+      '###B.......B################S..........S',
+      '###B.......B################S..........S',
+      '###B.......B################S..........S',
+      '###BBBB2BBBB################S..SSSSSS..S',
+      'BBBB........................S..........S',
+      'B..B........................S..........S',
+      'B..1........................S..SSSSSS..S',
+      'B..B...###...###...###......S..........S',
+      'B..B....................S...V..........S',
+      'BBBB....................S...S..SSSSSS..S',
+      '####....................S...S..........S',
+      '####...###...###...###......S..........S',
+      '####........................S..SS..SS..S',
+      '####........................S..........S',
+      '####........................S..........S',
+      '####........................S..........S',
+      '###BBBBBB..BBBBBB###..######SSSSSSSSSSSS',
+      '###B............B###..#######.........##',
+      '###B............B###..#######.........##',
+      '###B........BB..B........####.........##',
+      '###B........BB..B........####.##......##',
+      '###B............d........g....##......##',
+      '###B............B........####.........##',
+      '###B............B........####.........##',
+      '###B............B........####.........##',
+      '###BBBBBBBBBBBBBB#######################',
     ],
     legend: {
-      '#': { kind: 'wall', tex: 'wall-server' },
+      '#': { kind: 'wall', tex: 'wall-panel' },
+      'S': { kind: 'wall', tex: 'wall-server' },
+      'B': { kind: 'wall', tex: 'wall-brick' },
       '.': { kind: 'floor', tex: 'floor' },
-      'd': { kind: 'door', tex: 'door', doorId: 'ops-door', accessRole: 'analyst' },
       'E': { kind: 'exit', tex: 'exit' },
+      'd': { kind: 'door', tex: 'door', doorId: 'secoffice' },
+      'g': { kind: 'door', tex: 'door', doorId: 'legal' },
+      'V': { kind: 'door', tex: 'door', doorId: 'records', accessRole: 'investigator' },
+      'X': {
+        kind: 'door', tex: 'door', doorId: 'exit-door', locked: true,
+        lockText: 'Building is in lockdown until the insider case is reported',
+      },
+      '1': { kind: 'door', tex: 'wall-brick', doorId: 'secret-archive', secret: true },
+      '2': { kind: 'door', tex: 'wall-brick', doorId: 'secret-mail', secret: true },
     },
-    spawn: { x: 1.5, y: 1.5, angle: 0 },
-    defaultLight: 0.75,
+    spawn: { x: 9.5, y: 27.5, angle: -Math.PI / 2 },
+    defaultLight: 0.7,
+    lights: lightRects([[4, 21, 15, 28, 0.85], [4, 8, 27, 19, 0.7], [17, 23, 24, 28, 0.8], [29, 21, 37, 28, 0.75], [29, 4, 38, 19, 0.45], [29, 1, 38, 2, 1.0], [1, 9, 2, 12, 0.3], [4, 2, 10, 6, 0.35]]),
   },
   entities: [
     {
-      id: 'insider', kind: 'npc', x: 11, y: 7.5, sprite: 'npc-suit',
-      ai: 'wander', reportable: true, culprit: true,
+      id: 'dana', kind: 'npc', x: 8.5, y: 12.5, sprite: 'npc-f', ai: 'stand', reportable: true, culprit: true,
       inspect: {
         label: 'R. Kell, R&D lead',
         detail: 'BADGE: Sun 03:12 entry, R&D wing (usually Mon-Fri 09-17). FILE SRV: 1,284 files / 40 GB read from \\\\designs\\confidential; his project share is \\\\designs\\atlas. ENDPOINT: USB mass-storage mounted 03:40, 40 GB written. HR: promotion denied last week.',
@@ -58,8 +94,7 @@ export const m03: Mission = {
       },
     },
     {
-      id: 'dev', kind: 'npc', x: 5, y: 3.5, sprite: 'npc-m',
-      ai: 'wander', reportable: true, culprit: false,
+      id: 'marcus', kind: 'npc', x: 14.5, y: 16.5, sprite: 'npc-m', ai: 'stand', reportable: true,
       inspect: {
         label: 'D. Ortiz, developer',
         detail: 'APP LOG: 9 git commits 22:10-23:40 to atlas-api (his team\'s repo). BADGE: late exits all of release week. FILE SRV: atlas share only. ENDPOINT: no removable media.',
@@ -68,8 +103,7 @@ export const m03: Mission = {
       },
     },
     {
-      id: 'hr', kind: 'npc', x: 9, y: 9.5, sprite: 'npc-f',
-      ai: 'stand', reportable: true, culprit: false,
+      id: 'priya', kind: 'npc', x: 20.5, y: 12.5, sprite: 'npc-f', ai: 'stand', reportable: true,
       inspect: {
         label: 'S. Patel, HR specialist',
         detail: 'OS SECURITY LOG: ~300 personnel records opened today; ~300/day for the past 2 years. BADGE: 08:30-17:15. ENDPOINT: no removable media. DLP: no alerts.',
@@ -78,8 +112,7 @@ export const m03: Mission = {
       },
     },
     {
-      id: 'intern', kind: 'npc', x: 3, y: 9.5, sprite: 'npc-m',
-      ai: 'wander', reportable: true, culprit: false,
+      id: 'tom', kind: 'npc', x: 26.5, y: 18.5, sprite: 'npc-suit', ai: 'stand', reportable: true,
       inspect: {
         label: 'J. Lee, intern',
         detail: 'Observed: avoids eye contact, fidgets when security walks past. BADGE: 09:00-17:00. FILE SRV: intern share only. ENDPOINT: no removable media.',
@@ -87,41 +120,75 @@ export const m03: Mission = {
       },
     },
     {
-      id: 'console', kind: 'console', x: 13, y: 1.5, sprite: 'console',
-      tags: ['report-console'],
-      inspect: {
-        label: 'Security console',
-        detail: 'Incident reporting channel. Use the KEYBOARD here to report your marked suspect. Hand over the evidence; do not confront them yourself (4.8).',
-        category: 'item',
-        objectives: ['4.8'],
-      },
+      id: 'badge-log', kind: 'console', x: 23.5, y: 27.5, sprite: 'console', tags: ['badge-log', 'evidence'],
+      log: 'BADGE LOG: after-hours entries, last 7 days\nSun 03:12 R.KELL (R&D lead): R&D wing (usual Mon-Fri 09-17)\nThu 23:44 D.ORTIZ (Dev): lobby exit, release week\nS.PATEL, J.LEE: none',
+      inspect: { label: 'Physical access control log', detail: 'Badge reader events for every door.', category: 'legit', objectives: ['4.9'] },
     },
     {
-      id: 'worm1', kind: 'enemy', x: 6, y: 5.5, sprite: 'worm',
-      ai: 'chase', hp: 1, infected: true, tags: ['infected'],
-      inspect: { label: 'Worm', detail: 'Self-replicating malware that spreads with no user action (2.4). One scanner charge.', category: 'malware', objectives: ['2.4'] },
+      id: 'legal', kind: 'console', x: 36.5, y: 27.5, sprite: 'console', tags: ['case'],
+      grants: { resource: 'role:investigator', amount: 1 },
+      log: 'LEGAL/HR: case #883 opened on documented after-hours access.\nInvestigator access to DLP and endpoint logs approved. Legal hold: preserve all evidence.',
+      inspect: { label: 'Legal / HR case desk', detail: 'Investigations into employees need a documented reason and authorization.', category: 'legit', objectives: ['4.9'] },
     },
     {
-      id: 'trojan1', kind: 'enemy', x: 10, y: 3.5, sprite: 'trojan',
-      ai: 'chase', hp: 1, infected: true, tags: ['infected'],
-      inspect: { label: 'Trojan', detail: 'Malware disguised as legitimate software. It needs a user to run it and does not self-replicate (2.4).', category: 'malware', objectives: ['2.4'] },
+      id: 'dlp', kind: 'console', x: 37.5, y: 4.5, sprite: 'console', tags: ['evidence'],
+      log: 'DLP ALERTS: overnight\nSun 03:31 rkell: 1,284 files / 40 GB read from \\\\designs\\confidential (role share: \\\\designs\\atlas)\nspatel: ~300 HR records/day inside HRIS (no outbound transfer)',
+      inspect: { label: 'DLP console', detail: 'Data-loss-prevention alerts on outbound transfers.', category: 'legit', objectives: ['4.9'] },
     },
     {
-      id: 'ransom1', kind: 'enemy', x: 7, y: 9.5, sprite: 'ransomware',
-      ai: 'chase', hp: 2, infected: true, tags: ['infected'],
-      inspect: { label: 'Ransomware', detail: 'Encrypts data and demands payment (2.4). Tougher: two scanner charges.', category: 'malware', objectives: ['2.4'] },
+      id: 'usb-audit', kind: 'console', x: 29.5, y: 18.5, sprite: 'console', tags: ['evidence'],
+      log: 'ENDPOINT USB AUDIT\nSun 03:40 RKELL-LT: USB mass storage mounted, 40 GB written\nDORTIZ-LT, SPATEL-PC, JLEE-PC: no removable media',
+      inspect: { label: 'Endpoint (EDR) USB audit', detail: 'Removable-media events reported by endpoint agents.', category: 'legit', objectives: ['4.9'] },
     },
     {
-      id: 'charge1', kind: 'item', x: 1.5, y: 10.5, sprite: 'charge',
-      tags: ['charge'], grants: { resource: 'usb-charge', amount: 6 },
-      inspect: { label: 'Scanner charges', detail: 'Antimalware updates — ammo for your USB scanner.', category: 'item' },
+      id: 'report-console', kind: 'console', x: 37.5, y: 18.5, sprite: 'console', tags: ['report-console'],
+      log: 'INSIDER REPORT: mark the employee with the KEYBOARD, then file here. The case needs all three evidence sources.',
+      inspect: { label: 'Case reporting console', detail: 'Files the insider report to Legal/HR and the SOC.', category: 'legit', objectives: ['4.9'] },
     },
+    { id: 'trojan-floor', kind: 'enemy', x: 16.5, y: 9.5, sprite: 'trojan', ai: 'wander', hp: 2, infected: true, tags: ['malware'],
+      inspect: { label: 'Trojan', detail: 'Bundled with a "free PDF converter".', category: 'malware', objectives: ['2.4'] } },
+    { id: 'worm-floor', kind: 'enemy', x: 25.5, y: 9.5, sprite: 'worm', ai: 'chase', hp: 1, infected: true, tags: ['malware'],
+      inspect: { label: 'Worm', detail: 'Self-propagating across file shares.', category: 'malware', objectives: ['2.4'] } },
+    { id: 'bomb-a', kind: 'enemy', x: 33.5, y: 16.5, sprite: 'trojan', ai: 'chase', hp: 2, infected: true, dormant: true, tags: ['malware'],
+      inspect: { label: 'Logic-bomb payload', detail: 'Dropped by a scheduled task set to fire when the logs were opened.', category: 'malware', objectives: ['2.4'] } },
+    { id: 'bomb-b', kind: 'enemy', x: 38.5, y: 11.5, sprite: 'trojan', ai: 'chase', hp: 2, infected: true, dormant: true, tags: ['malware'],
+      inspect: { label: 'Logic-bomb payload', detail: 'Dropped by a scheduled task set to fire when the logs were opened.', category: 'malware', objectives: ['2.4'] } },
+    { id: 'bomb-rw', kind: 'enemy', x: 29.5, y: 5.5, sprite: 'ransomware', ai: 'wander', hp: 3, infected: true, dormant: true, tags: ['malware'],
+      inspect: { label: 'Ransomware', detail: 'Encrypting the records share. The logic bomb\'s final stage.', category: 'malware', objectives: ['2.4'] } },
+    { id: 'chg-lobby', kind: 'item', x: 14.5, y: 22.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 4 },
+      inspect: { label: 'Scanner charges', detail: 'Antimalware definitions.', category: 'item' } },
+    { id: 'chg-floor', kind: 'item', x: 4.5, y: 18.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 4 },
+      inspect: { label: 'Scanner charges', detail: 'Antimalware definitions.', category: 'item' } },
+    { id: 'chg-legal', kind: 'item', x: 30.5, y: 22.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 4 },
+      inspect: { label: 'Scanner charges', detail: 'Antimalware definitions.', category: 'item' } },
+    { id: 'med-archive', kind: 'item', x: 1.5, y: 10.5, sprite: 'medkit', grants: { resource: 'integrity', amount: 25 },
+      inspect: { label: 'Integrity kit', detail: 'Restores 25 integrity.', category: 'item' } },
+    { id: 'chg-mail', kind: 'item', x: 5.5, y: 3.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 6 },
+      inspect: { label: 'Scanner charges', detail: 'Antimalware definitions.', category: 'item' } },
+    { id: 'med-mail', kind: 'item', x: 9.5, y: 5.5, sprite: 'medkit', grants: { resource: 'integrity', amount: 25 },
+      inspect: { label: 'Integrity kit', detail: 'Restores 25 integrity.', category: 'item' } },
   ],
   missionObjectives: [
-    { id: 'report-insider', text: 'Report the real insider at the console', kind: 'report' },
-    { id: 'no-false-accuse', text: 'No false accusations', kind: 'avoid', tag: 'false-accuse' },
+    { id: 'badge', text: 'Pull the after-hours badge log (security office)', kind: 'interact', tag: 'badge-log' },
+    { id: 'case', text: 'Get a case opened with Legal/HR', kind: 'interact', tag: 'case', requires: ['badge'] },
+    { id: 'evidence', text: 'Collect 3 evidence sources (badge, DLP, USB audit)', kind: 'interact', tag: 'evidence', count: 3 },
+    { id: 'report', text: 'Report the insider (mark, then file at the case console)', kind: 'report', requires: ['evidence'] },
+    { id: 'no-false', text: 'No false accusations (one ends the case)', kind: 'avoid', tag: 'false-accuse' },
     { id: 'exit', text: 'Reach the exit', kind: 'reach-exit' },
   ],
+  script: {
+    par: 240,
+    triggers: [
+      { id: 'logic-bomb', after: ['evidence'], spawn: ['bomb-a', 'bomb-b', 'bomb-rw'], kind: 'bad',
+        message: 'A scheduled task fired in the records wing: the insider left a logic bomb!' },
+      { id: 'lockdown-lift', after: ['report'], openDoors: ['exit-door'], kind: 'good',
+        message: 'Case filed: lockdown lifted, exit open.' },
+    ],
+    secrets: [
+      { id: 'archive', area: [1, 9, 2, 12], label: 'Paper archive' },
+      { id: 'mail', area: [4, 2, 10, 6], label: 'Old mail room' },
+    ],
+  },
   debriefQuestions: [
     {
       id: 'q1',
@@ -181,6 +248,29 @@ export const m03: Mission = {
   ],
 };
 
+export const m03Walkthrough: WalkStep[] = [
+  { goto: [15, 25] },
+  { use: [16, 25] },
+  { goto: [23, 26] },
+  { interact: 'badge-log' },
+  { goto: [24, 25] },
+  { use: [25, 25] },
+  { goto: [36, 26] },
+  { interact: 'legal' },
+  { goto: [27, 12] },
+  { badge: [28, 12] },
+  { goto: [37, 5] },
+  { interact: 'dlp' },
+  { goto: [29, 17] },
+  { interact: 'usb-audit' },
+  { goto: [9, 12] },
+  { interact: 'dana' },
+  { goto: [37, 17] },
+  { interact: 'report-console' },
+  { wait: 0.2 },
+  { goto: [33, 1] },
+];
+
 export const m03Teach: MissionTeaching = {
   situation:
     'A DLP alert fired overnight: confidential R&D designs left the network. The data was taken from inside, using valid credentials. Four employees had the opportunity. Only one has the evidence against them.',
@@ -192,20 +282,35 @@ export const m03Teach: MissionTeaching = {
   ],
   keyTerms: ['insider threat', 'data exfiltration', 'correlation', 'endpoint logs', 'data classification', 'intellectual property', 'chain of custody'],
   lessons: {
-    'report-insider': {
+    'report': {
       objective: '2.1',
       done: 'You reported the right person. Badge, file-server and endpoint logs each showed one piece, and correlated they told the whole story (4.9). That is how insider cases are built.',
       missed: 'The insider is still on the floor with confidential designs. The answer was in the logs: an after-hours badge-in, bulk access outside his role and a USB write, all from one person.',
     },
-    'no-false-accuse': {
+    'no-false': {
       objective: '2.4',
       done: 'No innocent colleague was accused. You waited until the evidence corroborated before you acted.',
       missed: 'You accused someone the evidence did not support. Working late, handling lots of data for the role, or looking nervous are not indicators on their own. False accusations hurt people and tip off the real culprit.',
     },
-    exit: {
+    'exit': {
       objective: '4.8',
       done: 'Case handed off to incident response.',
       missed: 'You did not reach the exit.',
+    },
+    'badge': {
+      objective: '4.9',
+      done: 'You started with the physical access log: badge readers record who entered where and when.',
+      missed: 'You never pulled the badge log, so nothing placed anyone on site after hours.',
+    },
+    'case': {
+      objective: '4.8',
+      done: 'You opened a documented case with Legal/HR before pulling employee DLP and endpoint records, with a legal hold to preserve evidence.',
+      missed: 'No case was opened. Investigating an employee needs authorization and a legal hold, or the evidence may be unusable.',
+    },
+    'evidence': {
+      objective: '4.9',
+      done: 'You correlated three independent sources: badge, DLP and endpoint USB audit. Only one person appears in all three.',
+      missed: 'You did not collect all three sources. One log alone has an innocent explanation; correlation is what makes it actionable.',
     },
   },
   examTip: 'For investigation questions, pick the data source that actually recorded the event. USB copy = endpoint logs. Who entered the building = badge/physical logs. What crossed the network = firewall/NetFlow/packet capture. Who logged in where = OS security logs.',

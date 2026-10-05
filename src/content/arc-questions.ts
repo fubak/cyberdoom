@@ -3,7 +3,7 @@ import type { Question } from '../core/types';
 type Opt = [text: string, explanation: string];
 
 /** Compact builder: `correct` is the 0-based index of the right option. */
-function q(id: string, objectives: string[], prompt: string, correct: number, opts: Opt[]): Question {
+export function q(id: string, objectives: string[], prompt: string, correct: number, opts: Opt[]): Question {
   return {
     id,
     prompt,
@@ -181,32 +181,6 @@ export const ARC_QUESTIONS: Record<string, Question[]> = {
       ['Static code analysis', 'Static analysis finds flaws in the source before release. It cannot prove the deployed binary is unmodified.'],
       ['Sandboxing', 'A sandbox isolates what code can do when it runs. It does not verify where the code came from.'],
       ['Secure cookies', 'Secure cookies protect session tokens in the browser and have nothing to do with build integrity.'],
-    ]),
-  ],
-  m09: [
-    q('q1', ['4.8'], 'Ransomware is actively spreading across the finance VLAN. You have confirmed it. What is the NEXT incident-response activity?', 1, [
-      ['Eradication: re-image the infected hosts', 'While it is still spreading, newly re-imaged hosts get reinfected. Contain first.'],
-      ['Containment: isolate the finance VLAN', 'Containment stops the spread so eradication and recovery can succeed. Order: detection, analysis, containment, eradication, recovery, lessons learned.'],
-      ['Recovery: restore from backups now', 'Restored systems on a live infected network will be encrypted again.'],
-      ['Lessons learned: hold the post-incident review', 'Lessons learned comes after recovery, not while the attack is live.'],
-    ]),
-    q('q2', ['4.8'], 'An infected laptop may become evidence in court. What must you document from the moment you collect it?', 2, [
-      ['Root cause analysis', 'RCA explains why the incident happened. It is not an evidence-handling record.'],
-      ['E-discovery', 'E-discovery is identifying and producing electronic information for legal proceedings, not proving how the item was handled.'],
-      ['Chain of custody', 'A record of who handled the evidence, when and how. Without it, the defense can argue tampering and the evidence may be excluded.'],
-      ['Threat hunting', 'Threat hunting is proactively searching for undetected threats, not evidence handling.'],
-    ]),
-    q('q3', ['3.4'], 'Payroll must be running again within one hour of losing the primary data center. Which recovery site meets that?', 3, [
-      ['Cold site', 'A cold site has space and power but no equipment or data. Recovery takes days to weeks.'],
-      ['Warm site', 'A warm site has some hardware but needs data restores and configuration, typically hours to days.'],
-      ['Restoring onsite backups at the destroyed data center', 'Onsite backups are lost with the site. That is why geographic dispersion matters.'],
-      ['Hot site', 'A hot site is fully equipped with near-current data and can take over in minutes to an hour.'],
-    ]),
-    q('q4', ['4.9'], 'Which data source BEST shows which internal host first connected to the ransomware\u2019s command-and-control IP, and when?', 0, [
-      ['Firewall logs / NetFlow records', 'Network logs record source, destination and time for every connection, so filtering on the C2 IP finds patient zero.'],
-      ['Vulnerability scan results', 'Scans show weaknesses, not who talked to whom.'],
-      ['Badge access logs', 'Badge logs show people entering doors, not hosts making connections.'],
-      ['The payroll application\u2019s log', 'An application log records app events, not outbound connections from every host.'],
     ]),
   ],
   m10: [

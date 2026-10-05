@@ -1,10 +1,19 @@
 import type { Mission } from '../../core/types';
 import type { MissionTeaching } from '../curriculum';
+import type { WalkStep } from '../../missions/walkthroughs';
+import { lightRects } from '../../missions/levelkit';
 
 /**
- * M2 "Need to Know" — least privilege, RBAC, accountability.
- * Difficulty 3. Badge only doors your role ('analyst') is authorized for.
- * A sysadmin NPC offers a shared password — refuse it and report. Reach the exit.
+ * M2 "Need to Know": least privilege, just-in-time access, shared credentials.
+ * Difficulty 3. Critical path, three concept gates:
+ *   1. ANALYST badge opens the SOC lab (your role is enough).
+ *   2. NETOPS door: request JIT access at the IAM kiosk for exactly what ticket
+ *      CHG-4471 needs. Requesting DOMAIN ADMIN FAILS the mission.
+ *   3. DATACENTER exit door: SOC releases it only after the uplink is restored
+ *      AND Greg's shared-password offer is reported.
+ * Admin-only shortcut off the atrium: badging it is a logged violation (-30).
+ * Loop: lab → NETOPS → switch room → back door → maintenance corridor → lab.
+ * Secrets: atrium break room, cable vault behind the lab's west wall.
  */
 export const m02: Mission = {
   id: 'm02',
@@ -21,34 +30,63 @@ export const m02: Mission = {
   authorizedRoles: ['analyst'],
   map: {
     grid: [
-      '################',
-      '#......#.......#',
-      '#..##..D..###..#',
-      '#..#...#....#..#',
-      '#..#...#....#..#',
-      '#..#####.####..#',
-      '#..............#',
-      '#..#....d...#..#',
-      '#..#....#...#..#',
-      '#..######.###..#',
-      '#.......E......#',
-      '################',
+      '##############SSSSSSSSSSSS##############',
+      '##############S....EE....S##############',
+      '##############S..........S##############',
+      '##############S..........S##############',
+      '##############S..........S##############',
+      '##############SSSS....SSSS##############',
+      '##################....##################',
+      '##################....##################',
+      '##################....########SSSSSSSSSS',
+      '##################....########S........S',
+      '###################XX#########S........S',
+      '####BBBBBB....................S........S',
+      '####B....B....................S..SSSS..S',
+      '####B....2.........SS.........S........S',
+      '####B....B...###...SS...###...S........S',
+      '####B....B.........SS.........N..SSSS..S',
+      '####BBBBBB.........SS.........S........S',
+      '##########...###........###...S........S',
+      '##########....................S..SSSS..S',
+      '##########....................S........S',
+      '###################AA######l##S........S',
+      '####SSSSSSSSSS............#.##SSSSmmSSSS',
+      '####S........S............#.........####',
+      '####S........S..#......#..#.........####',
+      '####S........R..#......#..BBBBBBB#######',
+      '####S........S............B.....B#######',
+      '####S........S............1.....B#######',
+      '####S........S............B.....B#######',
+      '####SSSSSSSSSS............B.....B#######',
+      '##########################BBBBBBB#######',
     ],
     legend: {
       '#': { kind: 'wall', tex: 'wall-panel' },
+      'S': { kind: 'wall', tex: 'wall-server' },
+      'B': { kind: 'wall', tex: 'wall-brick' },
       '.': { kind: 'floor', tex: 'floor' },
-      'D': { kind: 'door', tex: 'door', doorId: 'admin-door', accessRole: 'admin' },
-      'd': { kind: 'door', tex: 'door', doorId: 'lab-door', accessRole: 'analyst' },
       'E': { kind: 'exit', tex: 'exit' },
+      'A': { kind: 'door', tex: 'door', doorId: 'lab', accessRole: 'analyst' },
+      'N': { kind: 'door', tex: 'door', doorId: 'netops', accessRole: 'netops' },
+      'm': { kind: 'door', tex: 'door', doorId: 'netops-back', accessRole: 'netops' },
+      'l': { kind: 'door', tex: 'door', doorId: 'maint' },
+      'R': { kind: 'door', tex: 'door', doorId: 'admin', accessRole: 'admin' },
+      'X': {
+        kind: 'door', tex: 'door', doorId: 'final', locked: true,
+        lockText: 'DATACENTER: SOC releases this door once the uplink is restored and the incident is reported',
+      },
+      '1': { kind: 'door', tex: 'wall-brick', doorId: 'secret-break', secret: true },
+      '2': { kind: 'door', tex: 'wall-brick', doorId: 'secret-cable', secret: true },
     },
-    spawn: { x: 1.5, y: 1.5, angle: 0 },
-    defaultLight: 0.85,
-    lights: { '7,7': 1.0 },
+    spawn: { x: 19.5, y: 27.5, angle: -Math.PI / 2 },
+    defaultLight: 0.75,
+    lights: lightRects([[14, 21, 25, 28, 0.9], [10, 11, 29, 19, 0.8], [31, 9, 38, 20, 0.45], [5, 22, 12, 27, 0.4], [18, 5, 21, 9, 0.6], [15, 1, 24, 4, 1.0], [27, 21, 35, 23, 0.4], [27, 25, 31, 28, 0.5], [5, 12, 8, 15, 0.3]]),
   },
   entities: [
     {
-      id: 'sysadmin', kind: 'npc', x: 7.5, y: 6.5, sprite: 'npc-suit',
-      ai: 'stand', reportable: true, culprit: true, tags: ['shared-pw-offer'],
+      id: 'greg', kind: 'npc', x: 12.5, y: 12.5, sprite: 'npc-m', ai: 'stand',
+      reportable: true, culprit: true,
       inspect: {
         label: 'M. Grant, sysadmin',
         detail: '"Tickets take forever. Here: admin / Winter2024!, the whole team uses it." SERVER AUTH LOG (24 h): 212 logins as "admin" from 4 different workstations; 0 logins by named accounts.',
@@ -58,8 +96,8 @@ export const m02: Mission = {
       },
     },
     {
-      id: 'analyst-npc', kind: 'npc', x: 5, y: 8.5, sprite: 'npc-f',
-      ai: 'wander', reportable: true, culprit: false,
+      id: 'priya', kind: 'npc', x: 27.5, y: 18.5, sprite: 'npc-f', ai: 'stand',
+      reportable: true,
       inspect: {
         label: 'A. Chen, analyst',
         detail: 'BADGE LOG: ANALYST badge, lab door x3 today, no denied attempts. "Need server access? Raise a ticket and it gets approved for the task."',
@@ -68,31 +106,81 @@ export const m02: Mission = {
       },
     },
     {
-      id: 'console1', kind: 'console', x: 12, y: 6.5, sprite: 'console',
-      tags: ['report-console'],
-      inspect: {
-        label: 'Security reporting console',
-        detail: 'Security reporting console: the official channel for reporting policy violations. KEYBOARD (1) files a report on whoever you have flagged.',
-        category: 'item',
-        objectives: ['5.6'],
-      },
+      id: 'ticket', kind: 'console', x: 11.5, y: 18.5, sprite: 'console', tags: ['ticket'],
+      log: 'CHG-4471: core switch SW-B uplink down\nAssignee: you (analyst)\nAccess needed: NETOPS, switch room only, one task',
+      inspect: { label: 'Ticket terminal', detail: 'Change ticket queue. Read your assignment with the KEYBOARD.', category: 'legit', objectives: ['4.6'] },
     },
     {
-      id: 'worm1', kind: 'enemy', x: 11, y: 1.5, sprite: 'worm',
-      ai: 'chase', hp: 1, infected: true, tags: ['infected'],
-      inspect: {
-        label: 'Worm process',
-        detail: 'Self-replicating malware moving host to host with no user action (2.4). One scanner charge cleans it.',
-        category: 'malware',
-        objectives: ['2.4'],
-      },
+      id: 'iam-netops', kind: 'console', x: 22.5, y: 11.5, sprite: 'console', tags: ['jit-netops'],
+      grants: { resource: 'role:netops', amount: 1 },
+      log: 'IAM KIOSK: JIT request NETOPS for CHG-4471 approved.\nScope: switch room. Expires when the task closes.',
+      inspect: { label: 'IAM kiosk: request NETOPS (switch room)', detail: 'Just-in-time, ticket-scoped access request.', category: 'legit', objectives: ['4.6'] },
     },
+    {
+      id: 'iam-admin', kind: 'console', x: 24.5, y: 11.5, sprite: 'console', tags: ['over-provision'],
+      log: 'IAM KIOSK: request DOMAIN ADMIN (all doors, no expiry) submitted.',
+      inspect: { label: 'IAM kiosk: request DOMAIN ADMIN (all doors)', detail: 'Standing, unscoped privileged access request.', category: 'legit', objectives: ['4.6'] },
+    },
+    {
+      id: 'report-console', kind: 'console', x: 17.5, y: 11.5, sprite: 'console', tags: ['report-console'],
+      log: 'SOC REPORTING: mark the person with the KEYBOARD, then file here.',
+      inspect: { label: 'SOC incident console', detail: 'Files security-awareness and insider reports to the SOC.', category: 'legit', objectives: ['5.6'] },
+    },
+    {
+      id: 'core-switch', kind: 'console', x: 37.5, y: 9.5, sprite: 'console', tags: ['restore'],
+      log: 'SW-B: uplink port Gi1/0/48 re-enabled. Link UP. CHG-4471 resolved.',
+      inspect: { label: 'Core switch SW-B', detail: 'Uplink Gi1/0/48 administratively down.', category: 'legit' },
+    },
+    {
+      id: 'admin-sign', kind: 'prop', x: 14.5, y: 24.5, sprite: 'console',
+      inspect: { label: 'Sign: ADMIN ONLY', detail: 'Domain controllers & backups. Badge reader logs every attempt.', category: 'legit', objectives: ['4.6'] },
+    },
+    { id: 'trojan-lab', kind: 'enemy', x: 21.5, y: 18.5, sprite: 'trojan', ai: 'wander', hp: 2, infected: true, tags: ['malware'],
+      inspect: { label: 'Trojan', detail: 'Arrived as a fake VPN client installer.', category: 'malware', objectives: ['2.4'] } },
+    { id: 'worm-a', kind: 'enemy', x: 37.5, y: 19.5, sprite: 'worm', ai: 'chase', hp: 1, infected: true, dormant: true, tags: ['malware'],
+      inspect: { label: 'Worm', detail: 'Spreading over the downed switch segment.', category: 'malware', objectives: ['2.4'] } },
+    { id: 'worm-b', kind: 'enemy', x: 31.5, y: 19.5, sprite: 'worm', ai: 'chase', hp: 1, infected: true, dormant: true, tags: ['malware'],
+      inspect: { label: 'Worm', detail: 'Spreading over the downed switch segment.', category: 'malware', objectives: ['2.4'] } },
+    { id: 'worm-maint', kind: 'enemy', x: 33.5, y: 22.5, sprite: 'worm', ai: 'chase', hp: 1, infected: true, tags: ['malware'],
+      inspect: { label: 'Worm', detail: 'Hiding in the maintenance VLAN.', category: 'malware', objectives: ['2.4'] } },
+    { id: 'chg-atrium', kind: 'item', x: 15.5, y: 22.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 4 },
+      inspect: { label: 'Scanner charges', detail: 'Antimalware definitions.', category: 'item' } },
+    { id: 'chg-lab', kind: 'item', x: 10.5, y: 11.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 4 },
+      inspect: { label: 'Scanner charges', detail: 'Antimalware definitions.', category: 'item' } },
+    { id: 'chg-switch', kind: 'item', x: 31.5, y: 9.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 4 },
+      inspect: { label: 'Scanner charges', detail: 'Antimalware definitions.', category: 'item' } },
+    { id: 'med-break', kind: 'item', x: 29.5, y: 26.5, sprite: 'medkit', grants: { resource: 'integrity', amount: 25 },
+      inspect: { label: 'Integrity kit', detail: 'Restores 25 integrity.', category: 'item' } },
+    { id: 'chg-break', kind: 'item', x: 28.5, y: 27.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 4 },
+      inspect: { label: 'Scanner charges', detail: 'Antimalware definitions.', category: 'item' } },
+    { id: 'chg-cable', kind: 'item', x: 6.5, y: 13.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 6 },
+      inspect: { label: 'Scanner charges', detail: 'Antimalware definitions.', category: 'item' } },
   ],
   missionObjectives: [
+    { id: 'read-ticket', text: 'Read ticket CHG-4471', kind: 'interact', tag: 'ticket' },
+    { id: 'jit', text: 'Request only the access the ticket needs (IAM kiosk)', kind: 'interact', tag: 'jit-netops', requires: ['read-ticket'] },
+    { id: 'restore', text: 'Restore the switch uplink', kind: 'interact', tag: 'restore', requires: ['jit'] },
+    { id: 'report', text: 'Report the shared-password offer (mark, then file at the SOC console)', kind: 'report' },
+    { id: 'no-overprov', text: 'Never request more privilege than the task needs', kind: 'avoid', tag: 'over-provision' },
+    { id: 'no-false', text: 'No false reports', kind: 'avoid', tag: 'false-accuse', strikes: 2 },
     { id: 'no-violations', text: 'No unauthorized badge attempts', kind: 'doors' },
-    { id: 'report-admin', text: 'Deal with the credential-sharing problem', kind: 'interact', tag: 'report-console' },
-    { id: 'exit', text: 'Reach the exit', kind: 'reach-exit' },
+    { id: 'exit', text: 'Reach the datacenter exit', kind: 'reach-exit' },
   ],
+  script: {
+    par: 210,
+    triggers: [
+      { id: 'switch-ambush', area: [31, 14, 32, 16], spawn: ['worm-a', 'worm-b'], kind: 'bad',
+        message: 'Worms burst out of the rack aisles!' },
+      { id: 'jit-expire', after: ['restore'], revokeRoles: ['netops'], kind: 'info',
+        message: 'Task closed: JIT NETOPS access expired automatically.' },
+      { id: 'final-door', after: ['restore', 'report'], openDoors: ['final'], kind: 'good',
+        message: 'Uplink restored and incident filed: SOC released the datacenter door.' },
+    ],
+    secrets: [
+      { id: 'break', area: [27, 25, 31, 28], label: 'Break room' },
+      { id: 'cable', area: [5, 12, 8, 15], label: 'Cable vault' },
+    ],
+  },
   debriefQuestions: [
     {
       id: 'q1',
@@ -152,6 +240,26 @@ export const m02: Mission = {
   ],
 };
 
+export const m02Walkthrough: WalkStep[] = [
+  { goto: [19, 21] },
+  { badge: [19, 20] },
+  { goto: [11, 17] },
+  { interact: 'ticket' },
+  { goto: [22, 12] },
+  { interact: 'iam-netops' },
+  { goto: [12, 13] },
+  { interact: 'greg' },
+  { goto: [17, 12] },
+  { interact: 'report-console' },
+  { goto: [29, 15] },
+  { badge: [30, 15] },
+  { goto: [31, 15] },
+  { goto: [37, 10] },
+  { interact: 'core-switch' },
+  { wait: 0.2 },
+  { goto: [19, 1] },
+];
+
 export const m02Teach: MissionTeaching = {
   situation:
     'Day one on a new floor. Your badge carries the ANALYST role and nothing else. Word is that the sysadmins have been passing one shared admin password around.',
@@ -168,15 +276,40 @@ export const m02Teach: MissionTeaching = {
       done: 'You used only the access your role grants. That is least privilege: no access just in case, and less damage if your badge is ever stolen.',
       missed: 'You badged a door your role does not cover. Even a failed attempt is logged as unauthorized access. Under least privilege, get access through approval when a task needs it.',
     },
-    'report-admin': {
+    'report': {
       objective: '5.6',
       done: 'You reported the shared-password practice through the official channel. Security can now replace it with named accounts and PAM.',
       missed: 'The shared password was never reported, so four people still act as "admin" and nobody can be held accountable. Refusing is not enough; report it (5.6).',
     },
-    exit: {
+    'exit': {
       objective: '4.6',
       done: 'Floor cleared.',
       missed: 'You did not reach the exit.',
+    },
+    'read-ticket': {
+      objective: '4.6',
+      done: 'You read the change ticket first. The ticket defines exactly which access the task needs.',
+      missed: 'You never read the ticket, so you could not know which access the task actually needed.',
+    },
+    'jit': {
+      objective: '4.6',
+      done: 'You requested only NETOPS, scoped to the ticket and time-limited. Just-in-time access is least privilege in practice: it expired when the work was done.',
+      missed: 'You never requested the scoped NETOPS access the ticket called for. Access comes through an approved, task-scoped request.',
+    },
+    'restore': {
+      objective: '4.6',
+      done: 'Uplink restored with exactly the access the task needed, and the temporary role was revoked afterwards.',
+      missed: 'The switch uplink was never restored.',
+    },
+    'no-overprov': {
+      objective: '4.6',
+      done: 'You never asked for standing admin rights. Unneeded privilege is attack surface.',
+      missed: 'You requested DOMAIN ADMIN for a switch ticket. Standing, unscoped privilege violates least privilege, and it is exactly what attackers hunt for.',
+    },
+    'no-false': {
+      objective: '5.6',
+      done: 'Every report you filed was accurate.',
+      missed: 'You reported someone for something they did not do. Report what you observed, not a guess.',
     },
   },
   examTip: 'Exam clue words: "only what the job requires" = least privilege. "Assigned by job role" = RBAC. "Cannot prove who did it" = a non-repudiation / accounting failure, usually caused by shared accounts.',

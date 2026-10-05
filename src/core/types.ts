@@ -35,6 +35,15 @@ export interface CellDef {
   doorId?: string;
   /** For doors: role required to badge it open. Undefined = any role. */
   accessRole?: string;
+  /**
+   * For doors: a hidden door drawn with `tex` (looks like wall). Opens with
+   * Use (E) or the badge like any unrestricted door. LEVELS-owned.
+   */
+  secret?: boolean;
+  /** For doors: opened only by a MissionTrigger (`openDoors`), never by
+   *  Use or the badge. `lockText` is shown when the player tries it. */
+  locked?: boolean;
+  lockText?: string;
 }
 
 /** Grid map. `grid` rows must all have equal length; the border must be enclosed. */
@@ -88,8 +97,19 @@ export interface EntityDef {
   inspect?: InspectInfo;
   /** Custom tags for objective matching (e.g. "found-usb"). */
   tags?: string[];
-  /** Amount of a resource granted on pickup, e.g. {resource:'usb-charge',amount:4}. */
+  /** Amount of a resource granted on pickup, e.g. {resource:'usb-charge',amount:4}.
+   *  `role:<name>` grants a badge role (pickup or console interact);
+   *  `integrity` heals the player. */
   grants?: { resource: string; amount: number };
+  /** Starts inactive (not alive) until a MissionTrigger spawns it. */
+  dormant?: boolean;
+  /** Item is picked up into the player's inventory on touch (e.g. found USB). */
+  carry?: boolean;
+  /** Keyboard-interact consumes a carried item with this tag (turn-in desk,
+   *  or a trap like an unlocked PC that "plugs in" the found USB). */
+  accepts?: string;
+  /** Raw evidence shown when the Keyboard reads this console (logs, alerts). */
+  log?: string;
 }
 
 /** A mission objective tracked by the runtime and shown in the HUD/debrief. */
@@ -106,6 +126,11 @@ export interface MissionObjective {
     | 'interact'; // use console/tag
   tag?: string;
   count?: number;
+  /** Objective ids that must be done before this one can progress
+   *  (e.g. a report is refused until the evidence is collected). */
+  requires?: string[];
+  /** For 'avoid': violations allowed before the mission FAILS (default 1). */
+  strikes?: number;
 }
 
 export interface QuestionOption {
@@ -145,6 +170,39 @@ export interface Mission {
    * `grants: { resource: 'tool:<id>', amount: 1 }`.
    */
   loadout?: string[];
+  /** Level scripting: triggers, secrets, par time (LEVELS-owned). */
+  script?: MissionScript;
+}
+
+/** Inclusive tile rect [x0, y0, x1, y1]. */
+export type TileRect = [number, number, number, number];
+
+/** A scripted level event (Doom linedef-trigger analogue). Fires once. */
+export interface MissionTrigger {
+  id: string;
+  /** Fires when the player stands inside this rect (and `after` is satisfied). */
+  area?: TileRect;
+  /** Fires once all these objective ids are done (and `area` entered, if set). */
+  after?: string[];
+  message?: string;
+  kind?: 'info' | 'warn' | 'good' | 'bad';
+  /** Dormant entity ids to activate. */
+  spawn?: string[];
+  /** Door ids to open. */
+  openDoors?: string[];
+  grantRoles?: string[];
+  revokeRoles?: string[];
+}
+
+export interface MissionScript {
+  /** Par time in seconds for the end-of-level tally. */
+  par: number;
+  triggers?: MissionTrigger[];
+  /** Secret areas; entering one counts it once ("A secret is revealed!"). */
+  secrets?: { id: string; area: TileRect; label: string }[];
+  /** Reinfection: while objective `until` is not done, every `every`
+   *  seconds one cleaned entity tagged `tag` is re-infected. */
+  outbreak?: { tag: string; every: number; until: string; message: string };
 }
 
 /** Runtime state of a spawned entity (engine-owned). */

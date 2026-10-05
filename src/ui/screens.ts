@@ -1,6 +1,7 @@
 import type { Gender } from '../core/types';
 import { missionRegistry } from '../content/missions';
 import { objectiveById } from '../content/objectives';
+import { isUnlocked } from '../missions/progress';
 
 /**
  * ARSENAL/LOOK: HTML overlay screens — title, character select, mission
@@ -91,11 +92,15 @@ export function characterSelect(onPick: (g: Gender) => void): HTMLElement {
 export function missionSelect(onPick: (id: string) => void): HTMLElement {
   const s = el('div', 'screen');
   s.appendChild(el('h2', '', 'SELECT MISSION'));
-  for (const m of missionRegistry.all()) {
+  const missions = missionRegistry.all();
+  const orderedIds = missions.map((m) => m.id);
+  for (const m of missions) {
+    const unlocked = isUnlocked(m.id, orderedIds);
     const row = el('div', 'mission-row');
+    if (!unlocked) row.classList.add('locked');
     row.appendChild(el('span', 'diff', '☣'.repeat(Math.min(3, Math.ceil(m.difficulty / 3)))));
     const body = el('div');
-    body.appendChild(el('div', 'mtitle', `M${m.id.slice(1)} — ${m.title}`));
+    body.appendChild(el('div', 'mtitle', `M${m.id.slice(1)} — ${m.title}${unlocked ? '' : ' — LOCKED'}`));
     body.appendChild(
       el(
         'div',
@@ -106,7 +111,8 @@ export function missionSelect(onPick: (id: string) => void): HTMLElement {
       ),
     );
     row.appendChild(body);
-    row.addEventListener('click', () => onPick(m.id));
+    row.setAttribute('aria-disabled', String(!unlocked));
+    if (unlocked) row.addEventListener('click', () => onPick(m.id));
     s.appendChild(row);
   }
   return s;

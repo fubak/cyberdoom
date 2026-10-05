@@ -152,6 +152,7 @@ html, body {
   text-align: left;
 }
 .mission-row:hover { border-color: var(--red); }
+.mission-row.locked { opacity: 0.5; cursor: not-allowed; }
 .mission-row .diff { color: var(--red); font-size: 20px; min-width: 2ch; }
 .mission-row .mtitle { color: #fff; font-size: 18px; }
 .mission-row .objs { color: #7a9; font-size: 11px; }

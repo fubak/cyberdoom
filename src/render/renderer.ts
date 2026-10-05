@@ -285,7 +285,7 @@ export class Renderer {
           for (const [dx, dz] of DIRS) {
             const n = map.cellAt(tx + dx, ty + dz);
             if (!n || n.kind === 'wall') continue;
-            const isTrack = n.kind === 'door';
+            const isTrack = n.kind === 'door' && !n.secret;
             const b = isTrack
               ? builder('doortrak', textureOr('doortrak'))
               : builder(`w:${cell.tex}`, textureOr(cell.tex));
