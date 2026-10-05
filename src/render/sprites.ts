@@ -107,8 +107,8 @@ const wormModel: Model = (pose) => {
     const y = 5 + Math.pow(t, 1.25) * (39 + lift);
     const z = -20 * Math.pow(1 - t, 1.6) + lean * t * t;
     const r = 8.5 - t * 3;
-    out.push(ell([x, y, z], [r, r * 0.8, r], i % 2 ? '#c42a1a' : '#a0200f', {
-      decal: (l) => (l[2] > r * 0.4 && Math.abs(l[0]) < r * 0.55 ? (Math.abs(l[1]) < r * 0.22 ? '#ffb080' : '#e8643a') : null),
+    out.push(ell([x, y, z], [r, r * 0.8, r], i % 2 ? '#e8442a' : '#c8301a', {
+      decal: (l) => (l[2] > r * 0.4 && Math.abs(l[0]) < r * 0.55 ? (Math.abs(l[1]) < r * 0.22 ? '#ffb080' : '#ff8a50') : null),
     }));
     out.push(ell([x, y + r * 0.72, z - r * 0.3], [1.3, 2.8, 1.3], '#2a0604', { pitch: -0.4 }));
     const sw = Math.sin(ph + i * 1.3) * 2.5;
@@ -118,8 +118,8 @@ const wormModel: Model = (pose) => {
   const [hx, hy0, hz0] = last;
   const hy = hy0 + 9;
   const hz = hz0 + 3;
-  out.push(ell([hx, hy, hz], [10.5, 8.5, 10], '#b8200f'));
-  out.push(ell([hx, hy - 5, hz + 2], [8, 3.6, 7.5], '#6a1006'));
+  out.push(ell([hx, hy, hz], [10.5, 8.5, 10], '#e0381c'));
+  out.push(ell([hx, hy - 5, hz + 2], [8, 3.6, 7.5], '#901a0a'));
   for (const sx of [-1, 1]) {
     out.push(ell([hx + sx * 4.6, hy + 1.6, hz + 8.4], [2.7, 2.3, 1.6], '#ffe040', { glow: true }));
     out.push(ell([hx + sx * 4.2, hy + 2.2, hz + 9.6], [0.9, 0.9, 0.6], '#ffffff', { glow: true }));
@@ -150,14 +150,14 @@ const trojanModel: Model = (pose) => {
       const hip: V3 = [sx * 11, by - 4, z];
       const knee: V3 = [sx * 18, by + 7, z * 1.3 + swing * 0.5];
       const foot: V3 = [sx * 15, 1.5 + up, z * 1.7 + swing];
-      limb(out, hip, knee, 1.9, '#1c1224');
-      limb(out, knee, foot, 1.6, '#24182e');
-      out.push(ell(knee, [2.6, 2.6, 2.6], '#4a3460'));
-      out.push(ell(foot, [2.2, 1.4, 2.4], '#0c0810'));
+      limb(out, hip, knee, 1.9, '#6a508a');
+      limb(out, knee, foot, 1.6, '#7a609a');
+      out.push(ell(knee, [2.6, 2.6, 2.6], '#7a5aa0'));
+      out.push(ell(foot, [2.2, 1.4, 2.4], '#2a2036'));
     }
   }
-  out.push(box([0, by, 0], [12.5, 9.5, 10.5], '#7a2aa8', { decal: ribbon }));
-  out.push(box([0, by - 9.5, 0], [12.6, 0.8, 10.6], '#4a1868'));
+  out.push(box([0, by, 0], [12.5, 9.5, 10.5], '#c070ff', { decal: ribbon }));
+  out.push(box([0, by - 9.5, 0], [12.6, 0.8, 10.6], '#8a40b8'));
   const gapY = by + 9.5 + lid / 2;
   if (lid > 3) {
     out.push(box([0, gapY, 0], [11.5, lid / 2, 9.5], '#12041a'));
@@ -171,7 +171,7 @@ const trojanModel: Model = (pose) => {
     }
   }
   const ly = by + 9.5 + lid + 2.5;
-  out.push(box([0, ly, 0], [14, 2.5, 12], '#9a3ad0', { decal: ribbon, pitch: atk === 1 ? -0.25 : 0 }));
+  out.push(box([0, ly, 0], [14, 2.5, 12], '#d890ff', { decal: ribbon, pitch: atk === 1 ? -0.25 : 0 }));
   for (const sx of [-1, 1]) out.push(ell([sx * 4.8, ly + 5, 0], [5, 3.4, 2.4], '#f0d030', { roll: sx * 0.5 }));
   out.push(ell([0, ly + 3.6, 0], [2.4, 2.2, 2.4], '#c89a10'));
   out.push(box([9, by - 1, 11.2], [3.6, 2.6, 0.5], '#f4ecd8', { decal: (l) => (Math.abs(l[1]) < 0.8 && Math.abs(l[0]) < 2.6 ? '#c01818' : null), roll: 0.2 }));
