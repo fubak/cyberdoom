@@ -37,6 +37,8 @@ export interface EventMap {
   'badge-confirm': { allowed: boolean };
   /** A tool hit/affected an entity; drives viewmodel hit reactions. */
   'tool-hit': { toolId: string; entityId?: string; good: boolean };
+  /** A tool weakened an entity without cleaning it. */
+  'entity-hurt': { entityId: string; fromX: number; fromY: number };
   /** HUD ticker message. */
   message: { text: string; kind?: 'info' | 'warn' | 'good' | 'bad' };
 }

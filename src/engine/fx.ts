@@ -1,0 +1,177 @@
+export const MAX_PARTICLES = 384;
+
+export interface ParticleView {
+  x: Float32Array;
+  y: Float32Array;
+  z: Float32Array;
+  color: Float32Array;
+  size: Float32Array;
+  minPx: Float32Array;
+  count: number;
+}
+
+type Color = readonly [number, number, number];
+
+export class ParticleSystem {
+  readonly x = new Float32Array(MAX_PARTICLES);
+  readonly y = new Float32Array(MAX_PARTICLES);
+  readonly z = new Float32Array(MAX_PARTICLES);
+  readonly vx = new Float32Array(MAX_PARTICLES);
+  readonly vy = new Float32Array(MAX_PARTICLES);
+  readonly vz = new Float32Array(MAX_PARTICLES);
+  readonly gravity = new Float32Array(MAX_PARTICLES);
+  readonly life = new Float32Array(MAX_PARTICLES);
+  readonly maxLife = new Float32Array(MAX_PARTICLES);
+  readonly color = new Float32Array(MAX_PARTICLES * 3);
+  readonly size = new Float32Array(MAX_PARTICLES);
+  readonly minPx = new Float32Array(MAX_PARTICLES);
+  private readonly born = new Float64Array(MAX_PARTICLES);
+  private readonly currentView: ParticleView;
+  private count = 0;
+  private sequence = 0;
+
+  constructor(private readonly rng: () => number = Math.random) {
+    this.currentView = {
+      x: this.x,
+      y: this.y,
+      z: this.z,
+      color: this.color,
+      size: this.size,
+      minPx: this.minPx,
+      count: 0,
+    };
+  }
+
+  burst(x: number, y: number, z: number, kind: 'kill' | 'hit'): void {
+    const count = kind === 'kill' ? 48 : 10;
+    for (let i = 0; i < count; i++) {
+      const angle = this.rng() * Math.PI * 2;
+      const speed = kind === 'kill' ? 0.8 + this.rng() * 2 : 0.7 + this.rng() * 2.3;
+      const color: Color = kind === 'kill'
+        ? i % 6 === 0
+          ? [0.95, 1, 0.96]
+          : [0.24 + this.rng() * 0.2, 0.78 + this.rng() * 0.22, 0.3 + this.rng() * 0.16]
+        : i % 3 === 0
+          ? [1, 0.9, 0.68]
+          : [1, 0.24 + this.rng() * 0.3, 0.035];
+      this.add(
+        x, y, z,
+        Math.cos(angle) * speed,
+        Math.sin(angle) * speed,
+        kind === 'kill' ? 0.8 + this.rng() * 1.8 : 0.3 + this.rng() * 1.1,
+        kind === 'kill' ? 3.2 : 2.6,
+        kind === 'kill' ? 0.5 + this.rng() * 0.3 : 0.25,
+        color,
+        kind === 'kill' ? 0.025 + this.rng() * 0.045 : 0.035 + this.rng() * 0.04,
+        1,
+      );
+    }
+    if (kind === 'kill') this.add(x, y, z, 0, 0, 0, 0, 0.12, [1, 1, 1], 0.6, 6);
+  }
+
+  charge(x: number, y: number, z: number, k: number): void {
+    const t = Math.max(0, Math.min(1, k));
+    this.add(x, y, z, 0, 0, 0, 0, (1 / 60) * 0.9,
+      [1, 0.85 + 0.15 * t, 0.2 + 0.5 * t],
+      0.08 + 0.12 * t,
+      3 + 2 * t);
+  }
+
+  pop(x: number, y: number, z: number): void {
+    this.add(x, y, z, 0, 0, 0, 0, 0.1, [1, 1, 0.72], 0.28, 7);
+  }
+
+  update(dt: number): void {
+    if (dt <= 0) return;
+    let i = 0;
+    while (i < this.count) {
+      const previousLife = this.life[i];
+      const nextLife = previousLife - dt;
+      if (nextLife <= 0) {
+        this.count--;
+        if (i < this.count) this.copyParticle(i, this.count);
+        continue;
+      }
+      const fade = nextLife / previousLife;
+      const colorIndex = i * 3;
+      this.color[colorIndex] *= fade;
+      this.color[colorIndex + 1] *= fade;
+      this.color[colorIndex + 2] *= fade;
+      this.life[i] = nextLife;
+      this.vz[i] -= this.gravity[i] * dt;
+      this.x[i] += this.vx[i] * dt;
+      this.y[i] += this.vy[i] * dt;
+      this.z[i] = Math.max(0, this.z[i] + this.vz[i] * dt);
+      i++;
+    }
+    this.currentView.count = this.count;
+  }
+
+  view(): ParticleView {
+    this.currentView.count = this.count;
+    return this.currentView;
+  }
+
+  clear(): void {
+    this.count = 0;
+    this.currentView.count = 0;
+  }
+
+  private add(
+    x: number,
+    y: number,
+    z: number,
+    vx: number,
+    vy: number,
+    vz: number,
+    gravity: number,
+    life: number,
+    color: Color,
+    size: number,
+    minPx: number,
+  ): void {
+    let i: number;
+    if (this.count < MAX_PARTICLES) {
+      i = this.count++;
+    } else {
+      i = 0;
+      for (let j = 1; j < this.count; j++) {
+        if (this.born[j] < this.born[i]) i = j;
+      }
+    }
+    this.x[i] = x;
+    this.y[i] = y;
+    this.z[i] = z;
+    this.vx[i] = vx;
+    this.vy[i] = vy;
+    this.vz[i] = vz;
+    this.gravity[i] = gravity;
+    this.life[i] = life;
+    this.maxLife[i] = life;
+    this.born[i] = this.sequence++;
+    this.color[i * 3] = color[0];
+    this.color[i * 3 + 1] = color[1];
+    this.color[i * 3 + 2] = color[2];
+    this.size[i] = size;
+    this.minPx[i] = minPx;
+    this.currentView.count = this.count;
+  }
+
+  private copyParticle(to: number, from: number): void {
+    this.x[to] = this.x[from];
+    this.y[to] = this.y[from];
+    this.z[to] = this.z[from];
+    this.vx[to] = this.vx[from];
+    this.vy[to] = this.vy[from];
+    this.vz[to] = this.vz[from];
+    this.gravity[to] = this.gravity[from];
+    this.life[to] = this.life[from];
+    this.maxLife[to] = this.maxLife[from];
+    this.size[to] = this.size[from];
+    this.minPx[to] = this.minPx[from];
+    this.born[to] = this.born[from];
+    this.color[to * 3] = this.color[from * 3];
+    this.color[to * 3 + 1] = this.color[from * 3 + 1];
+    this.color[to * 3 + 2] = this.color[from * 3 + 2];
+  }
+}

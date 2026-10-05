@@ -14,15 +14,16 @@ interface EnemyProfile {
   speed: number;
   ranged: boolean;
   damage: number;
+  painChance: number;
   range?: number;
   projectileSpeed?: number;
   windup: number;
 }
 
 export const ENEMY_PROFILES: Record<string, EnemyProfile> = {
-  worm: { speed: 2.6, ranged: false, damage: 6, range: 0.95, windup: 0.3 },
-  trojan: { speed: 1.8, ranged: true, damage: 10, projectileSpeed: 5.5, windup: 0.5 },
-  ransomware: { speed: 1.3, ranged: true, damage: 18, projectileSpeed: 4, windup: 0.7 },
+  worm: { speed: 2.6, ranged: false, damage: 6, painChance: 0.8, range: 0.95, windup: 0.3 },
+  trojan: { speed: 1.8, ranged: true, damage: 10, painChance: 0.6, projectileSpeed: 5.5, windup: 0.5 },
+  ransomware: { speed: 1.3, ranged: true, damage: 18, painChance: 0.4, projectileSpeed: 4, windup: 0.7 },
 };
 
 const DIRECTIONS = Array.from({ length: 8 }, (_, i) => [
@@ -65,16 +66,10 @@ function pickMoveDir(e: Entity, map: WorldMap, dx: number, dy: number): number {
 function setRenderState(e: Entity, now: number): void {
   const currentMode = mode(e);
   const pop = Math.max(0, 1 - ((e.state.popT as number | undefined) ?? 0) / 0.24);
-  const windupT = (e.state.windupT as number | undefined) ?? 0;
-  const windupDur = (e.state.windupDur as number | undefined) ?? 1;
-  e.state.scale = currentMode === 'windup'
-    ? 1 + 0.18 * Math.min(1, windupT / windupDur)
-    : 1 + 0.25 * pop;
+  e.state.scale = currentMode === 'windup' ? 1 : 1 + 0.25 * pop;
   e.state.tint = currentMode === 'pain' || (e.state.flashT as number) > 0
     ? 0xff3030
-    : currentMode === 'windup' && Math.floor(now * 14) % 2 === 0
-      ? 0xff6060
-      : 0xffffff;
+    : 0xffffff;
   e.state.hop = currentMode === 'chase'
     ? Math.abs(Math.sin(now * 11 + (e.state.phase as number))) * 0.04
     : 0;
@@ -94,6 +89,17 @@ export function updateEntities(
   }
   for (const e of entities) {
     if (!e.alive) continue;
+    if (e.def.kind === 'enemy') {
+      const knockX = (e.state.knockVx as number | undefined) ?? 0;
+      const knockY = (e.state.knockVy as number | undefined) ?? 0;
+      if (knockX !== 0 || knockY !== 0) {
+        const res = map.resolve(e.x + knockX * dt, e.y + knockY * dt, 0.3);
+        e.x = res.x;
+        e.y = res.y;
+        e.state.knockVx = knockX * Math.exp(-5 * dt);
+        e.state.knockVy = knockY * Math.exp(-5 * dt);
+      }
+    }
     const ai = e.def.ai ?? 'stand';
     if (ai === 'chase') {
       const profile = ENEMY_PROFILES[e.def.sprite] ?? ENEMY_PROFILES.worm;
@@ -209,13 +215,6 @@ export function updateEntities(
       } else if (currentMode === 'pain') {
         const painT = ((e.state.painT as number | undefined) ?? 0) - dt;
         e.state.painT = painT;
-        const knockX = (e.state.knockVx as number | undefined) ?? 0;
-        const knockY = (e.state.knockVy as number | undefined) ?? 0;
-        const res = map.resolve(e.x + knockX * dt, e.y + knockY * dt, 0.3);
-        e.x = res.x;
-        e.y = res.y;
-        e.state.knockVx = knockX * Math.exp(-5 * dt);
-        e.state.knockVy = knockY * Math.exp(-5 * dt);
         if (painT <= 0) e.state.mode = 'chase';
       }
       const attackJustLanded = currentMode === 'windup' && mode(e) === 'recover';
@@ -224,6 +223,12 @@ export function updateEntities(
         : Math.min(0.24, ((e.state.popT as number | undefined) ?? 0) + dt);
       setRenderState(e, now);
     } else if (ai === 'wander') {
+      if (mode(e) === 'pain') {
+        const painT = ((e.state.painT as number | undefined) ?? 0) - dt;
+        e.state.painT = Math.max(0, painT);
+        if (painT <= 0) delete e.state.mode;
+        continue;
+      }
       const t = (e.state.wanderT = ((e.state.wanderT as number) ?? 0) + dt);
       if (t > 2) {
         e.state.wanderT = 0;
@@ -261,15 +266,24 @@ export function updateEntities(
   }
 }
 
-export function hurtEntity(e: Entity, fromDx: number, fromDy: number): void {
+export function damageEntity(e: Entity, dmg: number, fromDx: number, fromDy: number): 'killed' | 'hurt' {
+  e.hp -= dmg;
+  if (e.hp <= 0) return 'killed';
+  hurtEntity(e, fromDx, fromDy);
+  return 'hurt';
+}
+
+export function hurtEntity(e: Entity, fromDx: number, fromDy: number, rng = Math.random): void {
   const length = Math.hypot(fromDx, fromDy) || 1;
-  if (mode(e) === 'idle') e.state.sighted = true;
-  e.state.mode = 'pain';
-  e.state.painT = 0.3;
-  e.state.flashT = 0.12;
   e.hurtT = 0.25;
-  e.state.knockVx = (fromDx / length) * 2.5;
-  e.state.knockVy = (fromDy / length) * 2.5;
+  e.state.knockVx = (fromDx / length) * 1.5;
+  e.state.knockVy = (fromDy / length) * 1.5;
+  const painChance = ENEMY_PROFILES[e.def.sprite]?.painChance ?? 0;
+  if (painChance > 0 && rng() < painChance) {
+    if (e.def.ai === 'chase' && mode(e) === 'idle') e.state.sighted = true;
+    e.state.mode = 'pain';
+    e.state.painT = 0.2;
+  }
 }
 
 export function alertNear(entities: Entity[], x: number, y: number, radius: number): void {
