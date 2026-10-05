@@ -42,9 +42,12 @@ describe('doors', () => {
     const m = new WorldMap(def);
     m.startOpening('d1');
     m.updateDoors(0.1);
-    expect(m.doorFrac('d1')).toBeCloseTo(0.125);
+    expect(m.doorFrac('d1')).toBeCloseTo(0.1 / 0.55);
     expect(m.blocked(2, 2)).toBe(true);
-    m.updateDoors(0.7);
+    m.updateDoors(0.3);
+    expect(m.doorFrac('d1')).toBeCloseTo(0.4 / 0.55);
+    expect(m.blocked(2, 2)).toBe(false);
+    m.updateDoors(0.15);
     expect(m.doorFrac('d1')).toBe(1);
     expect(m.blocked(2, 2)).toBe(false);
   });
@@ -76,12 +79,14 @@ describe('Player movement', () => {
     const m = new WorldMap(open);
     const walk = new Player(20.5, 20.5, 0);
     const run = new Player(20.5, 20.5, 0);
+    expect(EYE_HEIGHT).toBe(0.6);
     for (let i = 0; i < 120; i++) {
       walk.move(m, 1, 0, false, 0, 1 / 60);
       run.move(m, 1, 0, true, 0, 1 / 60);
     }
     expect(Math.hypot(walk.vx, walk.vy) / EYE_HEIGHT).toBeCloseTo(7.1, 1);
     expect(Math.hypot(run.vx, run.vy) / EYE_HEIGHT).toBeCloseTo(14.2, 1);
+    expect(MOVE.stopSpeed / EYE_HEIGHT).toBeCloseTo(0.054);
   });
   it('accelerates to 90 percent of run terminal speed in about 0.67 seconds', () => {
     const open: MapDef = {
@@ -127,8 +132,14 @@ describe('Player movement', () => {
     expect(Math.hypot(p.vx, p.vy) / EYE_HEIGHT).toBeCloseTo(14.2 * Math.sqrt(1.64), 1);
   });
   it('slides along the wall when moving diagonally into it', () => {
-    const m = new WorldMap(def);
-    const p = new Player(3.5, 1.5, 0);
+    const openBeyondEastWall: MapDef = {
+      ...def,
+      grid: Array.from({ length: 20 }, (_, y) =>
+        y === 0 || y === 19 ? '#'.repeat(20) : `#...#${'.'.repeat(14)}#`,
+      ),
+    };
+    const m = new WorldMap(openBeyondEastWall);
+    const p = new Player(3.5, 5.5, 0);
     for (let i = 0; i < 36; i++) p.move(m, 1, 1, true, 0, 1 / 60);
     expect(p.x).toBeLessThan(4);
     expect(p.vy).toBeGreaterThan(MOVE.runSpeed * 0.6);

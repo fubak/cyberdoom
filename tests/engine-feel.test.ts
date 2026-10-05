@@ -32,6 +32,18 @@ function hooks(overrides: Partial<AiHooks> = {}): AiHooks {
 }
 
 describe('Feel', () => {
+  it('applies and decays trauma shake', () => {
+    const feel = new Feel();
+    const initial = feel.shake(0);
+    expect(Math.hypot(initial.yaw, initial.x, initial.y)).toBe(0);
+    feel.hurt(40);
+    const shake = feel.shake(0.123);
+    expect(Math.abs(shake.yaw) + Math.abs(shake.x) + Math.abs(shake.y)).toBeGreaterThan(0);
+    feel.update(1);
+    const decayed = feel.shake(0.123);
+    expect(Math.hypot(decayed.yaw, decayed.x, decayed.y)).toBe(0);
+  });
+
   it('returns a weapon switch exactly once and becomes ready after 0.36s', () => {
     const swap = new WeaponSwitch('keyboard');
     swap.request('usb');
@@ -127,6 +139,7 @@ describe('Doom enemy AI', () => {
     hurtEntity(hurt, 1, 0);
     updateEntities([hurt], map, new Player(7, 2.5, 0), 0.1, hooks());
     expect(hurt.state.mode).toBe('pain');
+    expect(hurt.hurtT).toBeCloseTo(0.15);
     expect(hurt.x).toBeGreaterThan(2.5);
     const near = enemy('near', 'worm', 2.5, 2.5);
     const far = enemy('far', 'worm', 7.5, 2.5);

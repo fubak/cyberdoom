@@ -148,6 +148,7 @@ export interface Entity {
   hp: number;
   alive: boolean;
   infected: boolean;
+  hurtT?: number;
   /** Door-esque interactables state etc. */
   state: Record<string, unknown>;
 }

@@ -453,13 +453,6 @@ export class Renderer {
           flash: 0, kind: 'prop', entity: null,
         };
         this.projSprites.set(p, st);
-      } else {
-        const setId = p.hostile ? 'fx-payload' : 'fx-scan';
-        if (st.setId !== setId) {
-          st.set = spriteSets.require(setId);
-          st.setId = setId;
-          st.mesh.scale.set(st.set.w, st.set.h, 1);
-        }
       }
       st.lastX = p.x;
       st.lastY = p.y;

@@ -56,7 +56,7 @@ export class WorldMap {
 
   updateDoors(dt: number): void {
     for (const id of this.openingDoors) {
-      const next = this.doorFrac(id) + dt / 0.8;
+      const next = this.doorFrac(id) + dt / 0.55;
       const frac = next >= 1 - 1e-9 ? 1 : next;
       this.doors.set(id, frac);
       if (frac >= 1) this.openingDoors.delete(id);

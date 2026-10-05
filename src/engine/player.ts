@@ -1,14 +1,14 @@
 import { WorldMap } from './map';
 
-export const EYE_HEIGHT = 0.5;
+export const EYE_HEIGHT = 0.6; // Must match EYE_H in renderer.ts.
 
 export const MOVE = {
-  walkSpeed: 3.55,
-  runSpeed: 7.1,
+  walkSpeed: 7.1 * EYE_HEIGHT,
+  runSpeed: 14.2 * EYE_HEIGHT,
   friction: 3.445,
   strafeScaleRun: 0.8,
   strafeScaleWalk: 0.96,
-  stopSpeed: 0.027,
+  stopSpeed: 0.027 * (EYE_HEIGHT / 0.5),
   keyTurnSlow: 1.07,
   keyTurnWalk: 2.15,
   keyTurnRun: 4.3,

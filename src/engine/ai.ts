@@ -88,7 +88,10 @@ export function updateEntities(
   hooks: AiHooks,
 ): void {
   const now = ((entities[0]?.state.aiClock as number | undefined) ?? 0) + dt;
-  for (const e of entities) e.state.aiClock = now;
+  for (const e of entities) {
+    e.state.aiClock = now;
+    e.hurtT = Math.max(0, (e.hurtT ?? 0) - dt);
+  }
   for (const e of entities) {
     if (!e.alive) continue;
     const ai = e.def.ai ?? 'stand';
@@ -264,6 +267,7 @@ export function hurtEntity(e: Entity, fromDx: number, fromDy: number): void {
   e.state.mode = 'pain';
   e.state.painT = 0.3;
   e.state.flashT = 0.12;
+  e.hurtT = 0.25;
   e.state.knockVx = (fromDx / length) * 2.5;
   e.state.knockVy = (fromDy / length) * 2.5;
 }
