@@ -526,7 +526,7 @@ describe('MissionRuntime', () => {
     expect(state.rt.scoreLog.filter((event) => event.tag === 'bad-choice')).toMatchObject([
       { text: 'Wrong call: Base64 option', points: -15, objectives: ['1.4'], tag: 'bad-choice' },
     ]);
-    expect(state.messages.filter((message) => message.text === 'Base64 is not hashing.')).toHaveLength(2);
+    expect(state.messages.filter((message) => message.text === 'Wrong call: Base64 option. Read why in the case file (L).')).toHaveLength(2);
     expect(state.rt.objectives[0]).toMatchObject({ progress: 0, done: false });
   });
 
