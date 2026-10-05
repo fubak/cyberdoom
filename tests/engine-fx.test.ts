@@ -33,8 +33,8 @@ describe('particle system', () => {
     const charge = new ParticleSystem();
     charge.charge(3, 4, 0.7, 0.5);
     expect(charge.view().count).toBe(1);
-    expect(charge.size[0]).toBeCloseTo(0.14);
-    expect(charge.minPx[0]).toBeCloseTo(4);
+    expect(charge.size[0]).toBeCloseTo(0.2);
+    expect(charge.minPx[0]).toBeCloseTo(5.5);
     expect(charge.color[0]).toBe(1);
     expect(charge.color[1]).toBeCloseTo(0.925);
     expect(charge.color[2]).toBeCloseTo(0.45);

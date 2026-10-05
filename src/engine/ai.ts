@@ -278,9 +278,13 @@ export function hurtEntity(e: Entity, fromDx: number, fromDy: number, rng = Math
   e.hurtT = 0.25;
   e.state.knockVx = (fromDx / length) * 1.5;
   e.state.knockVy = (fromDy / length) * 1.5;
+  if (e.def.ai === 'chase' && mode(e) === 'idle') {
+    e.state.mode = 'chase';
+    e.state.reaction = 0.25;
+    e.state.sighted = true;
+  }
   const painChance = ENEMY_PROFILES[e.def.sprite]?.painChance ?? 0;
   if (painChance > 0 && rng() < painChance) {
-    if (e.def.ai === 'chase' && mode(e) === 'idle') e.state.sighted = true;
     e.state.mode = 'pain';
     e.state.painT = 0.2;
   }

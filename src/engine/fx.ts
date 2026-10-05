@@ -73,8 +73,8 @@ export class ParticleSystem {
     const t = Math.max(0, Math.min(1, k));
     this.add(x, y, z, 0, 0, 0, 0, (1 / 60) * 0.9,
       [1, 0.85 + 0.15 * t, 0.2 + 0.5 * t],
-      0.08 + 0.12 * t,
-      3 + 2 * t);
+      0.12 + 0.16 * t,
+      4 + 3 * t);
   }
 
   pop(x: number, y: number, z: number): void {

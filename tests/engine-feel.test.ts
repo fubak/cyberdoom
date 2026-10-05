@@ -96,7 +96,7 @@ describe('Doom enemy AI', () => {
 
     const unstunned = enemy('unstunned', 'worm');
     hurtEntity(unstunned, 1, 0, () => 0.99);
-    expect(unstunned.state.mode).toBeUndefined();
+    expect(unstunned.state.mode).toBe('chase');
     expect(unstunned.hurtT).toBe(0.25);
     expect(unstunned.state.knockVx).toBe(1.5);
 
@@ -105,7 +105,7 @@ describe('Doom enemy AI', () => {
     expect(trojan.state.mode).toBe('pain');
     const ransomware = enemy('ransomware', 'ransomware');
     hurtEntity(ransomware, 1, 0, () => 0.5);
-    expect(ransomware.state.mode).toBeUndefined();
+    expect(ransomware.state.mode).toBe('chase');
     expect(ransomware.hurtT).toBe(0.25);
   });
 
