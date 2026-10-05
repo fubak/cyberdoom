@@ -361,9 +361,12 @@ describe('MissionRuntime', () => {
       state: { cleaned: false },
     });
     expect(state.rt.objectives[0]).toMatchObject({ progress: 0, done: false });
-    expect(state.rt.scoreLog).toHaveLength(0);
+    expect(state.rt.scoreLog).toContainEqual(expect.objectContaining({
+      text: 'Scanned an unconfirmed host: inspect it (MOUSE) before removing anything',
+      points: -10,
+    }));
     expect(state.messages.at(-1)?.text).toBe(
-      'Not cleaned: inspect WS-07 first. Analysis before action.',
+      'Scanned an unconfirmed host: inspect it (MOUSE) before removing anything -10',
     );
   });
 
@@ -403,7 +406,10 @@ describe('MissionRuntime', () => {
     }));
     state.bus.emit('interact', { entityId: 'host' });
     expect(state.rt.byId('host')).toMatchObject({ alive: true, infected: true, hp: 3 });
-    expect(state.rt.scoreLog).toHaveLength(0);
+    expect(state.rt.scoreLog).toContainEqual(expect.objectContaining({
+      text: 'Scanned an unconfirmed host: inspect it (MOUSE) before removing anything',
+      points: -10,
+    }));
 
     state.bus.emit('inspect', { entityId: 'host' });
     state.bus.emit('interact', { entityId: 'host' });
@@ -423,6 +429,7 @@ describe('MissionRuntime', () => {
       }],
       missionObjectives: [{ id: 'clean', text: 'Clean host', kind: 'clean', tag: 'infected' }],
     }));
+    state.bus.emit('inspect', { entityId: 'host' });
     state.bus.emit('cleaned', { entityId: 'host' });
 
     expect(state.rt.byId('host')?.alive).toBe(false);

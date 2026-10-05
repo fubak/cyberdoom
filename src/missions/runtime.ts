@@ -282,6 +282,8 @@ export class MissionRuntime {
   private rejectUnconfirmedHost(e: Entity): boolean {
     if (e.def.kind !== 'workstation' || e.state.revealed) return false;
     const text = 'Scanned an unconfirmed host: inspect it (MOUSE) before removing anything';
+    e.alive = true;
+    e.state.cleaned = false;
     e.hp = this.initialHp.get(e.def.id) ?? e.hp;
     e.infected = true;
     if (this.rejectedUnconfirmedHosts.has(e.def.id)) {

@@ -148,7 +148,7 @@ export const m02: Mission = {
       inspect: { label: 'Worm', detail: 'Hiding in the maintenance VLAN.', category: 'malware', objectives: ['2.4'] } },
     { id: 'chg-atrium', kind: 'item', x: 15.5, y: 22.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 4 },
       inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for your write-protected scanner stick.', category: 'item' } },
-    { id: 'chg-lab', kind: 'item', x: 10.5, y: 11.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 4 },
+    { id: 'chg-lab', kind: 'item', x: 10.5, y: 11.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 8 },
       inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for your write-protected scanner stick.', category: 'item' } },
     { id: 'chg-switch', kind: 'item', x: 31.5, y: 9.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 4 },
       inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for your write-protected scanner stick.', category: 'item' } },
