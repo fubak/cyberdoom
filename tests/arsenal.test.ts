@@ -112,6 +112,32 @@ describe('tool mechanics', () => {
     expect(mal.state.flagCorrect).toBe(true);
   });
 
+  it('mouse inspects triage hosts but refuses the verdict on later clicks', () => {
+    const bus = new EventBus();
+    const inspected: string[] = [];
+    const verdicts: boolean[] = [];
+    const messages: string[] = [];
+    bus.on('inspect', ({ entityId }) => inspected.push(entityId));
+    bus.on('triage', ({ correct }) => verdicts.push(correct));
+    bus.on('message', ({ text }) => messages.push(text));
+    const host = ent('triage', { infected: true }, 'item');
+    host.def.tags = ['triage'];
+    const mouse = toolForSlot(2)!;
+
+    mouse.use(ctx({ bus, aimEntity: () => host }));
+    mouse.use(ctx({ bus, aimEntity: () => host }));
+    expect(inspected).toEqual(['triage']);
+    expect(verdicts).toEqual([]);
+    expect(host.state.flagged).toBeUndefined();
+    expect(messages).toContain('Decide from the raw evidence: SCANNER quarantines/patches, KEYBOARD releases.');
+
+    const captured = ent('captured-triage', { infected: false, state: { captured: true } }, 'item');
+    captured.def.tags = ['triage'];
+    mouse.use(ctx({ bus, aimEntity: () => captured }));
+    expect(inspected).toEqual(['triage', 'captured-triage']);
+    expect(verdicts).toEqual([]);
+  });
+
   it('badge: a repeated denied swipe at the same door logs only one violation', () => {
     const bus = new EventBus();
     const logged: boolean[] = [];

@@ -13,7 +13,7 @@ const terminals: EntityDef[] = [
     inspect: {
       label: 'Message terminal M-01',
       detail: 'From: CEO <ceo@cyberdoom.example>; Reply-To: ceo.wire@cyberdoorn.example; Return-Path: bounce@wire-notice.example; SPF=fail; DKIM=none; Link host=wire-notice.example; Body: "Urgent wire transfer; keep this request confidential."',
-      category: 'suspicious',
+      category: 'item',
       objectives: ['5.6', '2.2'],
     },
   },
@@ -23,7 +23,7 @@ const terminals: EntityDef[] = [
     inspect: {
       label: 'Message terminal M-02',
       detail: 'From: Support <service@micros0ft-support.com>; Reply-To: service@micros0ft-support.com; Return-Path: bounces@micros0ft-support.com; SPF=pass; DKIM=pass; Link host=micros0ft-support.com; Body: "Verify your mailbox before the support session expires."',
-      category: 'suspicious',
+      category: 'item',
       objectives: ['5.6', '2.2'],
     },
   },
@@ -33,7 +33,7 @@ const terminals: EntityDef[] = [
     inspect: {
       label: 'Message terminal M-03',
       detail: 'From: Accounts Payable <billing@vendor-payments.example>; Reply-To: billing@vendor-payments.example; Return-Path: batch@vendor-payments.example; SPF=pass; DKIM=fail; Link host=vendor-invoice.example; Body: "Review the attached invoice and confirm the revised bank details."',
-      category: 'suspicious',
+      category: 'item',
       objectives: ['5.6', '2.2'],
     },
   },
@@ -43,7 +43,7 @@ const terminals: EntityDef[] = [
     inspect: {
       label: 'Message terminal M-04',
       detail: 'From: Identity Team <alerts@cyberdoom-login.example>; Reply-To: alerts@cyberdoom-login.example; Return-Path: relay@cyberdoom-login.example; SPF=softfail; DKIM=none; Link host=cyberdoom-login.example; Body: "Your account will be disabled unless you sign in today."',
-      category: 'suspicious',
+      category: 'item',
       objectives: ['5.6', '2.2'],
     },
   },
@@ -53,7 +53,7 @@ const terminals: EntityDef[] = [
     inspect: {
       label: 'Message terminal M-08',
       detail: 'From: +1-555-0107; Reply-To: none; Return-Path: none; SPF=not applicable; DKIM=not applicable; Link host=micros0ft-support.com; Body: "Payroll account suspended. Sign in within one hour."',
-      category: 'suspicious',
+      category: 'item',
       objectives: ['5.6', '2.2'],
     },
   },
@@ -63,7 +63,7 @@ const terminals: EntityDef[] = [
     inspect: {
       label: 'Message terminal M-05',
       detail: 'From: Benefits <benefits@cyberdoom.example>; Reply-To: benefits@cyberdoom.example; Return-Path: bounce@cyberdoom.example; SPF=pass; DKIM=pass; Link host=portal.cyberdoom.example; Body: "Open enrollment closes Friday."',
-      category: 'legit',
+      category: 'item',
       objectives: ['5.6'],
     },
   },
@@ -73,7 +73,7 @@ const terminals: EntityDef[] = [
     inspect: {
       label: 'Message terminal M-06',
       detail: 'From: Service Desk <help@cyberdoom.example>; Reply-To: help@cyberdoom.example; Return-Path: help@cyberdoom.example; SPF=pass; DKIM=pass; Link host=support.cyberdoom.example; Body: "Your requested ticket update is ready."',
-      category: 'legit',
+      category: 'item',
       objectives: ['5.6'],
     },
   },
@@ -83,7 +83,7 @@ const terminals: EntityDef[] = [
     inspect: {
       label: 'Message terminal M-07',
       detail: 'From: Payroll <payroll@cyberdoom.example>; Reply-To: payroll@cyberdoom.example; Return-Path: payroll@cyberdoom.example; SPF=pass; DKIM=pass; Link host=payroll.cyberdoom.example; Body: "The scheduled pay statement is available."',
-      category: 'legit',
+      category: 'item',
       objectives: ['5.6'],
     },
   },

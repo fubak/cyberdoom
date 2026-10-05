@@ -50,32 +50,32 @@ const evidenceAndWork: EntityDef[] = [
   {
     id: 'vuln-hr', kind: 'workstation', x: 15.5, y: 18.5, sprite: 'workstation-infected',
     infected: true, tags: ['triage', 'vulnerability-confirmed'],
-    inspect: { label: 'Scan finding HR-01', detail: 'Scanner: vulnerable service present on payroll relay. Service banner and package version match the finding.', category: 'malware', objectives: ['4.3'] },
+    inspect: { label: 'Scan finding HR-01', detail: 'Scanner: vulnerable service present on payroll relay. Service banner and package version match the finding.', category: 'item', objectives: ['4.3'] },
   },
   {
     id: 'vuln-db', kind: 'workstation', x: 23.5, y: 18.5, sprite: 'workstation-infected',
     infected: true, tags: ['triage', 'vulnerability-confirmed'],
-    inspect: { label: 'Scan finding PAY-02', detail: 'Scanner: vulnerable service present on payroll database. Listener and package version match the finding.', category: 'malware', objectives: ['4.3'] },
+    inspect: { label: 'Scan finding PAY-02', detail: 'Scanner: vulnerable service present on payroll database. Listener and package version match the finding.', category: 'item', objectives: ['4.3'] },
   },
   {
     id: 'vuln-web', kind: 'workstation', x: 15.5, y: 12.5, sprite: 'workstation-infected',
     infected: true, tags: ['triage', 'vulnerability-confirmed'],
-    inspect: { label: 'Scan finding HR-03', detail: 'Scanner: vulnerable service present on the HR export host. Listener and package version match the finding.', category: 'malware', objectives: ['4.3'] },
+    inspect: { label: 'Scan finding HR-03', detail: 'Scanner: vulnerable service present on the HR export host. Listener and package version match the finding.', category: 'item', objectives: ['4.3'] },
   },
   {
     id: 'vuln-api', kind: 'workstation', x: 23.5, y: 12.5, sprite: 'workstation-infected',
     infected: true, tags: ['triage', 'vulnerability-confirmed'],
-    inspect: { label: 'Scan finding PAY-04', detail: 'Scanner: vulnerable service present on the payroll API host. Listener and package version match the finding.', category: 'malware', objectives: ['4.3'] },
+    inspect: { label: 'Scan finding PAY-04', detail: 'Scanner: vulnerable service present on the payroll API host. Listener and package version match the finding.', category: 'item', objectives: ['4.3'] },
   },
   {
     id: 'false-positive-old-service', kind: 'workstation', x: 11.5, y: 14.5, sprite: 'workstation',
     infected: false, tags: ['triage'],
-    inspect: { label: 'Scan finding ARCH-05', detail: 'Service inventory: the flagged legacy file-transfer service is absent; package not installed and no listening socket is present.', category: 'legit', objectives: ['4.3'] },
+    inspect: { label: 'Scan finding ARCH-05', detail: 'Service inventory: the flagged legacy file-transfer service is absent; package not installed and no listening socket is present.', category: 'item', objectives: ['4.3'] },
   },
   {
     id: 'false-positive-printer', kind: 'workstation', x: 31.5, y: 5.5, sprite: 'workstation',
     infected: false, tags: ['triage'],
-    inspect: { label: 'Scan finding PRINT-06', detail: 'Service inventory: the flagged database listener is absent; package not installed and no listening socket is present.', category: 'legit', objectives: ['4.3'] },
+    inspect: { label: 'Scan finding PRINT-06', detail: 'Service inventory: the flagged database listener is absent; package not installed and no listening socket is present.', category: 'item', objectives: ['4.3'] },
   },
 ];
 

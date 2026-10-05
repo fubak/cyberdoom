@@ -145,6 +145,13 @@ describe('missions', () => {
       ).toBeGreaterThanOrEqual(1.25 * infectedHp);
     }
   });
+  it('keeps triage evidence categories neutral and consistent within each mission', () => {
+    for (const m of missions) {
+      const triage = m.entities.filter((entity) => entity.tags?.includes('triage'));
+      if (triage.length === 0) continue;
+      expect(new Set(triage.map((entity) => entity.inspect?.category)), m.id).toEqual(new Set(['item']));
+    }
+  });
 
   for (const m of missions) {
     describe(m.id, () => {
