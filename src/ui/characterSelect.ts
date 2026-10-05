@@ -6,18 +6,19 @@ import { usbTool } from '../tools/usb';
 import { drawBigText, drawChunky, drawText, measureBig, measureChunky, measureText, wrapText } from '../render/font';
 import { drawSkull } from '../render/title';
 import { drawToolViewmodel } from '../render/viewmodels';
+import { BASE_H, BASE_W, RES, VIEW_H, VIEW_W } from '../render/res';
 
 /**
  * ARSENAL: character select. Two analysts with distinct procedural portraits,
  * bios, voices and viewmodel hands. A shared skin-tone picker is independent
  * of gender. Keyboard: ←/→ choose, 1-5 skin tone, Enter deploy.
  *
- * LOOK: presented on a 320x200 pixelated canvas in the title/HUD bitmap style.
+ * LOOK: presented on a 1280x800 canvas with a 320x200 base layout.
  * Every clickable region is also a transparent <button data-menu-item> laid
  * over it (analyst-male, analyst-female, skin-1..5, deploy).
  */
-const W = 320;
-const H = 200;
+const W = BASE_W;
+const H = BASE_H;
 const CARD_W = 146;
 const CARD_H = 124;
 const CARD_Y = 26;
@@ -29,40 +30,51 @@ const AMBER = ['#fff0a0', '#ffd040', '#ffa818', '#d07808', '#8a4804'];
 
 function paintBackdrop(): HTMLCanvasElement {
   const c = document.createElement('canvas');
-  c.width = W;
-  c.height = H;
+  c.width = VIEW_W;
+  c.height = VIEW_H;
   const g = c.getContext('2d')!;
+  const image = g.createImageData(VIEW_W, VIEW_H);
   let s = 99;
   const r = () => ((s = (s * 16807) % 2147483647) / 2147483647);
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) {
-      const k = y / H;
+  for (let y = 0; y < VIEW_H; y++) {
+    for (let x = 0; x < VIEW_W; x++) {
+      const k = y / VIEW_H;
       const v = Math.floor(r() * 10) - (r() < 0.03 ? 10 : 0);
-      g.fillStyle = `rgb(${Math.max(0, 26 + k * 18 + v)},${Math.max(0, 12 + k * 6 + v)},${Math.max(0, 12 + v)})`;
-      g.fillRect(x, y, 1, 1);
+      const i = (y * VIEW_W + x) * 4;
+      image.data[i] = Math.max(0, 26 + k * 18 + v);
+      image.data[i + 1] = Math.max(0, 12 + k * 6 + v);
+      image.data[i + 2] = Math.max(0, 12 + v);
+      image.data[i + 3] = 255;
     }
   }
   // riveted steel header band
-  for (let y = 0; y < 22; y++) {
-    for (let x = 0; x < W; x++) {
+  for (let y = 0; y < 22 * RES; y++) {
+    for (let x = 0; x < VIEW_W; x++) {
       const v = 70 + Math.floor(r() * 14);
-      g.fillStyle = `rgb(${v + 4},${v},${v - 8})`;
-      g.fillRect(x, y, 1, 1);
+      const i = (y * VIEW_W + x) * 4;
+      image.data[i] = v + 4;
+      image.data[i + 1] = v;
+      image.data[i + 2] = v - 8;
     }
   }
-  g.fillStyle = '#c8c0b0';
-  g.fillRect(0, 0, W, 1);
-  g.fillStyle = '#2a2722';
-  g.fillRect(0, 21, W, 1);
-  for (let x = 4; x < W; x += 24) {
-    g.fillStyle = '#f0e8d8';
-    g.fillRect(x, 3, 1, 1);
-    g.fillRect(x, 17, 1, 1);
+  for (let x = 0; x < VIEW_W; x++) {
+    let i = x * 4;
+    image.data[i] = 0xc8; image.data[i + 1] = 0xc0; image.data[i + 2] = 0xb0;
+    i = ((21 * RES) * VIEW_W + x) * 4;
+    image.data[i] = 0x2a; image.data[i + 1] = 0x27; image.data[i + 2] = 0x22;
   }
+  for (let x = 4 * RES; x < VIEW_W; x += 24 * RES) {
+    for (const y of [3, 17]) {
+      const i = ((y * RES) * VIEW_W + x) * 4;
+      image.data[i] = 0xf0; image.data[i + 1] = 0xe8; image.data[i + 2] = 0xd8;
+    }
+  }
+  g.putImageData(image, 0, 0);
   return c;
 }
 
 function frame(g: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, lit: boolean, glow: boolean): void {
+  const u = 1 / RES;
   g.fillStyle = '#000';
   g.fillRect(x - 2, y - 2, w + 4, h + 4);
   g.fillStyle = lit ? (glow ? '#ffd040' : '#c08010') : '#3a3e48';
@@ -71,23 +83,38 @@ function frame(g: CanvasRenderingContext2D, x: number, y: number, w: number, h: 
   g.fillRect(x, y, w, h);
   g.fillStyle = '#1a1e28';
   for (let yy = y + 1; yy < y + h; yy += 2) g.fillRect(x, yy, w, 1);
+  g.fillStyle = lit && glow ? '#fff0a0' : '#9aa0b0';
+  g.fillRect(x + u, y + u, w - 2 * u, u);
+  g.fillRect(x + u, y + u, u, h - 2 * u);
+  g.fillStyle = '#05060a';
+  g.fillRect(x + u, y + h - 2 * u, w - 2 * u, 2 * u);
+  for (const sx of [x + 2, x + w - 4]) {
+    g.fillStyle = '#101218';
+    g.fillRect(sx - u, y + 2 - u, 3 * u, 3 * u);
+    g.fillStyle = '#d8dce4';
+    g.fillRect(sx, y + 2, u, u);
+  }
 }
 
 export function characterSelect(onPick: (g: Gender) => void): HTMLElement {
   const s = document.createElement('div');
   s.className = 'screen title';
   const c = document.createElement('canvas');
-  c.width = W;
-  c.height = H;
+  c.width = VIEW_W;
+  c.height = VIEW_H;
   c.className = 'title-px';
   s.appendChild(c);
   const g = c.getContext('2d')!;
   g.imageSmoothingEnabled = false;
+  g.setTransform(RES, 0, 0, RES, 0, 0);
   const back = paintBackdrop();
   const hands: Record<Gender, HTMLCanvasElement> = { male: document.createElement('canvas'), female: document.createElement('canvas') };
   for (const h of Object.values(hands)) {
-    h.width = 160;
-    h.height = 110;
+    h.width = 160 * RES;
+    h.height = 110 * RES;
+    const hg = h.getContext('2d')!;
+    hg.imageSmoothingEnabled = false;
+    hg.setTransform(RES, 0, 0, RES, 0, 0);
   }
 
   let sel: Gender = 'male';
@@ -96,7 +123,7 @@ export function characterSelect(onPick: (g: Gender) => void): HTMLElement {
 
   const render = () => {
     const pulse = Math.floor(t * 4) % 2 === 0;
-    g.drawImage(back, 0, 0);
+    g.drawImage(back, 0, 0, W, H);
     const title = 'SELECT YOUR ANALYST';
     drawBigText(g, title, Math.round((W - measureBig(title, true)) / 2), 4, AMBER, '#200800', true);
     for (const gd of ['male', 'female'] as Gender[]) {
@@ -118,14 +145,16 @@ export function characterSelect(onPick: (g: Gender) => void): HTMLElement {
       const hg = hands[gd].getContext('2d')!;
       hg.clearRect(0, 0, 160, 110);
       hg.save();
+      hg.setTransform(RES, 0, 0, RES, 0, 0);
+      hg.imageSmoothingEnabled = false;
       hg.translate(-100, -60);
-      drawToolViewmodel(hg, usbTool, 320, 168, 0, gd, 0, t, {
+      drawToolViewmodel(hg, usbTool, W, 168, 0, gd, 0, t, {
         sinceUse: 9, sinceConfirm: 9, confirmGood: true, time: t, ammo: 8, skin: skinTriple(),
       });
       hg.restore();
       g.fillStyle = '#05060a';
       g.fillRect(x + 4, y + 60, CARD_W - 8, CARD_H - 64);
-      g.drawImage(hands[gd], 10, 40, CARD_W - 8, CARD_H - 64, x + 4, y + 60, CARD_W - 8, CARD_H - 64);
+      g.drawImage(hands[gd], 0, 0, 160 * RES, 110 * RES, x + 4, y + 60, CARD_W - 8, CARD_H - 64);
       if (gd === sel) drawSkull(g, x + CARD_W - 16, y + 62, pulse);
     }
     // skin tones
@@ -133,6 +162,7 @@ export function characterSelect(onPick: (g: Gender) => void): HTMLElement {
     SKIN_TONES.forEach((tone, i) => {
       const x = SKIN_X + i * 18;
       const on = tone.id === currentSkin().id;
+      const u = 1 / RES;
       g.fillStyle = '#000';
       g.fillRect(x - 2, SKIN_Y - 2, 16, 14);
       g.fillStyle = on ? '#ffffff' : '#3a3e48';
@@ -143,6 +173,10 @@ export function characterSelect(onPick: (g: Gender) => void): HTMLElement {
       g.fillRect(x, SKIN_Y, 12, 2);
       g.fillStyle = tone.shadow;
       g.fillRect(x, SKIN_Y + 8, 12, 2);
+      g.fillStyle = '#fff0c8';
+      g.fillRect(x + u, SKIN_Y + u, 12 - 2 * u, u);
+      g.fillStyle = '#5a3020';
+      g.fillRect(x + u, SKIN_Y + 10 - 2 * u, 12 - 2 * u, u);
       drawText(g, `${i + 1}`, x + 5, SKIN_Y + 3, on ? '#ffffff' : '#d8dce4', 'tiny', '#000');
     });
     // deploy
@@ -152,9 +186,9 @@ export function characterSelect(onPick: (g: Gender) => void): HTMLElement {
     g.fillStyle = pulse ? '#c02010' : '#a01808';
     g.fillRect(dx, dy, dw, dh);
     g.fillStyle = '#ff6a40';
-    g.fillRect(dx, dy, dw, 1);
+    g.fillRect(dx + 1 / RES, dy + 1 / RES, dw - 2 / RES, 1 / RES);
     g.fillStyle = '#500804';
-    g.fillRect(dx, dy + dh - 1, dw, 1);
+    g.fillRect(dx + 1 / RES, dy + dh - 2 / RES, dw - 2 / RES, 1 / RES);
     drawChunky(g, 'DEPLOY', dx + Math.round((dw - measureChunky('DEPLOY')) / 2), dy + 4, ['#ffffff', '#fff0a0', '#ffd040']);
     const hint = '< > CHOOSE  -  1-5 SKIN TONE  -  ENTER DEPLOY';
     drawText(g, hint, Math.round((W - measureText(hint, 'tiny')) / 2), H - 7, '#8a90a0', 'tiny');

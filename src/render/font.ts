@@ -1,3 +1,5 @@
+import { RES } from './res';
+
 /**
  * Original bitmap fonts for the HUD, ticker and texture lettering.
  * SMALL = 5x7 (6px advance), TINY = 3x5 (4px advance). Uppercase only, like
@@ -71,24 +73,112 @@ function norm(ch: string): string {
 }
 
 const cache = new Map<string, HTMLCanvasElement>();
+type Mask = { bits: Uint8Array; w: number; h: number };
+
+function epx(src: Mask): Mask {
+  const w = src.w * 2, h = src.h * 2;
+  const bits = new Uint8Array(w * h);
+  const at = (x: number, y: number) => x < 0 || y < 0 || x >= src.w || y >= src.h ? 0 : src.bits[y * src.w + x];
+  for (let y = 0; y < src.h; y++) for (let x = 0; x < src.w; x++) {
+    const e = at(x, y), b = at(x, y - 1), d = at(x - 1, y), f = at(x + 1, y), h0 = at(x, y + 1);
+    bits[(y * 2) * w + x * 2] = d === b && b !== f && d !== h0 ? d : e;
+    bits[(y * 2) * w + x * 2 + 1] = b === f && b !== d && f !== h0 ? f : e;
+    bits[(y * 2 + 1) * w + x * 2] = d === h0 && d !== b && h0 !== f ? d : e;
+    bits[(y * 2 + 1) * w + x * 2 + 1] = h0 === f && d !== h0 && b !== f ? f : e;
+  }
+  return { bits, w, h };
+}
+
+function maskFromRows(rows: number[], width: number, baseScale: number): Mask {
+  const src: Mask = { w: width * baseScale, h: rows.length * baseScale, bits: new Uint8Array(width * baseScale * rows.length * baseScale) };
+  for (let y = 0; y < rows.length; y++) for (let x = 0; x < width; x++) {
+    if (!(rows[y] & (1 << (width - 1 - x)))) continue;
+    for (let sy = 0; sy < baseScale; sy++) for (let sx = 0; sx < baseScale; sx++) {
+      src.bits[(y * baseScale + sy) * src.w + x * baseScale + sx] = 1;
+    }
+  }
+  return epx(epx(src));
+}
+
+type Color = [number, number, number, number];
+const colorCache = new Map<string, Color>();
+let colorContext: CanvasRenderingContext2D | null = null;
+
+function rgb(color: string): Color {
+  const cached = colorCache.get(color);
+  if (cached) return cached;
+  const hex = /^#([\da-f]{3,4}|[\da-f]{6}|[\da-f]{8})$/i.exec(color)?.[1];
+  let parsed: Color;
+  if (hex) {
+    const channels = hex.length <= 4
+      ? [...hex].map((channel) => parseInt(channel + channel, 16))
+      : hex.match(/.{2}/g)!.map((channel) => parseInt(channel, 16));
+    parsed = [channels[0], channels[1], channels[2], channels[3] ?? 255];
+  } else if (typeof document !== 'undefined') {
+    if (!colorContext) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 1;
+      canvas.height = 1;
+      colorContext = canvas.getContext('2d', { willReadFrequently: true });
+    }
+    if (colorContext) {
+      colorContext.clearRect(0, 0, 1, 1);
+      colorContext.fillStyle = 'rgba(0,0,0,0)';
+      colorContext.fillStyle = color;
+      colorContext.fillRect(0, 0, 1, 1);
+      const pixel = colorContext.getImageData(0, 0, 1, 1).data;
+      parsed = [pixel[0], pixel[1], pixel[2], pixel[3]];
+    } else {
+      parsed = [0, 0, 0, 255];
+    }
+  } else {
+    parsed = [0, 0, 0, 255];
+  }
+  colorCache.set(color, parsed);
+  return parsed;
+}
+
+function tone(color: Color, amount: number): string {
+  const c = color.map((v) => Math.max(0, Math.min(255, Math.round(amount >= 0 ? v + (255 - v) * amount : v * (1 + amount)))));
+  return `rgba(${c[0]},${c[1]},${c[2]},${color[3] / 255})`;
+}
+
+function nativeGlyph(
+  key: string,
+  rows: number[],
+  width: number,
+  baseScale: number,
+  ramp: string[],
+  bevel = true,
+): HTMLCanvasElement {
+  const cacheKey = `${key}|${rows.join(',')}|${ramp.join(',')}|${bevel}`;
+  const cached = cache.get(cacheKey);
+  if (cached) return cached;
+  const mask = maskFromRows(rows, width, baseScale);
+  const c = document.createElement('canvas');
+  c.width = mask.w;
+  c.height = mask.h;
+  const g = c.getContext('2d')!;
+  const colors = ramp.map(rgb);
+  const colorAt = (y: number) => colors[Math.min(colors.length - 1, Math.floor((y * colors.length) / mask.h))];
+  for (let y = 0; y < mask.h; y++) for (let x = 0; x < mask.w; x++) {
+    const i = y * mask.w + x;
+    if (!mask.bits[i]) continue;
+    const edgeHi = x === 0 || y === 0 || !mask.bits[i - 1] || !mask.bits[i - mask.w];
+    const edgeLo = x === mask.w - 1 || y === mask.h - 1 || !mask.bits[i + 1] || !mask.bits[i + mask.w];
+    const base = colorAt(y);
+    g.fillStyle = bevel && edgeHi ? tone(base, 0.32) : bevel && edgeLo ? tone(base, -0.38) : tone(base, 0);
+    g.fillRect(x, y, 1, 1);
+  }
+  cache.set(cacheKey, c);
+  return c;
+}
 
 function glyphCanvas(font: FontId, ch: string, color: string): HTMLCanvasElement | null {
   const spec = FONTS[font];
   const rows = spec.glyphs[ch];
   if (!rows) return null;
-  const key = `${font}|${ch}|${color}`;
-  let c = cache.get(key);
-  if (c) return c;
-  c = document.createElement('canvas');
-  c.width = spec.w;
-  c.height = spec.h;
-  const g = c.getContext('2d')!;
-  g.fillStyle = color;
-  rows.forEach((bits, y) => {
-    for (let x = 0; x < spec.w; x++) if (bits & (1 << (spec.w - 1 - x))) g.fillRect(x, y, 1, 1);
-  });
-  cache.set(key, c);
-  return c;
+  return nativeGlyph(`${font}|${ch}`, rows, spec.w, 1, [color]);
 }
 
 export function fontHeight(font: FontId): number {
@@ -108,7 +198,7 @@ export function measureText(text: string, font: FontId = 'small'): number {
   return n === 0 ? 0 : n * FONTS[font].adv - 1;
 }
 
-/** Draw pixel text; returns the advance width. `shadow` draws a 1px drop shadow. */
+/** Draw pixel text; returns the base-unit advance width. */
 export function drawText(
   g: CanvasRenderingContext2D,
   text: string,
@@ -126,10 +216,10 @@ export function drawText(
     if (ch !== ' ') {
       if (shadow) {
         const s = glyphCanvas(font, ch, shadow);
-        if (s) g.drawImage(s, cx + 1, cy + 1);
+        if (s) g.drawImage(s, cx + 0.5, cy + 0.5, s.width / RES, s.height / RES);
       }
       const gc = glyphCanvas(font, ch, color);
-      if (gc) g.drawImage(gc, cx, cy);
+      if (gc) g.drawImage(gc, cx, cy, gc.width / RES, gc.height / RES);
     }
     cx += spec.adv;
   }
@@ -156,22 +246,13 @@ export function drawBigText(
     const src = FONTS.small.glyphs[ch];
     const rows = src && fat ? fatRows(src) : src;
     if (rows) {
-      for (let pass = 0; pass < 2; pass++) {
-        rows.forEach((bits, ry) => {
-          for (let rx = 0; rx < spec.w; rx++) {
-            if (!(bits & (1 << (spec.w - 1 - rx)))) continue;
-            if (pass === 0) {
-              g.fillStyle = shadow;
-              g.fillRect(cx + rx * 2 + 1, y + ry * 2 + 1, 2, 2);
-            } else {
-              g.fillStyle = ramp[Math.min(ramp.length - 1, Math.floor((ry * 2 * ramp.length) / 14))];
-              g.fillRect(cx + rx * 2, y + ry * 2, 2, 1);
-              g.fillStyle = ramp[Math.min(ramp.length - 1, Math.floor(((ry * 2 + 1) * ramp.length) / 14))];
-              g.fillRect(cx + rx * 2, y + ry * 2 + 1, 2, 1);
-            }
-          }
-        });
+      const w = spec.w;
+      const glyph = nativeGlyph(`big${fat}|${ch}`, rows, w, 2, ramp);
+      if (shadow) {
+        const shade = nativeGlyph(`big-shadow${fat}|${ch}`, rows, w, 2, [shadow], false);
+        g.drawImage(shade, cx + 0.5, y + 0.5, shade.width / RES, shade.height / RES);
       }
+      g.drawImage(glyph, cx, y, glyph.width / RES, glyph.height / RES);
     }
     cx += fat ? 13 : 12;
   }
@@ -205,12 +286,12 @@ export function drawChunky(
     const rows = FONTS.small.glyphs[norm(raw)];
     if (rows) {
       const fr = fatRows(rows);
-      for (let pass = shadow ? 0 : 1; pass < 2; pass++) {
-        fr.forEach((bits, ry) => {
-          g.fillStyle = pass === 0 ? shadow! : rs[Math.min(rs.length - 1, Math.floor((ry * rs.length) / 7))];
-          for (let rx = 0; rx < 6; rx++) if (bits & (1 << (5 - rx))) g.fillRect(cx + rx + (pass === 0 ? 1 : 0), cy + ry + (pass === 0 ? 1 : 0), 1, 1);
-        });
+      const glyph = nativeGlyph(`chunky|${norm(raw)}`, fr, 6, 1, rs);
+      if (shadow) {
+        const shade = nativeGlyph(`chunky-shadow|${norm(raw)}`, fr, 6, 1, [shadow], false);
+        g.drawImage(shade, cx + 0.5, cy + 0.5, shade.width / RES, shade.height / RES);
       }
+      g.drawImage(glyph, cx, cy, glyph.width / RES, glyph.height / RES);
     }
     cx += 7;
   }

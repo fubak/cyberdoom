@@ -5,15 +5,18 @@ import type { WorldMap } from '../engine/map';
 import type { Player } from '../engine/player';
 import type { ViewPose } from '../engine/feel';
 import { buildPaletteLut } from './palette';
-import { buildSprites, spriteSets, type SpriteSet } from './sprites';
+import { buildSprites, prewarmLazySpriteFrames, spriteSets, type SpriteSet } from './sprites';
 import { WALL_H, buildTextures, doorTextureFor, textureOr, textureRegistry } from './textures';
+import { RES, STATUS_H, VIEW3D_H, VIEW_H, VIEW_W } from './res';
+
+export { VIEW_W, VIEW_H, STATUS_H, VIEW3D_H } from './res';
 
 /**
  * LOOK: Three.js renderer, Doom-E1 style.
- * - 320x200 frame: 3D view is the top 320x168, the 32px status bar sits below
- *   (drawn by the HUD), exactly like Doom's layout.
+ * - 4× 1280x800 frame (base layout 320x200): the 3D view is 1280x672 and the
+ *   128px status bar sits below (drawn by the HUD), exactly like Doom's layout.
  * - Level geometry: only exposed wall faces are emitted, world-aligned UVs,
- *   1 texel ≈ 1/64 tile, walls WALL_H tall. Doom "fake contrast" (E/W vs N/S
+ *   walls use 256x320 native textures and are WALL_H tall. Doom "fake contrast" (E/W vs N/S
  *   faces) + per-vertex corner occlusion on flats.
  * - Custom shader: sector light × distance diminishing quantised into 24 light
  *   bands (Doom's COLORMAP feel); texels on the glow layer are FULLBRIGHT.
@@ -24,10 +27,6 @@ import { WALL_H, buildTextures, doorTextureFor, textureOr, textureRegistry } fro
  */
 /** Distance (tiles) a player shot travels before its sprite is drawn. */
 const SHOT_NEAR = 1.4;
-export const VIEW_W = 320;
-export const VIEW_H = 200;
-export const STATUS_H = 32;
-export const VIEW3D_H = VIEW_H - STATUS_H;
 const EYE_H = 0.6;
 
 const WORLD_VS = /* glsl */ `
@@ -120,7 +119,7 @@ varying vec3 vColor;
 void main() {
   vec4 mv = modelViewMatrix * vec4(position, 1.0);
   vColor = color;
-  gl_PointSize = max(minPx, size * uScale / -mv.z);
+  gl_PointSize = max(minPx * ${RES.toFixed(1)}, size * uScale / -mv.z);
   gl_Position = projectionMatrix * mv;
 }`;
 
@@ -246,10 +245,19 @@ export class Renderer {
   }
   debugNoFlash = false;
   private hurt = 0;
+  private prewarmStarted = false;
+  private gen: { texturesMs: number; spritesMs: number; lazyPrewarmMs?: number } = { texturesMs: 0, spritesMs: 0 };
 
   constructor(container: HTMLElement) {
+    const texturesStart = performance.now();
     buildTextures();
+    const texturesMs = performance.now() - texturesStart;
+    const spritesStart = performance.now();
     buildSprites();
+    const spritesMs = performance.now() - spritesStart;
+    this.gen = { texturesMs, spritesMs };
+    (window as Window & { __cdGen?: { texturesMs: number; spritesMs: number; lazyPrewarmMs?: number } }).__cdGen = this.gen;
+    console.info(`[render] generated textures ${texturesMs.toFixed(1)} ms, sprites ${spritesMs.toFixed(1)} ms`);
     this.renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(1);
     this.renderer.setSize(VIEW_W, VIEW_H, false);
@@ -260,7 +268,7 @@ export class Renderer {
     this.canvas.style.imageRendering = 'pixelated';
     container.appendChild(this.canvas);
 
-    // Doom-like ~90° horizontal FOV on the 320x168 view.
+    // Doom-like ~90° horizontal FOV on the 1280x672 view.
     this.camera = new THREE.PerspectiveCamera(58, VIEW_W / VIEW3D_H, 0.04, 48);
     this.scene.background = new THREE.Color(0x000000);
     this.scene.add(this.levelGroup);
@@ -811,6 +819,13 @@ export class Renderer {
       const cb = this.captureCb;
       this.captureCb = null;
       cb({ w: VIEW_W, h: VIEW3D_H, data: out });
+    }
+    if (!this.prewarmStarted) {
+      this.prewarmStarted = true;
+      prewarmLazySpriteFrames((ms) => {
+        this.gen.lazyPrewarmMs = ms;
+        console.info(`[render] lazy sprite prewarm ${ms.toFixed(1)} ms`);
+      });
     }
   }
 

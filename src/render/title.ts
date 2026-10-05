@@ -4,9 +4,10 @@ import { skinTriple } from '../tools/look';
 import { drawChunky, drawText, glyphRows, measureChunky, measureText } from './font';
 import { spriteSets } from './sprites';
 import { drawToolViewmodel } from './viewmodels';
+import { BASE_H, BASE_W, RES, VIEW_H, VIEW_W } from './res';
 
 /**
- * LOOK: Doom-style title + main menu, rendered entirely at 320x200 into a
+ * LOOK: Doom-style title + main menu, drawn in 320x200 base units on a 4×
  * pixelated canvas. A full-bleed illustrated title picture (TITLEPIC-style):
  * a server-room corridor in one-point perspective, the three malware families
  * (rendered from the game's own procedural sprites) advancing on the analyst's
@@ -16,8 +17,25 @@ import { drawToolViewmodel } from './viewmodels';
  * Automation: every menu entry also has a transparent <button data-menu-item>
  * laid exactly over it (new-game, read-this). Keyboard: Up/Down + Enter.
  */
-const W = 320;
-const H = 200;
+const W = BASE_W;
+const H = BASE_H;
+let titleStipple: CanvasPattern | null = null;
+
+function getTitleStipple(g: CanvasRenderingContext2D): CanvasPattern | null {
+  if (titleStipple) return titleStipple;
+  const c = document.createElement('canvas');
+  c.width = 16;
+  c.height = 16;
+  const image = c.getContext('2d')!.createImageData(16, 16);
+  for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+    const i = (y * 16 + x) * 4;
+    image.data[i + 3] = (x + y) % 2 === 0 ? 140 : 0;
+  }
+  c.getContext('2d')!.putImageData(image, 0, 0);
+  titleStipple = g.createPattern(c, 'repeat');
+  titleStipple?.setTransform(new DOMMatrix().scale(1 / RES, 1 / RES));
+  return titleStipple;
+}
 
 const LOGO_RAMP = ['#fff4b0', '#ffe060', '#ffc030', '#ff9a18', '#f06a10', '#d8400c', '#b02008', '#801406'];
 
@@ -117,16 +135,16 @@ function blitSprite(g: CanvasRenderingContext2D, c: HTMLCanvasElement | null, cx
   outer: for (; bottom > 0; bottom--) for (let x = 0; x < c.width; x++) if (d[(bottom * c.width + x) * 4 + 3]) break outer;
   g.fillStyle = 'rgba(0,0,0,0.55)';
   g.beginPath();
-  g.ellipse(cx, footY, c.width * s * 0.32, 3 * s, 0, 0, Math.PI * 2);
+  g.ellipse(cx, footY, (c.width / RES) * s * 0.32, 3 * s, 0, 0, Math.PI * 2);
   g.fill();
-  g.drawImage(c, Math.round(cx - (c.width * s) / 2), Math.round(footY - (bottom + 1) * s), c.width * s, c.height * s);
+  g.drawImage(c, Math.round(cx - (c.width / RES * s) / 2), Math.round(footY - ((bottom + 1) / RES) * s), (c.width / RES) * s, (c.height / RES) * s);
 }
 
 /** Static TITLEPIC: server-room corridor in one-point perspective + the three threats. */
 function paintTitlePic(): HTMLCanvasElement {
   const c = document.createElement('canvas');
-  c.width = W;
-  c.height = H;
+  c.width = VIEW_W;
+  c.height = VIEW_H;
   const g = c.getContext('2d')!;
   g.imageSmoothingEnabled = false;
   let seed = 4242;
@@ -135,20 +153,22 @@ function paintTitlePic(): HTMLCanvasElement {
   const vy = 96;
   const slope = 0.62;
   const LED = ['#2cff5a', '#ffb010', '#2ca8ff', '#ff3020', '#2cff5a'];
-  const img = g.createImageData(W, H);
+  const img = g.createImageData(VIEW_W, VIEW_H);
   const put = (x: number, y: number, r: number, gg: number, b: number) => {
-    const i = (y * W + x) * 4;
+    const i = (y * VIEW_W + x) * 4;
     img.data[i] = r;
     img.data[i + 1] = gg;
     img.data[i + 2] = b;
     img.data[i + 3] = 255;
   };
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) {
-      const dx = x - vx;
-      const dy = y - vy;
+  for (let y = 0; y < VIEW_H; y++) {
+    for (let x = 0; x < VIEW_W; x++) {
+      const bx = x / RES;
+      const by = y / RES;
+      const dx = bx - vx;
+      const dy = by - vy;
       const d = Math.abs(dx);
-      const n = (rnd() - 0.5) * 14;
+      const n = (rnd() - 0.5) * 9;
       if (d < 9 && Math.abs(dy) < 9 * slope + 1) {
         // far end: the exit glows red through the smoke
         const k = 1 - Math.hypot(dx, dy * 1.6) / 14;
@@ -199,8 +219,9 @@ function paintTitlePic(): HTMLCanvasElement {
     }
   }
   g.putImageData(img, 0, 0);
+  g.setTransform(RES, 0, 0, RES, 0, 0);
   // red haze toward the far end
-  const haze = g.createRadialGradient(vx, vy, 4, vx, vy, 120);
+  const haze = g.createRadialGradient(vx, vy, 1, vx, vy, 30);
   haze.addColorStop(0, 'rgba(200,30,10,0.35)');
   haze.addColorStop(1, 'rgba(60,0,0,0)');
   g.fillStyle = haze;
@@ -224,28 +245,34 @@ function paintTitlePic(): HTMLCanvasElement {
 
 export function mountTitle(host: HTMLElement, onStart: () => void, about: string[]): void {
   const c = document.createElement('canvas');
-  c.width = W;
-  c.height = H;
+  c.width = VIEW_W;
+  c.height = VIEW_H;
   c.className = 'title-px';
   host.appendChild(c);
   const g = c.getContext('2d')!;
   g.imageSmoothingEnabled = false;
+  g.setTransform(RES, 0, 0, RES, 0, 0);
   const pic = paintTitlePic();
   const keyboard = sortedTools().find((t) => t.slot === 1);
 
   // classic spreading-fire automaton along the bottom edge, 0..36 heat
-  const FW = W;
-  const FH = 30;
+  const FW = W * 2;
+  const FH = 60;
   const fire = new Uint8Array(FW * FH);
-  const firePal: string[] = [];
+  const firePal: [number, number, number][] = [];
   for (let i = 0; i <= 36; i++) {
     const t = (i / 36) * 0.8;
     const r = Math.min(255, Math.round(t * 3 * 255));
     const gg = Math.max(0, Math.min(255, Math.round((t * 3 - 1) * 255)));
     const b = Math.max(0, Math.min(255, Math.round((t * 3 - 2) * 255)));
-    firePal.push(`rgb(${r},${Math.round(gg * 0.85)},${b})`);
+    firePal.push([r, Math.round(gg * 0.85), b]);
   }
   for (let x = 0; x < FW; x++) fire[(FH - 1) * FW + x] = 30;
+  const fireCanvas = document.createElement('canvas');
+  fireCanvas.width = FW;
+  fireCanvas.height = FH;
+  const fireCtx = fireCanvas.getContext('2d')!;
+  const fireImage = fireCtx.createImageData(FW, FH);
   let seed = 7;
   const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
 
@@ -325,7 +352,7 @@ export function mountTitle(host: HTMLElement, onStart: () => void, about: string
     const dt = Math.min(0.1, (now - last) / 1000);
     last = now;
     t += dt;
-    g.drawImage(pic, 0, 0);
+    g.drawImage(pic, 0, 0, W, H);
     // fire
     for (let x = 0; x < FW; x++) {
       for (let y = 1; y < FH; y++) {
@@ -336,14 +363,20 @@ export function mountTitle(host: HTMLElement, onStart: () => void, about: string
         if (dst >= 0) fire[dst] = Math.max(0, p - (r & 1) - (rnd() < 0.5 ? 1 : 0));
       }
     }
-    for (let y = 0; y < FH; y++) {
-      for (let x = 0; x < FW; x++) {
-        const v = fire[y * FW + x];
-        if (v < 6) continue;
-        g.fillStyle = firePal[v];
-        g.fillRect(x, H - FH + y, 1, 1);
+    for (let i = 0; i < fire.length; i++) {
+      const v = fire[i];
+      const p = i * 4;
+      if (v < 6) fireImage.data[p + 3] = 0;
+      else {
+        const col = firePal[v];
+        fireImage.data[p] = col[0];
+        fireImage.data[p + 1] = col[1];
+        fireImage.data[p + 2] = col[2];
+        fireImage.data[p + 3] = 255;
       }
     }
+    fireCtx.putImageData(fireImage, 0, 0);
+    g.drawImage(fireCanvas, 0, H - FH / 2, W, FH / 2);
     // the analyst's keyboard, held like Doom's pistol on the title art
     if (keyboard) {
       g.save();
@@ -354,8 +387,8 @@ export function mountTitle(host: HTMLElement, onStart: () => void, about: string
       g.restore();
     }
     // logo on a smoked band
-    g.fillStyle = '#000';
-    for (let y = 6; y < 70; y++) for (let x = (y & 1) ? 1 : 0; x < W; x += 2) if (y < 10 || y > 64 ? (x + y) % 4 === 0 : true) g.fillRect(x, y, 1, 1);
+    g.fillStyle = getTitleStipple(g) ?? '#000';
+    g.fillRect(0, 6, W, 64);
     const logo = 'CYBERDOOM';
     const px = 5;
     const lw = logo.length * 6 * px - px;
@@ -377,10 +410,8 @@ export function mountTitle(host: HTMLElement, onStart: () => void, about: string
       about.forEach((line, i) => drawText(g, line, bx + 6, by + 6 + i * 8, i === 0 ? '#ffd040' : '#e8e0d0', 'tiny', '#000'));
     } else {
       // menu plate, bottom-left (clear of the keyboard and the threats' faces)
-      g.fillStyle = '#000';
-      for (let y = menuY - 8; y < menuY + items.length * rowH + 2; y++) {
-        for (let x = 4 + ((y & 1) ? 1 : 0); x < 118; x += 2) g.fillRect(x, y, 1, 1);
-      }
+      g.fillStyle = getTitleStipple(g) ?? '#000';
+      g.fillRect(4, menuY - 8, 114, items.length * rowH + 10);
       items.forEach((it, i) => {
         const y = menuY + i * rowH;
         const label = it.label.toUpperCase();
