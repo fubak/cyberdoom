@@ -2,6 +2,7 @@ import type { Mission } from '../../core/types';
 import type { MissionTeaching } from '../curriculum';
 import type { WalkStep } from '../../missions/walkthroughs';
 import { lightRects } from '../../missions/levelkit';
+import { addThreatEncounter, setMapCell } from './campaign-map';
 
 /**
  * M2 "Need to Know": least privilege, just-in-time access, shared credentials.
@@ -79,6 +80,7 @@ export const m02: Mission = {
       },
       '1': { kind: 'door', tex: 'wall-brick', doorId: 'secret-break', secret: true },
       '2': { kind: 'door', tex: 'wall-brick', doorId: 'secret-cable', secret: true },
+      '3': { kind: 'door', tex: 'wall-panel', doorId: 'secret-server-room', secret: true },
     },
     spawn: { x: 19.5, y: 27.5, angle: -Math.PI / 2 },
     defaultLight: 0.75,
@@ -206,6 +208,7 @@ export const m02: Mission = {
     secrets: [
       { id: 'break', area: [27, 25, 31, 28], label: 'Break room' },
       { id: 'cable', area: [5, 12, 8, 15], label: 'Cable vault' },
+      { id: 'server-room', area: [36, 23, 36, 23], label: 'Server-side cache' },
     ],
   },
   debriefQuestions: [
@@ -286,6 +289,26 @@ export const m02Walkthrough: WalkStep[] = [
   { wait: 0.2 },
   { goto: [19, 1] },
 ];
+
+setMapCell(m02.map, 18, 23, 'S');
+setMapCell(m02.map, 20, 23, 'S');
+setMapCell(m02.map, 18, 24, 'S');
+setMapCell(m02.map, 20, 24, 'S');
+setMapCell(m02.map, 35, 23, '3');
+setMapCell(m02.map, 36, 23, '.');
+m02.map.lights = { ...m02.map.lights, ...lightRects([[17, 22, 21, 25, 1]]) };
+addThreatEncounter(m02, 'trojan-restore', 'trojan', 3, {
+  id: 'restore-ambush',
+  after: ['restore'],
+  kind: 'bad',
+  message: 'A second trojan wave surfaced after the switch was restored.',
+}, [27, 9, 37, 19]);
+addThreatEncounter(m02, 'trojan-report', 'trojan', 3, {
+  id: 'report-ambush',
+  after: ['report'],
+  kind: 'bad',
+  message: 'The shared-account incident drew another wave into the lab.',
+}, [4, 11, 14, 19]);
 
 export const m02Teach: MissionTeaching = {
   tagline: 'Day one. Your badge says ANALYST, and someone is handing out keys.',

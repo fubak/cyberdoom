@@ -23,64 +23,6 @@ export function q(id: string, objectives: string[], prompt: string, correct: num
  * mission file's `debriefQuestions`. Until then these also feed spaced review.
  */
 export const ARC_QUESTIONS: Record<string, Question[]> = {
-  m04: [
-    q('q1', ['5.6'], 'A user receives an email "from IT": their mailbox is full and they must sign in at micros0ft-support.com within one hour or lose their mail. What should the user do?', 2, [
-      ['Click the link to check whether the page looks genuine', 'Simply visiting can deliver a drive-by download, and a convincing clone page is how credentials get harvested.'],
-      ['Reply to the sender and ask whether it is legitimate', 'The reply goes to the attacker. It confirms the address is live, and the attacker will just say yes.'],
-      ['Report it with the phishing-report button without clicking anything', 'Reporting lets the SOC pull the same message from every inbox and block the domain. That is the trained response to a suspicious message.'],
-      ['Delete it and move on', 'You are safe, but colleagues who got the same message are not. Without a report the SOC never learns of the campaign.'],
-    ]),
-    q('q2', ['2.2'], 'The CFO gets an email from what looks like the CEO\u2019s own account: "Wire $48,000 to our new supplier today. I\u2019m in meetings, don\u2019t call." Which attack is this?', 0, [
-      ['Business email compromise (BEC)', 'Impersonating (or taking over) an executive\u2019s email to authorize a payment is the definition of BEC. The "don\u2019t call" line exists to block out-of-band verification.'],
-      ['Vishing', 'Vishing is voice phishing over a phone call. This arrived by email.'],
-      ['Watering hole', 'A watering-hole attack compromises a website the targets visit. Nothing here involves a website.'],
-      ['Typosquatting', 'A look-alike domain might be used, but the defining feature here is executive impersonation to authorize a payment, which is BEC.'],
-    ]),
-    q('q3', ['4.5'], 'Attackers are sending mail that spoofs your exact domain in the From header. Which control lets receiving servers authenticate your mail AND tells them to reject what fails?', 3, [
-      ['SPF', 'SPF lists the IPs allowed to send for the domain, but it checks the envelope sender, not the visible From, and has no policy telling receivers to reject.'],
-      ['DKIM', 'DKIM signs messages so tampering can be detected, but on its own it gives receivers no instruction on what to do with failures.'],
-      ['A web filter with URL reputation', 'Web filtering blocks malicious sites. It does nothing to authenticate who sent an email.'],
-      ['DMARC with a p=reject policy', 'DMARC requires SPF/DKIM results to align with the From domain and publishes a policy (reject) for receivers to apply to failures.'],
-    ]),
-    q('q4', ['2.4'], 'Sign-in logs show j.ortiz authenticating from Chicago at 09:00 and from Singapore at 09:20, and both sessions are still active. Which indicators are present?', 1, [
-      ['Account lockout and blocked content', 'Lockout follows repeated failed logins, and blocked content is a filter firing. Both of these sign-ins succeeded.'],
-      ['Impossible travel and concurrent session usage', 'No one travels 15,000 km in 20 minutes, and two simultaneous sessions from different continents point to stolen credentials.'],
-      ['Out-of-cycle logging', 'Out-of-cycle logging is activity logged at times there should be none. These are business-hours sign-ins; the anomaly is location and concurrency.'],
-      ['Resource inaccessibility', 'That would be users unable to reach their data. Here the attacker has too much access, not too little.'],
-    ]),
-  ],
-  m05: [
-    q('q1', ['1.3'], 'An emergency patch goes on the payroll server tonight. Which change-management item lets you restore service if the patch breaks payroll?', 2, [
-      ['Impact analysis', 'Impact analysis predicts what the change will affect before you make it. It does not undo anything.'],
-      ['Maintenance window', 'The window sets WHEN the change happens to limit disruption, not how to reverse it.'],
-      ['Backout plan', 'A backout plan is the documented, tested way to roll back to the last good state if the change fails.'],
-      ['Stakeholder approval', 'Approval authorizes the change. It gives you nothing to restore from.'],
-    ]),
-    q('q2', ['1.1'], 'Policy requires EDR on every server, but a legacy server cannot run the agent. It is moved to an isolated VLAN with extra network monitoring. What type of control is the isolation?', 0, [
-      ['Compensating', 'A compensating control is an alternative that meets the intent of a required control that cannot be implemented. Here, isolation stands in for EDR.'],
-      ['Corrective', 'Corrective controls fix or restore after an incident, like restoring from backup. Nothing has happened yet.'],
-      ['Deterrent', 'Deterrents discourage attempts, like warning signs. Isolation actually limits what an attacker can reach.'],
-      ['Directive', 'Directive controls tell people what to do, like a policy. This is a technical substitute for a missing control.'],
-    ]),
-    q('q3', ['1.1'], 'A sign at the data-center fence reads "Area under 24/7 video surveillance." What is the sign\u2019s PRIMARY control type?', 3, [
-      ['Detective', 'The cameras record and so detect. The sign itself records nothing.'],
-      ['Preventive', 'A preventive control physically or technically stops the act, like a locked door. A sign stops no one.'],
-      ['Compensating', 'Nothing is being substituted for an unavailable control.'],
-      ['Deterrent', 'The sign works by discouraging intruders with the threat of being seen. That is deterrence.'],
-    ]),
-    q('q4', ['4.3'], 'A scan flags a critical CVE on 40 servers. You confirm that 12 of them do not run the vulnerable service at all. What are those 12, and what is next?', 1, [
-      ['False negatives; rescan with stronger settings', 'A false negative is a real vulnerability the scanner MISSED. These are the opposite.'],
-      ['False positives; document them, remediate the other 28 by CVSS and exposure, then rescan to validate', 'Reported but not real = false positive. Confirmed findings get prioritized and fixed, and a rescan validates the remediation.'],
-      ['True positives; patch all 40 tonight', 'Patching hosts that are not affected wastes the change window and adds risk for no benefit.'],
-      ['Accept the risk on all 40 until the next quarter', 'The 28 confirmed hosts carry a critical vulnerability. Accepting that needs a formal risk decision, not a default.'],
-    ]),
-    q('q5', ['5.1'], '"All user passwords must be at least 14 characters." In the governance hierarchy, this statement is a:', 0, [
-      ['Standard', 'Standards are mandatory, specific, measurable requirements that support a policy. SY0-701 lists password standards explicitly.'],
-      ['Policy', 'A policy states high-level intent ("we protect accounts with strong authentication"), not exact numbers.'],
-      ['Procedure', 'A procedure is step-by-step instructions, such as how to reset a password.'],
-      ['Guideline', 'Guidelines are recommendations, and "must" makes this mandatory.'],
-    ]),
-  ],
   m07: [
     q('q1', ['3.2'], 'Admins must manage servers in a high-security zone from the user network. Which design MOST reduces the attack surface?', 3, [
       ['Allow RDP into the zone from every workstation', 'Every workstation becomes a path into the zone, so one phished PC reaches the servers.'],

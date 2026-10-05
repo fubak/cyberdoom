@@ -1,0 +1,297 @@
+import type { EntityDef, Mission } from '../../core/types';
+import type { MissionTeaching } from '../curriculum';
+import { q } from '../arc-questions';
+import type { WalkStep } from '../../missions/walkthroughs';
+import { campaignMap, stagedThreatWave } from './campaign-map';
+
+const map = campaignMap('change');
+
+const evidenceAndWork: EntityDef[] = [
+  {
+    id: 'impact-analysis', kind: 'console', x: 8.5, y: 25.5, sprite: 'console', tags: ['change-doc'],
+    log: 'CHANGE RECORD: impact analysis completed. Payroll, HR export, and downstream timekeeping dependencies reviewed.',
+    inspect: { label: 'Impact analysis', detail: 'Change impact record for payroll and its dependent services.', category: 'legit', objectives: ['1.3'] },
+  },
+  {
+    id: 'backout-plan', kind: 'console', x: 30.5, y: 25.5, sprite: 'console', tags: ['change-doc'],
+    log: 'CHANGE RECORD: backout plan approved. Restore the last known-good payroll image and validate the prior database snapshot.',
+    inspect: { label: 'Backout plan', detail: 'Documented rollback steps for the payroll patch.', category: 'legit', objectives: ['1.3'] },
+  },
+  {
+    id: 'owner-approval', kind: 'console', x: 12.5, y: 20.5, sprite: 'console', tags: ['change-doc'],
+    log: 'CHANGE RECORD: payroll service owner approved CHG-8821 for the maintenance window.',
+    inspect: { label: 'Owner approval', detail: 'Approval record from the payroll service owner.', category: 'legit', objectives: ['1.3'] },
+  },
+  {
+    id: 'payroll-patch', kind: 'console', x: 26.5, y: 25.5, sprite: 'console', tags: ['payroll-patch'],
+    log: 'PAYROLL CHANGE: signed patch installed; service health check passed.',
+    inspect: { label: 'Payroll patch console', detail: 'Installation control for the critical payroll patch.', category: 'legit', objectives: ['1.3'] },
+  },
+  {
+    id: 'gap-legacy-edr', kind: 'console', x: 7.5, y: 21.5, sprite: 'console', tags: ['gap-evidence'],
+    log: 'Legacy HR server cannot run the EDR agent required by policy.',
+    inspect: { label: 'Control gap: HR server', detail: 'Legacy HR server cannot run the EDR agent required by policy.', category: 'legit', objectives: ['1.1'] },
+  },
+  {
+    id: 'gap-payroll-write', kind: 'console', x: 30.5, y: 21.5, sprite: 'console', tags: ['gap-evidence'],
+    log: 'Payroll contractors can change bank details without a second approver.',
+    inspect: { label: 'Control gap: payroll changes', detail: 'Payroll contractors can change bank details without a second approver.', category: 'legit', objectives: ['1.1'] },
+  },
+  {
+    id: 'gap-access-log', kind: 'console', x: 7.5, y: 13.5, sprite: 'console', tags: ['gap-evidence'],
+    log: 'Privileged reads of archived employee records are not logged or reviewed.',
+    inspect: { label: 'Control gap: record access', detail: 'Privileged reads of archived employee records are not logged or reviewed.', category: 'legit', objectives: ['1.1'] },
+  },
+  {
+    id: 'gap-restore', kind: 'console', x: 30.5, y: 13.5, sprite: 'console', tags: ['gap-evidence'],
+    log: 'Payroll has no tested process to restore the last known-good service state after a failed deployment.',
+    inspect: { label: 'Control gap: service recovery', detail: 'Payroll has no tested process to restore the last known-good service state after a failed deployment.', category: 'legit', objectives: ['1.1'] },
+  },
+  {
+    id: 'vuln-hr', kind: 'workstation', x: 15.5, y: 18.5, sprite: 'workstation-infected',
+    infected: true, tags: ['triage', 'vulnerability-confirmed'],
+    inspect: { label: 'Scan finding HR-01', detail: 'Scanner: vulnerable service present on payroll relay. Service banner and package version match the finding.', category: 'malware', objectives: ['4.3'] },
+  },
+  {
+    id: 'vuln-db', kind: 'workstation', x: 23.5, y: 18.5, sprite: 'workstation-infected',
+    infected: true, tags: ['triage', 'vulnerability-confirmed'],
+    inspect: { label: 'Scan finding PAY-02', detail: 'Scanner: vulnerable service present on payroll database. Listener and package version match the finding.', category: 'malware', objectives: ['4.3'] },
+  },
+  {
+    id: 'vuln-web', kind: 'workstation', x: 15.5, y: 12.5, sprite: 'workstation-infected',
+    infected: true, tags: ['triage', 'vulnerability-confirmed'],
+    inspect: { label: 'Scan finding HR-03', detail: 'Scanner: vulnerable service present on the HR export host. Listener and package version match the finding.', category: 'malware', objectives: ['4.3'] },
+  },
+  {
+    id: 'vuln-api', kind: 'workstation', x: 23.5, y: 12.5, sprite: 'workstation-infected',
+    infected: true, tags: ['triage', 'vulnerability-confirmed'],
+    inspect: { label: 'Scan finding PAY-04', detail: 'Scanner: vulnerable service present on the payroll API host. Listener and package version match the finding.', category: 'malware', objectives: ['4.3'] },
+  },
+  {
+    id: 'false-positive-old-service', kind: 'workstation', x: 11.5, y: 14.5, sprite: 'workstation',
+    infected: false, tags: ['triage'],
+    inspect: { label: 'Scan finding ARCH-05', detail: 'Service inventory: the flagged legacy file-transfer service is absent; package not installed and no listening socket is present.', category: 'legit', objectives: ['4.3'] },
+  },
+  {
+    id: 'false-positive-printer', kind: 'workstation', x: 31.5, y: 5.5, sprite: 'workstation',
+    infected: false, tags: ['triage'],
+    inspect: { label: 'Scan finding PRINT-06', detail: 'Service inventory: the flagged database listener is absent; package not installed and no listening socket is present.', category: 'legit', objectives: ['4.3'] },
+  },
+];
+
+const choices: EntityDef[] = [
+  { id: 'legacy-compensating', kind: 'console', x: 9.5, y: 20.5, sprite: 'console', group: 'legacy-edr', tags: ['fix-gaps'],
+    log: 'Apply COMPENSATING control.', inspect: { label: 'Apply COMPENSATING control', detail: 'Apply COMPENSATING control.', category: 'legit' } },
+  { id: 'legacy-preventive', kind: 'console', x: 9.5, y: 21.5, sprite: 'console', group: 'legacy-edr', tags: ['wrong-control'],
+    log: 'Apply PREVENTIVE control.', inspect: { label: 'Apply PREVENTIVE control', detail: 'Apply PREVENTIVE control.', category: 'legit' } },
+  { id: 'legacy-detective', kind: 'console', x: 9.5, y: 22.5, sprite: 'console', group: 'legacy-edr', tags: ['wrong-control'],
+    log: 'Apply DETECTIVE control.', inspect: { label: 'Apply DETECTIVE control', detail: 'Apply DETECTIVE control.', category: 'legit' } },
+  { id: 'payroll-preventive', kind: 'console', x: 32.5, y: 20.5, sprite: 'console', group: 'payroll-write', tags: ['fix-gaps'],
+    log: 'Apply PREVENTIVE control.', inspect: { label: 'Apply PREVENTIVE control', detail: 'Apply PREVENTIVE control.', category: 'legit' } },
+  { id: 'payroll-corrective', kind: 'console', x: 32.5, y: 21.5, sprite: 'console', group: 'payroll-write', tags: ['wrong-control'],
+    log: 'Apply CORRECTIVE control.', inspect: { label: 'Apply CORRECTIVE control', detail: 'Apply CORRECTIVE control.', category: 'legit' } },
+  { id: 'payroll-compensating', kind: 'console', x: 32.5, y: 22.5, sprite: 'console', group: 'payroll-write', tags: ['wrong-control'],
+    log: 'Apply COMPENSATING control.', inspect: { label: 'Apply COMPENSATING control', detail: 'Apply COMPENSATING control.', category: 'legit' } },
+  { id: 'access-detective', kind: 'console', x: 9.5, y: 12.5, sprite: 'console', group: 'access-log', tags: ['fix-gaps'],
+    log: 'Apply DETECTIVE control.', inspect: { label: 'Apply DETECTIVE control', detail: 'Apply DETECTIVE control.', category: 'legit' } },
+  { id: 'access-preventive', kind: 'console', x: 9.5, y: 13.5, sprite: 'console', group: 'access-log', tags: ['wrong-control'],
+    log: 'Apply PREVENTIVE control.', inspect: { label: 'Apply PREVENTIVE control', detail: 'Apply PREVENTIVE control.', category: 'legit' } },
+  { id: 'access-directive', kind: 'console', x: 9.5, y: 14.5, sprite: 'console', group: 'access-log', tags: ['wrong-control'],
+    log: 'Apply DIRECTIVE control.', inspect: { label: 'Apply DIRECTIVE control', detail: 'Apply DIRECTIVE control.', category: 'legit' } },
+  { id: 'restore-corrective', kind: 'console', x: 32.5, y: 12.5, sprite: 'console', group: 'restore', tags: ['fix-gaps'],
+    log: 'Apply CORRECTIVE control.', inspect: { label: 'Apply CORRECTIVE control', detail: 'Apply CORRECTIVE control.', category: 'legit' } },
+  { id: 'restore-compensating', kind: 'console', x: 32.5, y: 13.5, sprite: 'console', group: 'restore', tags: ['wrong-control'],
+    log: 'Apply COMPENSATING control.', inspect: { label: 'Apply COMPENSATING control', detail: 'Apply COMPENSATING control.', category: 'legit' } },
+  { id: 'restore-detective', kind: 'console', x: 32.5, y: 14.5, sprite: 'console', group: 'restore', tags: ['wrong-control'],
+    log: 'Apply DETECTIVE control.', inspect: { label: 'Apply DETECTIVE control', detail: 'Apply DETECTIVE control.', category: 'legit' } },
+];
+
+const pickups: EntityDef[] = [
+  { id: 'usb-charge-change-a', kind: 'item', x: 7.5, y: 25.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 4 },
+    inspect: { label: 'Scanner charges', detail: 'Antimalware definitions.', category: 'item' } },
+  { id: 'usb-charge-change-b', kind: 'item', x: 33.5, y: 20.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 4 },
+    inspect: { label: 'Scanner charges', detail: 'Antimalware definitions.', category: 'item' } },
+  { id: 'patch-disk-change-a', kind: 'item', x: 13.5, y: 25.5, sprite: 'patch-disk', tags: ['arsenal-pickup'],
+    grants: { resource: 'patch-disk', amount: 2 }, inspect: { label: 'Patch disks', detail: 'Signed vendor updates (verify the signature before you install).', category: 'item', objectives: ['2.5'] } },
+  { id: 'patch-disk-change-b', kind: 'item', x: 35.5, y: 13.5, sprite: 'patch-disk', tags: ['arsenal-pickup'],
+    grants: { resource: 'patch-disk', amount: 2 }, inspect: { label: 'Patch disks', detail: 'Signed vendor updates (verify the signature before you install).', category: 'item', objectives: ['2.5'] } },
+  { id: 'medkit-change-a', kind: 'item', x: 6.5, y: 18.5, sprite: 'medkit', grants: { resource: 'integrity', amount: 25 },
+    inspect: { label: 'Integrity kit', detail: 'Restores 25 integrity.', category: 'item' } },
+  { id: 'medkit-change-b', kind: 'item', x: 33.5, y: 7.5, sprite: 'medkit', grants: { resource: 'integrity', amount: 25 },
+    inspect: { label: 'Integrity kit', detail: 'Restores 25 integrity.', category: 'item' } },
+  {
+    id: 'find-edr-change', kind: 'item', x: 34.5, y: 18.5, sprite: 'tool-edr',
+    tags: ['arsenal-pickup'], grants: { resource: 'tool:edr', amount: 1 },
+    inspect: { label: 'EDR console (found)', detail: 'Endpoint detection and response console with containment.', category: 'item', objectives: ['4.5'] },
+  },
+  {
+    id: 'edr-cell-change-a', kind: 'item', x: 6.5, y: 12.5, sprite: 'edr-cell',
+    tags: ['arsenal-pickup'], grants: { resource: 'edr-cell', amount: 1 },
+    inspect: { label: 'EDR cell', detail: 'Licence/compute for one EDR containment pulse.', category: 'item', objectives: ['4.5'] },
+  },
+  {
+    id: 'edr-cell-change-b', kind: 'item', x: 33.5, y: 26.5, sprite: 'edr-cell',
+    tags: ['arsenal-pickup'], grants: { resource: 'edr-cell', amount: 1 },
+    inspect: { label: 'EDR cell', detail: 'Licence/compute for one EDR containment pulse.', category: 'item', objectives: ['4.5'] },
+  },
+  {
+    id: 'pcap-change-a', kind: 'item', x: 8.5, y: 7.5, sprite: 'pcap',
+    tags: ['arsenal-pickup'], grants: { resource: 'pcap', amount: 3 },
+    inspect: { label: 'Capture buffer', detail: 'Blank capture storage for the network tap.', category: 'item', objectives: ['3.2'] },
+  },
+  {
+    id: 'pcap-change-b', kind: 'item', x: 31.5, y: 7.5, sprite: 'pcap',
+    tags: ['arsenal-pickup'], grants: { resource: 'pcap', amount: 3 },
+    inspect: { label: 'Capture buffer', detail: 'Blank capture storage for the network tap.', category: 'item', objectives: ['3.2'] },
+  },
+];
+
+const rootkitWave = stagedThreatWave(map, 'rootkit', 'rootkit', [...evidenceAndWork, ...choices, ...pickups], [
+  [6, 17, 14, 22],
+  [25, 17, 33, 22],
+  [6, 10, 14, 15],
+  [25, 10, 33, 15],
+]);
+const waveIds = (start: number, end: number) => rootkitWave.slice(start, end).map((enemy) => enemy.id);
+
+export const m05: Mission = {
+  id: 'm05',
+  title: 'CHANGE FREEZE',
+  difficulty: 6,
+  objectives: ['1.3', '1.1', '4.3', '5.1'],
+  briefing: 'A critical patch has to land on the payroll server tonight, and the change board meets in ten minutes.',
+  authorizedRoles: ['analyst'],
+  loadout: ['keyboard', 'mouse', 'usb', 'badge', 'patch'],
+  map,
+  entities: [...evidenceAndWork, ...choices, ...pickups, ...rootkitWave],
+  missionObjectives: [
+    { id: 'docs', text: 'Collect the impact analysis, backout plan and owner approval', kind: 'interact', tag: 'change-doc', count: 3 },
+    { id: 'payroll-patch', text: 'Patch payroll after the three change records are collected', kind: 'interact', tag: 'payroll-patch', requires: ['docs'], earlyViolates: 'early-patch' },
+    { id: 'early-patch', text: 'Do not patch before the required change records', kind: 'avoid', tag: 'early-patch', strikes: 1 },
+    { id: 'fix-gaps', text: 'Apply the correct control type to each gap', kind: 'interact', tag: 'fix-gaps', count: 4 },
+    { id: 'wrong-control', text: 'Avoid incorrect control choices', kind: 'avoid', tag: 'wrong-control', strikes: 3 },
+    { id: 'confirmed-hosts', text: 'Patch the four confirmed vulnerable hosts', kind: 'clean', tag: 'vulnerability-confirmed', count: 4 },
+    { id: 'wrong-call', text: 'Do not patch scan findings without confirming the service', kind: 'avoid', tag: 'wrong-call', strikes: 3 },
+    { id: 'exit', text: 'Reach the exit', kind: 'reach-exit' },
+  ],
+  script: {
+    par: 240,
+    triggers: [
+      { id: 'change-ambush-west', area: [6, 17, 14, 22], spawn: waveIds(0, 5), kind: 'bad', message: 'A rootkit persistence record reappeared in the HR service zone.' },
+      { id: 'change-ambush-east', area: [25, 17, 33, 22], spawn: waveIds(5, 10), kind: 'bad', message: 'Rootkit activity spread into payroll operations.' },
+      { id: 'change-ambush-upper', area: [6, 10, 14, 15], spawn: waveIds(10, 15), kind: 'bad', message: 'A hidden persistence task activated near the scan consoles.' },
+      { id: 'change-ambush-final', after: ['payroll-patch'], spawn: waveIds(15, 20), kind: 'bad', message: 'Rootkit persistence attempted to survive the approved patch.' },
+      { id: 'change-backtrack', after: ['fix-gaps'], openDoors: ['change-backtrack'], kind: 'good', message: 'The control gaps are covered: the return route is open.' },
+      { id: 'change-queue', after: ['confirmed-hosts'], openDoors: ['change-queue'], kind: 'good', message: 'Confirmed vulnerable hosts are patched: the upper scan wing is open.' },
+      { id: 'change-exit', after: ['docs', 'payroll-patch', 'fix-gaps', 'confirmed-hosts'], openDoors: ['change-exit'], kind: 'good', message: 'The change is complete and validated. Exit open.' },
+    ],
+    secrets: [
+      { id: 'change-secret-1', area: [2, 4, 4, 8], label: 'Change archive alcove' },
+      { id: 'change-secret-2', area: [35, 10, 37, 15], label: 'Audit storage nook' },
+      { id: 'change-secret-3', area: [2, 17, 4, 22], label: 'Payroll maintenance store' },
+    ],
+  },
+  debriefQuestions: [
+    q('q1', ['1.3'], 'An emergency patch goes on the payroll server tonight. Which change-management item lets you restore service if the patch breaks payroll?', 2, [
+      ['Impact analysis', 'Impact analysis predicts what the change will affect before you make it. It does not undo anything.'],
+      ['Maintenance window', 'The window sets WHEN the change happens to limit disruption, not how to reverse it.'],
+      ['Backout plan', 'A backout plan is the documented, tested way to roll back to the last good state if the change fails.'],
+      ['Stakeholder approval', 'Approval authorizes the change. It gives you nothing to restore from.'],
+    ]),
+    q('q2', ['1.1'], 'Policy requires EDR on every server, but a legacy server cannot run the agent. It is moved to an isolated VLAN with extra network monitoring. What type of control is the isolation?', 0, [
+      ['Compensating', 'A compensating control is an alternative that meets the intent of a required control that cannot be implemented. Here, isolation stands in for EDR.'],
+      ['Corrective', 'Corrective controls fix or restore after an incident, like restoring from backup. Nothing has happened yet.'],
+      ['Deterrent', 'Deterrents discourage attempts, like warning signs. Isolation actually limits what an attacker can reach.'],
+      ['Directive', 'Directive controls tell people what to do, like a policy. This is a technical substitute for a missing control.'],
+    ]),
+    q('q3', ['1.1'], 'A sign at the data-center fence reads "Area under 24/7 video surveillance." What is the sign’s PRIMARY control type?', 3, [
+      ['Detective', 'The cameras record and so detect. The sign itself records nothing.'],
+      ['Preventive', 'A preventive control physically or technically stops the act, like a locked door. A sign stops no one.'],
+      ['Compensating', 'Nothing is being substituted for an unavailable control.'],
+      ['Deterrent', 'The sign works by discouraging intruders with the threat of being seen. That is deterrence.'],
+    ]),
+    q('q4', ['4.3'], 'A scan flags a critical CVE on 40 servers. You confirm that 12 of them do not run the vulnerable service at all. What are those 12, and what is next?', 1, [
+      ['False negatives; rescan with stronger settings', 'A false negative is a real vulnerability the scanner MISSED. These are the opposite.'],
+      ['False positives; document them, remediate the other 28 by CVSS and exposure, then rescan to validate', 'Reported but not real = false positive. Confirmed findings get prioritized and fixed, and a rescan validates the remediation.'],
+      ['True positives; patch all 40 tonight', 'Patching hosts that are not affected wastes the change window and adds risk for no benefit.'],
+      ['Accept the risk on all 40 until the next quarter', 'The 28 confirmed hosts carry a critical vulnerability. Accepting that needs a formal risk decision, not a default.'],
+    ]),
+    q('q5', ['5.1'], '"All user passwords must be at least 14 characters." In the governance hierarchy, this statement is a:', 0, [
+      ['Standard', 'Standards are mandatory, specific, measurable requirements that support a policy. SY0-701 lists password standards explicitly.'],
+      ['Policy', 'A policy states high-level intent ("we protect accounts with strong authentication"), not exact numbers.'],
+      ['Procedure', 'A procedure is step-by-step instructions, such as how to reset a password.'],
+      ['Guideline', 'Guidelines are recommendations, and "must" makes this mandatory.'],
+    ]),
+  ],
+};
+
+export const m05Teach: MissionTeaching = {
+  tagline: 'Prepare the change, match each gap to a control, confirm scan findings, then patch payroll.',
+  situation: 'A critical payroll patch must be installed tonight before the change board meets.',
+  orders: [
+    { text: 'Collect an impact analysis, a backout plan, and owner approval before the maintenance window.', objective: '1.3' },
+    { text: 'Read each control-gap record and choose the matching control type.', objective: '1.1' },
+    { text: 'Confirm scanner findings against the installed service before patching hosts.', objective: '4.3' },
+    { text: 'Use the debrief to distinguish policy, standard, procedure, and guideline.', objective: '5.1' },
+  ],
+  keyTerms: ['impact analysis', 'backout plan', 'compensating control', 'false positive', 'standard'],
+  lessons: {
+    docs: { objective: '1.3', done: 'The impact analysis, backout plan, and owner approval were collected.', missed: 'Collect all three change records before patching.' },
+    'payroll-patch': { objective: '1.3', done: 'Payroll was patched after the required change records were collected.', missed: 'The patch requires the impact analysis, backout plan, and owner approval.' },
+    'early-patch': { objective: '1.3', done: 'The patch was not started prematurely.', missed: 'Patching without the required change records reverts the server and fails the mission.' },
+    'fix-gaps': { objective: '1.1', done: 'Each control gap received its matching control type.', missed: 'Match the raw gap to preventive, detective, corrective, or compensating control.' },
+    'wrong-control': { objective: '1.1', done: 'No incorrect control options were applied.', missed: 'A control must address the specific gap described by the terminal.' },
+    'confirmed-hosts': { objective: '4.3', done: 'Confirmed vulnerable hosts were patched.', missed: 'Confirm the service is present; patch confirmed findings.' },
+    'wrong-call': { objective: '4.3', done: 'No false-positive scan results were patched.', missed: 'The service inventory showed that some flagged services were absent.' },
+    exit: { objective: '1.3', done: 'The approved change was completed before exit.', missed: 'Complete the change and required validation before exiting.' },
+  },
+  examTip: 'A backout plan restores the last good state; reported-but-absent services are false positives, while standards are mandatory, specific, measurable requirements.',
+};
+
+export const m05Walkthrough: WalkStep[] = [
+  { goto: [8, 25] },
+  { interact: 'impact-analysis' },
+  { goto: [30, 25] },
+  { interact: 'backout-plan' },
+  { goto: [20, 24] },
+  { badge: [20, 23] },
+  { goto: [12, 20] },
+  { interact: 'owner-approval' },
+  { goto: [26, 25] },
+  { interact: 'payroll-patch' },
+  { goto: [7, 21] },
+  { interact: 'gap-legacy-edr' },
+  { goto: [9, 20] },
+  { interact: 'legacy-compensating' },
+  { goto: [30, 21] },
+  { interact: 'gap-payroll-write' },
+  { goto: [32, 20] },
+  { interact: 'payroll-preventive' },
+  { goto: [15, 18] },
+  { inspect: 'vuln-hr' },
+  { clean: 'vuln-hr' },
+  { goto: [23, 18] },
+  { inspect: 'vuln-db' },
+  { clean: 'vuln-db' },
+  { goto: [20, 17] },
+  { badge: [20, 16] },
+  { goto: [7, 13] },
+  { interact: 'gap-access-log' },
+  { goto: [9, 12] },
+  { interact: 'access-detective' },
+  { goto: [30, 13] },
+  { interact: 'gap-restore' },
+  { goto: [32, 12] },
+  { interact: 'restore-corrective' },
+  { goto: [15, 12] },
+  { inspect: 'vuln-web' },
+  { clean: 'vuln-web' },
+  { goto: [23, 12] },
+  { inspect: 'vuln-api' },
+  { clean: 'vuln-api' },
+  { wait: 0.1 },
+  { goto: [20, 10] },
+  { goto: [20, 8] },
+  { wait: 0.1 },
+  { goto: [20, 1] },
+];

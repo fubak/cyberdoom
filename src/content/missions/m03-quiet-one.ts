@@ -2,6 +2,7 @@ import type { Mission } from '../../core/types';
 import type { MissionTeaching } from '../curriculum';
 import type { WalkStep } from '../../missions/walkthroughs';
 import { lightRects } from '../../missions/levelkit';
+import { addThreatEncounter, setMapCell } from './campaign-map';
 
 /**
  * M3 "The Quiet One": insider threat, correlating data sources.
@@ -78,6 +79,7 @@ export const m03: Mission = {
       },
       '1': { kind: 'door', tex: 'wall-brick', doorId: 'secret-archive', secret: true },
       '2': { kind: 'door', tex: 'wall-brick', doorId: 'secret-mail', secret: true },
+      '3': { kind: 'door', tex: 'wall-brick', doorId: 'secret-pillar-cache', secret: true },
     },
     spawn: { x: 9.5, y: 27.5, angle: -Math.PI / 2 },
     defaultLight: 0.7,
@@ -150,12 +152,12 @@ export const m03: Mission = {
       inspect: { label: 'Trojan', detail: 'Bundled with a "free PDF converter".', category: 'malware', objectives: ['2.4'] } },
     { id: 'worm-floor', kind: 'enemy', x: 25.5, y: 9.5, sprite: 'worm', ai: 'chase', hp: 2, infected: true, tags: ['malware'],
       inspect: { label: 'Worm', detail: 'Self-propagating across file shares.', category: 'malware', objectives: ['2.4'] } },
-    { id: 'bomb-a', kind: 'enemy', x: 33.5, y: 16.5, sprite: 'trojan', ai: 'chase', hp: 3, infected: true, dormant: true, tags: ['malware'],
+    { id: 'bomb-a', kind: 'enemy', x: 33.5, y: 16.5, sprite: 'logicbomb', ai: 'stand', hp: 1, infected: true, dormant: true, tags: ['malware'],
       inspect: { label: 'Logic-bomb payload', detail: 'Dropped by a scheduled task set to fire when the logs were opened.', category: 'malware', objectives: ['2.4'] } },
-    { id: 'bomb-b', kind: 'enemy', x: 38.5, y: 11.5, sprite: 'trojan', ai: 'chase', hp: 3, infected: true, dormant: true, tags: ['malware'],
+    { id: 'bomb-b', kind: 'enemy', x: 38.5, y: 11.5, sprite: 'logicbomb', ai: 'stand', hp: 1, infected: true, dormant: true, tags: ['malware'],
       inspect: { label: 'Logic-bomb payload', detail: 'Dropped by a scheduled task set to fire when the logs were opened.', category: 'malware', objectives: ['2.4'] } },
-    { id: 'bomb-rw', kind: 'enemy', x: 29.5, y: 5.5, sprite: 'ransomware', ai: 'wander', hp: 4, infected: true, dormant: true, tags: ['malware'],
-      inspect: { label: 'Ransomware', detail: 'Encrypting the records share. The logic bomb\'s final stage.', category: 'malware', objectives: ['2.4'] } },
+    { id: 'bomb-rw', kind: 'enemy', x: 29.5, y: 5.5, sprite: 'logicbomb', ai: 'stand', hp: 1, infected: true, dormant: true, tags: ['malware'],
+      inspect: { label: 'Logic-bomb payload', detail: 'Scheduled execution condition recorded in the records share.', category: 'malware', objectives: ['2.4'] } },
     { id: 'chg-lobby', kind: 'item', x: 14.5, y: 22.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 4 },
       inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for your write-protected scanner stick.', category: 'item' } },
     { id: 'chg-floor', kind: 'item', x: 4.5, y: 18.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 4 },
@@ -218,6 +220,7 @@ export const m03: Mission = {
     secrets: [
       { id: 'archive', area: [1, 9, 2, 12], label: 'Paper archive' },
       { id: 'mail', area: [4, 2, 10, 6], label: 'Old mail room' },
+      { id: 'pillar-cache', area: [9, 11, 9, 11], label: 'Pillar cache' },
     ],
   },
   debriefQuestions: [
@@ -346,3 +349,32 @@ export const m03Teach: MissionTeaching = {
   },
   examTip: 'For investigation questions, pick the data source that actually recorded the event. USB copy = endpoint logs. Who entered the building = badge/physical logs. What crossed the network = firewall/NetFlow/packet capture. Who logged in where = OS security logs.',
 };
+
+setMapCell(m03.map, 8, 10, 'B');
+setMapCell(m03.map, 9, 10, 'B');
+setMapCell(m03.map, 10, 10, 'B');
+setMapCell(m03.map, 8, 11, '3');
+setMapCell(m03.map, 9, 11, '.');
+setMapCell(m03.map, 8, 23, 'S');
+setMapCell(m03.map, 10, 23, 'S');
+setMapCell(m03.map, 8, 24, 'S');
+setMapCell(m03.map, 10, 24, 'S');
+m03.map.lights = { ...m03.map.lights, ...lightRects([[7, 21, 11, 25, 1]]) };
+addThreatEncounter(m03, 'logicbomb-center', 'logicbomb', 5, {
+  id: 'open-floor-bombwave',
+  area: [22, 14, 24, 17],
+  kind: 'bad',
+  message: 'A row of logic bombs armed across the open-plan floor.',
+}, [12, 10, 24, 19]);
+addThreatEncounter(m03, 'logicbomb-east', 'logicbomb', 5, {
+  id: 'records-bombwave',
+  area: [35, 16, 37, 18],
+  kind: 'bad',
+  message: 'The records wing scheduled another logic-bomb wave.',
+}, [29, 4, 38, 19]);
+addThreatEncounter(m03, 'logicbomb-report', 'logicbomb', 5, {
+  id: 'report-bombwave',
+  after: ['report'],
+  kind: 'bad',
+  message: 'The insider’s final scheduled payload activated after the report.',
+}, [5, 20, 24, 28]);

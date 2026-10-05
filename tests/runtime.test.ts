@@ -246,11 +246,28 @@ describe('MissionRuntime', () => {
     }));
     tick(state);
     for (let i = 0; i < 3; i++) {
-      state.bus.emit('tool-hit', { toolId: 'usb', entityId: 'false-positive', good: false });
+      state.bus.emit('scan-miss', { entityId: 'false-positive' });
     }
     expect(state.rt.finished).toBe('lost');
     expect(state.rt.lossReason).toBe('Avoid wrong triage calls');
     expect(state.player.integrity).toBe(70);
+    expect(state.rt.score).toBe(-75);
+  });
+
+  it('deactivates sibling options after a successful grouped choice', () => {
+    const state = setup(mission({
+      entities: [
+        { id: 'correct', kind: 'console', x: 2, y: 2, sprite: 'console', tags: ['fix-gaps'], group: 'gap-1' },
+        { id: 'sibling', kind: 'console', x: 3, y: 2, sprite: 'console', tags: ['wrong-control'], group: 'gap-1' },
+      ],
+      missionObjectives: [
+        { id: 'fix-gaps', text: 'Resolve the gap', kind: 'interact', tag: 'fix-gaps' },
+        { id: 'wrong-control', text: 'Avoid wrong controls', kind: 'avoid', tag: 'wrong-control', strikes: 3 },
+      ],
+    }));
+    state.bus.emit('interact', { entityId: 'correct' });
+    expect(state.rt.byId('sibling')?.alive).toBe(false);
+    expect(state.rt.objectives.find((objective) => objective.def.id === 'wrong-control')?.violations).toBe(0);
   });
 
   it('marks an obeyed doors objective done at win, but violations are not fatal', () => {

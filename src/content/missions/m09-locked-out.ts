@@ -3,6 +3,7 @@ import type { MissionTeaching } from '../curriculum';
 import { q } from '../arc-questions';
 import type { WalkStep } from '../../missions/walkthroughs';
 import { lightRects } from '../../missions/levelkit';
+import { addThreatEncounter, setMapCell } from './campaign-map';
 
 /**
  * M9 "Locked Out": ransomware incident response, run in the right order.
@@ -79,6 +80,7 @@ briefing:
       },
       '1': { kind: 'door', tex: 'wall-brick', doorId: 'secret-store', secret: true },
       '2': { kind: 'door', tex: 'wall-brick', doorId: 'secret-closet', secret: true },
+      '3': { kind: 'door', tex: 'wall-server', doorId: 'secret-warroom-cache', secret: true },
     },
     spawn: { x: 19.5, y: 27.5, angle: -Math.PI / 2 },
     defaultLight: 0.65,
@@ -223,6 +225,7 @@ briefing:
     secrets: [
       { id: 'store', area: [11, 24, 13, 27], label: 'IR storeroom' },
       { id: 'closet', area: [35, 16, 38, 20], label: 'Finance closet' },
+      { id: 'warroom-cache', area: [18, 15, 18, 15], label: 'War-room cache' },
     ],
   },
 debriefQuestions: [
@@ -328,3 +331,29 @@ export const m09Teach: MissionTeaching = {
   },
   examTip: 'Incident response order on the exam: preparation, detection, analysis, containment, eradication, recovery, lessons learned. Ransomware recovery = offline/immutable backups, not replicas.',
 };
+
+setMapCell(m09.map, 17, 15, '3');
+setMapCell(m09.map, 18, 15, '.');
+setMapCell(m09.map, 17, 23, 'S');
+setMapCell(m09.map, 21, 23, 'S');
+setMapCell(m09.map, 17, 24, 'S');
+setMapCell(m09.map, 21, 24, 'S');
+m09.map.lights = { ...m09.map.lights, ...lightRects([[16, 22, 22, 26, 1]]) };
+addThreatEncounter(m09, 'ransomware-finance', 'ransomware', 9, {
+  id: 'finance-ambush',
+  area: [34, 11, 36, 13],
+  kind: 'bad',
+  message: 'A ransomware wave pushed through the finance floor.',
+}, [10, 21, 32, 28]);
+addThreatEncounter(m09, 'ransomware-west', 'ransomware', 9, {
+  id: 'ir-storeroom-ambush',
+  area: [2, 3, 4, 5],
+  kind: 'bad',
+  message: 'An isolated segment released another ransomware wave.',
+}, [1, 10, 38, 20]);
+addThreatEncounter(m09, 'ransomware-recovery', 'ransomware', 9, {
+  id: 'recovery-ambush',
+  after: ['recover'],
+  kind: 'bad',
+  message: 'The recovery operation triggered a final ransomware wave.',
+}, [1, 1, 38, 9]);

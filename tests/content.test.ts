@@ -1,7 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { missionRegistry } from '../src/content/missions';
+import { ARC } from '../src/content/curriculum';
 import { objectiveById, OBJECTIVES } from '../src/content/objectives';
 import type { Mission } from '../src/core/types';
+import { EventBus } from '../src/core/events';
+import { encounterBudget } from '../src/missions/difficulty';
+import { MissionRuntime } from '../src/missions/runtime';
 
 /** BFS reachability from spawn to an exit tile. */
 function reachableExit(m: Mission): boolean {
@@ -106,6 +110,21 @@ describe('missions', () => {
     const d = missions.map((m) => m.difficulty);
     expect([...d].sort((a, b) => a - b)).toEqual(d);
   });
+  it('ARC encounter budgets and infected-enemy counts increase together', () => {
+    const built = ARC.filter((entry) => entry.built).map((entry) => missionRegistry.get(entry.id)!);
+    const budgets = built.map((m) => encounterBudget(m.difficulty));
+    expect(budgets).toEqual([...budgets].sort((a, b) => a - b));
+    expect([1, 3, 6, 8].map(encounterBudget)).toEqual([6, 10, 20, 32]);
+    for (const m of built) {
+      const budget = encounterBudget(m.difficulty);
+      expect(
+        m.entities.filter((entity) => entity.kind === 'enemy' && entity.infected).length,
+        `${m.id} infected enemies`,
+      ).toBeGreaterThanOrEqual(budget);
+      expect(new MissionRuntime(m, new EventBus()).stats().killsTotal, `${m.id} runtime threat total`)
+        .toBeGreaterThanOrEqual(budget);
+    }
+  });
 
   for (const m of missions) {
     describe(m.id, () => {
@@ -133,12 +152,18 @@ describe('missions', () => {
       it('critical path is gated', () => {
         expect(reachableGatedExit(m)).toBe(false);
       });
-      it('has two reachable secrets with doors open', () => {
+      it('has at least three reachable secrets with doors open', () => {
         const secrets = m.script?.secrets ?? [];
-        expect(secrets.length).toBeGreaterThanOrEqual(2);
-        for (const secret of secrets.slice(0, 2)) {
+        expect(secrets.length).toBeGreaterThanOrEqual(3);
+        for (const secret of secrets) {
           expect(reachableArea(m, secret.area)).toBe(true);
         }
+      });
+      it('has at least three concept gates', () => {
+        const gates = Object.values(m.map.legend).filter(
+          (cell) => cell.kind === 'door' && !cell.secret,
+        );
+        expect(gates.length).toBeGreaterThanOrEqual(3);
       });
       it('is at least 40 by 28 tiles', () => {
         expect(m.map.grid[0].length).toBeGreaterThanOrEqual(40);
