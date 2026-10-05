@@ -1,3 +1,4 @@
+import { USB_PLUG_RANGE } from './tools/usb';
 import './ui/style.css';
 import { EventBus } from './core/events';
 import type { Entity, Gender, Projectile, Screen } from './core/types';
@@ -352,7 +353,8 @@ class Game {
         this.audio.sfx('oof');
       } else {
         this.useCd = 0.3;
-        toolForSlot(1)!.use(this.toolCtx());
+        const target = ctx.aimEntity(1.5, 0.5);
+        if (target) this.bus.emit('interact', { entityId: target.def.id });
       }
     }
 
@@ -385,11 +387,14 @@ class Game {
       dt,
       p,
     )) {
-      this.audio.sfx('impact', { x, y, gain: projectile.hostile ? 1 : 0.5 });
+      this.audio.sfx('impact', { x, y, gain: projectile.hostile || !hit ? 1 : 0.5 });
       if (hitPlayer && projectile.hostile) {
         this.hurtPlayer(projectile.damage ?? 10, x - projectile.dx, y - projectile.dy);
       }
-      if (hit) {
+      if (hit && hit.def.kind === 'workstation' && projectile.traveled > USB_PLUG_RANGE) {
+        this.bus.emit('tool-hit', { toolId: 'usb', entityId: hit.def.id, good: false });
+        this.hud.pushMessage('Workstations are cleaned at arm\'s length: walk up and plug the scanner stick in.', 'warn');
+      } else if (hit) {
         if (hit.infected) {
           const dmg = hit.state.flagCorrect ? 2 : 1;
           const result = damageEntity(hit, dmg, projectile.dx, projectile.dy);

@@ -35,30 +35,39 @@ export const mfaTool: ToolDef = {
     const ph = usePhase(anim?.sinceUse ?? 9, WINDUP);
     const push = ph.k > 0 ? ph.k * 12 : ph.k * 4;
     const lit = ph.phase === 'impact' || (ph.phase === 'recover' && ph.u < 0.5);
-    const x0 = Math.round(w / 2 - 14);
-    const y0 = Math.round(h - 58 - push);
-    // key body
-    bevel(g, x0, y0, 28, 44, '#23262e', 2);
-    rect(g, x0 + 2, y0 + 2, 24, 3, '#3a3f4c');
-    // gold USB-C/NFC contact
-    rect(g, x0 + 8, y0 - 6, 12, 7, '#c8ccd8');
-    rect(g, x0 + 10, y0 - 4, 8, 2, '#8a90a0');
-    // fingerprint sensor: concentric hard rings
-    const cx = x0 + 14;
-    const cy = y0 + 18;
-    const ring = lit ? (anim?.confirmGood === false && (anim?.sinceConfirm ?? 9) < 0.4 ? '#ff4a2a' : '#5aff6a') : '#c09a2a';
-    rect(g, cx - 7, cy - 7, 14, 14, '#14161c');
-    for (const r of [6, 4, 2]) {
+    const x0 = Math.round(w / 2 - 10);
+    const y0 = Math.round(h - 74 - push);
+    // USB-A connector: steel shell with the two contact windows
+    rect(g, x0 + 3, y0, 14, 14, '#c8ccd8');
+    rect(g, x0 + 3, y0, 14, 2, '#eef0f6');
+    rect(g, x0 + 15, y0 + 2, 2, 12, '#7a8296');
+    rect(g, x0 + 6, y0 + 4, 3, 4, '#2a2e38');
+    rect(g, x0 + 11, y0 + 4, 3, 4, '#2a2e38');
+    // key body: long and slim, like a real FIDO2 security key
+    bevel(g, x0, y0 + 14, 20, 48, '#23262e', 2);
+    rect(g, x0 + 2, y0 + 16, 16, 2, '#3a3f4c');
+    // gold touch contact (user presence) with a fingerprint-ring pattern
+    const cx = x0 + 10;
+    const cy = y0 + 30;
+    const ring = lit ? (anim?.confirmGood === false && (anim?.sinceConfirm ?? 9) < 0.4 ? '#ff4a2a' : '#5aff6a') : '#e0b030';
+    rect(g, cx - 6, cy - 6, 12, 12, '#7a5a10');
+    for (const r of [5, 3]) {
       rect(g, cx - r, cy - r, r * 2, 1, ring);
       rect(g, cx - r, cy + r - 1, r * 2, 1, ring);
       rect(g, cx - r, cy - r, 1, r * 2, ring);
       rect(g, cx + r - 1, cy - r, 1, r * 2, ring);
     }
-    // status LED
-    rect(g, x0 + 11, y0 + 31, 6, 3, lit ? '#ffffff' : '#2ad83a');
-    // fist round the lower half
-    sleeve(g, x0 + 2, y0 + 62, 22, 1, look);
-    fist(g, x0 - 2, y0 + 30, 30, look, 1);
+    rect(g, cx - 1, cy - 1, 2, 2, ring);
+    // status LED and key-ring hole
+    rect(g, x0 + 8, y0 + 40, 4, 2, lit ? '#ffffff' : '#2ad83a');
+    rect(g, x0 + 7, y0 + 50, 6, 5, '#0a0b0e');
+    // steel key ring through the hole, swinging off to the side
+    rect(g, x0 + 12, y0 + 51, 10, 2, '#aeb6c2');
+    rect(g, x0 + 20, y0 + 51, 2, 10, '#aeb6c2');
+    rect(g, x0 + 12, y0 + 59, 10, 2, '#7a8296');
+    // fist pinches only the far end, so the key stays readable
+    sleeve(g, x0 + 4, y0 + 84, 22, 1, look);
+    fist(g, x0 - 4, y0 + 56, 28, look, 1);
   },
   drawFx(g, w, h, anim) {
     impactBurst(g, w / 2, h - 70, anim.sinceConfirm, anim.confirmGood, 0.7);
