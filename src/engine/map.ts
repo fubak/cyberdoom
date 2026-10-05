@@ -9,8 +9,9 @@ export class WorldMap {
   readonly h: number;
   readonly def: MapDef;
   private cells: (CellDef | null)[][];
-  /** doorId -> open? */
-  private doors = new Map<string, boolean>();
+  /** doorId -> opening fraction */
+  private doors = new Map<string, number>();
+  private openingDoors = new Set<string>();
 
   constructor(def: MapDef) {
     this.def = def;
@@ -21,7 +22,7 @@ export class WorldMap {
     );
     for (const row of this.cells) {
       for (const c of row) {
-        if (c?.kind === 'door' && c.doorId) this.doors.set(c.doorId, false);
+        if (c?.kind === 'door' && c.doorId) this.doors.set(c.doorId, 0);
       }
     }
   }
@@ -36,11 +37,30 @@ export class WorldMap {
   }
 
   isDoorOpen(doorId: string): boolean {
-    return this.doors.get(doorId) ?? false;
+    return this.doorFrac(doorId) >= 0.7;
   }
 
   openDoor(doorId: string): void {
-    this.doors.set(doorId, true);
+    this.doors.set(doorId, 1);
+    this.openingDoors.delete(doorId);
+  }
+
+  startOpening(doorId: string): void {
+    if (!this.doors.has(doorId) || this.doorFrac(doorId) >= 1) return;
+    this.openingDoors.add(doorId);
+  }
+
+  doorFrac(doorId: string): number {
+    return this.doors.get(doorId) ?? 0;
+  }
+
+  updateDoors(dt: number): void {
+    for (const id of this.openingDoors) {
+      const next = this.doorFrac(id) + dt / 0.55;
+      const frac = next >= 1 - 1e-9 ? 1 : next;
+      this.doors.set(id, frac);
+      if (frac >= 1) this.openingDoors.delete(id);
+    }
   }
 
   /** A cell blocks movement if it's a wall or a closed door. */
@@ -74,14 +94,29 @@ export class WorldMap {
   ): { dist: number; cell: CellDef | null; tx: number; ty: number } {
     const dx = Math.cos(angle);
     const dy = Math.sin(angle);
-    const step = 0.02;
-    for (let d = step; d < maxDist; d += step) {
-      const px = x + dx * d;
-      const py = y + dy * d;
-      const tx = Math.floor(px);
-      const ty = Math.floor(py);
+    let tx = Math.floor(x);
+    let ty = Math.floor(y);
+    if (this.blocked(tx, ty)) return { dist: 0, cell: this.cellAt(tx, ty), tx, ty };
+    const stepX = dx < 0 ? -1 : 1;
+    const stepY = dy < 0 ? -1 : 1;
+    const deltaX = dx === 0 ? Infinity : Math.abs(1 / dx);
+    const deltaY = dy === 0 ? Infinity : Math.abs(1 / dy);
+    let maxX = dx === 0 ? Infinity : ((dx < 0 ? x - tx : tx + 1 - x) * deltaX);
+    let maxY = dy === 0 ? Infinity : ((dy < 0 ? y - ty : ty + 1 - y) * deltaY);
+    let dist = 0;
+    while (dist <= maxDist) {
+      if (maxX < maxY) {
+        tx += stepX;
+        dist = maxX;
+        maxX += deltaX;
+      } else {
+        ty += stepY;
+        dist = maxY;
+        maxY += deltaY;
+      }
+      if (dist > maxDist) break;
       if (this.blocked(tx, ty)) {
-        return { dist: d, cell: this.cellAt(tx, ty), tx, ty };
+        return { dist, cell: this.cellAt(tx, ty), tx, ty };
       }
     }
     return { dist: maxDist, cell: null, tx: -1, ty: -1 };
@@ -91,9 +126,11 @@ export class WorldMap {
    * Circle-vs-grid collision resolve: pushes (px,py) out of blocked cells and
    * enables wall sliding. Radius r in tiles.
    */
-  resolve(x: number, y: number, r: number): { x: number; y: number } {
+  resolve(x: number, y: number, r: number): { x: number; y: number; nx: number; ny: number } {
     let px = x;
     let py = y;
+    let normalX = 0;
+    let normalY = 0;
     for (let iter = 0; iter < 3; iter++) {
       const minTx = Math.floor(px - r);
       const maxTx = Math.floor(px + r);
@@ -114,11 +151,16 @@ export class WorldMap {
           const push = r - d;
           px += (ddx / d) * push;
           py += (ddy / d) * push;
+          normalX += ddx / d;
+          normalY += ddy / d;
           pushed = true;
         }
       }
       if (!pushed) break;
     }
-    return { x: px, y: py };
+    const normalLength = Math.hypot(normalX, normalY);
+    return normalLength > 0
+      ? { x: px, y: py, nx: normalX / normalLength, ny: normalY / normalLength }
+      : { x: px, y: py, nx: 0, ny: 0 };
   }
 }

@@ -587,6 +587,23 @@ export function buildSprites(): void {
       p.glow.fillRect(0, 0, 16, 16);
     },
   })));
+  makeSet('fx-payload', 20, 20, 0.32, 'flicker', [0, 1].map((f) => ({
+    key: `f${f}`,
+    draw: (p: PaintCtx) => {
+      const { g } = p;
+      g.fillStyle = '#241216';
+      g.fillRect(6, 1, 8, 18);
+      g.fillRect(3, 5, 14, 10);
+      g.fillStyle = '#a82319';
+      g.fillRect(7, 2, 6, 16);
+      g.fillRect(4, 6, 12, 8);
+      lit(p, f ? '#ff9a24' : '#ff5522', 7, 4, 6, 12);
+      lit(p, f ? '#ffe06a' : '#ffb13b', 8, 7, 4, 6);
+      lit(p, '#fff2c0', 9, 8 + f, 2, 3);
+      p.glow.fillStyle = '#fff';
+      p.glow.fillRect(8, 6, 4, 8);
+    },
+  })));
   makeSet('fx-puff', 24, 24, 0.34, 'static', [0, 1, 2].map((f) => ({
     key: `f${f}`,
     draw: (p: PaintCtx) => {

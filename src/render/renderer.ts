@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { Entity, MapDef, Projectile } from '../core/types';
 import type { WorldMap } from '../engine/map';
 import type { Player } from '../engine/player';
+import type { ViewPose } from '../engine/feel';
 import { buildPaletteLut } from './palette';
 import { buildSprites, spriteSets, type SpriteSet } from './sprites';
 import { WALL_H, buildTextures, doorTextureFor, textureOr, textureRegistry } from './textures';
@@ -423,7 +424,10 @@ export class Renderer {
       st.lastX = e.x;
       st.lastY = e.y;
       st.entity = e;
-      st.mesh.position.set(e.x, 0, e.y);
+      const scale = typeof e.state.scale === 'number' ? e.state.scale : 1;
+      const hop = typeof e.state.hop === 'number' ? e.state.hop : 0;
+      st.mesh.scale.set(set.w * scale, set.h * scale, 1);
+      st.mesh.position.set(e.x, hop, e.y);
       st.mat.uniforms.uLight.value = this.lightAt(e.x, e.y);
     }
     for (const [id, st] of [...this.sprites]) {
@@ -441,10 +445,11 @@ export class Renderer {
       live.add(p);
       let st = this.projSprites.get(p);
       if (!st) {
-        const set = spriteSets.require('fx-scan');
+        const setId = p.hostile ? 'fx-payload' : 'fx-scan';
+        const set = spriteSets.require(setId);
         const { mesh, mat } = this.makeSpriteMesh(set, 1);
         st = {
-          mesh, mat, set, setId: 'fx-scan', lastX: p.x, lastY: p.y, facing: null, moveT: 0, animT: 0, lastHp: 0,
+          mesh, mat, set, setId, lastX: p.x, lastY: p.y, facing: null, moveT: 0, animT: 0, lastHp: 0,
           flash: 0, kind: 'prop', entity: null,
         };
         this.projSprites.set(p, st);
@@ -481,6 +486,11 @@ export class Renderer {
     const t = st.animT;
     if (anim === 'monster') {
       if (st.flash > 0.25 && f.pain) return { tex: f.pain };
+      const stateMode = st.entity?.state.mode;
+      if (typeof stateMode === 'string') {
+        const walk = Math.floor(t * 4) % 2 === 0 ? f.walk0 : f.walk1;
+        return { tex: stateMode === 'windup' || stateMode === 'recover' ? f.attack ?? walk : walk };
+      }
       const dist = Math.hypot(px - st.lastX, py - st.lastY);
       if (dist < 0.95 && f.attack) return { tex: Math.floor(t * 5) % 2 === 0 ? f.attack : f.walk0 };
       return { tex: Math.floor(t * 4) % 2 === 0 ? f.walk0 : f.walk1 };
@@ -506,7 +516,7 @@ export class Renderer {
     return { tex: Object.values(f)[0] };
   }
 
-  render(player: Player): void {
+  render(player: Player, pose?: ViewPose): void {
     const now = performance.now();
     const dt = Math.min(0.1, (now - this.lastTime) / 1000);
     this.lastTime = now;
@@ -522,8 +532,11 @@ export class Renderer {
 
     const speed = Math.min(1, Math.hypot(player.vx, player.vy) / 4);
     const bobY = Math.abs(Math.sin(player.bob)) * 0.035 * speed;
-    this.camera.position.set(player.x, EYE_H + bobY, player.y);
-    this.camera.rotation.set(0, -player.angle - Math.PI / 2, 0, 'YXZ');
+    const cameraX = pose?.x ?? player.x;
+    const cameraY = pose?.y ?? player.y;
+    const cameraAngle = pose?.angle ?? player.angle;
+    this.camera.position.set(cameraX, pose ? EYE_H + pose.dz : EYE_H + bobY, cameraY);
+    this.camera.rotation.set(0, -cameraAngle - Math.PI / 2, pose?.roll ?? 0, 'YXZ');
     const yaw = this.camera.rotation.y;
 
     for (const st of [...this.sprites.values(), ...this.ghosts, ...this.projSprites.values()]) {
@@ -531,8 +544,10 @@ export class Renderer {
       st.moveT -= dt;
       st.flash = Math.max(0, st.flash - dt * 3);
       st.mesh.rotation.set(0, yaw, 0);
-      st.mat.uniforms.map.value = this.pickFrame(st, player.angle, player.x, player.y).tex;
-      st.mat.uniforms.uFlash.value = st.flash > 0.75 ? 0.6 : 0;
+      st.mat.uniforms.map.value = this.pickFrame(st, cameraAngle, cameraX, cameraY).tex;
+      const painFlash = st.flash > 0.75 ? 0.6 : 0;
+      const windupFlash = st.entity?.state.mode === 'windup' && Math.floor(this.time * 12) % 2 === 0 ? 0.35 : 0;
+      st.mat.uniforms.uFlash.value = Math.max(painFlash, windupFlash);
     }
     for (const fx of [...this.fx]) {
       fx.t += dt;

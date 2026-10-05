@@ -148,6 +148,7 @@ export interface Entity {
   hp: number;
   alive: boolean;
   infected: boolean;
+  hurtT?: number;
   /** Door-esque interactables state etc. */
   state: Record<string, unknown>;
 }
@@ -163,6 +164,8 @@ export interface Projectile {
   traveled: number;
   source: string;
   alive: boolean;
+  hostile?: boolean;
+  damage?: number;
 }
 
 /** Context handed to ToolDef.use. Implemented by the game shell. */

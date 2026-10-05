@@ -86,6 +86,7 @@ export class Hud {
     bob: number;
     cooldownFrac: number;
     gender: Gender;
+    viewmodelOffset?: { x: number; y: number };
     credentials: string;
     objectives: { text: string; done: boolean; failed: boolean }[];
   }): void {
@@ -100,8 +101,12 @@ export class Hud {
     g.beginPath();
     g.rect(0, 0, VIEW_W, VIEW3D_H);
     g.clip();
-    if (!drawToolViewmodel(g, opts.tool, VIEW_W, VIEW3D_H, opts.bob, opts.gender, opts.cooldownFrac, this.time)) {
-      opts.tool.drawViewmodel(g, VIEW_W, VIEW3D_H, Math.sin(opts.bob) * 2, opts.gender, opts.cooldownFrac);
+    if (opts.viewmodelOffset) {
+      g.translate(Math.round(opts.viewmodelOffset.x), Math.round(opts.viewmodelOffset.y));
+    }
+    const bob = opts.viewmodelOffset ? 0 : opts.bob;
+    if (!drawToolViewmodel(g, opts.tool, VIEW_W, VIEW3D_H, bob, opts.gender, opts.cooldownFrac, this.time)) {
+      opts.tool.drawViewmodel(g, VIEW_W, VIEW3D_H, Math.sin(bob) * 2, opts.gender, opts.cooldownFrac);
     }
     g.restore();
 
