@@ -346,15 +346,16 @@ export function damageEntity(e: Entity, dmg: number, fromDx: number, fromDy: num
 export function hurtEntity(e: Entity, fromDx: number, fromDy: number, rng = Math.random): void {
   const length = Math.hypot(fromDx, fromDy) || 1;
   e.state.lastHurtAt = (e.state.aiClock as number | undefined) ?? 0;
-  if (mode(e) === 'idle') e.state.sighted = true;
-  e.state.mode = 'pain';
+  const wasIdle = mode(e) === 'idle';
+  if (wasIdle) e.state.sighted = true;
+  const chasing = e.def.ai === 'chase';
+  e.state.mode = chasing ? 'chase' : 'pain';
   e.state.painT = 0.3;
   e.state.flashT = 0.12;
   e.hurtT = 0.25;
   e.state.knockVx = (fromDx / length) * 1.5;
   e.state.knockVy = (fromDy / length) * 1.5;
-  if (e.def.ai === 'chase' && mode(e) === 'idle') {
-    e.state.mode = 'chase';
+  if (chasing && wasIdle) {
     e.state.reaction = 0.25;
     e.state.sighted = true;
   }

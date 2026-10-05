@@ -116,7 +116,8 @@ export class Hud {
     gender: Gender;
     viewmodelOffset?: { x: number; y: number };
     credentials: string;
-    objectives: { text: string; done: boolean; failed: boolean }[];
+    objectives: { text: string; done: boolean; failed: boolean; progress?: number; target?: number }[];
+    progress?: { done: number; total: number; failed: boolean };
     /** ARSENAL: use-cycle/switch animation state for the held tool. */
     anim?: ViewmodelAnim;
     /** ARSENAL: ids of tools the player currently owns (ARMS grid). */
@@ -153,15 +154,16 @@ export class Hud {
       g.fillRect(0, 0, VIEW_W, VIEW3D_H);
     }
 
-    // objective strip: on change, flash ONLY the line that changed; at mission
-    // start, the first open objective; TAB shows the current one + n/m
     const states = opts.objectives.map((o) => (o.done ? 1 : o.failed ? 2 : 0));
-    const objKey = states.join('');
+    const objKey = opts.objectives
+      .map((o, index) => `${states[index]}:${o.progress ?? 0}/${o.target ?? 1}`)
+      .join('|');
     if (!this.lastObjKey) {
       if (this.objShowT > 0) this.objIdx = Math.max(0, states.indexOf(0));
     } else if (objKey !== this.lastObjKey) {
-      const prev = this.lastObjKey;
-      this.objIdx = Math.max(0, states.findIndex((v, k) => `${v}` !== prev[k]));
+      const previous = this.lastObjKey.split('|').map((value) => Number(value.split(':')[0]));
+      const changed = states.findIndex((value, index) => value !== previous[index]);
+      this.objIdx = changed >= 0 ? changed : Math.max(0, states.indexOf(0));
       this.objShowT = 3.5;
     }
     this.lastObjKey = objKey;
@@ -259,6 +261,7 @@ export class Hud {
     gender: Gender;
     credentials: string;
     objectives: { done: boolean; failed: boolean }[];
+    progress?: { done: number; total: number; failed: boolean };
     owned?: string[];
     face?: (g: CanvasRenderingContext2D, x: number, y: number) => void;
     resources?: ResRow[];
@@ -349,9 +352,10 @@ export class Hud {
     });
 
     // OBJECTIVES n/m
-    const done = o.objectives.filter((x) => x.done).length;
-    const failed = o.objectives.some((x) => x.failed);
-    bigCentered(g, `${done}/${o.objectives.length}`, P_OBJ, by + 5, failed ? RED : done === o.objectives.length ? GREEN : GREEN.slice(1));
+    const done = o.progress?.done ?? o.objectives.filter((x) => x.done).length;
+    const total = o.progress?.total ?? o.objectives.length;
+    const failed = o.progress?.failed ?? o.objectives.some((x) => x.failed);
+    bigCentered(g, `${done}/${total}`, P_OBJ, by + 5, failed ? RED : done === total ? GREEN : GREEN.slice(1));
     label(g, failed ? 'FAIL' : 'OBJ', P_OBJ, by + 20, failed ? '#ff5a3a' : undefined);
   }
 

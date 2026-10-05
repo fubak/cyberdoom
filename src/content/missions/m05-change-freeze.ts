@@ -111,6 +111,14 @@ const pickups: EntityDef[] = [
     inspect: { label: 'Scanner charges', detail: 'Antimalware definitions.', category: 'item' } },
   { id: 'usb-charge-change-b', kind: 'item', x: 33.5, y: 20.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 4 },
     inspect: { label: 'Scanner charges', detail: 'Antimalware definitions.', category: 'item' } },
+  { id: 'usb-charge-change-c', kind: 'item', x: 15.5, y: 6.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 30 },
+    inspect: { label: 'Scanner charges', detail: 'Antimalware definitions.', category: 'item' } },
+  { id: 'usb-charge-change-d', kind: 'item', x: 24.5, y: 6.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 30 },
+    inspect: { label: 'Scanner charges', detail: 'Antimalware definitions.', category: 'item' } },
+  { id: 'usb-charge-change-e', kind: 'item', x: 17.5, y: 27.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 30 },
+    inspect: { label: 'Scanner charges', detail: 'Antimalware definitions.', category: 'item' } },
+  { id: 'usb-charge-change-f', kind: 'item', x: 35.5, y: 25.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 30 },
+    inspect: { label: 'Scanner charges', detail: 'Antimalware definitions.', category: 'item' } },
   { id: 'patch-disk-change-a', kind: 'item', x: 13.5, y: 25.5, sprite: 'patch-disk', tags: ['arsenal-pickup'],
     grants: { resource: 'patch-disk', amount: 2 }, inspect: { label: 'Patch disks', detail: 'Signed vendor updates (verify the signature before you install).', category: 'item', objectives: ['2.5'] } },
   { id: 'patch-disk-change-b', kind: 'item', x: 35.5, y: 13.5, sprite: 'patch-disk', tags: ['arsenal-pickup'],
@@ -149,9 +157,26 @@ const pickups: EntityDef[] = [
 const rootkitWave = stagedThreatWave(map, 'rootkit', 'rootkit', [...evidenceAndWork, ...choices, ...pickups], [
   [6, 17, 14, 22],
   [25, 17, 33, 22],
-  [6, 10, 14, 15],
+  [3, 10, 17, 15],
   [25, 10, 33, 15],
 ]);
+rootkitWave.push({
+  id: 'rootkit-payroll-final',
+  kind: 'enemy',
+  x: 28.5,
+  y: 25.5,
+  sprite: 'rootkit',
+  ai: 'chase',
+  hp: 3,
+  infected: true,
+  dormant: true,
+  tags: ['malware'],
+  inspect: {
+    label: 'Rootkit process',
+    detail: 'Persistence record: service restart and privileged file access recorded.',
+    category: 'malware',
+  },
+});
 const waveIds = (start: number, end: number) => rootkitWave.slice(start, end).map((enemy) => enemy.id);
 
 export const m05: Mission = {
@@ -180,7 +205,7 @@ export const m05: Mission = {
       { id: 'change-ambush-west', area: [6, 17, 14, 22], spawn: waveIds(0, 5), kind: 'bad', message: 'A rootkit persistence record reappeared in the HR service zone.' },
       { id: 'change-ambush-east', area: [25, 17, 33, 22], spawn: waveIds(5, 10), kind: 'bad', message: 'Rootkit activity spread into payroll operations.' },
       { id: 'change-ambush-upper', area: [6, 10, 14, 15], spawn: waveIds(10, 15), kind: 'bad', message: 'A hidden persistence task activated near the scan consoles.' },
-      { id: 'change-ambush-final', after: ['payroll-patch'], spawn: waveIds(15, 20), kind: 'bad', message: 'Rootkit persistence attempted to survive the approved patch.' },
+      { id: 'change-ambush-final', after: ['payroll-patch'], spawn: waveIds(15, rootkitWave.length), kind: 'bad', message: 'Rootkit persistence attempted to survive the approved patch.' },
       { id: 'change-backtrack', after: ['fix-gaps'], openDoors: ['change-backtrack'], kind: 'good', message: 'The control gaps are covered: the return route is open.' },
       { id: 'change-queue', after: ['confirmed-hosts'], openDoors: ['change-queue'], kind: 'good', message: 'Confirmed vulnerable hosts are patched: the upper scan wing is open.' },
       { id: 'change-exit', after: ['docs', 'payroll-patch', 'fix-gaps', 'confirmed-hosts'], openDoors: ['change-exit'], kind: 'good', message: 'The change is complete and validated. Exit open.' },
@@ -226,15 +251,14 @@ export const m05: Mission = {
 };
 
 export const m05Teach: MissionTeaching = {
-  tagline: 'Prepare the change, match each gap to a control, confirm scan findings, then patch payroll.',
+  tagline: 'Prepare the change, match gaps to controls, confirm findings, then patch payroll.',
   situation: 'A critical payroll patch must be installed tonight before the change board meets.',
   orders: [
-    { text: 'Collect an impact analysis, a backout plan, and owner approval before the maintenance window.', objective: '1.3' },
-    { text: 'Read each control-gap record and choose the matching control type.', objective: '1.1' },
-    { text: 'Confirm scanner findings against the installed service before patching hosts.', objective: '4.3' },
-    { text: 'Use the debrief to distinguish policy, standard, procedure, and guideline.', objective: '5.1' },
+    { text: 'Collect impact analysis, backout plan, and owner approval first.', objective: '1.3' },
+    { text: 'Read each gap and apply its matching control type.', objective: '1.1' },
+    { text: 'Confirm service presence, then patch the vulnerable hosts.', objective: '4.3' },
   ],
-  keyTerms: ['impact analysis', 'backout plan', 'compensating control', 'false positive', 'standard'],
+  keyTerms: ['false positive', 'endpoint protection', 'patching', 'backups'],
   lessons: {
     docs: { objective: '1.3', done: 'The impact analysis, backout plan, and owner approval were collected.', missed: 'Collect all three change records before patching.' },
     'payroll-patch': { objective: '1.3', done: 'Payroll was patched after the required change records were collected.', missed: 'The patch requires the impact analysis, backout plan, and owner approval.' },

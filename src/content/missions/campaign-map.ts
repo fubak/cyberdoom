@@ -109,6 +109,14 @@ export function threatWave(
   tags: string[];
   inspect: { label: string; detail: string; category: 'malware' };
 }> {
+  const baseHp: Record<string, number> = {
+    worm: 2,
+    trojan: 3,
+    ransomware: 4,
+    logicbomb: 1,
+    rat: 2,
+    rootkit: 3,
+  };
   const positions: { x: number; y: number }[] = [];
   const [rx1, ry1, rx2, ry2] = region ?? [2, 4, map.grid[0].length - 3, map.grid.length - 3];
   for (let y = Math.max(4, ry1); y <= Math.min(map.grid.length - 3, ry2); y++) {
@@ -125,7 +133,7 @@ export function threatWave(
   return positions.map(({ x, y }, index) => ({
     id: `${prefix}-${index + 1}`,
     kind: 'enemy',
-    x, y, sprite, ai: 'chase', hp: 1, infected: true, dormant: true,
+    x, y, sprite, ai: 'chase', hp: baseHp[sprite] ?? 1, infected: true, dormant: true,
     tags: ['malware'],
     inspect: {
       label: ({
