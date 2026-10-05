@@ -26,6 +26,8 @@ export const ENEMY_PROFILES: Record<string, EnemyProfile> = {
   ransomware: { speed: 1.3, ranged: true, damage: 18, painChance: 0.4, projectileSpeed: 4, windup: 0.7 },
 };
 
+export const ENEMY_RADIUS = 0.3;
+
 const DIRECTIONS = Array.from({ length: 8 }, (_, i) => [
   Math.cos((i * Math.PI) / 4),
   Math.sin((i * Math.PI) / 4),
@@ -57,10 +59,22 @@ function pickMoveDir(e: Entity, map: WorldMap, dx: number, dy: number): number {
   const randomDirs = Array.from({ length: 8 }, (_, i) => i).sort(() => Math.random() - 0.5);
   for (const dir of [...candidates, ...randomDirs]) {
     const [vx, vy] = DIRECTIONS[dir];
-    const res = map.resolve(e.x + vx * 0.02, e.y + vy * 0.02, 0.3);
+    const res = map.resolve(e.x + vx * 0.02, e.y + vy * 0.02, ENEMY_RADIUS);
     if (Math.hypot(res.x - e.x, res.y - e.y) > 0.001) return dir;
   }
   return direct;
+}
+
+export function enemyMoveTo(e: Entity, nx: number, ny: number, map: WorldMap, player: Player): boolean {
+  const res = map.resolve(nx, ny, ENEMY_RADIUS);
+  const currentDist = Math.hypot(e.x - player.x, e.y - player.y);
+  const nextDist = Math.hypot(res.x - player.x, res.y - player.y);
+  const contact = player.radius + ENEMY_RADIUS;
+  if (currentDist < contact ? nextDist <= currentDist : nextDist < contact) return false;
+  if (Math.hypot(res.x - e.x, res.y - e.y) < 0.001) return false;
+  e.x = res.x;
+  e.y = res.y;
+  return true;
 }
 
 function setRenderState(e: Entity, now: number): void {
@@ -98,9 +112,7 @@ export function updateEntities(
       const knockX = (e.state.knockVx as number | undefined) ?? 0;
       const knockY = (e.state.knockVy as number | undefined) ?? 0;
       if (knockX !== 0 || knockY !== 0) {
-        const res = map.resolve(e.x + knockX * dt, e.y + knockY * dt, 0.3);
-        e.x = res.x;
-        e.y = res.y;
+        enemyMoveTo(e, e.x + knockX * dt, e.y + knockY * dt, map, player);
         e.state.knockVx = knockX * Math.exp(-5 * dt);
         e.state.knockVy = knockY * Math.exp(-5 * dt);
       }
@@ -147,11 +159,9 @@ export function updateEntities(
         const tryMove = () => {
           const dir = (e.state.movedir as number | undefined) ?? movedirFromAngle(Math.atan2(dy, dx));
           const [mx, my] = DIRECTIONS[dir];
-          const res = map.resolve(e.x + mx * profile.speed * dt, e.y + my * profile.speed * dt, 0.3);
-          const moved = Math.hypot(res.x - e.x, res.y - e.y);
-          if (moved < 0.001) return false;
-          e.x = res.x;
-          e.y = res.y;
+          if (!enemyMoveTo(e, e.x + mx * profile.speed * dt, e.y + my * profile.speed * dt, map, player)) {
+            return false;
+          }
           turnToward(e, Math.atan2(my, mx), dt, 8);
           e.state.stepT = ((e.state.stepT as number | undefined) ?? 0) - dt;
           if ((e.state.stepT as number) <= 0) {
@@ -242,14 +252,18 @@ export function updateEntities(
       const a = (e.state.wanderA as number) ?? 0;
       const nx = e.x + Math.cos(a) * 0.5 * dt;
       const ny = e.y + Math.sin(a) * 0.5 * dt;
-      const res = map.resolve(nx, ny, 0.3);
-      e.x = res.x;
-      e.y = res.y;
+      if (e.def.kind === 'enemy') {
+        enemyMoveTo(e, nx, ny, map, player);
+      } else {
+        const res = map.resolve(nx, ny, ENEMY_RADIUS);
+        e.x = res.x;
+        e.y = res.y;
+      }
       turnToward(e, a, dt, 2.5);
     }
   }
 
-  const enemies = entities.filter((e) => e.alive && e.def.ai === 'chase');
+  const enemies = entities.filter((e) => e.alive && e.def.kind === 'enemy' && e.def.ai === 'chase');
   for (let i = 0; i < enemies.length; i++) {
     for (let j = i + 1; j < enemies.length; j++) {
       const a = enemies[i];
@@ -261,12 +275,8 @@ export function updateEntities(
       const push = (0.6 - dist) / 2;
       const nx = dx / dist;
       const ny = dy / dist;
-      const ar = map.resolve(a.x - nx * push, a.y - ny * push, 0.3);
-      const br = map.resolve(b.x + nx * push, b.y + ny * push, 0.3);
-      a.x = ar.x;
-      a.y = ar.y;
-      b.x = br.x;
-      b.y = br.y;
+      enemyMoveTo(a, a.x - nx * push, a.y - ny * push, map, player);
+      enemyMoveTo(b, b.x + nx * push, b.y + ny * push, map, player);
     }
   }
 }
@@ -306,6 +316,35 @@ export function alertNear(entities: Entity[], x: number, y: number, radius: numb
   }
 }
 
+export function traceShot(
+  x: number,
+  y: number,
+  dx: number,
+  dy: number,
+  range: number,
+  entities: Entity[],
+  map: WorldMap,
+): { hit: Entity | null; dist: number; x: number; y: number } {
+  const length = Math.hypot(dx, dy);
+  if (length === 0 || range <= 0) return { hit: null, dist: 0, x, y };
+  const dirX = dx / length;
+  const dirY = dy / length;
+  const maxD = Math.min(range, map.raycast(x, y, Math.atan2(dirY, dirX), range).dist);
+  let hit: Entity | null = null;
+  let dist = maxD;
+  for (const e of entities) {
+    if (!e.alive) continue;
+    const toX = e.x - x;
+    const toY = e.y - y;
+    const along = toX * dirX + toY * dirY;
+    const perpendicular = Math.abs(toX * dirY - toY * dirX);
+    if (along <= 0 || along > maxD || perpendicular >= 0.45 || along >= dist) continue;
+    hit = e;
+    dist = along;
+  }
+  return { hit, dist, x: x + dirX * dist, y: y + dirY * dist };
+}
+
 export function updateProjectiles(
   projectiles: Projectile[],
   entities: Entity[],
@@ -320,6 +359,10 @@ export function updateProjectiles(
     p.x += p.dx * step;
     p.y += p.dy * step;
     p.traveled += step;
+    if (p.cosmetic) {
+      if (p.traveled >= p.range || map.blockedF(p.x, p.y)) p.alive = false;
+      continue;
+    }
     if (p.traveled >= p.range || map.blockedF(p.x, p.y)) {
       p.alive = false;
       events.push({ p, hit: null, x: p.x, y: p.y });

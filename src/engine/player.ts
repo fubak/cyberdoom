@@ -157,6 +157,17 @@ export class Player {
     this.vy += iy;
   }
 
+  knockback(awayX: number, awayY: number, tiles: number): void {
+    const length = Math.hypot(awayX, awayY);
+    if (length === 0 || tiles <= 0) return;
+    const nx = awayX / length;
+    const ny = awayY / length;
+    const impulse = MOVE.friction * tiles;
+    const velocityAway = this.vx * nx + this.vy * ny;
+    const add = Math.max(0, impulse - velocityAway);
+    this.applyImpulse(nx * add, ny * add);
+  }
+
   get viewBobZ(): number {
     return 0.045 * this.bobAmt * Math.sin((2 * Math.PI * this.t) / 0.571);
   }
