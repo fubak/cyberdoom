@@ -536,7 +536,15 @@ export class Renderer {
         continue;
       }
       seen.add(id);
-      const setId = this.debugSprite.get(id) ?? (e.def.kind === 'workstation' ? (e.infected ? 'workstation-infected' : 'workstation') : e.def.sprite);
+      const setId = this.debugSprite.get(id) ?? (
+        e.def.kind === 'workstation'
+          ? !e.state.revealed
+            ? 'workstation'
+            : e.infected
+              ? 'workstation-infected'
+              : (e.def.sprite ?? 'workstation')
+          : e.def.sprite
+      );
       const set = spriteSets.get(setId) ?? spriteSets.require('npc-m');
       if (!st) {
         const { mesh, mat } = this.makeSpriteMesh(set, this.lightAt(e.x, e.y));
