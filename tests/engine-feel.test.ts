@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { alertNear, hurtEntity, updateEntities, updateProjectiles, type AiHooks } from '../src/engine/ai';
-import { Feel, WeaponSwitch } from '../src/engine/feel';
+import { Feel } from '../src/engine/feel';
 import { WorldMap } from '../src/engine/map';
 import { Player } from '../src/engine/player';
 import type { Entity, MapDef, Projectile } from '../src/core/types';
@@ -42,17 +42,6 @@ describe('Feel', () => {
     feel.update(1);
     const decayed = feel.shake(0.123);
     expect(Math.hypot(decayed.yaw, decayed.x, decayed.y)).toBe(0);
-  });
-
-  it('returns a weapon switch exactly once and becomes ready after 0.36s', () => {
-    const swap = new WeaponSwitch('keyboard');
-    swap.request('usb');
-    expect(swap.ready).toBe(false);
-    expect(swap.update(0.16)).toBe('usb');
-    expect(swap.update(0.01)).toBeNull();
-    expect(swap.update(0.19)).toBeNull();
-    expect(swap.ready).toBe(true);
-    expect(swap.current).toBe('usb');
   });
 });
 

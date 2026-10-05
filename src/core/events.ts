@@ -25,6 +25,12 @@ export interface EventMap {
   'player-down': Record<string, never>;
   /** Player picked up an item. */
   pickup: { entityId: string };
+  /** Player committed a triage verdict on an entity (Mouse, second click). */
+  triage: { entityId: string; verdict: 'malicious'; correct: boolean };
+  /** Badge reader refused a repeat swipe (no new violation logged). */
+  'badge-confirm': { allowed: boolean };
+  /** A tool hit/affected an entity; drives viewmodel hit reactions. */
+  'tool-hit': { toolId: string; entityId?: string; good: boolean };
   /** HUD ticker message. */
   message: { text: string; kind?: 'info' | 'warn' | 'good' | 'bad' };
 }

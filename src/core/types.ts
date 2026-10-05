@@ -138,6 +138,13 @@ export interface Mission {
   debriefQuestions: Question[];
   /** Roles the player badge is authorized for in this mission. */
   authorizedRoles: string[];
+  /**
+   * Optional starting tool ids. When omitted the arsenal starts with every
+   * tool whose `unlock.difficulty` is <= this mission's difficulty.
+   * Additional tools can be granted mid-mission by an item with
+   * `grants: { resource: 'tool:<id>', amount: 1 }`.
+   */
+  loadout?: string[];
 }
 
 /** Runtime state of a spawned entity (engine-owned). */
@@ -186,6 +193,26 @@ export interface ToolUseContext {
   authorizedRoles: string[];
   /** Current player role. */
   role: string;
+  /** Unobstructed line of sight between two points (tile coords). Optional. */
+  lineOfSight?: (x0: number, y0: number, x1: number, y1: number) => boolean;
+}
+
+/** Extra per-frame animation state passed to ToolDef.drawViewmodel. */
+export interface ViewmodelAnim {
+  /** Seconds since the tool was last used (large when idle). */
+  sinceUse: number;
+  /** Seconds since the last "hit confirm" for this tool (large when none). */
+  sinceConfirm: number;
+  /** Whether the last confirm was a success (green) or a failure (red). */
+  confirmGood: boolean;
+  /** Global animation clock in seconds. */
+  time: number;
+  /** Current ammo for this tool (null = infinite). */
+  ammo: number | null;
+  /** Skin tone fill colours for the analyst's hands: [base, shadow, highlight]. */
+  skin: [string, string, string];
+  /** Tool switch progress: 0 = fully raised, 1 = fully lowered off-screen. */
+  lower?: number;
 }
 
 /** One tool the player can wield. Implemented under src/tools/. */
@@ -198,6 +225,17 @@ export interface ToolDef {
   ammo: { resource: string; start: number; max: number } | null;
   /** Seconds between uses. */
   cooldown: number;
+  /**
+   * Seconds between pulling the trigger and `use()` taking effect (the
+   * windup phase of the use animation). Default 0.
+   */
+  windup?: number;
+  /** Holding the use button repeats the tool (Doom-style auto fire). */
+  auto?: boolean;
+  /** Mission difficulty at which the tool is in the default loadout (default 1). */
+  unlock?: { difficulty: number };
+  /** Which SY0-701 security control the tool models (for the field manual). */
+  control?: ToolControl;
   /** Draw the first-person viewmodel onto a 2D canvas (x = center px). */
   drawViewmodel: (
     g: CanvasRenderingContext2D,
@@ -206,8 +244,27 @@ export interface ToolDef {
     bob: number,
     gender: Gender,
     cooldownFrac: number,
+    anim?: ViewmodelAnim,
   ) => void;
+  /** Optional additive effects (flashes, bursts) drawn after the viewmodel outline pass. */
+  drawFx?: (g: CanvasRenderingContext2D, w: number, h: number, anim: ViewmodelAnim) => void;
   use: (ctx: ToolUseContext) => void;
+}
+
+/** Security-control metadata for a tool (SY0-701 1.1 categories/types). */
+export interface ToolControl {
+  /** Real-world control the tool stands for, e.g. "Antimalware / endpoint protection". */
+  name: string;
+  /** SY0-701 1.1 control category. */
+  category: 'technical' | 'managerial' | 'operational' | 'physical';
+  /** SY0-701 1.1 control types this tool exercises. */
+  types: ('preventive' | 'deterrent' | 'detective' | 'corrective' | 'compensating' | 'directive')[];
+  /** SY0-701 objective ids. */
+  objectives: string[];
+  /** How to use it in game. */
+  use: string;
+  /** The real-world lesson. */
+  lesson: string;
 }
 
 /** One scored player action recorded for the debrief. */

@@ -1,4 +1,4 @@
-import type { Gender, ToolDef } from '../core/types';
+import type { Gender, ToolDef, ViewmodelAnim } from '../core/types';
 import { drawBigText, drawText, measureBig, measureText, wrapText } from '../render/font';
 import { STATUS_H, VIEW3D_H, VIEW_H, VIEW_W } from '../render/renderer';
 import { roleColor } from '../render/textures';
@@ -89,6 +89,12 @@ export class Hud {
     viewmodelOffset?: { x: number; y: number };
     credentials: string;
     objectives: { text: string; done: boolean; failed: boolean }[];
+    /** ARSENAL: use-cycle/switch animation state for the held tool. */
+    anim?: ViewmodelAnim;
+    /** ARSENAL: ids of tools the player currently owns (ARMS grid). */
+    owned?: string[];
+    /** ARSENAL: status-face painter (portrait + damage/direction states). */
+    face?: (g: CanvasRenderingContext2D, x: number, y: number) => void;
   }): void {
     const g = this.g;
     g.clearRect(0, 0, VIEW_W, VIEW_H);
@@ -105,8 +111,9 @@ export class Hud {
       g.translate(Math.round(opts.viewmodelOffset.x), Math.round(opts.viewmodelOffset.y));
     }
     const bob = opts.viewmodelOffset ? 0 : opts.bob;
-    if (!drawToolViewmodel(g, opts.tool, VIEW_W, VIEW3D_H, bob, opts.gender, opts.cooldownFrac, this.time)) {
-      opts.tool.drawViewmodel(g, VIEW_W, VIEW3D_H, Math.sin(bob) * 2, opts.gender, opts.cooldownFrac);
+    if (!drawToolViewmodel(g, opts.tool, VIEW_W, VIEW3D_H, bob, opts.gender, opts.cooldownFrac, this.time, opts.anim)) {
+      opts.tool.drawViewmodel(g, VIEW_W, VIEW3D_H, Math.sin(bob) * 2, opts.gender, opts.cooldownFrac, opts.anim);
+      if (opts.anim) opts.tool.drawFx?.(g, VIEW_W, VIEW3D_H, opts.anim);
     }
     g.restore();
 
@@ -165,6 +172,8 @@ export class Hud {
     gender: Gender;
     credentials: string;
     objectives: { done: boolean; failed: boolean }[];
+    owned?: string[];
+    face?: (g: CanvasRenderingContext2D, x: number, y: number) => void;
   }): void {
     const g = this.g;
     const by = VIEW_H - STATUS_H;
@@ -195,22 +204,26 @@ export class Hud {
     }
 
     // TOOLS grid (Doom ARMS)
+    // 3x2 like Doom's ARMS: slots 1-6, lit when owned, boxed when held
     const tools = sortedTools();
-    for (let i = 0; i < 4; i++) {
-      const t = tools[i];
-      const x = P_TOOLS[0] + 5 + i * 11;
-      const y = by + 5;
-      const active = t && t.slot === o.tool.slot;
+    for (let i = 0; i < 6; i++) {
+      const slot = i + 1;
+      const t = tools.find((tt) => tt.slot === slot);
+      const owned = !!t && (o.owned ? o.owned.includes(t.id) : true);
+      const x = P_TOOLS[0] + 5 + (i % 3) * 14;
+      const y = by + 4 + Math.floor(i / 3) * 8;
+      const active = !!t && t.slot === o.tool.slot;
       g.fillStyle = active ? '#3a3010' : '#0c0e12';
-      g.fillRect(x, y, 10, 11);
+      g.fillRect(x, y, 13, 7);
       g.fillStyle = active ? '#ffd040' : '#2a2e38';
-      g.fillRect(x, y, 10, 1);
-      drawText(g, `${t ? t.slot : i + 1}`, x + 3, y + 2, active ? '#fff0a0' : t ? '#8a90a0' : '#3a3e48', 'small', '#000');
+      g.fillRect(x, y, 13, 1);
+      drawText(g, `${slot}`, x + 5, y + 1, active ? '#fff0a0' : owned ? '#ffa818' : '#3a3e48', 'small', '#000');
     }
     label(g, o.tool.name.toUpperCase().slice(0, 12), P_TOOLS, by + 22, '#ffd040');
 
     // FACE
-    this.drawFace(P_FACE[0] + 4, by + 2, o.gender, o.integrity);
+    if (o.face) o.face(g, P_FACE[0] + 4, by + 2);
+    else this.drawFace(P_FACE[0] + 4, by + 2, o.gender, o.integrity);
 
     // CRED keycard
     const rc = roleColor(o.credentials);

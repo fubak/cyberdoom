@@ -1,4 +1,7 @@
-import type { Gender, ToolDef } from '../core/types';
+import type { Gender, ToolDef, ViewmodelAnim } from '../core/types';
+import { usePhase } from '../tools/anim';
+import { currentSkin } from '../tools/look';
+import { shade } from '../tools/pixel';
 
 /**
  * LOOK: Doom-style first-person tool viewmodels. Each tool is pixel-painted
@@ -15,10 +18,13 @@ interface Art {
 
 const cache = new Map<string, Art>();
 
-const SKIN: Record<Gender, string[]> = {
-  male: ['#f8c898', '#e0a070', '#b07848', '#704828'],
-  female: ['#ffd8b0', '#f0b888', '#c88860', '#8a5838'],
-};
+/** Hand palette from the player's chosen skin tone (independent of gender). */
+const SKIN: Record<Gender, string[]> = new Proxy({} as Record<Gender, string[]>, {
+  get: () => {
+    const s = currentSkin();
+    return [s.highlight, s.base, s.shadow, shade(s.shadow, 0.7)];
+  },
+});
 const CUFF: Record<Gender, string[]> = {
   male: ['#3a62c8', '#1a3a8a', '#0c1c4a'],
   female: ['#2aa8a0', '#147a74', '#0a4440'],
@@ -236,7 +242,7 @@ function badgeArt(gender: Gender, fire: boolean): Art {
 }
 
 function art(tool: ToolDef, gender: Gender, fire: boolean): Art | null {
-  const key = `${tool.id}:${gender}:${fire ? 1 : 0}`;
+  const key = `${tool.id}:${gender}:${fire ? 1 : 0}:${currentSkin().id}`;
   let a = cache.get(key);
   if (!a) {
     const maker = { keyboard: keyboardArt, mouse: mouseArt, usb: usbArt, badge: badgeArt }[tool.id];
@@ -260,14 +266,35 @@ export function drawToolViewmodel(
   gender: Gender,
   cooldownFrac: number,
   _time: number,
+  anim?: ViewmodelAnim,
 ): boolean {
-  const fire = cooldownFrac > 0.55;
+  const ph = anim ? usePhase(anim.sinceUse, tool.windup ?? 0) : null;
+  const fire = ph ? ph.phase === 'impact' || (ph.phase === 'recover' && ph.u < 0.25) : cooldownFrac > 0.55;
   const a = art(tool, gender, fire);
   if (!a) return false;
   const bx = Math.round(Math.sin(bob) * 7);
   const byy = Math.round(Math.abs(Math.cos(bob)) * 5);
-  const recoil = Math.round(cooldownFrac * (tool.id === 'usb' ? 10 : tool.id === 'badge' ? -10 : 6));
+  let dx = 0;
+  let dy: number;
+  if (ph) {
+    // windup (k<0) pulls back/down; impact (k=1) drives the tool's strike; recover eases home
+    const k = ph.k;
+    const pose = POSE[tool.id] ?? POSE.usb;
+    const s = k >= 0 ? pose.strike : pose.wind;
+    dx = Math.round(s[0] * Math.abs(k));
+    dy = Math.round(s[1] * Math.abs(k));
+  } else dy = Math.round(cooldownFrac * (tool.id === 'usb' ? 10 : tool.id === 'badge' ? -10 : 6));
+  const drop = Math.round((anim?.lower ?? 0) * (a.c.height + 10));
   const side = tool.id === 'mouse' ? 56 : tool.id === 'badge' ? 40 : tool.id === 'usb' ? 20 : 0;
-  g.drawImage(a.c, Math.round(w / 2 - a.ox + side + bx), h - a.c.height + 8 + byy + recoil);
+  g.drawImage(a.c, Math.round(w / 2 - a.ox + side + bx + dx), h - a.c.height + 8 + byy + dy + drop);
+  if (anim && !anim.lower) tool.drawFx?.(g, w, h, anim);
   return true;
 }
+
+/** Per-tool [dx, dy] at full windup and at the impact frame. */
+const POSE: Record<string, { wind: [number, number]; strike: [number, number] }> = {
+  keyboard: { wind: [0, 10], strike: [0, -22] }, // lift and slam forward
+  mouse: { wind: [0, 0], strike: [0, 3] }, // click press
+  usb: { wind: [0, -3], strike: [2, 12] }, // recoil kick
+  badge: { wind: [6, 8], strike: [-18, -20] }, // thrust at the reader
+};
