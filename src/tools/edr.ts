@@ -1,5 +1,5 @@
 import type { ToolDef, ToolUseContext } from '../core/types';
-import { hash, impactBurst, screenFlash, usePhase } from './anim';
+import { hash, impactBurst, screenFlash, usePhase, tipY } from './anim';
 import { bevel, glow, poly, rect } from './pixel';
 import { drawText } from './pixelfont';
 import { fist, handLook, sleeve } from './shared';
@@ -70,7 +70,7 @@ export const edrTool: ToolDef = {
       }
     } else if (ph.phase === 'impact' || (ph.phase === 'recover' && ph.u < 0.7)) {
       const k = ph.phase === 'impact' ? ph.u * 0.3 : 0.3 + ph.u;
-      screenFlash(g, w, h, '160,240,255', 0.55 * (1 - k));
+      screenFlash(g, w, h, '160,240,255', 0.3 * (1 - k));
       const r = 10 + k * 220;
       g.strokeStyle = `rgba(200,255,255,${1 - k})`;
       g.lineWidth = 3;
@@ -78,7 +78,7 @@ export const edrTool: ToolDef = {
       g.ellipse(w / 2, 100, r, r * 0.55, 0, 0, Math.PI * 2);
       g.stroke();
     }
-    impactBurst(g, w / 2, 92, anim.sinceConfirm, anim.confirmGood, 1.6);
+    impactBurst(g, w / 2, tipY(h), anim.sinceConfirm, anim.confirmGood, 1.6);
   },
   use(ctx: ToolUseContext) {
     ctx.bus.emit('tool-used', { toolId: 'edr' });

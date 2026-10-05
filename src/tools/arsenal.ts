@@ -4,6 +4,7 @@ import { toolRegistry } from './index';
 import { playTool, playVoice, type ToolSound } from './sfx';
 import { skinTriple } from './look';
 import { Face, drawPortrait } from './portrait';
+import { wrapText } from '../render/font';
 
 const LOWER = 0.13;
 const RAISE = 0.16;
@@ -38,7 +39,15 @@ export function defaultLoadout(m: Pick<Mission, 'difficulty' | 'loadout'>): stri
  */
 const BUFFER = 0.15;
 
-const RES_LABEL: Record<string, string> = { 'usb-charge': 'CHG', pcap: 'PCAP', 'edr-cell': 'CELL', 'patch-disk': 'DISK' };
+const RES_NAME: Record<string, string> = {
+  'usb-charge': 'SCAN SESSIONS',
+  pcap: 'PCAP',
+  'edr-cell': 'EDR CELLS',
+  'patch-disk': 'PATCH DISKS',
+};
+/** Columns of the HUD ticker (hud.ts drawTicker wraps at 45, 2 lines). */
+const TICKER_COLS = 45;
+const RES_LABEL: Record<string, string> = { 'usb-charge': 'SCAN', pcap: 'PCAP', 'edr-cell': 'CELL', 'patch-disk': 'DISK' };
 
 export class Arsenal {
   readonly owned = new Set<string>();
@@ -49,6 +58,8 @@ export class Arsenal {
   gotSlot = 0;
   current: ToolDef = sorted()[0];
   gender: Gender = 'male';
+  private pages: string[] = [];
+  private pageT = 0;
   private queued = false;
 
   private next: ToolDef | null = null;
@@ -109,9 +120,18 @@ export class Arsenal {
       this.face.grin();
       this.gotT = 0;
       this.gotSlot = t.slot;
-      this.bus.emit('message', { text: `[${t.slot}] ${t.name}: ${t.control?.use ?? ''}`, kind: 'info' });
+      this.say(`[${t.slot}] ${t.name}: ${t.control?.use ?? ''}`);
       this.switchTo(t);
     }
+  }
+
+  /** Queue a long explanation as 2-line ticker pages so it is never cut off mid-sentence. */
+  private say(text: string): void {
+    const lines = wrapText(text.toUpperCase(), TICKER_COLS, Infinity);
+    this.pages = [];
+    for (let i = 0; i < lines.length; i += 2) this.pages.push(lines.slice(i, i + 2).join(' '));
+    // let "YOU GOT THE ...!" read first
+    this.pageT = 1.2;
   }
 
   owns(id: string): boolean {
@@ -138,7 +158,7 @@ export class Arsenal {
     playTool('ammo');
     this.face.grin();
     const t = sorted().find((x) => x.ammo?.resource === resource);
-    return `+${amount} ${resource.toUpperCase()}${t ? ` for ${t.name}` : ''}`;
+    return `+${amount} ${RES_NAME[resource] ?? resource.toUpperCase()}${t ? ` for ${t.name}` : ''}`;
   }
 
   ammoFor(t: ToolDef = this.current): number | null {
@@ -204,6 +224,11 @@ export class Arsenal {
     this.sinceUse += dt;
     this.sinceConfirm += dt;
     this.dryMsgT = Math.max(0, this.dryMsgT - dt);
+    this.pageT -= dt;
+    if (this.pages.length && this.pageT <= 0) {
+      this.bus.emit('message', { text: this.pages.shift()!, kind: 'info' });
+      this.pageT = 3;
+    }
     this.face.tick(dt);
     this.cooldown = Math.max(0, this.cooldown - dt);
 
@@ -246,7 +271,7 @@ export class Arsenal {
       if (pressed) {
         playTool('dry');
         if (this.dryMsgT <= 0) {
-          this.bus.emit('message', { text: `Out of ${spec.resource.toUpperCase()}: find a pickup or switch tools.`, kind: 'warn' });
+          this.bus.emit('message', { text: `Out of ${RES_NAME[spec.resource] ?? spec.resource.toUpperCase()}: find a pickup or switch tools.`, kind: 'warn' });
           this.dryMsgT = 2;
         }
       }

@@ -1,5 +1,5 @@
 import type { Gender, ToolDef, ViewmodelAnim } from '../core/types';
-import { usePhase } from '../tools/anim';
+import { usePhase, vmLine } from '../tools/anim';
 import { currentSkin } from '../tools/look';
 import { shade } from '../tools/pixel';
 
@@ -14,6 +14,8 @@ interface Art {
   c: HTMLCanvasElement;
   /** anchor: x is centre, y is the canvas bottom */
   ox: number;
+  /** first opaque row (after the outline pass) */
+  top: number;
 }
 
 const cache = new Map<string, Art>();
@@ -61,7 +63,9 @@ function paint(w: number, h: number, ox: number, fn: (px: Px) => void): Art {
     }
   }
   g.putImageData(new ImageData(out, w, h), 0, 0);
-  return { c, ox };
+  let top = 0;
+  while (top < h && !out.subarray(top * w * 4, (top + 1) * w * 4).some((v, i) => i % 4 === 3 && v > 0)) top++;
+  return { c, ox, top };
 }
 
 /** A hand gripping from below: fingers wrap forward over an object edge. */
@@ -176,68 +180,67 @@ function mouseArt(gender: Gender, fire: boolean): Art {
 }
 
 function usbArt(gender: Gender, fire: boolean): Art {
-  return paint(96, 108, 48, (px) => {
+  // compact stick: connector + body ride low in the view, fist below
+  return paint(96, 94, 48, (px) => {
     if (fire) {
       // small hard-edged muzzle flash at the connector tip (drawn before outline pass)
-      px('#5affff', 46, 2, 4, 14);
-      px('#5affff', 42, 9, 12, 4);
-      px('#ffffff', 47, 6, 2, 10);
-      px('#ffffff', 44, 10, 8, 2);
-      px('#bff8ff', 42, 5, 2, 2);
-      px('#bff8ff', 52, 5, 2, 2);
+      px('#5affff', 46, 8, 4, 8);
+      px('#5affff', 42, 11, 12, 3);
+      px('#ffffff', 47, 9, 2, 7);
+      px('#ffffff', 44, 12, 8, 1);
+      px('#bff8ff', 42, 8, 2, 2);
+      px('#bff8ff', 52, 8, 2, 2);
     }
     // metal connector
-    px('#c8ccd8', 40, 16, 16, 16);
+    px('#c8ccd8', 40, 16, 16, 12);
     px('#eef0f6', 40, 16, 16, 2);
-    px('#6a7288', 52, 18, 4, 14);
-    px('#2a2e38', 43, 20, 4, 4);
-    px('#2a2e38', 49, 20, 4, 4);
+    px('#6a7288', 52, 18, 4, 10);
+    px('#2a2e38', 43, 19, 4, 4);
+    px('#2a2e38', 49, 19, 4, 4);
     // scanner body (dark polymer, chunky)
-    px('#2a2e38', 34, 32, 28, 52);
-    px('#4a5060', 34, 32, 28, 3);
-    px('#4a5060', 34, 32, 3, 52);
-    px('#14161c', 58, 34, 4, 50);
-    // grip ridges
-    for (let y = 62; y < 82; y += 4) px('#1a1c22', 36, y, 22, 1);
+    px('#2a2e38', 34, 28, 28, 36);
+    px('#4a5060', 34, 28, 28, 3);
+    px('#4a5060', 34, 28, 3, 36);
+    px('#14161c', 58, 30, 4, 34);
+    for (let y = 56; y < 64; y += 3) px('#1a1c22', 36, y, 22, 1);
     // little screen + LED
-    px('#0a1a14', 38, 38, 20, 14);
-    px(fire ? '#8affff' : '#2ad83a', 40, 40, 16, 2);
-    px(fire ? '#5affff' : '#14a024', 40, 44, 10, 1);
-    px(fire ? '#5affff' : '#14a024', 40, 47, 13, 1);
-    px(fire ? '#ffffff' : '#ff4a2a', 45, 55, 6, 3);
+    px('#0a1a14', 38, 32, 20, 11);
+    px(fire ? '#8affff' : '#2ad83a', 40, 34, 16, 2);
+    px(fire ? '#5affff' : '#14a024', 40, 37, 10, 1);
+    px(fire ? '#5affff' : '#14a024', 40, 39, 13, 1);
+    px(fire ? '#ffffff' : '#ff4a2a', 45, 45, 6, 3);
     // blue brand stripe
-    px('#2458d8', 34, 58, 28, 3);
-    px('#8ab4ff', 34, 58, 28, 1);
-    hand(px, 30, 60, gender, false);
+    px('#2458d8', 34, 50, 28, 3);
+    px('#8ab4ff', 34, 50, 28, 1);
+    hand(px, 30, 46, gender, false);
   });
 }
 
 function badgeArt(gender: Gender, fire: boolean): Art {
-  return paint(84, 104, 42, (px) => {
-    // lanyard strap
-    px('#c81e14', 38, 0, 6, 24);
-    px('#ff7a5a', 38, 0, 2, 24);
-    px('#9aa0b0', 37, 22, 8, 5);
+  return paint(84, 80, 42, (px) => {
+    // lanyard clip (the strap runs down behind the card)
+    px('#c81e14', 38, 0, 6, 4);
+    px('#ff7a5a', 38, 0, 2, 4);
+    px('#9aa0b0', 37, 3, 8, 5);
     // card
-    px('#eef0f6', 18, 26, 46, 62);
-    px('#c8ccd8', 60, 28, 4, 60);
-    px('#2458d8', 18, 30, 46, 10);
-    px('#8ab4ff', 18, 30, 46, 2);
-    px('#8a90a0', 24, 46, 16, 20); // photo
-    px('#f0b888', 28, 49, 8, 9);
-    px('#3a2a1a', 27, 47, 10, 3);
-    px('#2458d8', 26, 59, 12, 7);
-    px('#ffd040', 44, 48, 12, 9); // chip
-    px('#c89818', 44, 52, 12, 1);
-    px('#c89818', 50, 48, 1, 9);
-    px('#3a404c', 24, 70, 34, 2);
-    px('#3a404c', 24, 74, 26, 2);
-    px('#3a404c', 24, 78, 30, 2);
+    px('#eef0f6', 18, 7, 46, 46);
+    px('#c8ccd8', 60, 9, 4, 44);
+    px('#2458d8', 18, 10, 46, 8);
+    px('#8ab4ff', 18, 10, 46, 2);
+    px('#8a90a0', 24, 21, 14, 16); // photo
+    px('#f0b888', 27, 23, 8, 8);
+    px('#3a2a1a', 26, 21, 10, 3);
+    px('#2458d8', 25, 31, 12, 6);
+    px('#ffd040', 44, 22, 12, 9); // chip
+    px('#c89818', 44, 26, 12, 1);
+    px('#c89818', 50, 22, 1, 9);
+    px('#3a404c', 24, 40, 34, 2);
+    px('#3a404c', 46, 35, 12, 2);
     if (fire) {
-      px('#5aff6a', 22, 82, 38, 3);
-      px('#c8ffb0', 22, 82, 38, 1);
+      px('#5aff6a', 40, 44, 22, 3);
+      px('#c8ffb0', 40, 44, 22, 1);
     }
-    hand(px, 24, 72, gender, false);
+    hand(px, 24, 44, gender, false);
   });
 }
 
@@ -254,8 +257,8 @@ function art(tool: ToolDef, gender: Gender, fire: boolean): Art | null {
 }
 
 /**
- * Draw the current tool's viewmodel; returns false for tools without bespoke
- * art so the caller can fall back to the tool's own drawViewmodel.
+ * Draw the current tool's viewmodel (bespoke art, or the tool's own
+ * drawViewmodel) plus its fx, all under the clearance line. Always true.
  */
 export function drawToolViewmodel(
   g: CanvasRenderingContext2D,
@@ -268,30 +271,46 @@ export function drawToolViewmodel(
   _time: number,
   anim?: ViewmodelAnim,
 ): boolean {
+  const line = vmLine(h);
   const ph = anim ? usePhase(anim.sinceUse, tool.windup ?? 0) : null;
   const fire = ph ? ph.phase === 'impact' || (ph.phase === 'recover' && ph.u < 0.25) : cooldownFrac > 0.55;
   const a = art(tool, gender, fire);
-  if (!a) return false;
-  const bx = Math.round(Math.sin(bob) * 7);
-  const byy = Math.round(Math.abs(Math.cos(bob)) * 5);
-  let dx = 0;
-  let dy: number;
-  if (ph) {
-    // windup (k<0) pulls back/down; impact (k=1) drives the tool's strike; recover eases home
-    const k = ph.k;
+  if (a) {
+    const bx = Math.round(Math.sin(bob) * 7);
+    const byy = Math.round(Math.abs(Math.cos(bob)) * 5);
     const pose = POSE[tool.id] ?? POSE.usb;
-    const s = k >= 0 ? pose.strike : pose.wind;
-    dx = Math.round(s[0] * Math.abs(k));
-    dy = Math.round(s[1] * Math.abs(k));
-  } else dy = Math.round(cooldownFrac * (tool.id === 'usb' ? 10 : tool.id === 'badge' ? -10 : 6));
-  const drop = Math.round((anim?.lower ?? 0) * (a.c.height + 10));
-  const side = SIDE[tool.id] ?? 0;
-  const S = VIEWMODEL_SCALE;
-  const cw = Math.round(a.c.width * S);
-  const ch = Math.round(a.c.height * S);
-  g.imageSmoothingEnabled = false;
-  g.drawImage(a.c, Math.round(w / 2 - (a.ox - side) * S + bx + dx), h - ch + Math.round(8 * S) + byy + dy + drop, cw, ch);
-  if (anim && !anim.lower) tool.drawFx?.(g, w, h, anim);
+    let dx = 0;
+    let dy: number;
+    if (ph) {
+      // windup (k<0) pulls back/down; impact (k=1) drives the tool's strike; recover eases home
+      const k = ph.k;
+      const s = k >= 0 ? pose.strike : pose.wind;
+      dx = Math.round(s[0] * Math.abs(k));
+      dy = Math.round(s[1] * Math.abs(k));
+    } else dy = Math.round(cooldownFrac * (tool.id === 'usb' ? 10 : 6));
+    const drop = Math.round((anim?.lower ?? 0) * (a.c.height + 10));
+    const side = SIDE[tool.id] ?? 0;
+    const S = VIEWMODEL_SCALE;
+    const cw = Math.round(a.c.width * S);
+    const ch = Math.round(a.c.height * S);
+    // sit low enough that the highest pixel of either frame, at the top of the strike, stays under the line
+    const lift = Math.max(0, -Math.min(pose.wind[1], pose.strike[1]));
+    const artTop = Math.min(a.top, art(tool, gender, !fire)!.top) * S;
+    const y0 = Math.max(h - ch + Math.round(8 * S), line - Math.floor(artTop) + lift);
+    g.imageSmoothingEnabled = false;
+    g.drawImage(a.c, Math.round(w / 2 - (a.ox - side) * S + bx + dx), y0 + byy + dy + drop, cw, ch);
+  } else {
+    tool.drawViewmodel(g, w, h, Math.sin(bob) * 2, gender, cooldownFrac, anim);
+  }
+  if (anim && !anim.lower && tool.drawFx) {
+    // tool fx live in the band under the line, so flashes and pulses never cover the aim area
+    g.save();
+    g.beginPath();
+    g.rect(0, line, w, h - line);
+    g.clip();
+    tool.drawFx(g, w, h, anim);
+    g.restore();
+  }
   return true;
 }
 
@@ -300,8 +319,8 @@ export function drawToolViewmodel(
 const SIDE: Record<string, number> = { mouse: 0, badge: 0, usb: 0 };
 
 const POSE: Record<string, { wind: [number, number]; strike: [number, number] }> = {
-  keyboard: { wind: [0, 8], strike: [0, -14] }, // lift and slam forward
+  keyboard: { wind: [0, 12], strike: [0, -22] }, // big lift and slam forward
   mouse: { wind: [0, 0], strike: [0, 3] }, // click press
   usb: { wind: [0, -3], strike: [2, 12] }, // recoil kick
-  badge: { wind: [6, 8], strike: [-18, -20] }, // thrust at the reader
+  badge: { wind: [6, 6], strike: [-16, -8] }, // thrust at the reader
 };

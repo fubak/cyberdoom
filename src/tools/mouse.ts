@@ -1,6 +1,6 @@
 import type { Entity, ToolDef, ToolUseContext } from '../core/types';
-import { impactBurst, usePhase } from './anim';
-import { ellipse, glow, pill, rect, shade } from './pixel';
+import { impactBurst, usePhase, tipY } from './anim';
+import { ellipse, pill, rect, shade } from './pixel';
 import { flatHand, handLook, sleeve } from './shared';
 
 const WINDUP = 0.03;
@@ -66,21 +66,7 @@ export const mouseTool: ToolDef = {
     flatHand(g, cx - 2, cy - 30 + press * 2, 16, look, 1, Math.round(press * 3));
   },
   drawFx(g, w, _h, anim) {
-    const ph = usePhase(anim.sinceUse, WINDUP);
-    // targeting brackets snap in on click
-    if (ph.phase !== 'idle') {
-      const k = ph.phase === 'impact' ? 1 : ph.phase === 'recover' ? 1 - ph.u : ph.u;
-      const r = Math.round(16 - k * 8);
-      g.fillStyle = '#7dffb0';
-      const cx = w / 2;
-      const cy = 92;
-      for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
-        g.fillRect(cx + sx * r - (sx > 0 ? 4 : 0), cy + sy * r - (sy > 0 ? 0 : 0), 5, 1);
-        g.fillRect(cx + sx * r - (sx > 0 ? 0 : 0), cy + sy * r - (sy > 0 ? 4 : 0), 1, 5);
-      }
-      if (ph.phase === 'impact') glow(g, cx, cy, 14, '120,255,180', 0.4);
-    }
-    impactBurst(g, w / 2, 92, anim.sinceConfirm, anim.confirmGood, 0.6);
+    impactBurst(g, w / 2, tipY(_h), anim.sinceConfirm, anim.confirmGood, 0.6);
   },
   use(ctx: ToolUseContext) {
     const e = ctx.aimEntity(8, 0.26);

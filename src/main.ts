@@ -1,4 +1,3 @@
-import { USB_PLUG_RANGE } from './tools/usb';
 import './ui/style.css';
 import { EventBus } from './core/events';
 import type { Entity, Gender, Projectile, Screen } from './core/types';
@@ -18,6 +17,7 @@ import { MissionRuntime } from './missions/runtime';
 import { missionRegistry } from './content/missions';
 import { toolForSlot } from './tools';
 import { Arsenal } from './tools/arsenal';
+import { USB_PLUG_RANGE } from './tools/usb';
 import { characterSelect } from './ui/characterSelect';
 import { markCompleted } from './missions/progress';
 
@@ -397,7 +397,7 @@ class Game {
         this.hud.pushMessage('Workstations are cleaned at arm\'s length: walk up and plug the scanner stick in.', 'warn');
       } else if (hit) {
         if (hit.infected) {
-          const dmg = hit.state.flagCorrect ? 2 : 1;
+          const dmg = hit.state.flagCorrect ? 4 : 2;
           const result = damageEntity(hit, dmg, projectile.dx, projectile.dy);
           this.bus.emit('tool-hit', { toolId: 'usb', entityId: hit.def.id, good: true });
           if (result === 'killed') {
@@ -407,12 +407,11 @@ class Game {
             if (hit.def.kind === 'enemy') {
               this.audio.sfx('enemy-pain', { x: hit.x, y: hit.y });
             }
-            this.hud.pushMessage(`Hit${dmg > 1 ? ' x2 (flagged)' : ''}! ${hit.hp} more charge(s) needed.`, 'info');
           }
         } else {
           this.bus.emit('tool-hit', { toolId: 'usb', entityId: hit.def.id, good: false });
           this.bus.emit('scan-miss', { entityId: hit.def.id });
-          this.hud.pushMessage('The charge fizzles: that target is not infected.', 'warn');
+          this.hud.pushMessage('Scan session wasted: that target is not infected.', 'warn');
         }
       }
     }

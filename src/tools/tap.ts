@@ -1,5 +1,5 @@
 import type { Entity, ToolDef, ToolUseContext } from '../core/types';
-import { hash, impactBurst, usePhase } from './anim';
+import { hash, impactBurst, usePhase, tipY } from './anim';
 import { bevel, glow, rect } from './pixel';
 import { drawText } from './pixelfont';
 import { fist, handLook, sleeve } from './shared';
@@ -39,7 +39,7 @@ export const tapTool: ToolDef = {
     const sweep = ph.phase !== 'idle';
     const lift = ph.k > 0 ? ph.k * 8 : ph.k * 3;
     const x0 = Math.round(w / 2 - 24);
-    const y0 = Math.round(_h - 46 - lift);
+    const y0 = Math.round(_h - 40 - lift);
     // cables
     for (let i = 0; i < 6; i++) {
       rect(g, x0 + 7 - i * 0.6, y0 - i * 3, 3, 3, '#2a7bd8');
@@ -84,7 +84,7 @@ export const tapTool: ToolDef = {
       }
       glow(g, w / 2, 110, 40, '90,255,150', 0.3 * (1 - k));
     }
-    impactBurst(g, w / 2, 92, anim.sinceConfirm, anim.confirmGood, 1.3);
+    impactBurst(g, w / 2, tipY(_h), anim.sinceConfirm, anim.confirmGood, 1.3);
   },
   use(ctx: ToolUseContext) {
     ctx.bus.emit('tool-used', { toolId: 'tap' });

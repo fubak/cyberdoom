@@ -39,6 +39,19 @@ export function useDuration(windup: number): number {
   return windup + IMPACT + RECOVER;
 }
 
+/** Top of every held tool and its fx (rest, bob, firing), as a fraction of 3D-view height. */
+export const VM_CLEAR = 0.62;
+
+/** First view row a held tool may draw on: everything above stays clear for targets. */
+export function vmLine(h: number): number {
+  return Math.ceil(h * VM_CLEAR);
+}
+
+/** Row where tool-tip confirm sparks sit, just below the clearance line. */
+export function tipY(h: number): number {
+  return vmLine(h) + Math.round(h * 0.08);
+}
+
 /** Deterministic hash for flicker/sparkle patterns. */
 export function hash(n: number): number {
   const x = Math.sin(n * 127.1 + 311.7) * 43758.5453;
@@ -46,8 +59,8 @@ export function hash(n: number): number {
 }
 
 /**
- * On-target hit reaction drawn at the crosshair (where every tool aims):
- * a fast radial pixel burst + ring, coloured by result.
+ * Hit confirm at the tool tip (below the clearance line; the target itself
+ * shows the hit): a small fast pixel burst + ring, coloured by result.
  */
 export function impactBurst(g: Ctx, cx: number, cy: number, t: number, good: boolean, big = 1): void {
   const dur = 0.32;
@@ -55,21 +68,21 @@ export function impactBurst(g: Ctx, cx: number, cy: number, t: number, good: boo
   const u = t / dur;
   const col = good ? '#6dff8a' : '#ff4a3a';
   const rgb = good ? '80,255,140' : '255,70,50';
-  glow(g, cx, cy, 26 * big * (0.6 + u), rgb, 0.55 * (1 - u));
+  glow(g, cx, cy, 12 * big * (0.6 + u), rgb, 0.5 * (1 - u));
   const n = 14;
   for (let i = 0; i < n; i++) {
     const a = (i / n) * Math.PI * 2 + hash(i) * 0.4;
-    const r = (6 + 28 * u * (0.6 + hash(i + 9) * 0.6)) * big;
+    const r = (3 + 14 * u * (0.6 + hash(i + 9) * 0.6)) * big;
     const x = cx + Math.cos(a) * r;
-    const y = cy + Math.sin(a) * r * 0.8;
+    const y = cy + Math.sin(a) * r * 0.6;
     const s = u < 0.5 ? 2 : 1;
     rect(g, x, y, s, s, i % 3 === 0 ? '#ffffff' : col);
   }
   if (u < 0.6) {
-    const r = Math.round((4 + u * 30) * big);
+    const r = Math.round((3 + u * 12) * big);
     g.strokeStyle = col;
     g.lineWidth = 1;
-    g.strokeRect(cx - r, cy - r * 0.8, r * 2, r * 1.6);
+    g.strokeRect(cx - r, cy - r * 0.5, r * 2, r);
   }
 }
 

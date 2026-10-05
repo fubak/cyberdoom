@@ -1,13 +1,13 @@
 import type { ToolDef } from '../core/types';
 import { damageEntity } from '../engine/ai';
-import { hash, impactBurst, usePhase } from './anim';
+import { hash, impactBurst, usePhase, tipY } from './anim';
 import { bevel, glow, poly, rect, shade } from './pixel';
 import { flatHand, handLook, sleeve } from './shared';
 
-const WINDUP = 0.09;
+const WINDUP = 0.06;
 
-/** Damage of one keyboard strike: enough to kill a worm in one hit, a trojan or ransomware in two. */
-export const KEYBOARD_DAMAGE = 2;
+/** Damage of one keyboard strike: worms take two, trojans three, ransomware four (ranged is faster). */
+export const KEYBOARD_DAMAGE = 1;
 export const KEYBOARD_RANGE = 1.5;
 
 /**
@@ -22,7 +22,7 @@ export const keyboardTool: ToolDef = {
   name: 'KEYBOARD',
   slot: 1,
   ammo: null,
-  cooldown: 0.42,
+  cooldown: 0.6,
   windup: WINDUP,
   auto: true,
   control: {
@@ -30,7 +30,7 @@ export const keyboardTool: ToolDef = {
     category: 'technical',
     types: ['corrective'],
     objectives: ['4.8'],
-    use: 'Point-blank only (1.5 tiles). Each strike runs a kill-process / isolate command on the malware in front of you: one strike stops a worm, two stop a trojan or ransomware. Infinite, but you must get close. Also runs commands on a console.',
+    use: 'Point-blank only (1.5 tiles), slow but infinite. Each strike runs a kill-process / isolate command on the malware in front of you (containment): two stop a worm, three a trojan, four ransomware. At range, the SCANNER (3) is the right tool. Also runs commands on a console.',
     lesson: 'Containment comes before eradication and recovery in the incident response process: stop the malicious process spreading first, then clean and restore the host.',
   },
   drawViewmodel(g, w, _h, _bob, gender, _cd, anim) {
@@ -100,8 +100,8 @@ export const keyboardTool: ToolDef = {
   },
   drawFx(g, w, _h, anim) {
     const ph = usePhase(anim.sinceUse, WINDUP);
-    if (ph.phase === 'impact') glow(g, w / 2, 120, 50, '120,255,160', 0.35 * (1 - ph.u));
-    impactBurst(g, w / 2, 92, anim.sinceConfirm, anim.confirmGood, 0.8);
+    if (ph.phase === 'impact') glow(g, w / 2, tipY(_h), 20, '120,255,160', 0.35 * (1 - ph.u));
+    impactBurst(g, w / 2, tipY(_h), anim.sinceConfirm, anim.confirmGood, 0.8);
   },
   use(ctx) {
     // point-blank targets fill more of the view, so the strike cone widens up close
@@ -114,11 +114,10 @@ export const keyboardTool: ToolDef = {
       const result = damageEntity(e, KEYBOARD_DAMAGE, e.x - ctx.playerX, e.y - ctx.playerY);
       ctx.bus.emit('tool-hit', { toolId: 'keyboard', entityId: e.def.id, good: true });
       if (result === 'killed') {
-        ctx.bus.emit('message', { text: `kill -9: ${name} contained.`, kind: 'good' });
+        ctx.bus.emit('message', { text: `CONTAINED: ${name} process killed and isolated. Eradication (clean / reimage) is the scanner's job.`, kind: 'good' });
         ctx.bus.emit('cleaned', { entityId: e.def.id });
       } else {
         ctx.bus.emit('entity-hurt', { entityId: e.def.id, fromX: ctx.playerX, fromY: ctx.playerY, applied: true });
-        ctx.bus.emit('message', { text: `Process isolated, still running: ${name} needs another strike.`, kind: 'info' });
       }
       return;
     }

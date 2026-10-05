@@ -1,5 +1,5 @@
 import type { ToolDef, ToolUseContext } from '../core/types';
-import { impactBurst, usePhase } from './anim';
+import { impactBurst, usePhase, tipY } from './anim';
 import { bevel, rect } from './pixel';
 import { mfaPending } from './badge';
 import { fist, handLook, sleeve } from './shared';
@@ -36,7 +36,7 @@ export const mfaTool: ToolDef = {
     const push = ph.k > 0 ? ph.k * 12 : ph.k * 4;
     const lit = ph.phase === 'impact' || (ph.phase === 'recover' && ph.u < 0.5);
     const x0 = Math.round(w / 2 - 10);
-    const y0 = Math.round(h - 74 - push);
+    const y0 = Math.round(h - 50 - push);
     // USB-A connector: steel shell with the two contact windows
     rect(g, x0 + 3, y0, 14, 14, '#c8ccd8');
     rect(g, x0 + 3, y0, 14, 2, '#eef0f6');
@@ -70,7 +70,7 @@ export const mfaTool: ToolDef = {
     fist(g, x0 - 4, y0 + 56, 28, look, 1);
   },
   drawFx(g, w, h, anim) {
-    impactBurst(g, w / 2, h - 70, anim.sinceConfirm, anim.confirmGood, 0.7);
+    impactBurst(g, w / 2, tipY(h), anim.sinceConfirm, anim.confirmGood, 0.7);
   },
   use(ctx: ToolUseContext) {
     ctx.bus.emit('tool-used', { toolId: 'mfa' });

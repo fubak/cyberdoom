@@ -1,5 +1,5 @@
 import type { ToolDef, ToolUseContext } from '../core/types';
-import { impactBurst, usePhase } from './anim';
+import { impactBurst, usePhase, tipY } from './anim';
 import { bevel, rect } from './pixel';
 import { drawText } from './pixelfont';
 import { fist, handLook, sleeve } from './shared';
@@ -34,7 +34,7 @@ export const patchTool: ToolDef = {
     const ph = usePhase(anim?.sinceUse ?? 9, WINDUP);
     const push = ph.k > 0 ? ph.k * 16 : ph.k * 6;
     const x0 = Math.round(w / 2 - 22);
-    const y0 = Math.round(h - 58 - push);
+    const y0 = Math.round(h - 47 - push);
     // 3.5" disk: body, metal shutter, label
     bevel(g, x0, y0, 44, 44, '#1e3a8a', 2);
     rect(g, x0 + 12, y0, 22, 14, '#b8bcc8');
@@ -49,7 +49,7 @@ export const patchTool: ToolDef = {
     fist(g, x0 + 14, y0 + 34, 26, look, 1);
   },
   drawFx(g, w, h, anim) {
-    impactBurst(g, w / 2, h - 70, anim.sinceConfirm, anim.confirmGood);
+    impactBurst(g, w / 2, tipY(h), anim.sinceConfirm, anim.confirmGood);
   },
   use(ctx: ToolUseContext) {
     ctx.bus.emit('tool-used', { toolId: 'patch' });
