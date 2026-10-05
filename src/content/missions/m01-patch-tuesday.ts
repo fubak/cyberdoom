@@ -156,6 +156,17 @@ export const m01: Mission = {
         category: 'legit',
       },
     },
+    {
+      // Reserved decoy slot (print room, separate from the hub's infected hosts).
+      // Curriculum owns its "clean but noisy" inspect text and the runtime penalty.
+      id: 'ws-decoy', kind: 'workstation', x: 30.5, y: 25.5, sprite: 'workstation', tags: ['decoy'],
+      inspect: {
+        label: 'Workstation PRN-02',
+        detail: 'Print-queue host. CPU 41% (spooler), outbound 9100/tcp to PRN-FLOOR2.',
+        category: 'legit',
+        objectives: ['2.4'],
+      },
+    },
     { id: 'worm-hub', kind: 'enemy', x: 21.5, y: 13.5, sprite: 'worm', ai: 'chase', hp: 1, infected: true, tags: ['malware'],
       inspect: { label: 'Worm', detail: 'Self-replicating: spreads host to host with no user action.', category: 'malware', objectives: ['2.4'] } },
     { id: 'worm-print', kind: 'enemy', x: 33.5, y: 23.5, sprite: 'worm', ai: 'wander', hp: 1, infected: true, tags: ['malware'],
