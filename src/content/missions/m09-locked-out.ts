@@ -276,13 +276,13 @@ export const m09Walkthrough: WalkStep[] = [
 ];
 
 export const m09Teach: MissionTeaching = {
+  tagline: 'Finance is encrypting in real time. Payroll is due by morning.',
   situation:
     'Ransomware is encrypting the finance VLAN right now. Four finance hosts are already locked, and the CFO wants payroll back by morning.',
   orders: [
     { text: 'Find where the infection started and where it phones home.', objective: '4.9' },
-    { text: 'Stop the spread before you clean anything.', objective: '4.8' },
-    { text: 'Clean every affected host, then restore the data.', objective: '3.4' },
-    { text: 'Close the incident properly.', objective: '4.8' },
+    { text: 'Stop the spread, then clean every affected host.', objective: '4.8' },
+    { text: 'Restore the data and close the incident properly.', objective: '3.4' },
   ],
   keyTerms: ['ransomware', 'backups', 'replication', 'correlation', 'chain of custody'],
   lessons: {

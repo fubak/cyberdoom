@@ -4,11 +4,17 @@
  * via declaration merging if needed.
  */
 
+import type { EvidenceEntry } from './types';
+
 export interface EventMap {
   /** A tool was used (fired). */
   'tool-used': { toolId: string };
   /** Player inspected an entity with the Mouse. */
   inspect: { entityId: string };
+  /** Evidence was logged or re-read; the UI opens the case file. */
+  evidence: EvidenceEntry;
+  /** Scanner charge hit a non-infected target. */
+  'scan-miss': { entityId: string };
   /** Player reported/accused an entity (insider threat). */
   report: { entityId: string };
   /** An infected entity was cleaned by the scanner. */

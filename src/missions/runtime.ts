@@ -1,6 +1,7 @@
 import type { EventBus } from '../core/events';
 import type {
   Entity,
+  EvidenceEntry,
   Mission,
   MissionObjective,
   ScoreEvent,
@@ -33,6 +34,7 @@ export class MissionRuntime {
   readonly mission: Mission;
   entities: Entity[];
   objectives: ObjectiveStatus[];
+  evidence: EvidenceEntry[] = [];
   scoreLog: ScoreEvent[] = [];
   score = 0;
   roles: string[];
@@ -42,6 +44,8 @@ export class MissionRuntime {
 
   private pendingAccusation: Entity | null = null;
   private inspected = new Set<string>();
+  private triageScored = new Set<string>();
+  private falsePositiveSources = new Set<string>();
   private counted = new Map<string, Set<string>>();
   private cleaned = new Set<string>();
   private initialHp = new Map<string, number>();
@@ -84,13 +88,38 @@ export class MissionRuntime {
     this.bind();
   }
 
-  private log(text: string, points: number, objectives: string[] = []): void {
+  private log(text: string, points: number, objectives: string[] = [], tag?: string): void {
     this.score += points;
-    this.scoreLog.push({ text, points, good: points >= 0, objectives });
+    this.scoreLog.push({ text, points, good: points >= 0, objectives, ...(tag ? { tag } : {}) });
     this.bus.emit('message', {
       text: `${text} ${points >= 0 ? '+' : ''}${points}`,
       kind: points >= 0 ? 'good' : 'bad',
     });
+  }
+
+  private record(e: Entity, source: EvidenceEntry['source'], label: string, detail: string): void {
+    const id = `${e.def.id}:${source}`;
+    let entry = this.evidence.find((candidate) => candidate.id === id);
+    if (!entry) {
+      entry = {
+        id,
+        entityId: e.def.id,
+        label,
+        detail,
+        source,
+        category: e.def.inspect?.category,
+      };
+      this.evidence.push(entry);
+    }
+    this.bus.emit('evidence', entry);
+  }
+
+  private falsePositive(e: Entity, points: number, source: 'scan' | 'flag'): void {
+    const key = `${e.def.id}:${source}`;
+    if (this.falsePositiveSources.has(key)) return;
+    this.falsePositiveSources.add(key);
+    const label = e.def.inspect?.label ?? e.def.id;
+    this.log(`False positive: ${label} was clean`, points, ['2.4'], 'false-positive');
   }
 
   private message(text: string, kind: 'info' | 'warn' | 'good' | 'bad' = 'info'): void {
@@ -191,15 +220,30 @@ export class MissionRuntime {
       const e = this.byId(entityId);
       if (!e?.def.inspect) return;
       const info = e.def.inspect;
-      this.message(`${info.label}: ${info.detail}`);
+      this.message(`CASE FILE: ${info.label.slice(0, 29)}`);
+      this.record(e, 'inspect', info.label, info.detail);
       if (this.inspected.has(entityId)) return;
       this.inspected.add(entityId);
-      if (info.category === 'malware' || info.category === 'suspicious') {
-        this.log('Identified an indicator', 10, info.objectives ?? []);
-      }
       for (const objective of this.objectivesFor('inspect', e)) {
         if (!this.rejectRequirements(objective)) this.countEntity(objective, entityId);
       }
+    });
+
+    this.bus.on('triage', ({ entityId, correct }) => {
+      const e = this.byId(entityId);
+      if (!e?.def.inspect || this.triageScored.has(entityId)) return;
+      this.triageScored.add(entityId);
+      if (correct) {
+        this.log(`Correct triage: ${e.def.inspect.label}`, 10, e.def.inspect.objectives ?? []);
+      } else {
+        this.falsePositive(e, -10, 'flag');
+      }
+    });
+
+    this.bus.on('scan-miss', ({ entityId }) => {
+      const e = this.byId(entityId);
+      if (!e || this.initialInfected.get(entityId)) return;
+      this.falsePositive(e, -25, 'scan');
     });
 
     this.bus.on('cleaned', ({ entityId }) => {
@@ -272,8 +316,11 @@ export class MissionRuntime {
         }
         if (matching.some((objective) => this.rejectRequirements(objective))) return;
         if (this.violateMatchingAvoid(e)) return;
-        for (const line of (e.def.log ?? e.def.inspect?.detail ?? '').split('\n')) {
-          if (line) this.message(line, 'info');
+        const text = e.def.log ?? e.def.inspect?.detail ?? '';
+        if (text.trim()) {
+          const label = e.def.inspect?.label ?? e.def.id;
+          this.message(`READ: ${label}`, 'info');
+          this.record(e, 'log', label, text);
         }
         for (const objective of matching) this.countEntity(objective, e.def.id);
         this.applyRoleGrant(e);

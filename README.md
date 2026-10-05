@@ -62,7 +62,7 @@ Deep link: `/?mission=m01&gender=female` jumps straight into a mission
 ## Controls
 
 WASD move · mouse look · ←→ turn · Shift run · LMB use tool ·
-E/Space interact · 1-4 / mouse wheel select tool.
+E/Space interact · 1-4 / mouse wheel select tool · L — evidence log (case files).
 
 ## Tests
 

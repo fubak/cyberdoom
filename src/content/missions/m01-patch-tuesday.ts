@@ -158,12 +158,10 @@ export const m01: Mission = {
       },
     },
     {
-      // Reserved decoy slot (print room, separate from the hub's infected hosts).
-      // Curriculum owns its "clean but noisy" inspect text and the runtime penalty.
-      id: 'ws-decoy', kind: 'workstation', x: 30.5, y: 25.5, sprite: 'workstation', tags: ['decoy'],
+      id: 'ws-decoy', kind: 'workstation', x: 30.5, y: 25.5, sprite: 'workstation-infected', tags: ['decoy'],
       inspect: {
-        label: 'Workstation PRN-02',
-        detail: 'Print-queue host. CPU 41% (spooler), outbound 9100/tcp to PRN-FLOOR2.',
+        label: 'Workstation PRN-02 (print room)',
+        detail: 'CPU 96%: spoolsv.exe (print spooler, signed by the OS vendor) rendering a 1,400-page job queued by FACILITIES. Firewall log: outbound 9100/tcp to PRN-FLOOR2, its assigned printer, and nothing else. No new processes or services since the patch run. Endpoint protection: signatures updated 06:00, last full scan clean. Pop-up on screen: "Toner low - tray 2".',
         category: 'legit',
         objectives: ['2.4'],
       },
@@ -211,7 +209,7 @@ export const m01: Mission = {
     },
   ],
   missionObjectives: [
-    { id: 'turn-in', text: 'Turn the found USB in at the Security Desk', kind: 'interact', tag: 'security-desk' },
+    { id: 'turn-in', text: 'Handle the found USB stick per policy', kind: 'interact', tag: 'security-desk' },
     { id: 'clean-all', text: 'Clean all 3 infected workstations', kind: 'clean', tag: 'infected', count: 3 },
     { id: 'no-plug', text: 'Never plug in unknown media', kind: 'avoid', tag: 'plug-usb' },
     { id: 'exit', text: 'Reach the exit', kind: 'reach-exit' },
@@ -308,15 +306,15 @@ export const m01Walkthrough: WalkStep[] = [
 ];
 
 export const m01Teach: MissionTeaching = {
+  tagline: 'Screens are screaming and a USB stick is lying by the lifts.',
   situation:
-    'Patch Tuesday went wrong. Three workstations on the 4th floor are throwing indicators of malicious activity, and someone left a USB stick in the corridor. You are first on scene.',
+    'Patch Tuesday went wrong. Workstations across the 4th floor are throwing alerts, not all for the same reason, and someone left a USB stick by the lifts. You are first on scene.',
   orders: [
-    { text: 'Read each workstation\'s indicators. You will be asked what malware each one has.', objective: '2.4' },
-    { text: 'Restore every affected host to a clean state.', objective: '2.5' },
-    { text: 'Decide what to do about the unclaimed USB stick.', objective: '2.2' },
-    { text: 'Reach the exit.', objective: '5.6' },
+    { text: 'Read every flagged host before you act.', objective: '2.4' },
+    { text: 'Clean only what is actually infected.', objective: '2.5' },
+    { text: 'Decide what to do with the unclaimed USB stick.', objective: '5.6' },
   ],
-  keyTerms: ['indicators of malicious activity', 'ransomware', 'worm', 'spyware', 'removable device', 'endpoint protection', 'backups'],
+  keyTerms: ['indicators of malicious activity', 'ransomware', 'worm', 'spyware', 'removable device', 'false positive', 'endpoint protection', 'backups'],
   lessons: {
     'clean-all': {
       objective: '2.5',
@@ -337,6 +335,11 @@ export const m01Teach: MissionTeaching = {
       objective: '5.6',
       done: 'You carried the unknown drive to the Security Desk instead of connecting it. Removable devices are a threat vector (2.2), and handing found media to security is the trained awareness response (5.6).',
       missed: 'The found drive never reached the Security Desk. Leaving it on the floor means the next person may plug it in. Report and hand over found media (5.6).',
+    },
+    'false-positive': {
+      objective: '2.4',
+      done: 'No false positives. PRN-02 looked busy, but its CPU spike was a signed print spooler talking only to its own printer. An indicator needs context before you act on it.',
+      missed: 'You hit a clean host. PRN-02\'s CPU spike was a signed spooler job sent to its own printer, and its pop-up was a toner warning. Acting on one indicator without context wastes response effort and disrupts the user.',
     },
   },
   examTip: 'Exam questions identify malware by its behavior. Self-spreads with no user action = worm. Disguised and run by the user = trojan. Encrypts files and demands payment = ransomware. Hides and collects data = spyware. Triggers on a condition = logic bomb.',

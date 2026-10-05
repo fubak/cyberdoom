@@ -288,13 +288,13 @@ export const m02Walkthrough: WalkStep[] = [
 ];
 
 export const m02Teach: MissionTeaching = {
+  tagline: 'Day one. Your badge says ANALYST, and someone is handing out keys.',
   situation:
     'Day one on a new floor. Your badge carries the ANALYST role and nothing else. Word is that the sysadmins have been passing one shared admin password around.',
   orders: [
     { text: 'Cross the floor using the access your role actually has.', objective: '4.6' },
-    { text: 'Find out who is spreading the shared credential and why it matters.', objective: '1.2' },
+    { text: 'Learn who shares the admin password and why it matters.', objective: '1.2' },
     { text: 'Deal with it the way policy expects an analyst to.', objective: '5.6' },
-    { text: 'Reach the exit.', objective: '4.6' },
   ],
   keyTerms: ['least privilege', 'role-based access control', 'shared credentials', 'accounting', 'non-repudiation', 'privileged access management'],
   lessons: {

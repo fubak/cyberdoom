@@ -4,6 +4,8 @@ import {
   arcObjectiveIds,
   coverageShare,
   isDemonstrated,
+  playableCoverage,
+  playableCoverageLine,
   readiness,
   recordAnswer,
   type Mastery,
@@ -143,6 +145,27 @@ describe('mission arc', () => {
       }
     }
   });
+
+  it('reports playable objective and win-mechanic coverage', () => {
+    const coverage = playableCoverage();
+    const registeredObjectives = [...new Set(missionRegistry.all().flatMap((mission) => mission.objectives))].sort();
+    expect(coverage.objectives).toEqual(registeredObjectives);
+    expect(coverage.objectives.every((id) => OBJECTIVES.some((objective) => objective.id === id))).toBe(true);
+    expect(coverage.total).toBe(28);
+    expect(playableCoverageLine()).toContain(`${coverage.objectives.length}/28`);
+  });
+
+  it('backs m01 removable-media reporting with a win mechanic and false-positive lesson', () => {
+    const m01 = missionRegistry.require('m01');
+    const fiveSix = ARC.find((mission) => mission.id === 'm01')
+      ?.objectives.find((objective) => objective.id === '5.6');
+    const decoy = m01.entities.find((entity) => entity.tags?.includes('decoy'));
+    expect(fiveSix?.kind).toBe('win');
+    expect(decoy).toBeDefined();
+    expect(decoy?.infected ?? false).toBe(false);
+    expect(decoy?.inspect?.category).toBe('legit');
+    expect(teachingRegistry.require('m01').lessons['false-positive']).toBeDefined();
+  });
 });
 
 describe('unbuilt arc questions', () => {
@@ -272,6 +295,8 @@ describe('mission teaching', () => {
     it(`${mission.id} covers objectives, lessons, glossary terms, and orders`, () => {
       const teaching = teachingRegistry.require(mission.id);
       const lessonKeys = Object.keys(teaching.lessons);
+      expect(teaching.tagline.length, `${mission.id} tagline length`).toBeGreaterThanOrEqual(1);
+      expect(teaching.tagline.length, `${mission.id} tagline length`).toBeLessThanOrEqual(90);
 
       for (const objective of mission.missionObjectives) {
         expect(lessonKeys, `${mission.id} is missing lesson ${objective.id}`).toContain(objective.id);
@@ -287,9 +312,11 @@ describe('mission teaching', () => {
         expect(define(term), `${mission.id} has undefined key term "${term}"`).toBeDefined();
       }
 
-      expect(teaching.orders.length, mission.id).toBeGreaterThan(0);
+      expect(teaching.orders.length, mission.id).toBeGreaterThanOrEqual(1);
+      expect(teaching.orders.length, mission.id).toBeLessThanOrEqual(3);
       for (const order of teaching.orders) {
         expect(objectiveById(order.objective), `${mission.id} has unknown order objective`).toBeDefined();
+        expect(order.text.length, `${mission.id} order length`).toBeLessThanOrEqual(64);
       }
     });
   }

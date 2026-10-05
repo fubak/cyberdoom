@@ -303,13 +303,13 @@ export const m03Walkthrough: WalkStep[] = [
 ];
 
 export const m03Teach: MissionTeaching = {
+  tagline: '40 GB walked out on a valid login. Find out whose.',
   situation:
     'A DLP alert fired overnight: confidential R&D designs left the network. The data was taken from inside, using valid credentials. Four employees had the opportunity. Only one has the evidence against them.',
   orders: [
     { text: 'Pull the log evidence on everyone who had the opportunity.', objective: '4.9' },
     { text: 'Decide who the evidence actually supports.', objective: '2.4' },
     { text: 'Escalate your finding through the proper channel.', objective: '4.8' },
-    { text: 'Survive the malware and reach the exit.', objective: '2.4' },
   ],
   keyTerms: ['insider threat', 'data exfiltration', 'correlation', 'endpoint logs', 'data classification', 'intellectual property', 'chain of custody'],
   lessons: {

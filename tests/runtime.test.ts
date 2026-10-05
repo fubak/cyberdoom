@@ -243,4 +243,115 @@ describe('MissionRuntime', () => {
     expect(state.rt.scoreLog.find((entry) => entry.text.startsWith('Correct'))?.objectives)
       .toEqual(['2.1', '2.4']);
   });
+
+  it('records inspect evidence once, reopens it on every read, and keeps the ticker short', () => {
+    const detail = 'A long chain of evidence that must remain in the case file, not in the ticker.';
+    const state = setup(mission({
+      entities: [{
+        id: 'decoy', kind: 'workstation', x: 2, y: 2, sprite: 'workstation-infected', tags: ['decoy'],
+        inspect: { label: 'Workstation PRN-02 (print room)', detail, category: 'legit' },
+      }],
+      missionObjectives: [{ id: 'read', text: 'Read the host', kind: 'inspect', tag: 'decoy' }],
+    }));
+    const opened: string[] = [];
+    state.bus.on('evidence', (evidence) => opened.push(evidence.id));
+    state.bus.emit('inspect', { entityId: 'decoy' });
+    state.bus.emit('inspect', { entityId: 'decoy' });
+
+    expect(state.rt.evidence).toHaveLength(1);
+    expect(opened).toEqual(['decoy:inspect', 'decoy:inspect']);
+    const ticker = state.messages.filter((message) => message.text.startsWith('CASE FILE:'));
+    expect(ticker).toHaveLength(2);
+    expect(ticker.every((message) => message.text.length <= 40 && !message.text.includes(detail))).toBe(true);
+    expect(state.rt.score).toBe(0);
+    expect(state.rt.objectives[0].progress).toBe(1);
+  });
+
+  it('records console reads as one full log evidence entry', () => {
+    const text = 'SECURITY DESK: lost and found.\nHand over found devices; do not plug them in.';
+    const state = setup(mission({
+      entities: [{
+        id: 'desk', kind: 'console', x: 2, y: 2, sprite: 'console', log: text,
+        inspect: { label: 'Security Desk', detail: 'Drop point.', category: 'legit' },
+      }],
+      missionObjectives: [{ id: 'exit', text: 'Finish', kind: 'reach-exit' }],
+    }));
+    state.bus.emit('interact', { entityId: 'desk' });
+
+    expect(state.rt.evidence).toEqual([{
+      id: 'desk:log',
+      entityId: 'desk',
+      label: 'Security Desk',
+      detail: text,
+      source: 'log',
+      category: 'legit',
+    }]);
+    expect(state.messages.map((message) => message.text)).toContain('READ: Security Desk');
+    expect(state.messages.some((message) => message.text === text)).toBe(false);
+  });
+
+  it('scores one scan false positive for a clean decoy without progressing clean objectives', () => {
+    const state = setup(mission({
+      entities: [{
+        id: 'decoy', kind: 'workstation', x: 2, y: 2, sprite: 'workstation-infected', tags: ['decoy'],
+        inspect: { label: 'PRN-02', detail: 'Signed spooler.', category: 'legit', objectives: ['2.4'] },
+      }],
+      missionObjectives: [{ id: 'clean-decoy', text: 'Clean the decoy', kind: 'clean', tag: 'decoy' }],
+    }));
+    state.bus.emit('scan-miss', { entityId: 'decoy' });
+    state.bus.emit('scan-miss', { entityId: 'decoy' });
+
+    const falsePositives = state.rt.scoreLog.filter((entry) => entry.tag === 'false-positive');
+    expect(falsePositives).toHaveLength(1);
+    expect(falsePositives[0]).toMatchObject({
+      text: 'False positive: PRN-02 was clean',
+      points: -25,
+      good: false,
+      objectives: ['2.4'],
+      tag: 'false-positive',
+    });
+    expect(state.rt.objectives[0].progress).toBe(0);
+    expect(state.rt.objectives[0].done).toBe(false);
+    expect(state.rt.finished).toBeNull();
+  });
+
+  it('scores triage once per entity and tags a false-positive flag', () => {
+    const state = setup(mission({
+      entities: [
+        {
+          id: 'clean', kind: 'workstation', x: 2, y: 2, sprite: 'workstation',
+          inspect: { label: 'Clean host', detail: '', category: 'legit' },
+        },
+        {
+          id: 'infected', kind: 'workstation', x: 3, y: 2, sprite: 'workstation-infected', infected: true,
+          inspect: { label: 'Infected host', detail: '', category: 'malware', objectives: ['2.4'] },
+        },
+      ],
+      missionObjectives: [{ id: 'exit', text: 'Finish', kind: 'reach-exit' }],
+    }));
+    state.bus.emit('triage', { entityId: 'clean', verdict: 'malicious', correct: false });
+    state.bus.emit('triage', { entityId: 'clean', verdict: 'malicious', correct: false });
+    state.bus.emit('triage', { entityId: 'infected', verdict: 'malicious', correct: true });
+    state.bus.emit('triage', { entityId: 'infected', verdict: 'malicious', correct: true });
+
+    expect(state.rt.scoreLog.filter((entry) => entry.text.startsWith('False positive:'))).toMatchObject([
+      { text: 'False positive: Clean host was clean', points: -10, tag: 'false-positive' },
+    ]);
+    expect(state.rt.scoreLog.filter((entry) => entry.text.startsWith('Correct triage:'))).toMatchObject([
+      { text: 'Correct triage: Infected host', points: 10, objectives: ['2.4'] },
+    ]);
+  });
+
+  it('does not penalize a scan miss on an initially infected entity', () => {
+    const state = setup(mission({
+      entities: [{
+        id: 'infected', kind: 'workstation', x: 2, y: 2, sprite: 'workstation-infected', infected: true,
+        inspect: { label: 'Infected host', detail: '', category: 'malware' },
+      }],
+      missionObjectives: [{ id: 'exit', text: 'Finish', kind: 'reach-exit' }],
+    }));
+    state.bus.emit('scan-miss', { entityId: 'infected' });
+    expect(state.rt.score).toBe(0);
+    expect(state.rt.scoreLog).toHaveLength(0);
+  });
 });

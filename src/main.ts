@@ -9,6 +9,7 @@ import { Audio } from './engine/audio';
 import { Feel } from './engine/feel';
 import { Renderer } from './render/renderer';
 import { Hud } from './ui/hud';
+import { Dossier } from './ui/dossier';
 import * as screens from './ui/screens';
 import { MissionRuntime } from './missions/runtime';
 import { missionRegistry } from './content/missions';
@@ -34,6 +35,7 @@ class Game {
   private feel = new Feel();
   private renderer!: Renderer;
   private hud!: Hud;
+  private dossier!: Dossier;
   private input!: Input;
   private screen: Screen = 'title';
   private gender: Gender = 'male';
@@ -70,8 +72,13 @@ class Game {
     const cross = document.createElement('div');
     cross.id = 'crosshair';
     viewport.appendChild(cross);
+    this.dossier = new Dossier(() => this.runtime?.evidence ?? []);
+    viewport.appendChild(this.dossier.canvas);
 
     this.bus.on('message', ({ text, kind }) => this.hud.pushMessage(text, kind ?? 'info'));
+    this.bus.on('evidence', (evidence) => {
+      if (this.screen === 'play') this.dossier.show(evidence.id);
+    });
     // tool sfx are the arsenal's (per-tool, per-phase); using a tool still wakes nearby enemies
     this.bus.on('tool-used', () => {
       if (this.player && this.runtime) alertNear(this.runtime.entities, this.player.x, this.player.y, 8);
@@ -114,6 +121,7 @@ class Game {
 
   private setScreen(s: Screen, node: HTMLElement | null): void {
     this.screen = s;
+    this.dossier.enabled = s === 'play';
     if (this.overlay) this.overlay.remove();
     this.overlay = node;
     if (node) document.getElementById('viewport')!.appendChild(node);
@@ -150,6 +158,7 @@ class Game {
       score: rt.score,
       scoreLog: rt.scoreLog,
       objectives: rt.objectiveSummary(),
+      evidence: rt.evidence,
       onDone: () => this.showMissionSelect(),
     }));
   }
@@ -160,6 +169,7 @@ class Game {
     const mission = missionRegistry.require(id);
     this.map = new WorldMap(mission.map);
     this.runtime = new MissionRuntime(mission, this.bus);
+    this.dossier.reset();
     const sp = mission.map.spawn;
     this.player = new Player(sp.x, sp.y, sp.angle);
     this.player.snap();
@@ -205,7 +215,9 @@ class Game {
     }
     if (this.screen === 'play' && this.map && this.player && this.runtime) {
       const mouseDX = this.input.consumeMouseDX();
-      if (this.runtime.finished === null) this.player.angle += mouseDX * 0.0028;
+      if (!this.dossier.isOpen && this.runtime.finished === null) {
+        this.player.angle += mouseDX * 0.0028;
+      }
       this.audio.setListener(this.player.x, this.player.y, this.player.angle);
       this.renderer.syncEntities(this.runtime.entities, this.projectiles);
       const alpha = this.acc / FIXED_DT;
@@ -242,11 +254,25 @@ class Game {
         credentials: this.runtime.roles[this.runtime.roles.length - 1] ?? this.role,
         objectives: this.runtime.objectiveSummary(),
       });
+      this.dossier.draw();
     }
+  }
+
+  private consumeDossierInput(): void {
+    this.input.firePressed = false;
+    this.input.usePressed = false;
+    this.input.slotPressed = null;
+    this.input.consumeWheel();
+    this.input.consumeMouseDX();
+    this.debugFire = false;
   }
 
   private tick(dt: number): void {
     if (this.screen !== 'play' || !this.map || !this.player || !this.runtime) return;
+    if (this.dossier.isOpen) {
+      this.consumeDossierInput();
+      return;
+    }
     const p = this.player;
     const map = this.map;
     const runtime = this.runtime;
@@ -282,6 +308,10 @@ class Game {
       use: this.input.usePressed,
       openDoor: (doorId) => this.openDoor(doorId),
     });
+    if (this.dossier.isOpen) {
+      this.consumeDossierInput();
+      return;
+    }
 
     // fire (windup → impact → recover, ammo, auto-repeat and input buffering live in the arsenal)
     const fired = !ending && (this.input.firePressed || this.debugFire);
@@ -342,6 +372,7 @@ class Game {
           }
         } else {
           this.bus.emit('tool-hit', { toolId: 'usb', entityId: hit.def.id, good: false });
+          this.bus.emit('scan-miss', { entityId: hit.def.id });
           this.hud.pushMessage('The charge fizzles: that target is not infected.', 'warn');
         }
       }
@@ -486,6 +517,12 @@ class Game {
           owned: [...g.arsenal.owned],
           ammo: Object.fromEntries(g.arsenal.ammo),
           score: g.runtime?.score ?? null,
+          dossier: {
+            open: g.dossier.isOpen,
+            mode: g.dossier.mode,
+            page: g.dossier.page,
+            entries: g.runtime?.evidence.length ?? 0,
+          },
           stats: g.runtime?.stats() ?? null,
           roles: g.runtime?.roles ?? [],
           inventory: [...(g.runtime?.inventory ?? [])],
@@ -502,6 +539,12 @@ class Game {
       startMission(id: string, gender?: string) {
         g.gender = gender === 'female' ? 'female' : 'male';
         g.startMission(id);
+      },
+      evidence() {
+        return g.runtime?.evidence ?? [];
+      },
+      toggleLog() {
+        g.dossier.toggleLog();
       },
       teleport(x: number, y: number, angle?: number) {
         if (!g.player || !g.map) return;
