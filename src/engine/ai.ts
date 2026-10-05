@@ -22,6 +22,7 @@ interface EnemyProfile {
   logicBomb?: boolean;
   retreatAfterShot?: number;
   regenerate?: boolean;
+  hidesWhenIdle?: boolean;
 }
 
 export const ENEMY_PROFILES: Record<string, EnemyProfile> = {
@@ -30,7 +31,7 @@ export const ENEMY_PROFILES: Record<string, EnemyProfile> = {
   ransomware: { speed: 1.3, ranged: true, damage: 18, painChance: 0.4, projectileSpeed: 4, windup: 0.7 },
   logicbomb: { speed: 0, ranged: false, damage: 22, painChance: 0, range: 2.2, windup: 1.4, aggroRange: 4, logicBomb: true },
   rat: { speed: 3.2, ranged: true, damage: 8, painChance: 0.6, projectileSpeed: 7, windup: 0.35, retreatAfterShot: 0.7 },
-  rootkit: { speed: 1.6, ranged: false, damage: 12, painChance: 0.4, range: 0.95, windup: 0.5, regenerate: true },
+  rootkit: { speed: 1.6, ranged: false, damage: 12, painChance: 0.4, range: 0.95, windup: 0.5, regenerate: true, hidesWhenIdle: true },
 };
 
 export const ENEMY_RADIUS = 0.3;
@@ -164,7 +165,7 @@ export function updateEntities(
         const toPlayer = Math.atan2(dy, dx);
         const inFront = Math.abs(Math.atan2(Math.sin(toPlayer - facing), Math.cos(toPlayer - facing))) <= Math.PI / 2;
         const baseAggro = (e.state.aggro as number | undefined) ?? 10;
-        const hiddenAggro = (e.def.threat ?? e.def.sprite) === 'rootkit' ? baseAggro / 2 : baseAggro;
+        const hiddenAggro = profile.hidesWhenIdle ? baseAggro / 2 : baseAggro;
         const aggro = Math.min(
           hiddenAggro,
           profile.aggroRange ?? Infinity,
@@ -345,21 +346,16 @@ export function damageEntity(e: Entity, dmg: number, fromDx: number, fromDy: num
 
 export function hurtEntity(e: Entity, fromDx: number, fromDy: number, rng = Math.random): void {
   const length = Math.hypot(fromDx, fromDy) || 1;
-  e.state.lastHurtAt = (e.state.aiClock as number | undefined) ?? 0;
-  const wasIdle = mode(e) === 'idle';
-  if (wasIdle) e.state.sighted = true;
-  const chasing = e.def.ai === 'chase';
-  e.state.mode = chasing ? 'chase' : 'pain';
-  e.state.painT = 0.3;
-  e.state.flashT = 0.12;
   e.hurtT = 0.25;
   e.state.knockVx = (fromDx / length) * 1.5;
   e.state.knockVy = (fromDy / length) * 1.5;
-  if (chasing && wasIdle) {
+  if (e.def.ai === 'chase' && mode(e) === 'idle') {
+    e.state.mode = 'chase';
     e.state.reaction = 0.25;
     e.state.sighted = true;
   }
-  const painChance = (ENEMY_PROFILES[e.def.threat ?? e.def.sprite] ?? ENEMY_PROFILES.worm).painChance;
+  e.state.lastHurtAt = (e.state.aiClock as number | undefined) ?? 0;
+  const painChance = ENEMY_PROFILES[e.def.threat ?? e.def.sprite]?.painChance ?? 0;
   if (painChance > 0 && rng() < painChance) {
     e.state.mode = 'pain';
     e.state.painT = 0.2;
