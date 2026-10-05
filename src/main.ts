@@ -102,10 +102,10 @@ class Game {
         this.audio.sfx('clean');
       }
     });
-    this.bus.on('entity-hurt', ({ entityId, fromX, fromY }) => {
+    this.bus.on('entity-hurt', ({ entityId, fromX, fromY, applied }) => {
       const e = this.runtime?.entities.find((entity) => entity.def.id === entityId);
       if (!e?.alive) return;
-      hurtEntity(e, e.x - fromX, e.y - fromY);
+      if (!applied) hurtEntity(e, e.x - fromX, e.y - fromY);
       this.particles.burst(e.x, e.y, 0.4, 'hit');
       this.audio.sfx('enemy-pain', { x: e.x, y: e.y });
     });
