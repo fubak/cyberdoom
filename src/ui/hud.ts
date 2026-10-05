@@ -1,13 +1,14 @@
 import type { Gender, ToolDef, ViewmodelAnim } from '../core/types';
 import { drawBigText, drawChunky, drawText, measureBig, measureChunky, measureText, wrapText } from '../render/font';
-import { STATUS_H, VIEW3D_H, VIEW_H, VIEW_W } from '../render/renderer';
+import { VIEW_H, VIEW_W } from '../render/renderer';
 import { roleColor } from '../render/textures';
 import { drawToolViewmodel } from '../render/viewmodels';
 import { sortedTools } from '../tools';
+import { BASE_H, BASE_STATUS, BASE_W, RES } from '../render/res';
 
 /**
- * LOOK: Doom-style 32px status bar + message ticker + tool viewmodel.
- * Drawn each frame on a 2D canvas overlay at 320x200, all text in the
+ * LOOK: Doom-style 128px native status bar + message ticker + tool viewmodel.
+ * Drawn each frame on a 2D canvas overlay at 1280x800, all text in the
  * original CYBERDOOM bitmap font (no browser fonts → crisp at any scale).
  *
  * Bar layout (left → right):
@@ -35,6 +36,24 @@ const P_FACE: Panel = [162, 34];
 const P_CRED: Panel = [196, 36];
 const P_RES: Panel = [232, 48];
 const P_OBJ: Panel = [280, 40];
+let tickerPattern: CanvasPattern | null = null;
+
+function getTickerPattern(g: CanvasRenderingContext2D): CanvasPattern | null {
+  if (tickerPattern) return tickerPattern;
+  const c = document.createElement('canvas');
+  c.width = 16;
+  c.height = 16;
+  const image = c.getContext('2d')!.createImageData(16, 16);
+  for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+    const i = (y * 16 + x) * 4;
+    const v = ((x + y) & 1) === 0 ? 0 : 8;
+    image.data[i] = v; image.data[i + 1] = v; image.data[i + 2] = v; image.data[i + 3] = 255;
+  }
+  c.getContext('2d')!.putImageData(image, 0, 0);
+  tickerPattern = g.createPattern(c, 'repeat');
+  tickerPattern?.setTransform(new DOMMatrix().scale(1 / RES, 1 / RES));
+  return tickerPattern;
+}
 
 type ResRow = { id: string; label: string; cur: number; max: number; owned: boolean; active: boolean };
 type GotFx = { k: number; slot: number; blink: boolean } | null;
@@ -130,7 +149,9 @@ export class Hud {
     got?: GotFx;
   }): void {
     const g = this.g;
+    g.setTransform(1, 0, 0, 1, 0, 0);
     g.clearRect(0, 0, VIEW_W, VIEW_H);
+    g.setTransform(RES, 0, 0, RES, 0, 0);
     if (opts.integrity < this.lastIntegrity) this.ouchT = 0.7;
     this.lastIntegrity = opts.integrity;
     this.cooldown = opts.cooldownFrac;
@@ -138,20 +159,24 @@ export class Hud {
     // viewmodel sits on top of the 3D view, above the bar (like Doom's weapon)
     g.save();
     g.beginPath();
-    g.rect(0, 0, VIEW_W, VIEW3D_H);
+    g.rect(0, 0, BASE_W, BASE_H - BASE_STATUS);
     g.clip();
+    const bob = opts.viewmodelOffset ? 0 : opts.bob;
+    g.save();
+    g.setTransform(RES, 0, 0, RES, 0, 0);
+    g.imageSmoothingEnabled = false;
     if (opts.viewmodelOffset) {
       g.translate(Math.round(opts.viewmodelOffset.x), Math.round(opts.viewmodelOffset.y));
     }
-    const bob = opts.viewmodelOffset ? 0 : opts.bob;
-    if (!drawToolViewmodel(g, opts.tool, VIEW_W, VIEW3D_H, bob, opts.gender, opts.cooldownFrac, this.time, opts.anim)) {
-      opts.tool.drawViewmodel(g, VIEW_W, VIEW3D_H, Math.sin(bob) * 2, opts.gender, opts.cooldownFrac, opts.anim);
-      if (opts.anim) opts.tool.drawFx?.(g, VIEW_W, VIEW3D_H, opts.anim);
+    if (!drawToolViewmodel(g, opts.tool, BASE_W, BASE_H - BASE_STATUS, bob, opts.gender, opts.cooldownFrac, this.time, opts.anim)) {
+      opts.tool.drawViewmodel(g, BASE_W, BASE_H - BASE_STATUS, Math.sin(bob) * 2, opts.gender, opts.cooldownFrac, opts.anim);
+      if (opts.anim) opts.tool.drawFx?.(g, BASE_W, BASE_H - BASE_STATUS, opts.anim);
     }
+    g.restore();
     g.restore();
     if (opts.got && opts.got.k > 0) {
       g.fillStyle = `rgba(255,196,40,${(0.38 * opts.got.k).toFixed(3)})`;
-      g.fillRect(0, 0, VIEW_W, VIEW3D_H);
+      g.fillRect(0, 0, BASE_W, BASE_H - BASE_STATUS);
     }
 
     const states = opts.objectives.map((o) => (o.done ? 1 : o.failed ? 2 : 0));
@@ -198,14 +223,14 @@ export class Hud {
     const col = o.failed ? '#ff5a3a' : o.done ? '#5aff6a' : '#f0ece4';
     const text = o.text.toUpperCase();
     const tx = 13 + measureChunky(head) + 6;
-    const avail = VIEW_W - tx - 3;
+    const avail = BASE_W - tx - 3;
     const chunky = measureChunky(text) <= avail;
     const lines = chunky ? [text] : wrapText(text, Math.floor((avail + 1) / 6), 2);
     const h = Math.min(OBJ_STRIP_MAX, chunky ? 11 : 4 + lines.length * 8);
-    g.fillStyle = '#000';
-    for (let y = 0; y < h; y++) for (let x = (y & 1) ? 1 : 0; x < VIEW_W; x += 2) g.fillRect(x, y, 1, 1);
+    g.fillStyle = getTickerPattern(g) ?? '#000';
+    g.fillRect(0, 0, BASE_W, h);
     g.fillStyle = o.failed ? '#a80c06' : o.done ? '#14a024' : '#a87a10';
-    g.fillRect(0, h - 1, VIEW_W, 1);
+    g.fillRect(0, h - 1, BASE_W, 1);
     // status lamp
     g.fillStyle = '#000';
     g.fillRect(3, 2, 7, 7);
@@ -229,6 +254,7 @@ export class Hud {
       g.fillStyle = c;
       g.fillRect(x + ax, y + ay, w, h);
     };
+    const native = (c: string, ax: number, ay: number, w = 1, h = 1) => p(c, ax, ay, w / RES, h / RES);
     p('#8a0a06', 6, 3, 5, 2); // forehead gash, blood running down
     p('#c01810', 7, 5, 2, 8);
     p('#7a0604', 8, 13, 1, 6);
@@ -251,6 +277,9 @@ export class Hud {
       p('#ff2010', -2, -2, 1, 28);
       p('#ff2010', 25, -2, 1, 28);
     }
+    native('#ffb090', 6.25, 8.25);
+    native('#5a0a04', 7.25, 10.25, 1, 4);
+    native('#e84020', 17.25, 15.25, 2, 1);
   }
 
   private drawBar(o: {
@@ -268,8 +297,8 @@ export class Hud {
     got?: GotFx;
   }): void {
     const g = this.g;
-    const by = VIEW_H - STATUS_H;
-    g.drawImage(this.bar, 0, by);
+    const by = BASE_H - BASE_STATUS;
+    g.drawImage(this.bar, 0, by, BASE_W, BASE_STATUS);
 
     const pulse = Math.floor(this.time * 5) % 2 === 0;
     // INTEGRITY: big fat digits; <=25% the well throbs red and the digits go white-hot
@@ -318,7 +347,13 @@ export class Hud {
     }
 
     // FACE
-    if (o.face) o.face(g, P_FACE[0] + 5, by + 4);
+    if (o.face) {
+      g.save();
+      g.setTransform(RES, 0, 0, RES, 0, 0);
+      g.imageSmoothingEnabled = false;
+      o.face(g, P_FACE[0] + 5, by + 4);
+      g.restore();
+    }
     else this.drawFace(P_FACE[0] + 4, by + 2, o.gender, o.integrity);
     if (crit) this.drawCritFace(P_FACE[0] + 5, by + 4, hp, pulse);
 
@@ -372,6 +407,7 @@ export class Hud {
       g.fillStyle = c;
       g.fillRect(x + ax, y + ay, w, h);
     };
+    const native = (c: string, ax: number, ay: number, w = 1, h = 1) => px(c, ax, ay, w / RES, h / RES);
     const tier = integrity <= 0 ? 4 : integrity < 20 ? 3 : integrity < 45 ? 2 : integrity < 75 ? 1 : 0;
     const ouch = this.ouchT > 0 && tier < 4;
     const look = ouch || tier === 4 ? 0 : this.look;
@@ -489,6 +525,10 @@ export class Hud {
       px('#c01810', 4, 21, 18, 2); // blood on collar
     }
     if (tier === 4) px('#000', 0, 0, 26, 1);
+    native('#fff0c8', 7.25, 7.25);
+    native(tier >= 2 ? '#8a1a10' : '#d8a078', 17.25, 14.25, 2, 1);
+    if (tier >= 1) native('#7a3020', 18.25, 9.25, 1, 3);
+    native('#d0c8b8', 4.25, 23.25, 2, 1);
   }
 }
 
@@ -505,66 +545,71 @@ function label(g: CanvasRenderingContext2D, text: string, p: Panel, y: number, c
 /** Alarm: the recessed well behind a critical number throbs dark red. */
 function alarmWell(g: CanvasRenderingContext2D, p: Panel, by: number, pulse: boolean): void {
   g.fillStyle = pulse ? '#5a0804' : '#2a0402';
-  g.fillRect(p[0] + 5, by + 6, p[1] - 10, STATUS_H - 12);
+  g.fillRect(p[0] + 5, by + 6, p[1] - 10, BASE_STATUS - 12);
 }
 
 /** Static bar art: bold Doom-grey stone/steel plate, thick bevels, recessed wells. */
 function paintBarBackground(): HTMLCanvasElement {
   const c = document.createElement('canvas');
   c.width = VIEW_W;
-  c.height = STATUS_H;
+  c.height = BASE_STATUS * RES;
   const g = c.getContext('2d')!;
   let s = 1337;
   const r = () => ((s = (s * 16807) % 2147483647) / 2147483647);
-  for (let y = 0; y < STATUS_H; y++) {
+  const image = g.createImageData(VIEW_W, BASE_STATUS * RES);
+  for (let y = 0; y < BASE_STATUS * RES; y++) {
     for (let x = 0; x < VIEW_W; x++) {
       const v = 104 + Math.floor(r() * 18) - (r() < 0.04 ? 26 : 0);
-      g.fillStyle = `rgb(${v + 4},${v},${v - 8})`;
-      g.fillRect(x, y, 1, 1);
+      const i = (y * VIEW_W + x) * 4;
+      image.data[i] = v + 4;
+      image.data[i + 1] = v;
+      image.data[i + 2] = v - 8;
+      image.data[i + 3] = 255;
     }
   }
-  // outer bevel: 2px light top, 2px dark bottom
+  g.putImageData(image, 0, 0);
+  g.setTransform(RES, 0, 0, RES, 0, 0);
+  const u = 1 / RES;
+  // outer bevel: one native highlight, two native shadow texels
   g.fillStyle = '#e4dccc';
-  g.fillRect(0, 0, VIEW_W, 1);
-  g.fillStyle = '#b8b0a2';
-  g.fillRect(0, 1, VIEW_W, 1);
+  g.fillRect(0, 0, BASE_W, u);
   g.fillStyle = '#3a362e';
-  g.fillRect(0, STATUS_H - 1, VIEW_W, 1);
-  g.fillStyle = '#5a554a';
-  g.fillRect(0, STATUS_H - 2, VIEW_W, 1);
+  g.fillRect(0, BASE_STATUS - 2 * u, BASE_W, 2 * u);
+  g.fillStyle = '#b8b0a2';
+  g.fillRect(0, u, BASE_W, u);
   for (const [x, w] of [P_INT, P_AMMO, P_TOOLS, P_FACE, P_CRED, P_RES, P_OBJ]) {
     // raised ridge between panels
     g.fillStyle = '#d8d0c0';
-    g.fillRect(x, 2, 1, STATUS_H - 4);
+    g.fillRect(x, 2, u, BASE_STATUS - 4);
     g.fillStyle = '#4a463c';
-    g.fillRect(x + 1, 2, 1, STATUS_H - 4);
-    // recessed well: dark top/left, light bottom/right, 2px each
+    g.fillRect(x + u, 2, u, BASE_STATUS - 4);
+    // recessed well: dark top/left, light bottom/right
     const wx = x + 3;
     const ww = w - 6;
     g.fillStyle = '#2a2722';
-    g.fillRect(wx, 4, ww, STATUS_H - 8);
-    for (let yy = 5; yy < STATUS_H - 5; yy++) {
-      for (let xx = wx + 1; xx < wx + ww - 1; xx++) {
-        if (r() < 0.12) {
-          g.fillStyle = '#34302a';
-          g.fillRect(xx, yy, 1, 1);
-        }
-      }
-    }
+    g.fillRect(wx, 4, ww, BASE_STATUS - 8);
+    const well = g.createLinearGradient(0, 4, 0, BASE_STATUS - 4);
+    well.addColorStop(0, 'rgba(0,0,0,0.3)');
+    well.addColorStop(0.5, 'rgba(40,36,30,0.08)');
+    well.addColorStop(1, 'rgba(150,140,120,0.12)');
+    g.fillStyle = well;
+    g.fillRect(wx + u, 4 + u, ww - 2 * u, BASE_STATUS - 8 - 2 * u);
     g.fillStyle = '#151310';
-    g.fillRect(wx, 4, ww, 2);
-    g.fillRect(wx, 4, 2, STATUS_H - 8);
+    g.fillRect(wx, 4, ww, u);
+    g.fillRect(wx, 4, u, BASE_STATUS - 8);
     g.fillStyle = '#cfc6b4';
-    g.fillRect(wx, STATUS_H - 5, ww, 1);
-    g.fillRect(wx + ww - 1, 4, 1, STATUS_H - 8);
+    g.fillRect(wx, BASE_STATUS - 5, ww, u);
+    g.fillRect(wx + ww - u, 4, u, BASE_STATUS - 8);
     g.fillStyle = '#8a8476';
-    g.fillRect(wx + 1, STATUS_H - 6, ww - 1, 1);
+    g.fillRect(wx + u, BASE_STATUS - 6, ww - u, u);
     // rivets
     for (const [rx, ry] of [[x + 3, 2], [x + w - 4, 2]]) {
-      g.fillStyle = '#f0e8d8';
-      g.fillRect(rx, ry, 1, 1);
-      g.fillStyle = '#2a2722';
-      g.fillRect(rx + 1, ry + 1, 1, 1);
+      g.fillStyle = '#171612';
+      g.fillRect(rx - u, ry - u, 3 * u, 3 * u);
+      g.fillStyle = '#cfc6b4';
+      g.fillRect(rx, ry, u, u);
+      g.fillStyle = '#766e60';
+      g.fillRect(rx + u, ry + u, u, u);
     }
   }
   return c;

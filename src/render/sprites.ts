@@ -3,6 +3,7 @@ import { Registry } from '../core/registry';
 import { drawText } from './font';
 import { limb, rasterize, type Prim, type V3 } from './model';
 import { packTexture, paintRaw, pxEllipse, type PaintCtx } from './pixel';
+import { RES, TEX } from './res';
 
 /**
  * Procedural billboard sprite sets. Every entity sprite id maps to a SpriteSet
@@ -34,12 +35,12 @@ function makeSet(id: string, cw: number, ch: number, worldH: number, anim: Sprit
   const out: Record<string, THREE.Texture> = {};
   let firstRaw: ReturnType<typeof paintRaw> | null = null;
   for (const f of frames) {
-    const raw = paintRaw(cw, ch, `${id}:${f.key}`, f.draw);
+    const raw = paintRaw(cw, ch, `${id}:${f.key}`, f.draw, RES, false, true);
     if (!firstRaw) firstRaw = raw;
-    out[f.key] = packTexture(cw, ch, raw, { sprite: true, shade: true, mirror: f.mirror });
+    out[f.key] = packTexture(cw * RES, ch * RES, raw, { sprite: true, shade: true, mirror: f.mirror });
   }
   if (dissolve && firstRaw) {
-    for (let k = 0; k < 4; k++) out[`die${k}`] = dissolveFrame(cw, ch, firstRaw, k, id);
+    for (let k = 0; k < 4; k++) out[`die${k}`] = dissolveFrame(cw * RES, ch * RES, firstRaw, k, id);
   }
   const set: SpriteSet = { w: (worldH * cw) / ch, h: worldH, frames: out, anim };
   spriteSets.register(id, set);
@@ -60,8 +61,8 @@ function dissolveFrame(w: number, h: number, raw: ReturnType<typeof paintRaw>, k
       if (raw.rgba[i + 3] < 128) continue;
       if (rnd() < 0.18 + k * 0.24) continue;
       // fall/scatter downward
-      const ny = Math.min(h - 1, y + Math.floor(k * k * 2 * rnd()));
-      const nx = Math.max(0, Math.min(w - 1, x + Math.round((rnd() - 0.5) * k * 4)));
+      const ny = Math.min(h - 1, y + Math.floor(k * k * 2 * RES * rnd()));
+      const nx = Math.max(0, Math.min(w - 1, x + Math.round((rnd() - 0.5) * k * 4 * RES)));
       const o = (ny * w + nx) * 4;
       const t = Math.min(1, 0.35 + k * 0.25);
       rgba[o] = raw.rgba[i] * (1 - t) + 44 * t;
@@ -107,10 +108,11 @@ const wormModel: Model = (pose) => {
     const y = 5 + Math.pow(t, 1.25) * (39 + lift);
     const z = -20 * Math.pow(1 - t, 1.6) + lean * t * t;
     const r = 8.5 - t * 3;
-    out.push(ell([x, y, z], [r, r * 0.8, r], i % 2 ? '#e8442a' : '#c8301a', {
+    out.push(ell([x, y, z], [r, r * 0.8, r], i % 2 ? '#eb482d' : '#cc331d', {
       decal: (l) => (l[2] > r * 0.4 && Math.abs(l[0]) < r * 0.55 ? (Math.abs(l[1]) < r * 0.22 ? '#ffb080' : '#ff8a50') : null),
     }));
     out.push(ell([x, y + r * 0.72, z - r * 0.3], [1.3, 2.8, 1.3], '#2a0604', { pitch: -0.4 }));
+    out.push(ell([x, y + r * 0.16, z + r * 0.62], [r * 0.68, 0.55, 0.42], '#ff7950'));
     const sw = Math.sin(ph + i * 1.3) * 2.5;
     for (const sx of [-1, 1]) limb(out, [x + sx * r * 0.8, y - r * 0.3, z], [x + sx * (r + 4), y - r * 0.9 - 2, z + sx * sw], 1.3, '#3a0604');
     last = [x, y, z];
@@ -120,6 +122,9 @@ const wormModel: Model = (pose) => {
   const hz = hz0 + 3;
   out.push(ell([hx, hy, hz], [10.5, 8.5, 10], '#e0381c'));
   out.push(ell([hx, hy - 5, hz + 2], [8, 3.6, 7.5], '#901a0a'));
+  for (let tooth = -2; tooth <= 2; tooth++) {
+    out.push(ell([hx + tooth * 2.2, hy - 8, hz + 8.2], [0.75, 1.35, 0.7], '#f3dcae'));
+  }
   for (const sx of [-1, 1]) {
     out.push(ell([hx + sx * 4.6, hy + 1.6, hz + 8.4], [2.7, 2.3, 1.6], '#ffe040', { glow: true }));
     out.push(ell([hx + sx * 4.2, hy + 2.2, hz + 9.6], [0.9, 0.9, 0.6], '#ffffff', { glow: true }));
@@ -157,6 +162,9 @@ const trojanModel: Model = (pose) => {
     }
   }
   out.push(box([0, by, 0], [12.5, 9.5, 10.5], '#c070ff', { decal: ribbon }));
+  for (const sx of [-1, 1]) for (const sy of [-1, 1]) {
+    out.push(ell([sx * 9.2, by + sy * 6.5, 9.55], [0.75, 0.75, 0.35], '#ffe9a0'));
+  }
   out.push(box([0, by - 9.5, 0], [12.6, 0.8, 10.6], '#8a40b8'));
   const gapY = by + 9.5 + lid / 2;
   if (lid > 3) {
@@ -198,6 +206,8 @@ const ransomModel: Model = (pose) => {
   const mouth = atk >= 0 ? '#ff3010' : '#140600';
   out.push(ell([0, body + 1, 10.2], [3.2, 3.2, 1], mouth, { glow: atk >= 0 }));
   out.push(box([0, body - 4, 10.2], [1.7, 4.2, 1], mouth, { glow: atk >= 0 }));
+  out.push(ell([0, body + 1, 11.2], [1.25, 1.25, 0.35], '#100804'));
+  out.push(box([0, body - 2.5, 11.2], [0.8, 2.4, 0.35], '#100804'));
   for (const sx of [-1, 1]) {
     out.push(ell([sx * 7, body + 7, 10.3], [3, 2.3, 1], pain ? '#ffffff' : '#ff2010', { glow: true }));
     out.push(box([sx * 7, body + 10.2, 10.6], [4.2, 1, 1], '#3a1802', { roll: sx * (pain ? -0.3 : 0.35) }));
@@ -218,9 +228,20 @@ const ransomModel: Model = (pose) => {
   return out;
 };
 
+const lazyFrames: (() => void)[] = [];
+
+function scaleModel(prims: Prim[]): Prim[] {
+  return prims.map((prim) => ({
+    ...prim,
+    c: [prim.c[0] * RES, prim.c[1] * RES, prim.c[2] * RES] as V3,
+    r: [prim.r[0] * RES, prim.r[1] * RES, prim.r[2] * RES] as V3,
+    ...(prim.decal ? { decal: (local: V3, normal: V3) => prim.decal!([local[0] / RES, local[1] / RES, local[2] / RES], normal) } : {}),
+  }));
+}
+
 function makeMonster(id: string, worldH: number, model: Model): void {
-  const W = 64;
-  const H = 64;
+  const W = TEX.monster;
+  const H = TEX.monster;
   const frames: Record<string, THREE.Texture> = {};
   const poses: [string, Pose][] = [
     ['walk0', { kind: 'walk', k: 0 }],
@@ -231,27 +252,88 @@ function makeMonster(id: string, worldH: number, model: Model): void {
     ['attack1', { kind: 'attack', k: 1 }],
     ['pain', { kind: 'pain' }],
   ];
-  // 5 drawn rotations (front, 3/4, side, rear 3/4, back), 3 mirrored → 8
-  for (const [key, pose] of poses) {
-    const prims = model(pose);
-    for (let r = 0; r <= 4; r++) {
-      const raw = rasterize(W, H, prims, { view: (r * Math.PI) / 4, ...(pose.kind === 'pain' ? { tint: [255, 120, 80] as V3, tintT: 0.2 } : {}) });
-      frames[`${key}_${r}`] = packTexture(W, H, raw, { sprite: true });
-      if (r >= 1 && r <= 3) frames[`${key}_${8 - r}`] = packTexture(W, H, raw, { sprite: true, mirror: true });
+  const renderPose = (pose: Pose, rotation: number, mirror = false): THREE.Texture => {
+    const prims = scaleModel(model(pose));
+    const raw = rasterize(W, H, prims, { view: (rotation * Math.PI) / 4, ...(pose.kind === 'pain' ? { tint: [255, 120, 80] as V3, tintT: 0.2 } : {}) });
+    const grain = raw.rgba;
+    let seed = 2166136261;
+    for (const ch of `${id}:${pose.kind}:${'k' in pose ? pose.k : 0}:${rotation}:${mirror ? 1 : 0}`) seed = Math.imul(seed ^ ch.charCodeAt(0), 16777619);
+    const random = () => {
+      seed ^= seed << 13;
+      seed ^= seed >>> 17;
+      seed ^= seed << 5;
+      return (seed >>> 0) / 4294967296;
+    };
+    for (let i = 0; i < grain.length; i += 4) {
+      if (grain[i + 3] < 128 || raw.glow[i + 3] > 0) continue;
+      const m = 0.97 + random() * 0.06;
+      grain[i] = Math.min(255, grain[i] * m);
+      grain[i + 1] = Math.min(255, grain[i + 1] * m);
+      grain[i + 2] = Math.min(255, grain[i + 2] * m);
     }
-    frames[key] = frames[`${key}_0`];
+    return packTexture(W, H, raw, { sprite: true, mirror });
+  };
+  const defineLazy = (key: string, build: () => THREE.Texture) => {
+    const getter = () => {
+      const tex = build();
+      Object.defineProperty(frames, key, { configurable: true, enumerable: true, value: tex });
+      return tex;
+    };
+    Object.defineProperty(frames, key, { configurable: true, enumerable: true, get: getter });
+    lazyFrames.push(() => { void frames[key]; });
+  };
+  // Keep all eight walk0 views ready so newly encountered threats face correctly immediately.
+  for (let r = 0; r <= 4; r++) {
+    frames[`walk0_${r}`] = renderPose(poses[0][1], r);
+    if (r >= 1 && r <= 3) frames[`walk0_${8 - r}`] = renderPose(poses[0][1], r, true);
   }
-  frames.attack = frames.attack1;
-  // death: the model slumps and collapses, then dissolves into quarantine-green pixels
+  frames.walk0 = frames.walk0_0;
+  for (const [key, pose] of poses.slice(1)) {
+    for (let r = 0; r <= 4; r++) {
+      defineLazy(`${key}_${r}`, () => renderPose(pose, r));
+      if (r >= 1 && r <= 3) defineLazy(`${key}_${8 - r}`, () => renderPose(pose, r, true));
+    }
+    defineLazy(key, () => frames[`${key}_0`]);
+  }
+  defineLazy('attack', () => frames.attack1);
   const base = model({ kind: 'pain' });
   for (let k = 0; k < 5; k++) {
     const sq = 1 - k * 0.19;
-    const prims = base.map((p) => ({ ...p, c: [p.c[0] * (1 + k * 0.14), p.c[1] * sq + k * 0.6, p.c[2] * (1 + k * 0.1)] as V3, r: [p.r[0], p.r[1] * (1 - k * 0.1), p.r[2]] as V3 }));
-    const raw = rasterize(W, H, prims, { view: 0, tint: [44, 255, 90], tintT: 0.12 + k * 0.14 });
-    frames[`die${k}`] = k === 0 ? packTexture(W, H, raw, { sprite: true }) : dissolveFrame(W, H, raw, k - 1, id);
+    const prims = scaleModel(base.map((p) => ({
+      ...p,
+      c: [p.c[0] * (1 + k * 0.14), p.c[1] * sq + k * 0.6, p.c[2] * (1 + k * 0.1)] as V3,
+      r: [p.r[0], p.r[1] * (1 - k * 0.1), p.r[2]] as V3,
+    })));
+    defineLazy(`die${k}`, () => {
+      const raw = rasterize(W, H, prims, { view: 0, tint: [44, 255, 90], tintT: 0.12 + k * 0.14 });
+      return k === 0 ? packTexture(W, H, raw, { sprite: true }) : dissolveFrame(W, H, raw, k - 1, id);
+    });
   }
-  spriteSets.register(id, { w: (worldH * W) / H, h: worldH, frames, anim: 'monster' });
+  spriteSets.register(id, { w: worldH, h: worldH, frames, anim: 'monster' });
   spriteRegistry.register(id, frames.walk0);
+}
+
+export function prewarmLazySpriteFrames(onComplete?: (ms: number) => void): void {
+  let index = 0;
+  const start = performance.now();
+  const runSlice = (deadline?: { didTimeout?: boolean; timeRemaining: () => number }) => {
+    const sliceStart = performance.now();
+    while (index < lazyFrames.length && performance.now() - sliceStart < 8 && (!deadline || deadline.didTimeout || deadline.timeRemaining() > 1)) {
+      lazyFrames[index++]();
+    }
+    if (index < lazyFrames.length) {
+      const idleWindow = window as Window & {
+        requestIdleCallback?: (cb: (d: { didTimeout?: boolean; timeRemaining: () => number }) => void, opts?: { timeout: number }) => number;
+      };
+      if (idleWindow.requestIdleCallback) idleWindow.requestIdleCallback(runSlice, { timeout: 50 });
+      else window.setTimeout(() => runSlice(), 0);
+    } else onComplete?.(performance.now() - start);
+  };
+  const idleWindow = window as Window & {
+    requestIdleCallback?: (cb: (d: { didTimeout?: boolean; timeRemaining: () => number }) => void, opts?: { timeout: number }) => number;
+  };
+  if (idleWindow.requestIdleCallback) idleWindow.requestIdleCallback(runSlice, { timeout: 50 });
+  else window.setTimeout(() => runSlice(), 0);
 }
 // ---------------------------------------------------------------- devices
 

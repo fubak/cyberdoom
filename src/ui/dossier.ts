@@ -1,6 +1,7 @@
 import type { EvidenceEntry } from '../core/types';
 import { drawText, measureText } from '../render/font';
 import { VIEW_H, VIEW_W } from '../render/renderer';
+import { RES } from '../render/res';
 
 export const DOSSIER_TEXT_W = 276;
 export const DOSSIER_ROWS = 12;
@@ -146,7 +147,9 @@ export class Dossier {
     this.dirty = false;
     const g = this.g;
     const entries = this.getEntries();
+    g.setTransform(1, 0, 0, 1, 0, 0);
     g.clearRect(0, 0, VIEW_W, VIEW_H);
+    g.setTransform(RES, 0, 0, RES, 0, 0);
     g.fillStyle = '#100806';
     g.fillRect(12, 12, 296, 176);
     g.fillStyle = '#806050';

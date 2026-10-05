@@ -2,28 +2,29 @@ import * as THREE from 'three';
 import { Registry } from '../core/registry';
 import { drawText, measureText } from './font';
 import { bevel, grime, noiseFill, packTexture, paintRaw, type PaintCtx, type Painter } from './pixel';
+import { RES, TEX } from './res';
 
 /**
  * Procedural pixel-art texture atlas (no binary assets).
- * Walls are 64x80 texels = 1 x WALL_H world units, so one wall cell shows the
- * texture exactly once (Doom-style 1 texel ≈ 1/64 unit). Flats are 64x64.
+ * Walls use a 64x80 base layout at 4× native resolution = 1 x WALL_H world
+ * units, so one wall cell shows the texture exactly once. Flats are 64x64 base.
  * Anything painted on the glow layer renders FULLBRIGHT.
  */
 
 export const WALL_H = 1.25;
-export const WALL_TEX_W = 64;
-export const WALL_TEX_H = 80;
+export const WALL_TEX_W = TEX.wallW;
+export const WALL_TEX_H = TEX.wallH;
 
 export const textureRegistry = new Registry<THREE.Texture>();
 
-function makeTexture(id: string, w: number, h: number, painter: Painter): THREE.Texture {
-  const t = packTexture(w, h, paintRaw(w, h, id, painter));
+function makeTexture(id: string, w: number, h: number, painter: Painter, wallGrime = false): THREE.Texture {
+  const t = packTexture(w * RES, h * RES, paintRaw(w, h, id, painter, RES, wallGrime));
   textureRegistry.register(id, t);
   return t;
 }
 
-const wall = (id: string, p: Painter) => makeTexture(id, WALL_TEX_W, WALL_TEX_H, p);
-const flat = (id: string, p: Painter) => makeTexture(id, 64, 64, p);
+const wall = (id: string, p: Painter) => makeTexture(id, TEX.wallW / RES, TEX.wallH / RES, p, true);
+const flat = (id: string, p: Painter) => makeTexture(id, TEX.flat / RES, TEX.flat / RES, p);
 
 const ROLE_COLORS: Record<string, { stripe: string; dark: string; light: string }> = {
   admin: { stripe: '#c81e14', dark: '#4a0a06', light: '#ff7a5a' },
@@ -36,15 +37,24 @@ export function roleColor(role: string | undefined): { stripe: string; dark: str
 }
 
 function rivet(g: CanvasRenderingContext2D, x: number, y: number): void {
-  g.fillStyle = '#c4ccd8';
-  g.fillRect(x, y, 1, 1);
-  g.fillStyle = '#20232b';
-  g.fillRect(x + 1, y + 1, 1, 1);
+  const u = 1 / RES;
+  g.fillStyle = '#161920';
+  g.fillRect(x - u, y - u, 5 * u, 5 * u);
+  g.fillStyle = '#687080';
+  g.fillRect(x, y, 3 * u, 3 * u);
+  g.fillStyle = '#d8e0ec';
+  g.fillRect(x, y, 2 * u, u);
+  g.fillRect(x, y, u, 2 * u);
+  g.fillStyle = '#8a92a0';
+  g.fillRect(x + u, y + u, u, u);
+  g.fillStyle = '#343a46';
+  g.fillRect(x + 2 * u, y + 2 * u, u, u);
 }
 
 function steelPanel(p: PaintCtx, x: number, y: number, w: number, h: number, base: [number, number, number]): void {
   noiseFill(p, base, 14, 1, x, y, w, h);
   const { g } = p;
+  const u = 1 / p.s;
   // brushed horizontal streaks
   for (let yy = y + 1; yy < y + h - 1; yy++) {
     if (p.rnd() < 0.35) {
@@ -52,15 +62,29 @@ function steelPanel(p: PaintCtx, x: number, y: number, w: number, h: number, bas
       g.fillRect(x + 1, yy, w - 2, 1);
     }
   }
-  g.fillStyle = 'rgba(255,255,255,0.28)';
-  g.fillRect(x, y, w, 1);
-  g.fillRect(x, y, 1, h);
+  g.fillStyle = 'rgba(255,255,255,0.34)';
+  g.fillRect(x, y, w, u);
+  g.fillRect(x, y, u, h);
   g.fillStyle = 'rgba(0,0,0,0.55)';
-  g.fillRect(x, y + h - 1, w, 1);
-  g.fillRect(x + w - 1, y, 1, h);
+  g.fillRect(x, y + h - 2 * u, w, 2 * u);
+  g.fillRect(x + w - 2 * u, y, 2 * u, h);
+  for (const sx of [x + 3, x + w - 5]) {
+    rivet(g, sx, y + 3);
+    rivet(g, sx, y + h - 5);
+  }
+  for (let k = 0; k < 6; k++) {
+    const sx = x + 5 + p.rnd() * Math.max(1, w - 12);
+    const sy = y + 6 + p.rnd() * Math.max(1, h - 12);
+    const len = 2 + p.rnd() * 7;
+    g.fillStyle = 'rgba(230,235,245,0.24)';
+    g.fillRect(sx, sy, len, u);
+    g.fillStyle = 'rgba(8,10,14,0.48)';
+    g.fillRect(sx, sy + u, len, u);
+  }
 }
 
 function hazard(g: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, vertical = false): void {
+  const u = 1 / RES;
   g.fillStyle = '#d8b018';
   g.fillRect(x, y, w, h);
   g.fillStyle = '#16120a';
@@ -72,8 +96,10 @@ function hazard(g: CanvasRenderingContext2D, x: number, y: number, w: number, h:
       }
     }
   }
-  g.fillStyle = 'rgba(0,0,0,0.35)';
-  g.fillRect(x, y + h - 1, w, 1);
+  g.fillStyle = 'rgba(255,236,128,0.55)';
+  g.fillRect(x, y, w, u);
+  g.fillStyle = 'rgba(0,0,0,0.45)';
+  g.fillRect(x, y + h - 2 * u, w, 2 * u);
 }
 
 export function buildTextures(): void {
@@ -91,6 +117,10 @@ export function buildTextures(): void {
       g.fillRect(38, y, 20, 1);
       g.fillStyle = '#a4acbc';
       g.fillRect(38, y + 1, 20, 1);
+      for (let x = 40; x < 58; x += 3) {
+        g.fillStyle = '#080a0e';
+        g.fillRect(x, y, 1 / p.s, 1 / p.s);
+      }
     }
     // label plate on the left plate
     bevel(g, 6, 10, 20, 9, '#2a2e38', '#5a6070', '#101218', true);
@@ -165,6 +195,9 @@ export function buildTextures(): void {
           g.fillRect(41 + k * 4, y + 3, 2, 2);
         }
       }
+      g.fillStyle = '#080a0d';
+      for (let x = 10; x < 39; x += 7) g.fillRect(x, y + 1, 1 / p.s, 1 / p.s);
+      drawText(g, `U${Math.floor(y / 10) + 1}`, 9, y + 2, '#9299a6', 'tiny', '#121418');
       g.fillStyle = '#0e1013';
       g.fillRect(40, y + 6, 16, 1);
     }
@@ -186,6 +219,10 @@ export function buildTextures(): void {
         g.fillRect(Math.max(0, x + 1), y + 1, 30, 1);
         g.fillStyle = 'rgba(0,0,0,0.4)';
         g.fillRect(Math.max(0, x + 1), y + 8, 30, 1);
+        for (let i = 0; i < 10; i++) {
+          g.fillStyle = '#483b33';
+          g.fillRect(Math.max(1, x + 3 + p.rnd() * 25), y + 3 + p.rnd() * 4, 1 / p.s, 1 / p.s);
+        }
       }
     }
     grime(p, 'rgba(0,0,0,0.5)', 120);
@@ -199,6 +236,10 @@ export function buildTextures(): void {
     g.fillStyle = 'rgba(0,0,0,0.25)';
     g.fillRect(0, 0, 4, 80);
     g.fillRect(60, 0, 4, 80);
+    g.fillStyle = 'rgba(255,240,170,0.5)';
+    g.fillRect(2, 0, 1 / p.s, 80);
+    g.fillStyle = 'rgba(0,0,0,0.55)';
+    g.fillRect(61, 0, 2 / p.s, 80);
   });
 
   // Generic security door + role-coded variants.
@@ -226,6 +267,11 @@ export function buildTextures(): void {
           }
       }
     }
+    for (let i = 0; i < 48; i++) {
+      const x = 2 + p.rnd() * 60, y = 2 + p.rnd() * 60;
+      g.fillStyle = p.rnd() < 0.5 ? '#6c5a46' : '#211b16';
+      g.fillRect(x, y, (p.rnd() < 0.25 ? 2 : 1) / p.s, 1 / p.s);
+    }
     g.fillStyle = '#16171b';
     g.fillRect(0, 0, 64, 1);
     g.fillRect(0, 0, 1, 64);
@@ -241,6 +287,12 @@ export function buildTextures(): void {
     for (let i = 0; i < 120; i++) {
       g.fillStyle = 'rgba(40,30,20,0.35)';
       g.fillRect(Math.floor(p.rnd() * 64), Math.floor(p.rnd() * 64), 1, 1);
+    }
+    for (let y = 4; y < 64; y += 4) for (let x = 4; x < 64; x += 4) {
+      g.fillStyle = '#514a3d';
+      g.fillRect(x, y, 1 / p.s, 1 / p.s);
+      g.fillStyle = '#b3a890';
+      g.fillRect(x + 1 / p.s, y, 1 / p.s, 1 / p.s);
     }
     g.fillStyle = '#3a3226';
     g.fillRect(0, 0, 64, 2);
@@ -294,6 +346,11 @@ export function buildTextures(): void {
         glow.fillRect(44 - i - 4, 14 + k * 13 + i, 4, 2);
       }
     }
+    for (let i = 0; i < 24; i++) {
+      const x = 7 + p.rnd() * 50, y = 11 + p.rnd() * 42;
+      g.fillStyle = '#405238';
+      g.fillRect(x, y, 1 / p.s, 1 / p.s);
+    }
   });
 }
 
@@ -301,6 +358,7 @@ function doorTexture(id: string, role: string | undefined): void {
   const rc = role ? roleColor(role) : { stripe: '#5a6070', dark: '#1a1c22', light: '#c0c8d8' };
   wall(id, (p) => {
     const { g, glow } = p;
+    const u = 1 / p.s;
     noiseFill(p, [52, 56, 64], 8);
     // two leaves
     steelPanel(p, 2, 2, 29, 70, [96, 100, 112]);
@@ -313,7 +371,9 @@ function doorTexture(id: string, role: string | undefined): void {
     g.fillStyle = rc.stripe;
     g.fillRect(2, 23, 60, 10);
     g.fillStyle = rc.light;
-    g.fillRect(2, 23, 60, 1);
+    g.fillRect(2, 23, 60, u);
+    g.fillStyle = 'rgba(0,0,0,0.65)';
+    g.fillRect(2, 32, 60, 2 * u);
     const label = role ? role.toUpperCase() : 'SECURE';
     const lw = measureText(label, 'tiny');
     drawText(g, label, 32 - Math.floor(lw / 2), 26, '#ffffff', 'tiny', rc.dark);
@@ -322,7 +382,9 @@ function doorTexture(id: string, role: string | undefined): void {
       g.fillStyle = '#4a4e58';
       g.fillRect(4, y, 56, 3);
       g.fillStyle = '#a8b0c0';
-      g.fillRect(4, y, 56, 1);
+      g.fillRect(4, y, 56, u);
+      g.fillStyle = '#101218';
+      g.fillRect(4, y + 2, 56, 2 * u);
     }
     // badge reader (fullbright LED)
     bevel(g, 46, 8, 10, 12, '#1a1c22', '#6a7080', '#08090b');
@@ -337,6 +399,7 @@ function doorTexture(id: string, role: string | undefined): void {
     hazard(g, 2, 72, 60, 6);
     g.fillStyle = '#0c0d10';
     g.fillRect(0, 78, 64, 2);
+    for (const x of [5, 27, 35, 57]) rivet(g, x, 6);
   });
 }
 

@@ -41,6 +41,7 @@ export class Automap {
     const cellAt = (x: number, y: number) => map.legend[map.grid[y]?.[x] ?? ''];
 
     g.save();
+    g.setTransform(1, 0, 0, 1, 0, 0);
     g.fillStyle = '#000';
     g.fillRect(0, 0, VIEW_W, VIEW3D_H);
 

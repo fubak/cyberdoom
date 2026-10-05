@@ -8,10 +8,14 @@ import { alertNear, damageEntity, hurtEntity, traceShot, updateEntities, updateP
 import { Audio } from './engine/audio';
 import { Feel } from './engine/feel';
 import { ParticleSystem } from './engine/fx';
-import { lookProbe } from './render/probe';
+import { lookProbe, placeThreat } from './render/probe';
 import { Renderer } from './render/renderer';
+import { spriteSets } from './render/sprites';
+import { textureRegistry } from './render/textures';
 import { Hud } from './ui/hud';
 import { Automap } from './ui/automap';
+import { setupPresentation } from './ui/present';
+import { RES } from './render/res';
 import { Dossier } from './ui/dossier';
 import * as screens from './ui/screens';
 import { MissionRuntime } from './missions/runtime';
@@ -79,6 +83,7 @@ class Game {
     const viewport = document.createElement('div');
     viewport.id = 'viewport';
     app.appendChild(viewport);
+    setupPresentation(viewport);
     this.renderer = new Renderer(viewport);
     registerThreatSprites();
     this.renderer.canvas.classList.add('gl');
@@ -708,6 +713,19 @@ class Game {
       probe(kind: string, dist: number, withImages = false) {
         if (!g.map || !g.runtime || !g.player) throw new Error('no mission running');
         return lookProbe(g.renderer, g.map, g.runtime.entities, g.player, kind, dist, withImages);
+      },
+      stage(kind: string, dist: number) {
+        if (!g.map || !g.runtime || !g.player) throw new Error('no mission running');
+        const { target, line } = placeThreat(g.map, g.runtime.entities, g.player, kind, dist);
+        return { id: target.def.id, x: target.x, y: target.y, light: line.light };
+      },
+      texInfo() {
+        const dimensions = (id: string) => {
+          const image = textureRegistry.require(id).image as { width: number; height: number };
+          return [image.width, image.height];
+        };
+        const worm = spriteSets.require('worm').frames.walk0.image as { width: number; height: number };
+        return { wall: dimensions('wall-panel'), flat: dimensions('floor'), worm: [worm.width, worm.height], RES };
       },
       setTool(slot: number) {
         const t = toolForSlot(slot);

@@ -23,6 +23,13 @@ const rows = [];
 for (const m of MISSIONS) {
   await page.goto(`${base}/?debug=1&mission=${m}&gender=male`);
   await page.waitForFunction(() => window.__cd?.state().mission != null, null, { timeout: 30000 });
+  if (m === MISSIONS[0]) {
+    const info = await page.evaluate(() => window.__cd.texInfo());
+    const expected = { wall: [256, 320], flat: [256, 256], worm: [256, 256], RES: 4 };
+    if (JSON.stringify(info) !== JSON.stringify(expected)) {
+      throw new Error(`texture dimensions mismatch: expected ${JSON.stringify(expected)}, got ${JSON.stringify(info)}`);
+    }
+  }
   await page.waitForTimeout(800);
   for (const k of KINDS) {
     for (const d of DISTS) {

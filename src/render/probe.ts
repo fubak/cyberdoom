@@ -58,6 +58,29 @@ export function darkestLine(map: WorldMap, dist: number): { x: number; y: number
   return best;
 }
 
+export function placeThreat(
+  map: WorldMap,
+  entities: Entity[],
+  player: Player,
+  kind: string,
+  dist: number,
+): { target: Entity; line: NonNullable<ReturnType<typeof darkestLine>> } {
+  const line = darkestLine(map, dist);
+  if (!line) throw new Error(`no straight open line of ${dist + 1} tiles`);
+  const target = entities.find((e) => e.alive && e.def.kind === 'enemy' && e.def.sprite === kind) ??
+    entities.find((e) => e.alive && e.def.kind === 'enemy');
+  if (!target) throw new Error('no live enemy to probe with');
+  const px = line.x + 0.5;
+  const py = line.y + 0.5;
+  player.x = px;
+  player.y = py;
+  player.angle = Math.atan2(line.dy, line.dx);
+  player.snap();
+  target.x = px + line.dx * dist;
+  target.y = py + line.dy * dist;
+  return { target, line };
+}
+
 export async function lookProbe(
   r: Renderer,
   map: WorldMap,
@@ -67,21 +90,10 @@ export async function lookProbe(
   dist: number,
   withImages = false,
 ): Promise<ProbeResult> {
-  const line = darkestLine(map, dist);
-  if (!line) throw new Error(`no straight open line of ${dist + 1} tiles`);
-  const target = entities.find((e) => e.alive && e.def.kind === 'enemy' && e.def.sprite === kind) ??
-    entities.find((e) => e.alive && e.def.kind === 'enemy');
-  if (!target) throw new Error('no live enemy to probe with');
+  const { target, line } = placeThreat(map, entities, player, kind, dist);
   const id = target.def.id;
-  const px = line.x + 0.5;
-  const py = line.y + 0.5;
   const place = () => {
-    player.x = px;
-    player.y = py;
-    player.angle = Math.atan2(line.dy, line.dx);
-    player.snap();
-    target.x = px + line.dx * dist;
-    target.y = py + line.dy * dist;
+    placeThreat(map, entities, player, kind, dist);
   };
   r.debugSprite.set(id, kind);
   r.debugNoFlash = true;
