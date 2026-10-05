@@ -355,7 +355,13 @@ export class Hud {
     const done = o.progress?.done ?? o.objectives.filter((x) => x.done).length;
     const total = o.progress?.total ?? o.objectives.length;
     const failed = o.progress?.failed ?? o.objectives.some((x) => x.failed);
-    bigCentered(g, `${done}/${total}`, P_OBJ, by + 5, failed ? RED : done === total ? GREEN : GREEN.slice(1));
+    const objectiveCount = `${done}/${total}`;
+    const objectiveColor = failed ? RED[0] : done === total ? GREEN[0] : GREEN[1];
+    if (measureBig(objectiveCount) <= P_OBJ[1] - 6) {
+      bigCentered(g, objectiveCount, P_OBJ, by + 5, failed ? RED : done === total ? GREEN : GREEN.slice(1));
+    } else {
+      label(g, objectiveCount, P_OBJ, by + 6, objectiveColor);
+    }
     label(g, failed ? 'FAIL' : 'OBJ', P_OBJ, by + 20, failed ? '#ff5a3a' : undefined);
   }
 
