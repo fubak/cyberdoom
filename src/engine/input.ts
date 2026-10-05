@@ -10,6 +10,7 @@ export class Input {
   wheel = 0;
   /** LMB pressed this frame (edge-triggered, consumed by game). */
   firePressed = false;
+  fireHeld = false;
   /** E or Space pressed this frame. */
   usePressed = false;
   /** Digit pressed this frame, 1-9 or null. */
@@ -18,40 +19,60 @@ export class Input {
   private pendingSlot: number | null = null;
   private pendingFire = false;
   private pendingUse = false;
+  private mouseDown = false;
+  private unlockedAudio = false;
 
-  constructor(private canvas: HTMLElement) {
+  constructor(private canvas: HTMLElement, private unlockAudio: () => void = () => {}) {
     window.addEventListener('keydown', (e) => {
       if (e.repeat) return;
+      this.unlockOnce();
       this.keys.add(e.code);
       if (e.code === 'Space' || e.code === 'KeyE') this.pendingUse = true;
+      if (e.code === 'KeyF') this.pendingFire = true;
       if (/^Digit[1-9]$/.test(e.code)) this.pendingSlot = Number(e.code[5]);
       if (e.code === 'Space') e.preventDefault();
     });
     window.addEventListener('keyup', (e) => this.keys.delete(e.code));
-    window.addEventListener('blur', () => this.keys.clear());
+    window.addEventListener('blur', () => {
+      this.keys.clear();
+      this.mouseDown = false;
+    });
+    window.addEventListener('pointerdown', () => this.unlockOnce());
     canvas.addEventListener('mousedown', (e) => {
       if (e.button === 0) {
         if (!this.pointerLocked) {
-          canvas.requestPointerLock?.();
+          this.requestLock();
         } else {
+          this.mouseDown = true;
           this.pendingFire = true;
         }
       }
     });
+    window.addEventListener('mouseup', (e) => {
+      if (e.button === 0) this.mouseDown = false;
+    });
     window.addEventListener('mousemove', (e) => {
-      if (this.pointerLocked) this.mouseDX += e.movementX;
+      if (this.pointerLocked) this.mouseDX += Math.max(-250, Math.min(250, e.movementX));
     });
     window.addEventListener('wheel', (e) => {
       this.wheel += Math.sign(e.deltaY);
     });
     document.addEventListener('pointerlockchange', () => {
       this.pointerLocked = document.pointerLockElement === this.canvas;
+      if (!this.pointerLocked) this.mouseDown = false;
     });
   }
 
-  /** Call once per frame; moves edge-triggered flags into public fields. */
+  private unlockOnce(): void {
+    if (this.unlockedAudio) return;
+    this.unlockedAudio = true;
+    this.unlockAudio();
+  }
+
+  /** Call once per simulation tick; edges are consumed by exactly one tick. */
   poll(): void {
     this.firePressed = this.pendingFire;
+    this.fireHeld = (this.pointerLocked && this.mouseDown) || this.keys.has('KeyF');
     this.usePressed = this.pendingUse;
     this.slotPressed = this.pendingSlot;
     this.pendingFire = false;
@@ -77,6 +98,10 @@ export class Input {
   }
 
   requestLock(): void {
-    this.canvas.requestPointerLock?.();
+    try {
+      void Promise.resolve(this.canvas.requestPointerLock?.()).catch(() => {});
+    } catch {
+      // Pointer lock may be denied before a trusted user gesture.
+    }
   }
 }

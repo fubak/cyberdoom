@@ -163,6 +163,8 @@ export interface Projectile {
   traveled: number;
   source: string;
   alive: boolean;
+  hostile?: boolean;
+  damage?: number;
 }
 
 /** Context handed to ToolDef.use. Implemented by the game shell. */
