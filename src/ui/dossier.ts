@@ -172,7 +172,7 @@ export class Dossier {
     } else {
       this.drawFile(entries);
     }
-    const hint = this.mode === 'log' ? 'W/S SELECT  ENTER OPEN  ESC BACK' : 'A/D PAGE  TAB LOG  ESC CLOSE';
+    const hint = this.mode === 'log' ? 'W/S SELECT  ENTER OPEN  ESC BACK' : 'A/D PAGE  L LOG  ESC CLOSE';
     drawText(g, hint, 21, 177, '#8a7868', 'small', null);
   }
 
@@ -229,13 +229,13 @@ export class Dossier {
 
   private onKeyDown = (event: KeyboardEvent): void => {
     if (!this.enabled) return;
-    if (event.key === 'Tab') {
+    if (event.code === 'KeyL') {
       event.preventDefault();
       event.stopImmediatePropagation();
       if (!event.repeat) this.toggleLog();
       return;
     }
-    if (!this.isOpen) return;
+    if (!this.isOpen || event.key === 'Tab') return;
     event.preventDefault();
     event.stopImmediatePropagation();
     if (event.repeat) return;

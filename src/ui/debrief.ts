@@ -89,14 +89,14 @@ export function debrief(opts: {
     updateEvidenceDrawer();
   };
   const addEvidenceUi = () => {
-    const button = bigButton(`EVIDENCE LOG (${entries.length}) [TAB]`, toggleEvidence, 'cd-btn cd-evidence-toggle');
+    const button = bigButton(`EVIDENCE LOG (${entries.length}) [L]`, toggleEvidence, 'cd-btn cd-evidence-toggle');
     evidenceButton = button;
     s.appendChild(button);
     s.appendChild(drawer);
     updateEvidenceDrawer();
   };
   onKeysWhileMounted(s, (e) => {
-    if (e.key === 'Tab') {
+    if (e.code === 'KeyL' || e.key === 'Tab') {
       e.preventDefault();
       toggleEvidence();
       return;
