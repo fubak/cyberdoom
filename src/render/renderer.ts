@@ -537,8 +537,8 @@ export class Renderer {
       st.lastX = e.x;
       st.lastY = e.y;
       st.entity = e;
-      const scale = typeof e.state.scale === 'number' ? e.state.scale : 1;
-      const hop = typeof e.state.hop === 'number' ? e.state.hop : 0;
+      const scale = Number.isFinite(e.state.scale) ? (e.state.scale as number) : 1;
+      const hop = Number.isFinite(e.state.hop) ? (e.state.hop as number) : 0;
       st.scale = scale;
       st.mesh.scale.set(set.w * scale, set.h * scale, 1);
       st.mesh.position.set(e.x, hop, e.y);

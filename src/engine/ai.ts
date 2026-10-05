@@ -70,6 +70,11 @@ function setRenderState(e: Entity, now: number): void {
   e.state.tint = currentMode === 'pain' || (e.state.flashT as number) > 0
     ? 0xff3030
     : 0xffffff;
+  if (typeof e.state.phase !== 'number') {
+    let hash = 0;
+    for (const ch of e.def.id) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
+    e.state.phase = (hash % 6283) / 1000; // deterministic phase in [0, 2π)
+  }
   e.state.hop = currentMode === 'chase'
     ? Math.abs(Math.sin(now * 11 + (e.state.phase as number))) * 0.04
     : 0;
