@@ -23,7 +23,7 @@ const map: MapDef = {
     '######..........#......#..............##',
     '######.......WW.#......#.W.........#..##',
     '######........W.#......#...........#..##',
-    '#################...O..Q################',
+    '####################O##Q################',
     '##...#W..........................W..####',
     '##...#..........#...................####',
     '##...#W.........#......#.........WW.####',
@@ -238,6 +238,7 @@ const rootkitWave = stagedThreatWave(map, 'rootkit', 'rootkit', [...evidenceAndW
   [3, 10, 17, 15],
   [25, 10, 33, 15],
 ]);
+rootkitWave.push({ ...rootkitWave[0], id: 'rootkit-1-extra', x: 14.5, y: 19.5 });
 rootkitWave.push({
   id: 'rootkit-payroll-final',
   kind: 'enemy',
@@ -255,7 +256,9 @@ rootkitWave.push({
     category: 'malware',
   },
 });
-const waveIds = (start: number, end: number) => rootkitWave.slice(start, end).map((enemy) => enemy.id);
+const waveIds = (wave: number) => rootkitWave
+  .filter((enemy) => enemy.id.startsWith(`rootkit-${wave}-`))
+  .map((enemy) => enemy.id);
 
 export const m05: Mission = {
   id: 'm05',
@@ -280,10 +283,11 @@ export const m05: Mission = {
   script: {
     par: 240,
     triggers: [
-      { id: 'change-ambush-west', area: [6, 17, 14, 22], spawn: waveIds(0, 5), kind: 'bad', message: 'A rootkit persistence record reappeared in the HR service zone.' },
-      { id: 'change-ambush-east', area: [25, 17, 33, 22], spawn: waveIds(5, 10), kind: 'bad', message: 'Rootkit activity spread into payroll operations.' },
-      { id: 'change-ambush-upper', area: [6, 10, 14, 15], spawn: waveIds(10, 15), kind: 'bad', message: 'A hidden persistence task activated near the scan consoles.' },
-      { id: 'change-ambush-final', after: ['payroll-patch'], spawn: waveIds(15, rootkitWave.length), kind: 'bad', message: 'Rootkit persistence attempted to survive the approved patch.' },
+      { id: 'change-ambush-west', area: [6, 17, 14, 22], spawn: waveIds(1), kind: 'bad', message: 'A rootkit persistence record reappeared in the HR service zone.' },
+      { id: 'change-ambush-east', area: [25, 17, 33, 22], spawn: waveIds(2), kind: 'bad', message: 'Rootkit activity spread into payroll operations.' },
+      { id: 'change-ambush-upper', area: [6, 10, 14, 15], spawn: waveIds(3), kind: 'bad', message: 'A hidden persistence task activated near the scan consoles.' },
+      { id: 'change-ambush-northeast', area: [25, 10, 33, 15], spawn: waveIds(4), kind: 'bad', message: 'A scan-wing persistence task activated.' },
+      { id: 'change-ambush-final', after: ['payroll-patch'], spawn: ['rootkit-payroll-final'], kind: 'bad', message: 'Rootkit persistence attempted to survive the approved patch.' },
       { id: 'change-backtrack', after: ['fix-gaps'], openDoors: ['change-backtrack'], kind: 'good', message: 'The control gaps are covered: the return route is open.' },
       { id: 'change-queue', after: ['confirmed-hosts'], openDoors: ['change-queue'], kind: 'good', message: 'Confirmed vulnerable hosts are patched: the upper scan wing is open.' },
       { id: 'change-exit', after: ['docs', 'payroll-patch', 'fix-gaps', 'confirmed-hosts'], openDoors: ['change-exit'], kind: 'good', message: 'The change is complete and validated. Exit open.' },
