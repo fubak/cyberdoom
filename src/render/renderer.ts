@@ -96,7 +96,7 @@ void main() {
   vec3 c = texture2D(tScene, vUv).rgb;
   // Doom-style palette shift: push toward red but keep luminance structure
   float l = dot(c, vec3(0.3, 0.59, 0.11));
-  vec3 red = vec3(max(c.r, l * 1.35 + 0.06), c.g * 0.42, c.b * 0.38);
+  vec3 red = vec3(max(c.r, l * 1.7 + 0.2), c.g * 0.15, c.b * 0.12);
   c = mix(c, red, uHurt);
   float edge = uHurtSide > 0.0 ? smoothstep(0.62, 1.0, vUv.x) : smoothstep(0.38, 0.0, vUv.x);
   c = mix(c, vec3(max(c.r, 0.75), c.g * 0.2, c.b * 0.2), edge * abs(uHurtSide) * uHurt);
@@ -644,6 +644,10 @@ export class Renderer {
     (this.particleGeometry.getAttribute('size') as THREE.BufferAttribute).needsUpdate = true;
     (this.particleGeometry.getAttribute('minPx') as THREE.BufferAttribute).needsUpdate = true;
     this.particleGeometry.setDrawRange(0, count);
+  }
+
+  debugHurtUniform(): number {
+    return this.postMat.uniforms.uHurt.value as number;
   }
 
   /** Entity went away: malware dissolves; cleaned workstations stay as clean props. */

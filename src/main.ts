@@ -512,7 +512,7 @@ class Game {
       this.hud.pushMessage('Workstations are cleaned at arm\'s length: walk up and plug the scanner stick in.', 'warn');
     } else if (hit) {
       if (hit.infected) {
-        const dmg = hit.state.flagCorrect ? 2 : 1;
+        const dmg = hit.state.flagCorrect ? 4 : 2;
         const result = damageEntity(hit, dmg, dx, dy);
         this.bus.emit('tool-hit', { toolId: 'usb', entityId: hit.def.id, good: true });
         if (result === 'killed') {
@@ -520,12 +520,11 @@ class Game {
         } else {
           this.particles.burst(x, y, 0.4, 'hit');
           if (hit.def.kind === 'enemy') this.audio.sfx('enemy-pain', { x: hit.x, y: hit.y });
-          this.hud.pushMessage(`Hit${dmg > 1 ? ' x2 (flagged)' : ''}! ${hit.hp} more charge(s) needed.`, 'info');
         }
       } else {
         this.bus.emit('tool-hit', { toolId: 'usb', entityId: hit.def.id, good: false });
         this.bus.emit('scan-miss', { entityId: hit.def.id });
-        this.hud.pushMessage('The charge fizzles: that target is not infected.', 'warn');
+        this.hud.pushMessage('Scan session wasted: that target is not infected.', 'warn');
       }
     }
   }
@@ -561,7 +560,7 @@ class Game {
           this.resolveScannerHit(shot.hit, shot.x, shot.y, proj.dx, proj.dy, shot.dist);
           this.projectiles.push({
             ...proj,
-            speed: 60,
+            speed: 30,
             range: shot.dist,
             alive: true,
             traveled: 0,
@@ -604,6 +603,9 @@ class Game {
   private exposeDebug(): void {
     const g = this;
     (window as unknown as { __cd: unknown }).__cd = {
+      hurtUniform() {
+        return g.renderer.debugHurtUniform();
+      },
       state() {
         return {
           screen: g.screen,
