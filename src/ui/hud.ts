@@ -38,6 +38,9 @@ export class Hud {
   private look = 0;
   private grinT = 0;
   private cooldown = 0;
+  private tabHeld = false;
+  private objShowT = 0;
+  private lastObjKey = '';
 
   constructor(container: HTMLElement) {
     this.canvas = document.createElement('canvas');
@@ -48,6 +51,14 @@ export class Hud {
     this.g.imageSmoothingEnabled = false;
     container.appendChild(this.canvas);
     this.bar = paintBarBackground();
+    const onKey = (down: boolean) => (e: KeyboardEvent) => {
+      if (e.code !== 'Tab') return;
+      e.preventDefault();
+      this.tabHeld = down;
+    };
+    window.addEventListener('keydown', onKey(true));
+    window.addEventListener('keyup', onKey(false));
+    window.addEventListener('blur', () => (this.tabHeld = false));
   }
 
   pushMessage(text: string, kind = 'info'): void {
@@ -63,10 +74,13 @@ export class Hud {
 
   clearMessages(): void {
     this.messages = [];
+    this.objShowT = 3.5;
+    this.lastObjKey = '';
   }
 
   tick(dt: number): void {
     this.grinT = Math.max(0, this.grinT - dt);
+    this.objShowT = Math.max(0, this.objShowT - dt);
     this.time += dt;
     this.ouchT = Math.max(0, this.ouchT - dt);
     this.lookT -= dt;
@@ -117,50 +131,55 @@ export class Hud {
     }
     g.restore();
 
-    this.drawTicker();
-    this.drawObjectives(opts.objectives);
+    const objKey = opts.objectives.map((o) => (o.done ? 1 : o.failed ? 2 : 0)).join('');
+    if (this.lastObjKey && objKey !== this.lastObjKey) this.objShowT = 3.5;
+    this.lastObjKey = objKey;
+    if (this.tabHeld || this.objShowT > 0) this.drawObjectives(opts.objectives);
+    else this.drawTicker();
     this.drawBar(opts);
   }
 
+  /** Doom-style single-line ticker, top-left: newest message only. */
   private drawTicker(): void {
-    const g = this.g;
-    let y = 2;
-    for (const m of this.messages) {
-      const col = MSG_COL[m.kind] ?? MSG_COL.info;
-      // fade by stepping the colour off in the last half second (no alpha blur)
-      if (m.t < 0.4 && Math.floor(m.t * 20) % 2 === 0) {
-        y += wrapText(m.text, 30, 3).length * 8 + 1;
-        continue;
-      }
-      for (const line of wrapText(m.text, 30, 3)) {
-        drawText(g, line, 3, y, col, 'small', '#000');
-        y += 8;
-      }
-      y += 1;
-    }
+    const m = this.messages[this.messages.length - 1];
+    if (!m) return;
+    if (m.t < 0.4 && Math.floor(m.t * 20) % 2 === 0) return;
+    const line = wrapText(m.text.toUpperCase(), 52, 1)[0] ?? '';
+    drawText(this.g, line, 2, 2, MSG_COL[m.kind] ?? MSG_COL.info, 'small', '#000');
   }
 
+  /** Objectives overlay (hold TAB; also flashes up at mission start / on change). */
   private drawObjectives(objs: { text: string; done: boolean; failed: boolean }[]): void {
     const g = this.g;
-    let y = 3;
-    for (const o of objs) {
-      const col = o.failed ? '#ff5a3a' : o.done ? '#5aff6a' : '#c8ccd8';
-      const lines = wrapText(o.text.toUpperCase(), 30, 2);
-      const w = Math.max(...lines.map((l) => measureText(l, 'tiny')));
-      const x = VIEW_W - 4 - w;
+    const rows = objs.map((o) => ({ o, lines: wrapText(o.text.toUpperCase(), 46, 3) }));
+    const h = 14 + rows.reduce((n, r) => n + r.lines.length * 7 + 3, 0);
+    const w = 214;
+    const x0 = Math.round((VIEW_W - w) / 2);
+    const y0 = 6;
+    // dithered smoke backing (no alpha blending: stays crisp under the palette)
+    g.fillStyle = '#000';
+    for (let y = y0; y < y0 + h; y++) for (let x = x0 + ((y & 1) ? 1 : 0); x < x0 + w; x += 2) g.fillRect(x, y, 1, 1);
+    g.fillStyle = '#6a665e';
+    g.fillRect(x0, y0, w, 1);
+    g.fillRect(x0, y0 + h - 1, w, 1);
+    drawText(g, 'OBJECTIVES', x0 + 4, y0 + 3, '#ffd040', 'small', '#000');
+    drawText(g, 'HOLD TAB', x0 + w - 4 - measureText('HOLD TAB', 'tiny'), y0 + 4, '#8a90a0', 'tiny', '#000');
+    let y = y0 + 13;
+    for (const { o, lines } of rows) {
+      const col = o.failed ? '#ff5a3a' : o.done ? '#5aff6a' : '#e8e4dc';
       g.fillStyle = '#000';
-      g.fillRect(x - 7, y, 5, 5);
+      g.fillRect(x0 + 4, y, 6, 6);
       g.fillStyle = o.failed ? '#e01e10' : o.done ? '#2ad83a' : '#5a6070';
-      g.fillRect(x - 6, y + 1, 3, 3);
+      g.fillRect(x0 + 5, y + 1, 4, 4);
       for (const line of lines) {
-        drawText(g, line, x, y, col, 'tiny', '#000');
+        drawText(g, line, x0 + 14, y, col, 'tiny', '#000');
         if (o.done || o.failed) {
           g.fillStyle = col;
-          g.fillRect(x, y + 2, measureText(line, 'tiny'), 1);
+          g.fillRect(x0 + 14, y + 2, measureText(line, 'tiny'), 1);
         }
-        y += 6;
+        y += 7;
       }
-      y += 2;
+      y += 3;
     }
   }
 
@@ -184,7 +203,7 @@ export class Hud {
     const crit = hp < 25 && Math.floor(this.time * 4) % 2 === 0;
     const hpRamp = hp >= 50 ? RED : crit ? AMBER : RED;
     bigCentered(g, `${hp}%`, P_INT, by + 6, hpRamp);
-    label(g, 'INTEGRITY', P_INT, by + 24);
+    label(g, 'INTEGRITY', P_INT, by + 21);
 
     // AMMO / bandwidth
     if (o.ammo === null) {
@@ -197,10 +216,10 @@ export class Hud {
       g.fillRect(lx + 1, by + 8, 14, 10);
       g.fillStyle = ready ? '#8aff9a' : '#ffa818';
       g.fillRect(lx + 2, by + 9, 12, 3);
-      label(g, ready ? 'READY' : 'BUSY', P_AMMO, by + 24, ready ? '#5aff6a' : '#ffc030');
+      label(g, ready ? 'READY' : 'BUSY', P_AMMO, by + 21, ready ? '#5aff6a' : '#ffc030');
     } else {
       bigCentered(g, `${o.ammo}`, P_AMMO, by + 6, o.ammo === 0 ? RED : AMBER);
-      label(g, o.ammoName.toUpperCase().slice(0, 11), P_AMMO, by + 24);
+      label(g, o.ammoName.toUpperCase().slice(0, 11), P_AMMO, by + 21);
     }
 
     // TOOLS grid (Doom ARMS)
@@ -219,7 +238,7 @@ export class Hud {
       g.fillRect(x, y, 13, 1);
       drawText(g, `${slot}`, x + 5, y + 1, active ? '#fff0a0' : owned ? '#ffa818' : '#3a3e48', 'small', '#000');
     }
-    label(g, o.tool.name.toUpperCase().slice(0, 12), P_TOOLS, by + 22, '#ffd040');
+    label(g, o.tool.name.toUpperCase().slice(0, 12), P_TOOLS, by + 20, '#ffd040');
 
     // FACE
     if (o.face) o.face(g, P_FACE[0] + 4, by + 2);
@@ -243,13 +262,13 @@ export class Hud {
     g.fillRect(cx + 9, cy + 7, 5, 1);
     g.fillRect(cx + 9, cy + 9, 4, 1);
     drawText(g, o.credentials.toUpperCase().slice(0, 7), cx + 20, cy + 3, rc.light, 'small', '#000');
-    label(g, 'CREDENTIAL', P_CRED, by + 24);
+    label(g, 'CREDENTIAL', P_CRED, by + 21);
 
     // OBJECTIVES n/m
     const done = o.objectives.filter((x) => x.done).length;
     const failed = o.objectives.some((x) => x.failed);
     bigCentered(g, `${done}/${o.objectives.length}`, P_OBJ, by + 6, failed ? RED : done === o.objectives.length ? GREEN : GREEN.slice(1));
-    label(g, failed ? 'FAILED' : 'OBJECTIVES', P_OBJ, by + 24, failed ? '#ff5a3a' : undefined);
+    label(g, failed ? 'FAILED' : 'OBJ  TAB', P_OBJ, by + 21, failed ? '#ff5a3a' : undefined);
   }
 
   /** 26x28 procedural analyst portrait; reacts to damage like Doom's face. */
@@ -289,11 +308,18 @@ export class Hud {
     px(hair[0], 7, 1, 12, 1);
     px(hair[2], 6, 5, 14, 1);
     if (gender === 'female') {
-      px(hair[0], 3, 5, 3, 16);
-      px(hair[0], 20, 5, 3, 16);
-      px(hair[1], 3, 18, 3, 3);
-      px(hair[1], 20, 18, 3, 3);
-      px(hair[0], 8, 5, 6, 2);
+      // long hair falling past the shoulders, side-swept fringe
+      px(hair[0], 2, 4, 4, 22);
+      px(hair[0], 20, 4, 4, 22);
+      px(hair[1], 2, 20, 4, 6);
+      px(hair[1], 20, 20, 4, 6);
+      px(hair[2], 5, 8, 1, 14);
+      px(hair[2], 20, 8, 1, 14);
+      px(hair[0], 6, 5, 9, 3);
+      px(hair[0], 6, 8, 3, 2);
+      px('#c8a050', 9, 3, 4, 1); // highlight
+      px('#ffd040', 5, 15, 1, 2); // earring
+      px('#ffd040', 20, 15, 1, 2);
     } else {
       px(hair[0], 14, 5, 5, 1);
     }
@@ -319,6 +345,12 @@ export class Hud {
         px(hair[1], 16, ey - 3, 2, 1); // furrowed
       }
     }
+    if (gender === 'female' && tier < 4) {
+      px('#1a0c08', 7, ey - 1, 1, 1);
+      px('#1a0c08', 18, ey - 1, 1, 1);
+      px('#1a0c08', 8, ey - 1, 3, 1);
+      px('#1a0c08', 15, ey - 1, 3, 1);
+    }
     // nose
     px(pale[2], 12, 13, 2, 3);
     px(pale[3], 12, 16, 2, 1);
@@ -336,17 +368,31 @@ export class Hud {
       px('#5a1a10', 10, 18, 6, 1);
       px('#5a1a10', 9, 19, 1, 1);
       px('#5a1a10', 16, 19, 1, 1);
+    } else if (gender === 'female') {
+      px('#c8283a', 10, 18, 6, 1);
+      px('#e85a6a', 11, 17, 4, 1);
+      px('#8a1020', 11, 19, 4, 1);
     } else px('#8a3020', 10, 18, 6, 1);
     // damage marks by tier
-    if (tier >= 1) px('#c83a2a', 17, 8, 2, 2); // scrape
+    if (tier >= 1) {
+      px('#d83a2a', 16, 7, 3, 2); // scrape
+      px('#8a1a10', 17, 9, 1, 2);
+    }
     if (tier >= 2) {
-      px('#a01a10', 7, 7, 2, 3);
+      px('#c01810', 7, 6, 3, 4); // cut brow, blood runs down
+      px('#9a120a', 8, 10, 1, 5);
+      px('#6a4a8a', 15, 9, 4, 1); // bruise under eye
+      px('#6a4a8a', 15, 13, 4, 1);
       px('#7ab8ff', 19, 12, 1, 3); // sweat
     }
     if (tier >= 3) {
-      px('#a01a10', 9, 14, 1, 4);
-      px('#a01a10', 16, 15, 2, 4);
-      px('#5a1a10', 6, 16, 2, 2);
+      px('#b01008', 9, 14, 2, 6); // bloodied cheek + nose
+      px('#d02010', 12, 16, 2, 3);
+      px('#b01008', 16, 14, 3, 6);
+      px('#7a0a06', 10, 20, 7, 2);
+      px('#4a2a6a', 14, 9, 5, 5); // swollen eye
+      px('#e8e8e8', 15, 11, 3, 1);
+      px('#c01810', 4, 21, 18, 2); // blood on collar
     }
     if (tier === 4) px('#000', 0, 0, 26, 1);
   }
@@ -360,40 +406,64 @@ function label(g: CanvasRenderingContext2D, text: string, p: Panel, y: number, c
   drawText(g, text, p[0] + Math.round((p[1] - measureText(text, 'tiny')) / 2), y, col, 'tiny', '#000');
 }
 
-/** Static bar art: riveted gunmetal panels with bevelled insets. */
+/** Static bar art: bold Doom-grey stone/steel plate, thick bevels, recessed wells. */
 function paintBarBackground(): HTMLCanvasElement {
   const c = document.createElement('canvas');
   c.width = VIEW_W;
   c.height = STATUS_H;
   const g = c.getContext('2d')!;
-  // base plate with subtle procedural grain
   let s = 1337;
   const r = () => ((s = (s * 16807) % 2147483647) / 2147483647);
   for (let y = 0; y < STATUS_H; y++) {
     for (let x = 0; x < VIEW_W; x++) {
-      const v = 46 + Math.floor(r() * 10) - (y > STATUS_H - 3 ? 14 : 0);
-      g.fillStyle = `rgb(${v},${v + 4},${v + 12})`;
+      const v = 104 + Math.floor(r() * 18) - (r() < 0.04 ? 26 : 0);
+      g.fillStyle = `rgb(${v + 4},${v},${v - 8})`;
       g.fillRect(x, y, 1, 1);
     }
   }
-  g.fillStyle = '#8a92a8';
+  // outer bevel: 2px light top, 2px dark bottom
+  g.fillStyle = '#e4dccc';
   g.fillRect(0, 0, VIEW_W, 1);
-  g.fillStyle = '#5a6278';
+  g.fillStyle = '#b8b0a2';
   g.fillRect(0, 1, VIEW_W, 1);
+  g.fillStyle = '#3a362e';
+  g.fillRect(0, STATUS_H - 1, VIEW_W, 1);
+  g.fillStyle = '#5a554a';
+  g.fillRect(0, STATUS_H - 2, VIEW_W, 1);
   for (const [x, w] of [P_INT, P_AMMO, P_TOOLS, P_FACE, P_CRED, P_OBJ]) {
-    // inset well
-    g.fillStyle = '#14161c';
-    g.fillRect(x + 2, 3, w - 4, STATUS_H - 5);
-    g.fillStyle = '#0a0b0e';
-    g.fillRect(x + 2, 3, w - 4, 1);
-    g.fillRect(x + 2, 3, 1, STATUS_H - 5);
-    g.fillStyle = '#6a7288';
-    g.fillRect(x + 2, STATUS_H - 2, w - 4, 1);
-    g.fillRect(x + w - 2, 3, 1, STATUS_H - 4);
-    // rivets between panels
-    g.fillStyle = '#9aa2b8';
-    g.fillRect(x, 4, 1, 1);
-    g.fillRect(x, STATUS_H - 4, 1, 1);
+    // raised ridge between panels
+    g.fillStyle = '#d8d0c0';
+    g.fillRect(x, 2, 1, STATUS_H - 4);
+    g.fillStyle = '#4a463c';
+    g.fillRect(x + 1, 2, 1, STATUS_H - 4);
+    // recessed well: dark top/left, light bottom/right, 2px each
+    const wx = x + 3;
+    const ww = w - 6;
+    g.fillStyle = '#2a2722';
+    g.fillRect(wx, 4, ww, STATUS_H - 8);
+    for (let yy = 5; yy < STATUS_H - 5; yy++) {
+      for (let xx = wx + 1; xx < wx + ww - 1; xx++) {
+        if (r() < 0.12) {
+          g.fillStyle = '#34302a';
+          g.fillRect(xx, yy, 1, 1);
+        }
+      }
+    }
+    g.fillStyle = '#151310';
+    g.fillRect(wx, 4, ww, 2);
+    g.fillRect(wx, 4, 2, STATUS_H - 8);
+    g.fillStyle = '#cfc6b4';
+    g.fillRect(wx, STATUS_H - 5, ww, 1);
+    g.fillRect(wx + ww - 1, 4, 1, STATUS_H - 8);
+    g.fillStyle = '#8a8476';
+    g.fillRect(wx + 1, STATUS_H - 6, ww - 1, 1);
+    // rivets
+    for (const [rx, ry] of [[x + 3, 2], [x + w - 4, 2]]) {
+      g.fillStyle = '#f0e8d8';
+      g.fillRect(rx, ry, 1, 1);
+      g.fillStyle = '#2a2722';
+      g.fillRect(rx + 1, ry + 1, 1, 1);
+    }
   }
   return c;
 }

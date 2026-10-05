@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Registry } from '../core/registry';
 import { drawText } from './font';
+import { limb, rasterize, type Prim, type V3 } from './model';
 import { packTexture, paintRaw, pxEllipse, type PaintCtx } from './pixel';
 
 /**
@@ -37,7 +38,6 @@ function makeSet(id: string, cw: number, ch: number, worldH: number, anim: Sprit
     if (!firstRaw) firstRaw = raw;
     out[f.key] = packTexture(cw, ch, raw, { sprite: true, shade: true, mirror: f.mirror });
   }
-  if (anim === 'monster' && firstRaw) out.pain = painFrame(cw, ch, firstRaw);
   if (dissolve && firstRaw) {
     for (let k = 0; k < 4; k++) out[`die${k}`] = dissolveFrame(cw, ch, firstRaw, k, id);
   }
@@ -45,27 +45,6 @@ function makeSet(id: string, cw: number, ch: number, worldH: number, anim: Sprit
   spriteSets.register(id, set);
   spriteRegistry.register(id, out[frames[0].key]);
   return set;
-}
-
-/** Pain frame: recoils up/back 2px and flares hot white-red. */
-function painFrame(w: number, h: number, raw: ReturnType<typeof paintRaw>): THREE.Texture {
-  const rgba = new Uint8ClampedArray(w * h * 4);
-  const glow = new Uint8ClampedArray(w * h * 4);
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      const i = (y * w + x) * 4;
-      if (raw.rgba[i + 3] < 128) continue;
-      const nx = Math.min(w - 1, x + (y < h / 2 ? 1 : 0));
-      const ny = Math.max(0, y - 2);
-      const o = (ny * w + nx) * 4;
-      rgba[o] = Math.min(255, raw.rgba[i] * 0.6 + 120);
-      rgba[o + 1] = Math.min(255, raw.rgba[i + 1] * 0.6 + 60);
-      rgba[o + 2] = Math.min(255, raw.rgba[i + 2] * 0.6 + 50);
-      rgba[o + 3] = 255;
-      glow[o + 3] = raw.glow[i + 3];
-    }
-  }
-  return packTexture(w, h, { rgba, glow }, { sprite: true, shade: true });
 }
 
 /** "Quarantine" death: the sprite breaks into green fullbright pixels and scatters. */
@@ -104,179 +83,176 @@ function lit(p: PaintCtx, color: string, x: number, y: number, w: number, h: num
 
 // ---------------------------------------------------------------- malware
 
-function worm(phase: number, attack: boolean): Draw {
-  return (p) => {
-    const { g } = p;
-    const segs = 6;
-    const pts: [number, number, number][] = [];
-    for (let i = 0; i < segs; i++) {
-      const t = i / (segs - 1);
-      const x = 32 + Math.sin(i * 1.1 + phase) * (3 + t * 3) + (attack ? t * t * 6 : 0);
-      const y = 58 - t * (attack ? 34 : 38);
-      const r = 9 - t * 2.5;
-      pts.push([x, y, r]);
-    }
-    for (let i = 0; i < segs; i++) {
-      const [x, y, r] = pts[i];
-      pxEllipse(g, x, y, r + 1, r * 0.8, '#5a0c08');
-      pxEllipse(g, x, y - 1, r, r * 0.72, i % 2 ? '#c42a1a' : '#a8200f');
-      pxEllipse(g, x - 1, y + 1, r * 0.55, r * 0.3, '#f07a4a');
-      // spines
-      g.fillStyle = '#2a0604';
-      g.fillRect(Math.round(x - 1), Math.round(y - r * 0.8 - 3), 2, 3);
-    }
-    // head
-    const [hx, hy] = [pts[segs - 1][0], pts[segs - 1][1] - 8];
-    pxEllipse(g, hx, hy, 11, 9, '#b8200f');
-    pxEllipse(g, hx, hy + 3, 8, 4, '#7a1208');
-    // mandibles
-    g.fillStyle = '#ecd8a8';
-    g.fillRect(Math.round(hx - 10), Math.round(hy + 4), 3, 7);
-    g.fillRect(Math.round(hx + 7), Math.round(hy + 4), 3, 7);
-    g.fillRect(Math.round(hx - 8), Math.round(hy + 10), 3, 2);
-    g.fillRect(Math.round(hx + 5), Math.round(hy + 10), 3, 2);
-    if (attack) {
-      pxEllipse(g, hx, hy + 5, 5, 4, '#200000');
-      lit(p, '#ff4020', Math.round(hx - 3), Math.round(hy + 4), 6, 3);
-    }
-    // glowing compound eyes
-    lit(p, '#ffe040', Math.round(hx - 7), Math.round(hy - 3), 4, 3);
-    lit(p, '#ffe040', Math.round(hx + 3), Math.round(hy - 3), 4, 3);
-    lit(p, '#ffffff', Math.round(hx - 6), Math.round(hy - 3), 1, 1);
-    lit(p, '#ffffff', Math.round(hx + 4), Math.round(hy - 3), 1, 1);
-    // antennae
-    g.fillStyle = '#2a0604';
-    g.fillRect(Math.round(hx - 5), Math.round(hy - 14), 1, 6);
-    g.fillRect(Math.round(hx + 5), Math.round(hy - 14), 1, 6);
-    lit(p, '#ff6030', Math.round(hx - 6), Math.round(hy - 16), 3, 2);
-    lit(p, '#ff6030', Math.round(hx + 4), Math.round(hy - 16), 3, 2);
-  };
-}
+// ---------------------------------------------------------------- malware (3D-modelled)
 
-function trojan(phase: number, attack: boolean): Draw {
-  return (p) => {
-    const { g } = p;
-    const lift = attack ? 14 : 2 + Math.round(Math.abs(Math.sin(phase)) * 3);
-    // spider legs (the giveaway)
-    g.fillStyle = '#16101c';
-    for (let k = 0; k < 3; k++) {
-      const sw = (k + (phase > 1.5 ? 1 : 0)) % 2 ? 2 : -2;
-      g.fillRect(12 - k * 3 + sw, 50 + k, 6, 2);
-      g.fillRect(9 - k * 3 + sw, 52 + k, 2, 8 - k);
-      g.fillRect(46 + k * 3 - sw, 50 + k, 6, 2);
-      g.fillRect(53 + k * 3 - sw, 52 + k, 2, 8 - k);
+type Pose = { kind: 'walk'; k: number } | { kind: 'attack'; k: 0 | 1 } | { kind: 'pain' };
+type Model = (pose: Pose) => Prim[];
+
+const ell = (c: V3, r: V3, col: string, extra: Partial<Prim> = {}): Prim => ({ shape: 'ell', c, r, col, ...extra });
+const box = (c: V3, r: V3, col: string, extra: Partial<Prim> = {}): Prim => ({ shape: 'box', c, r, col, ...extra });
+const walkPhase = (p: Pose) => (p.kind === 'walk' ? (p.k * Math.PI) / 2 : 0);
+
+/** Worm: a rearing, segmented red centipede; tail trails behind on the floor. */
+const wormModel: Model = (pose) => {
+  const out: Prim[] = [];
+  const ph = walkPhase(pose);
+  const atk = pose.kind === 'attack' ? pose.k : -1;
+  const lean = atk === 0 ? -7 : atk === 1 ? 8 : pose.kind === 'pain' ? -9 : 0;
+  const lift = atk === 0 ? 3 : pose.kind === 'pain' ? -3 : Math.sin(ph * 2) * 1;
+  const segs = 8;
+  let last: V3 = [0, 0, 0];
+  for (let i = 0; i < segs; i++) {
+    const t = i / (segs - 1);
+    const x = Math.sin(i * 0.9 + ph) * 4.5 * (1 - t * 0.6);
+    const y = 5 + Math.pow(t, 1.25) * (39 + lift);
+    const z = -20 * Math.pow(1 - t, 1.6) + lean * t * t;
+    const r = 8.5 - t * 3;
+    out.push(ell([x, y, z], [r, r * 0.8, r], i % 2 ? '#c42a1a' : '#a0200f', {
+      decal: (l) => (l[2] > r * 0.4 && Math.abs(l[0]) < r * 0.55 ? (Math.abs(l[1]) < r * 0.22 ? '#ffb080' : '#e8643a') : null),
+    }));
+    out.push(ell([x, y + r * 0.72, z - r * 0.3], [1.3, 2.8, 1.3], '#2a0604', { pitch: -0.4 }));
+    const sw = Math.sin(ph + i * 1.3) * 2.5;
+    for (const sx of [-1, 1]) limb(out, [x + sx * r * 0.8, y - r * 0.3, z], [x + sx * (r + 4), y - r * 0.9 - 2, z + sx * sw], 1.3, '#3a0604');
+    last = [x, y, z];
+  }
+  const [hx, hy0, hz0] = last;
+  const hy = hy0 + 9;
+  const hz = hz0 + 3;
+  out.push(ell([hx, hy, hz], [10.5, 8.5, 10], '#b8200f'));
+  out.push(ell([hx, hy - 5, hz + 2], [8, 3.6, 7.5], '#6a1006'));
+  for (const sx of [-1, 1]) {
+    out.push(ell([hx + sx * 4.6, hy + 1.6, hz + 8.4], [2.7, 2.3, 1.6], '#ffe040', { glow: true }));
+    out.push(ell([hx + sx * 4.2, hy + 2.2, hz + 9.6], [0.9, 0.9, 0.6], '#ffffff', { glow: true }));
+    out.push(ell([hx + sx * 4.6, hy + 4.4, hz + 7.4], [3.6, 1.3, 2], '#4a0806', { roll: sx * 0.35 }));
+    const open = atk === 1 ? 10 : atk === 0 ? 7 : 5;
+    limb(out, [hx + sx * 6, hy - 4, hz + 6], [hx + sx * open, hy - 11, hz + 10], 1.7, '#ecd8a8');
+    limb(out, [hx + sx * 3, hy + 7, hz - 1], [hx + sx * 7, hy + 15, hz - 5], 0.9, '#2a0604');
+    out.push(ell([hx + sx * 7, hy + 15.5, hz - 5], [1.6, 1.6, 1.6], '#ff6030', { glow: true }));
+  }
+  if (atk >= 0 || pose.kind === 'pain') out.push(ell([hx, hy - 4, hz + 8.6], [4.2, 3, 1.4], atk === 1 ? '#ffd040' : '#ff4020', { glow: true }));
+  return out;
+};
+
+/** Trojan: a "free gift" box stalking on six spider legs; the lid hides fangs. */
+const trojanModel: Model = (pose) => {
+  const out: Prim[] = [];
+  const ph = walkPhase(pose);
+  const bob = pose.kind === 'walk' ? Math.abs(Math.sin(ph)) * 2 : 0;
+  const atk = pose.kind === 'attack' ? pose.k : -1;
+  const lid = atk === 0 ? 7 : atk === 1 ? 13 : pose.kind === 'pain' ? 9 : 2.5;
+  const by = 36 + bob;
+  const ribbon = (l: V3) => (Math.abs(l[0]) < 2.6 || Math.abs(l[2]) < 2.6 ? (Math.abs(l[0]) < 0.9 || Math.abs(l[2]) < 0.9 ? '#fff0a0' : '#e8c020') : null);
+  for (let k = 0; k < 3; k++) {
+    const z = (k - 1) * 7;
+    for (const sx of [-1, 1]) {
+      const swing = Math.sin(ph + k * 2.1 + (sx > 0 ? Math.PI : 0)) * 4;
+      const up = Math.max(0, swing) * 0.8;
+      const hip: V3 = [sx * 11, by - 4, z];
+      const knee: V3 = [sx * 18, by + 7, z * 1.3 + swing * 0.5];
+      const foot: V3 = [sx * 15, 1.5 + up, z * 1.7 + swing];
+      limb(out, hip, knee, 1.9, '#1c1224');
+      limb(out, knee, foot, 1.6, '#24182e');
+      out.push(ell(knee, [2.6, 2.6, 2.6], '#4a3460'));
+      out.push(ell(foot, [2.2, 1.4, 2.4], '#0c0810'));
     }
-    // box body
-    g.fillStyle = '#7a2aa8';
-    g.fillRect(14, 30, 36, 24);
-    g.fillStyle = '#5a1a80';
-    g.fillRect(14, 48, 36, 6);
-    // ribbon vertical + horizontal
-    g.fillStyle = '#e8c020';
-    g.fillRect(29, 30, 6, 24);
-    g.fillStyle = '#b08a10';
-    g.fillRect(34, 30, 1, 24);
-    // interior / teeth gap
-    if (attack) {
-      g.fillStyle = '#1a0420';
-      g.fillRect(14, 30 - lift, 36, lift);
-      lit(p, '#ff40c0', 18, 30 - lift + 3, 28, lift - 5);
-      g.fillStyle = '#f4f0e0';
-      for (let x = 15; x < 49; x += 4) {
-        g.fillRect(x, 30 - lift, 3, 4);
-        g.fillRect(x + 1, 27, 3, 3);
+  }
+  out.push(box([0, by, 0], [12.5, 9.5, 10.5], '#7a2aa8', { decal: ribbon }));
+  out.push(box([0, by - 9.5, 0], [12.6, 0.8, 10.6], '#4a1868'));
+  const gapY = by + 9.5 + lid / 2;
+  if (lid > 3) {
+    out.push(box([0, gapY, 0], [11.5, lid / 2, 9.5], '#12041a'));
+    for (const sx of [-1, 1]) out.push(ell([sx * 5, gapY + 0.5, 9.6], [2.6, Math.min(2.2, lid / 2 - 0.5), 1], '#ff60ff', { glow: true }));
+    if (atk >= 0) {
+      for (let x = -10; x <= 10; x += 4) {
+        out.push(box([x, by + 10.5, 9.9], [1.2, 1.4, 0.5], '#f4f0e0'));
+        out.push(box([x + 2, by + 9.5 + lid - 1, 10.6], [1.2, 1.4, 0.5], '#f4f0e0'));
       }
-    } else {
-      g.fillStyle = '#12041a';
-      g.fillRect(15, 30 - lift, 34, lift);
-      lit(p, '#ff60ff', 21, 30 - lift, 4, Math.max(1, lift - 1));
-      lit(p, '#ff60ff', 39, 30 - lift, 4, Math.max(1, lift - 1));
+      out.push(box([0, gapY - 1, 8], [8, 1, 1], '#ff40c0', { glow: true }));
     }
-    // lid
-    const ly = 22 - lift;
-    g.fillStyle = '#8e36c4';
-    g.fillRect(12, ly, 40, 9);
-    g.fillStyle = '#e8c020';
-    g.fillRect(29, ly, 6, 9);
-    // bow
-    pxEllipse(g, 25, ly - 4, 6, 4, '#f0d030');
-    pxEllipse(g, 39, ly - 4, 6, 4, '#f0d030');
-    pxEllipse(g, 25, ly - 4, 2, 1, '#9a7808');
-    pxEllipse(g, 39, ly - 4, 2, 1, '#9a7808');
-    g.fillStyle = '#c89a10';
-    g.fillRect(30, ly - 6, 4, 5);
-    // gift tag "FREE"
-    g.fillStyle = '#f4ecd8';
-    g.fillRect(40, 36, 13, 7);
-    drawText(g, 'FREE', 41, 37, '#c01818', 'tiny', null);
-  };
-}
+  }
+  const ly = by + 9.5 + lid + 2.5;
+  out.push(box([0, ly, 0], [14, 2.5, 12], '#9a3ad0', { decal: ribbon, pitch: atk === 1 ? -0.25 : 0 }));
+  for (const sx of [-1, 1]) out.push(ell([sx * 4.8, ly + 5, 0], [5, 3.4, 2.4], '#f0d030', { roll: sx * 0.5 }));
+  out.push(ell([0, ly + 3.6, 0], [2.4, 2.2, 2.4], '#c89a10'));
+  out.push(box([9, by - 1, 11.2], [3.6, 2.6, 0.5], '#f4ecd8', { decal: (l) => (Math.abs(l[1]) < 0.8 && Math.abs(l[0]) < 2.6 ? '#c01818' : null), roll: 0.2 }));
+  return out;
+};
 
-function ransomware(phase: number, attack: boolean): Draw {
-  return (p) => {
-    const { g } = p;
-    const arm = attack ? -10 : Math.round(Math.sin(phase) * 3);
-    // shackle horns
-    g.fillStyle = '#9aa2b0';
-    for (let a = 0; a <= 20; a++) {
-      const t = (a / 20) * Math.PI;
-      const x = 32 - Math.cos(t) * 13;
-      const y = 22 - Math.sin(t) * 16;
-      g.fillRect(Math.round(x) - 2, Math.round(y) - 1, 5, 4);
-    }
-    g.fillStyle = '#d8e0ec';
-    for (let a = 2; a <= 18; a += 2) {
-      const t = (a / 20) * Math.PI;
-      g.fillRect(Math.round(32 - Math.cos(t) * 13) - 1, Math.round(22 - Math.sin(t) * 16) - 1, 2, 1);
-    }
-    // chained arms
-    g.fillStyle = '#6a3a0a';
-    g.fillRect(6, 28 + arm, 8, 18);
-    g.fillRect(50, 28 + arm, 8, 18);
-    g.fillStyle = '#2a1404';
-    for (let k = 0; k < 3; k++) {
-      g.fillRect(4, 26 + arm - k * 2, 3, 3);
-      g.fillRect(57, 26 + arm - k * 2, 3, 3);
-    }
-    g.fillStyle = '#9aa2b0';
-    for (let y = 46 + arm; y < 62; y += 4) {
-      g.fillRect(8, y, 3, 2);
-      g.fillRect(53, y, 3, 2);
-    }
-    // padlock body
-    g.fillStyle = '#d8740c';
-    g.fillRect(12, 22, 40, 36);
-    g.fillStyle = '#f0a030';
-    g.fillRect(12, 22, 40, 3);
-    g.fillStyle = '#8a4404';
-    g.fillRect(12, 52, 40, 6);
-    for (let y = 28; y < 52; y += 6) {
-      g.fillStyle = '#b85a08';
-      g.fillRect(14, y, 36, 1);
-    }
-    // angry brows + eyes
-    g.fillStyle = '#3a1802';
-    g.fillRect(17, 28, 10, 2);
-    g.fillRect(37, 28, 10, 2);
-    g.fillRect(25, 30, 3, 2);
-    g.fillRect(36, 30, 3, 2);
-    lit(p, '#ff2010', 19, 31, 6, 4);
-    lit(p, '#ff2010', 39, 31, 6, 4);
-    lit(p, '#ffe0a0', 21, 32, 2, 2);
-    lit(p, '#ffe0a0', 41, 32, 2, 2);
-    // keyhole mouth
-    pxEllipse(g, 32, 41, 5, 4, '#140600');
-    g.fillStyle = '#140600';
-    g.fillRect(29, 43, 7, 10);
-    if (attack) lit(p, '#ff3010', 30, 39, 5, 12);
-    else lit(p, '#a01808', 31, 44, 3, 6);
-    // ransom note scrap
-    g.fillStyle = '#ece4cc';
-    g.fillRect(40, 46, 10, 8);
-    drawText(g, '$', 43, 47, '#1a7a20', 'tiny', null);
-  };
-}
+/** Ransomware: a hulking padlock brute with chained fists and a keyhole maw. */
+const ransomModel: Model = (pose) => {
+  const out: Prim[] = [];
+  const ph = walkPhase(pose);
+  const atk = pose.kind === 'attack' ? pose.k : -1;
+  const pain = pose.kind === 'pain';
+  const bob = pose.kind === 'walk' ? Math.abs(Math.sin(ph)) * 1.5 : 0;
+  for (const sx of [-1, 1]) {
+    const sw = pose.kind === 'walk' ? Math.sin(ph) * 5 * sx : 0;
+    out.push(box([sx * 7, 10 + Math.max(0, -sw) * 0.4, sw], [4.5, 9.5, 5], '#5a3a1a'));
+    out.push(box([sx * 7, 2, sw + 1.5], [5.5, 2, 6.5], '#2a1808'));
+  }
+  const body = 33 + bob;
+  out.push(box([0, body, 0], [15, 13, 10], '#d8740c', {
+    roll: pain ? 0.14 : 0,
+    decal: (l) => (Math.abs(((l[1] + 13) % 6) - 0) < 0.8 ? '#a05408' : l[1] > 11.6 ? '#ffb040' : null),
+  }));
+  const mouth = atk >= 0 ? '#ff3010' : '#140600';
+  out.push(ell([0, body + 1, 10.2], [3.2, 3.2, 1], mouth, { glow: atk >= 0 }));
+  out.push(box([0, body - 4, 10.2], [1.7, 4.2, 1], mouth, { glow: atk >= 0 }));
+  for (const sx of [-1, 1]) {
+    out.push(ell([sx * 7, body + 7, 10.3], [3, 2.3, 1], pain ? '#ffffff' : '#ff2010', { glow: true }));
+    out.push(box([sx * 7, body + 10.2, 10.6], [4.2, 1, 1], '#3a1802', { roll: sx * (pain ? -0.3 : 0.35) }));
+  }
+  const open = atk === 1 ? 5 : 0;
+  for (let a = 0; a <= 16; a++) {
+    const t = (a / 16) * Math.PI;
+    const x = Math.cos(t) * 10;
+    const y = body + 13 + Math.sin(t) * 13 + (x < 0 ? open : 0);
+    out.push(ell([x, y, 0], [3, 3, 3.6], a % 4 === 0 ? '#d8e0ec' : '#9aa2b0'));
+  }
+  for (const sx of [-1, 1]) {
+    const hand: V3 = atk === 0 ? [sx * 14, body + 24, 4] : atk === 1 ? [sx * 12, body + 6, 11] : pain ? [sx * 21, body + 14, -2] : [sx * 18, body - 10 + Math.sin(ph + (sx > 0 ? Math.PI : 0)) * 2, 3];
+    limb(out, [sx * 15, body + 8, 0], hand, 3.4, '#6a3a0a');
+    out.push(ell(hand, [4.6, 4.6, 4.6], '#4a2808'));
+    for (let k = 1; k <= 3; k++) out.push(ell([hand[0], hand[1] - 3 - k * 3.2, hand[2]], [1.4, 2, 1], '#b8c0cc', { roll: k % 2 ? 0 : 0.6 }));
+  }
+  return out;
+};
 
+function makeMonster(id: string, worldH: number, model: Model): void {
+  const W = 64;
+  const H = 64;
+  const frames: Record<string, THREE.Texture> = {};
+  const poses: [string, Pose][] = [
+    ['walk0', { kind: 'walk', k: 0 }],
+    ['walk1', { kind: 'walk', k: 1 }],
+    ['walk2', { kind: 'walk', k: 2 }],
+    ['walk3', { kind: 'walk', k: 3 }],
+    ['attack0', { kind: 'attack', k: 0 }],
+    ['attack1', { kind: 'attack', k: 1 }],
+    ['pain', { kind: 'pain' }],
+  ];
+  // 5 drawn rotations (front, 3/4, side, rear 3/4, back), 3 mirrored → 8
+  for (const [key, pose] of poses) {
+    const prims = model(pose);
+    for (let r = 0; r <= 4; r++) {
+      const raw = rasterize(W, H, prims, { view: (r * Math.PI) / 4, ...(pose.kind === 'pain' ? { tint: [255, 120, 80] as V3, tintT: 0.2 } : {}) });
+      frames[`${key}_${r}`] = packTexture(W, H, raw, { sprite: true });
+      if (r >= 1 && r <= 3) frames[`${key}_${8 - r}`] = packTexture(W, H, raw, { sprite: true, mirror: true });
+    }
+    frames[key] = frames[`${key}_0`];
+  }
+  frames.attack = frames.attack1;
+  // death: the model slumps and collapses, then dissolves into quarantine-green pixels
+  const base = model({ kind: 'pain' });
+  for (let k = 0; k < 5; k++) {
+    const sq = 1 - k * 0.19;
+    const prims = base.map((p) => ({ ...p, c: [p.c[0] * (1 + k * 0.14), p.c[1] * sq + k * 0.6, p.c[2] * (1 + k * 0.1)] as V3, r: [p.r[0], p.r[1] * (1 - k * 0.1), p.r[2]] as V3 }));
+    const raw = rasterize(W, H, prims, { view: 0, tint: [44, 255, 90], tintT: 0.12 + k * 0.14 });
+    frames[`die${k}`] = k === 0 ? packTexture(W, H, raw, { sprite: true }) : dissolveFrame(W, H, raw, k - 1, id);
+  }
+  spriteSets.register(id, { w: (worldH * W) / H, h: worldH, frames, anim: 'monster' });
+  spriteRegistry.register(id, frames.walk0);
+}
 // ---------------------------------------------------------------- devices
 
 function workstation(state: 'clean' | 'infected', frame: number): Draw {
@@ -483,21 +459,9 @@ function personSet(id: string, look: Look): void {
 export function buildSprites(): void {
   if (spriteSets.ids().length > 0) return;
 
-  makeSet('worm', 64, 64, 0.95, 'monster', [
-    { key: 'walk0', draw: worm(0, false) },
-    { key: 'walk1', draw: worm(1.6, false) },
-    { key: 'attack', draw: worm(0.8, true) },
-  ], true);
-  makeSet('trojan', 64, 64, 1.05, 'monster', [
-    { key: 'walk0', draw: trojan(0.3, false) },
-    { key: 'walk1', draw: trojan(1.9, false) },
-    { key: 'attack', draw: trojan(0, true) },
-  ], true);
-  makeSet('ransomware', 64, 64, 1.15, 'monster', [
-    { key: 'walk0', draw: ransomware(0, false) },
-    { key: 'walk1', draw: ransomware(Math.PI, false) },
-    { key: 'attack', draw: ransomware(0, true) },
-  ], true);
+  makeMonster('worm', 0.95, wormModel);
+  makeMonster('trojan', 1.05, trojanModel);
+  makeMonster('ransomware', 1.15, ransomModel);
 
   makeSet('workstation', 64, 64, 0.82, 'static', [{ key: 'idle', draw: workstation('clean', 0) }]);
   makeSet('workstation-infected', 64, 64, 0.82, 'flicker', [
@@ -514,7 +478,7 @@ export function buildSprites(): void {
     longHair: false, lanyard: '#2458d8',
   });
   personSet('npc-f', {
-    shirt: '#d0661c', shirtDark: '#8a3e0c', pants: '#34303a', skin: '#f0c098', hair: '#6a2a10',
+    shirt: '#1f8f7e', shirtDark: '#0f5a4e', pants: '#34303a', skin: '#f0c098', hair: '#6a2a10',
     longHair: true, lanyard: '#2458d8',
   });
   personSet('npc-suit', {
@@ -522,7 +486,7 @@ export function buildSprites(): void {
     longHair: false, tie: '#a01818', lanyard: '#c81e14',
   });
 
-  makeSet('usb', 32, 32, 0.26, 'static', [{
+  makeSet('usb', 32, 32, 0.52, 'static', [{
     key: 'idle',
     draw: (p) => {
       const { g } = p;
@@ -541,10 +505,10 @@ export function buildSprites(): void {
       lit(p, '#ffe040', 5, 4, 1, 1);
       drawText(g, '?', 18, 3, '#ffe040', 'small', '#000');
       p.glow.fillStyle = '#fff';
-      p.glow.fillRect(18, 3, 5, 7);
+      p.glow.fillRect(0, 0, 32, 32);
     },
   }]);
-  makeSet('charge', 32, 32, 0.36, 'flicker', [0, 1].map((f) => ({
+  makeSet('charge', 32, 32, 0.56, 'flicker', [0, 1].map((f) => ({
     key: `f${f}`,
     draw: (p: PaintCtx) => {
       const { g } = p;
@@ -558,9 +522,11 @@ export function buildSprites(): void {
       lit(p, f ? '#7af8ff' : '#18d8f0', 12, 11, 8, 14);
       lit(p, '#ffffff', 14, 13 + f * 4, 2, 6);
       drawText(g, '+', 13, 15, '#0a3040', 'small', null);
+      p.glow.fillStyle = '#fff';
+      p.glow.fillRect(0, 0, 32, 32);
     },
   })));
-  makeSet('medkit', 32, 32, 0.3, 'static', [{
+  makeSet('medkit', 32, 32, 0.5, 'static', [{
     key: 'idle',
     draw: (p) => {
       const { g } = p;
@@ -573,6 +539,8 @@ export function buildSprites(): void {
       g.fillStyle = '#d81e1e';
       g.fillRect(14, 14, 4, 11);
       g.fillRect(10, 18, 12, 4);
+      p.glow.fillStyle = '#fff';
+      p.glow.fillRect(0, 0, 32, 32);
     },
   }]);
 

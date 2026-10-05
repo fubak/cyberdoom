@@ -192,3 +192,8 @@ export function wrapText(text: string, maxChars: number, maxLines = 4): string[]
   }
   return lines;
 }
+
+/** Raw 5x7 glyph rows (bit 4 = leftmost pixel) for custom renderers like the title logo. */
+export function glyphRows(ch: string): number[] | undefined {
+  return FONTS.small.glyphs[norm(ch)];
+}

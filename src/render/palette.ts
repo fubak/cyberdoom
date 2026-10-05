@@ -10,7 +10,9 @@ type RGB = [number, number, number];
 
 /** [shadow, mid, highlight] anchors per ramp; 16 shades interpolated. */
 const RAMPS: { n: number; stops: RGB[] }[] = [
-  { n: 32, stops: [[0, 0, 0], [118, 118, 122], [255, 255, 255]] }, // neutral grey
+  { n: 16, stops: [[0, 0, 0], [118, 118, 122], [255, 255, 255]] }, // neutral grey
+  { n: 16, stops: [[12, 6, 2], [110, 70, 36], [236, 196, 140]] }, // wood / leather brown
+  { n: 16, stops: [[16, 12, 6], [140, 112, 72], [246, 228, 190]] }, // tan / beige
   { n: 16, stops: [[6, 8, 14], [74, 86, 108], [196, 210, 232]] }, // steel blue-grey
   { n: 16, stops: [[10, 8, 6], [92, 82, 70], [214, 200, 178]] }, // warm concrete
   { n: 16, stops: [[14, 6, 4], [112, 58, 38], [228, 160, 120]] }, // rust / brick
@@ -23,7 +25,6 @@ const RAMPS: { n: number; stops: RGB[] }[] = [
   { n: 16, stops: [[2, 4, 24], [36, 80, 210], [170, 200, 255]] }, // blue
   { n: 16, stops: [[14, 2, 20], [130, 44, 170], [236, 170, 255]] }, // purple
   { n: 16, stops: [[30, 14, 8], [196, 136, 96], [255, 224, 196]] }, // skin
-  { n: 16, stops: [[2, 10, 10], [34, 84, 80], [150, 210, 196]] }, // dark teal
   { n: 16, stops: [[20, 4, 14], [200, 40, 120], [255, 180, 220]] }, // magenta (malware)
 ];
 

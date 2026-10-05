@@ -82,9 +82,9 @@ export function buildTextures(): void {
   // Office tech-panel wall: two steel plates, cable tray, cyan status strip.
   wall('wall-panel', (p) => {
     const { g } = p;
-    noiseFill(p, [44, 48, 58], 10);
-    steelPanel(p, 1, 2, 30, 44, [86, 92, 106]);
-    steelPanel(p, 33, 2, 30, 44, [82, 88, 102]);
+    noiseFill(p, [52, 46, 40], 10);
+    steelPanel(p, 1, 2, 30, 44, [104, 98, 88]);
+    steelPanel(p, 33, 2, 30, 44, [98, 92, 84]);
     // vent grille on the right plate
     for (let y = 10; y < 26; y += 2) {
       g.fillStyle = '#1c1f26';
@@ -105,15 +105,22 @@ export function buildTextures(): void {
     p.glow.fillRect(2, 48, 60, 3);
     g.fillStyle = '#b8fcff';
     g.fillRect(2, 49, 60, 1);
-    // lower kick plate
-    steelPanel(p, 1, 53, 62, 25, [64, 68, 80]);
-    for (let x = 6; x < 60; x += 9) {
-      g.fillStyle = '#2a2e38';
-      g.fillRect(x, 58, 5, 14);
-      g.fillStyle = '#5c6474';
-      g.fillRect(x, 58, 5, 1);
+    // lower wainscot: dark wood panelling with grain + rust-stained base
+    for (let x = 0; x < 64; x += 16) {
+      noiseFill(p, [96, 60, 32], 14, 1, x, 52, 16, 26);
+      for (let yy = 53; yy < 78; yy++) {
+        if (p.rnd() < 0.5) {
+          g.fillStyle = `rgba(40,20,6,${0.25 + p.rnd() * 0.25})`;
+          g.fillRect(x + 1 + Math.floor(p.rnd() * 14), yy, 1 + Math.floor(p.rnd() * 3), 1);
+        }
+      }
+      bevel(g, x + 2, 55, 12, 20, 'rgba(0,0,0,0)', '#c08a52', '#2e1a0a', true);
+      g.fillStyle = '#2e1a0a';
+      g.fillRect(x, 52, 1, 26);
     }
-    grime(p, 'rgba(20,12,6,0.5)', 90, 0, 60, 64, 20);
+    g.fillStyle = '#d8a060';
+    g.fillRect(0, 52, 64, 1);
+    grime(p, 'rgba(90,40,10,0.55)', 90, 0, 70, 64, 8);
     g.fillStyle = '#14161c';
     g.fillRect(0, 78, 64, 2);
   });
@@ -201,10 +208,10 @@ export function buildTextures(): void {
   // Raised data-centre floor tiles (2x2 per cell) with perforated panels.
   flat('floor', (p) => {
     const { g } = p;
-    noiseFill(p, [40, 42, 48], 6);
+    noiseFill(p, [40, 32, 26], 6);
     for (const [x, y] of [[0, 0], [32, 0], [0, 32], [32, 32]]) {
       const perf = (x + y) % 64 === 0;
-      noiseFill(p, perf ? [62, 64, 72] : [70, 72, 80], 10, 1, x + 1, y + 1, 30, 30);
+      noiseFill(p, perf ? [74, 62, 50] : [104, 84, 62], 12, 1, x + 1, y + 1, 30, 30);
       g.fillStyle = 'rgba(255,255,255,0.16)';
       g.fillRect(x + 1, y + 1, 30, 1);
       g.fillRect(x + 1, y + 1, 1, 30);
@@ -230,8 +237,12 @@ export function buildTextures(): void {
   // Acoustic ceiling tile + fluorescent light panel variant.
   const ceilBase = (p: PaintCtx) => {
     const { g } = p;
-    noiseFill(p, [58, 58, 60], 10);
-    g.fillStyle = '#26272b';
+    noiseFill(p, [92, 84, 70], 12);
+    for (let i = 0; i < 120; i++) {
+      g.fillStyle = 'rgba(40,30,20,0.35)';
+      g.fillRect(Math.floor(p.rnd() * 64), Math.floor(p.rnd() * 64), 1, 1);
+    }
+    g.fillStyle = '#3a3226';
     g.fillRect(0, 0, 64, 2);
     g.fillRect(0, 0, 2, 64);
     g.fillRect(31, 0, 2, 64);
@@ -250,6 +261,19 @@ export function buildTextures(): void {
     for (let x = 18; x < 50; x += 8) g.fillRect(x, 8, 1, 48);
     glow.fillStyle = '#fff';
     glow.fillRect(14, 8, 36, 48);
+  });
+
+  // Dead fluorescent panel: dusty diffuser, no glow.
+  flat('ceil-light-off', (p) => {
+    ceilBase(p);
+    const { g } = p;
+    g.fillStyle = '#3a3c40';
+    g.fillRect(12, 6, 40, 52);
+    g.fillStyle = '#56585c';
+    g.fillRect(14, 8, 36, 48);
+    g.fillStyle = '#44464a';
+    for (let x = 18; x < 50; x += 8) g.fillRect(x, 8, 1, 48);
+    grime(p, 'rgba(0,0,0,0.5)', 80, 14, 8, 36, 48);
   });
 
   // Exit pad: green chevrons, fullbright.

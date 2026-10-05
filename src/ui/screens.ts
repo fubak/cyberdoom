@@ -2,6 +2,7 @@ import type { Gender } from '../core/types';
 import { missionRegistry } from '../content/missions';
 import { objectiveById } from '../content/objectives';
 import { isUnlocked } from '../missions/progress';
+import { mountTitle } from '../render/title';
 
 /**
  * ARSENAL/LOOK: HTML overlay screens — title, character select, mission
@@ -16,27 +17,18 @@ function el(tag: string, cls = '', html = ''): HTMLElement {
   return e;
 }
 
-function button(label: string, onClick: () => void, cls = 'btn'): HTMLElement {
-  const b = el('button', cls, label);
-  b.addEventListener('click', onClick);
-  return b;
-}
-
 export function titleScreen(onStart: () => void): HTMLElement {
-  const s = el('div', 'screen');
-  s.appendChild(el('h1', '', 'CYBERDOOM'));
-  s.appendChild(el('h2', '', 'SECURITY+ FIELD TRAINING'));
-  s.appendChild(
-    el('p', '', 'A Doom-style first-person training ground for the CompTIA ' +
-      'Security+ SY0-701. Your weapons are IT tools: keyboard, mouse, USB ' +
-      'scanner, and your badge. Clean malware. Enforce least privilege. ' +
-      'Catch the insider.'),
-  );
-  s.appendChild(button('INSERT COIN — START', onStart));
-  s.appendChild(
-    el('p', '', 'WASD move · mouse look · arrows turn · Shift run · ' +
-      'LMB use tool · E/Space interact · 1-4 / wheel select tool'),
-  );
+  const s = el('div', 'screen title');
+  mountTitle(s, onStart, [
+    'A DOOM-STYLE TRAINING GROUND FOR COMPTIA SECURITY+ SY0-701.',
+    'YOUR WEAPONS ARE IT TOOLS: KEYBOARD, MOUSE, USB SCANNER, BADGE.',
+    'CLEAN MALWARE. ENFORCE LEAST PRIVILEGE. CATCH THE INSIDER.',
+    '',
+    'WASD MOVE - MOUSE LOOK - ARROWS TURN - SHIFT RUN',
+    'LMB USE TOOL - E/SPACE INTERACT - 1-4 / WHEEL SELECT TOOL',
+    '',
+    'PRESS ANY KEY OR CLICK TO GO BACK',
+  ]);
   return s;
 }
 
