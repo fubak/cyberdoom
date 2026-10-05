@@ -26,6 +26,7 @@ const SMALL: Record<string, number[]> = {
   ']': [14, 2, 2, 2, 2, 2, 14], '<': [2, 4, 8, 16, 8, 4, 2], '>': [8, 4, 2, 1, 2, 4, 8],
   _: [0, 0, 0, 0, 0, 0, 31], '=': [0, 0, 31, 0, 31, 0, 0], '#': [10, 10, 31, 10, 31, 10, 10],
   '*': [0, 4, 21, 14, 21, 4, 0], '&': [12, 18, 20, 8, 21, 18, 13], '@': [14, 17, 1, 13, 21, 21, 14],
+  '\\': [16, 16, 8, 4, 2, 1, 1], '~': [0, 0, 9, 22, 0, 0, 0],
   $: [4, 15, 20, 14, 5, 30, 4], '✓': [0, 1, 2, 2, 20, 8, 0], '✗': [0, 17, 10, 4, 10, 17, 0],
   '·': [0, 0, 0, 12, 12, 0, 0], '→': [0, 4, 2, 31, 2, 4, 0], '∞': [0, 0, 10, 21, 10, 0, 0],
 };
@@ -92,6 +93,14 @@ function glyphCanvas(font: FontId, ch: string, color: string): HTMLCanvasElement
 
 export function fontHeight(font: FontId): number {
   return FONTS[font].h;
+}
+
+export function canDraw(text: string, font: FontId = 'small'): boolean {
+  const { glyphs } = FONTS[font];
+  return [...text].every((raw) => {
+    const ch = norm(raw);
+    return ch === ' ' || ch === '\n' || !!glyphs[ch];
+  });
 }
 
 export function measureText(text: string, font: FontId = 'small'): number {

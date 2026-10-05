@@ -17,6 +17,8 @@ export const GLOSSARY: Record<string, string> = {
     'Malware that covertly monitors the user and sends data (browsing, keystrokes, files) to the attacker. Designed to stay quiet. [2.4]',
   'indicators of malicious activity':
     'Observable signs an attack is under way, e.g. account lockout, concurrent session usage, blocked content, impossible travel, resource consumption, resource inaccessibility, out-of-cycle logging, missing logs. [2.4]',
+  'false positive':
+    'An alert or verdict that flags benign activity as malicious. Context and tuning reduce false positives; each one wastes response effort and erodes trust in alerts.',
   'resource consumption':
     'An indicator: CPU, memory, disk or bandwidth use far above the host\u2019s baseline, often from a worm, cryptominer or data staging. [2.4]',
   'resource inaccessibility':

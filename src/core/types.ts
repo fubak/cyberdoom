@@ -79,6 +79,15 @@ export interface InspectInfo {
   flags?: string[];
 }
 
+export interface EvidenceEntry {
+  id: string;
+  entityId: string;
+  label: string;
+  detail: string;
+  source: 'inspect' | 'log';
+  category?: InspectInfo['category'];
+}
+
 export interface EntityDef {
   id: string;
   kind: EntityKind;
@@ -332,4 +341,5 @@ export interface ScoreEvent {
   good: boolean;
   /** SY0-701 objective ids this action maps to. */
   objectives: string[];
+  tag?: string;
 }

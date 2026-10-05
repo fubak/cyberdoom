@@ -38,57 +38,88 @@ export function onKeysWhileMounted(node: HTMLElement, fn: (e: KeyboardEvent) => 
 
 export function briefing(mission: Mission, onGo: () => void): HTMLElement {
   const teach = teachingRegistry.get(mission.id);
-  const s = h('div', 'screen cd-inter');
   const idx = arcIndex(mission.id);
-  const head = h('div', 'cd-kicker',
-    `MISSION ${String(idx + 1).padStart(2, '0')} OF ${ARC.length}  ·  THREAT LEVEL ${'☣'.repeat(Math.max(1, Math.ceil(mission.difficulty / 3)))}`);
-  s.appendChild(head);
-  s.appendChild(h('h1', 'cd-title', mission.title));
-
-  const grid = h('div', 'cd-grid');
-  const left = h('div', 'cd-panel');
-  left.appendChild(h('h3', '', 'SITUATION'));
-  left.appendChild(h('p', 'cd-body', mission.briefing));
-  left.appendChild(h('h3', '', 'OBJECTIVES'));
-  const ol = h('ol', 'cd-orders');
   const orders = teach?.orders ?? mission.missionObjectives.map((o) => ({ text: o.text, objective: '' }));
-  for (const o of orders) {
-    const li = h('li', '', o.text);
-    ol.appendChild(li);
-  }
-  left.appendChild(ol);
-  grid.appendChild(left);
+  const s = h('div', 'screen cd-inter cd-briefing');
+  let detailsOpen = false;
+  const kicker = `MISSION ${idx + 1}/${ARC.length} · THREAT LEVEL ${'☣'.repeat(Math.max(1, Math.ceil(mission.difficulty / 3)))}`;
 
-  const right = h('div', 'cd-panel cd-intel');
-  right.appendChild(h('h3', '', 'SY0-701 ON THE LINE'));
-  for (const id of mission.objectives) {
-    const o = objectiveById(id);
-    if (!o) continue;
-    const row = h('div', 'cd-obj');
-    row.appendChild(h('span', `cd-chip d${o.domain}`, id));
-    row.appendChild(h('span', '', o.title));
-    row.title = domainById(o.domain)?.title ?? '';
-    right.appendChild(row);
-  }
-  if (teach?.keyTerms.length) {
-    right.appendChild(h('h3', '', 'FIELD MANUAL'));
-    const dl = h('dl', 'cd-terms');
-    for (const t of teach.keyTerms) {
-      const def = define(t);
-      if (!def) continue;
-      dl.appendChild(h('dt', '', t.toUpperCase()));
-      dl.appendChild(h('dd', '', def.replace(/\s*\[[\d., ]+\]\s*$/, '')));
+  const render = () => {
+    s.replaceChildren();
+    if (!detailsOpen) {
+      const page = h('div', 'cd-briefing-page');
+      page.appendChild(h('div', 'cd-kicker', kicker));
+      page.appendChild(h('h1', 'cd-title cd-brief-title', mission.title));
+      page.appendChild(h('div', 'cd-brief-tagline', teach?.tagline ?? mission.title));
+      const ol = h('ol', 'cd-brief-orders');
+      for (const order of orders.slice(0, 3)) ol.appendChild(h('li', '', order.text));
+      page.appendChild(ol);
+      const buttons = h('div', 'cd-brief-actions');
+      buttons.appendChild(bigButton('DETAILS  [D]', () => {
+        detailsOpen = true;
+        render();
+      }, 'cd-btn alt'));
+      buttons.appendChild(bigButton('DEPLOY  [ENTER]', onGo));
+      page.appendChild(buttons);
+      s.appendChild(page);
+    } else {
+      const page = h('div', 'cd-briefing-page cd-briefing-details-page');
+      page.appendChild(h('div', 'cd-kicker', `${kicker} · DETAILS`));
+      page.appendChild(h('h1', 'cd-title cd-details-title', 'DETAILS'));
+      const grid = h('div', 'cd-brief-details');
+      const situation = h('section', 'cd-panel');
+      situation.appendChild(h('h3', '', 'SITUATION'));
+      situation.appendChild(h('p', 'cd-body', teach?.situation ?? mission.briefing));
+      situation.appendChild(h('h3', '', 'ALL ORDERS'));
+      const ol = h('ol', 'cd-orders');
+      for (const order of orders) ol.appendChild(h('li', '', order.text));
+      situation.appendChild(ol);
+      grid.appendChild(situation);
+
+      const intel = h('section', 'cd-panel cd-intel');
+      intel.appendChild(h('h3', '', 'SY0-701 OBJECTIVES'));
+      for (const id of mission.objectives) {
+        const objective = objectiveById(id);
+        if (!objective) continue;
+        const row = h('div', 'cd-obj');
+        row.appendChild(h('span', `cd-chip d${objective.domain}`, id));
+        row.appendChild(h('span', '', objective.title));
+        row.title = domainById(objective.domain)?.title ?? '';
+        intel.appendChild(row);
+      }
+      if (teach?.keyTerms.length) {
+        intel.appendChild(h('h3', '', 'KEY TERMS'));
+        const dl = h('dl', 'cd-terms');
+        for (const term of teach.keyTerms) {
+          const definition = define(term);
+          if (!definition) continue;
+          dl.appendChild(h('dt', '', term.toUpperCase()));
+          dl.appendChild(h('dd', '', definition.replace(/\s*\[[\d., ]+\]\s*$/, '')));
+        }
+        intel.appendChild(dl);
+      }
+      grid.appendChild(intel);
+      page.appendChild(grid);
+      const buttons = h('div', 'cd-brief-actions');
+      buttons.appendChild(bigButton('BACK  [D/ESC]', () => {
+        detailsOpen = false;
+        render();
+      }, 'cd-btn alt'));
+      buttons.appendChild(bigButton('DEPLOY  [ENTER]', onGo));
+      page.appendChild(buttons);
+      s.appendChild(page);
     }
-    right.appendChild(dl);
-  }
-  grid.appendChild(right);
-  s.appendChild(grid);
+  };
 
-  s.appendChild(bigButton('DEPLOY ▸  [ENTER]', onGo));
+  render();
   onKeysWhileMounted(s, (e) => {
     if (e.key === 'Enter') {
       e.preventDefault();
       onGo();
+    } else if (e.key.toLowerCase() === 'd' || (e.key === 'Escape' && detailsOpen)) {
+      e.preventDefault();
+      detailsOpen = !detailsOpen;
+      render();
     }
   });
   return s;

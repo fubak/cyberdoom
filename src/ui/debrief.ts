@@ -1,5 +1,5 @@
-import type { Mission, Question, ScoreEvent } from '../core/types';
-import { loadMastery, readiness, recordAnswer } from '../content/curriculum';
+import type { EvidenceEntry, Mission, Question, ScoreEvent } from '../core/types';
+import { loadMastery, playableCoverageLine, readiness, recordAnswer } from '../content/curriculum';
 import { missionRegistry, teachingRegistry } from '../content/missions';
 import { objectiveById } from '../content/objectives';
 import { bigButton, h, onKeysWhileMounted } from './briefing';
@@ -56,13 +56,59 @@ export function debrief(opts: {
   score: number;
   scoreLog: ScoreEvent[];
   objectives: { text: string; done: boolean; failed: boolean }[];
+  evidence?: EvidenceEntry[];
   onDone: (quizScore: number) => void;
 }): HTMLElement {
   const { mission } = opts;
   const teach = teachingRegistry.get(mission.id);
   const s = h('div', 'screen cd-inter');
   let keyFn: ((e: KeyboardEvent) => void) | null = null;
-  onKeysWhileMounted(s, (e) => keyFn?.(e));
+  let evidenceOpen = false;
+  let evidenceButton: HTMLButtonElement | null = null;
+  const drawer = h('aside', 'cd-evidence-drawer');
+  drawer.setAttribute('aria-label', 'Evidence log');
+  const entries = opts.evidence ?? [];
+  if (entries.length) {
+    for (const entry of entries) {
+      const row = h('article', 'cd-evidence-entry');
+      row.appendChild(h('strong', '', entry.label));
+      row.appendChild(h('span', 'cd-evidence-source', entry.source.toUpperCase()));
+      row.appendChild(h('pre', 'cd-evidence-detail', entry.detail));
+      drawer.appendChild(row);
+    }
+  } else {
+    drawer.appendChild(h('p', 'cd-body', 'No evidence was logged during this mission.'));
+  }
+  const updateEvidenceDrawer = () => {
+    drawer.classList.toggle('open', evidenceOpen);
+    drawer.setAttribute('aria-hidden', String(!evidenceOpen));
+    evidenceButton?.setAttribute('aria-expanded', String(evidenceOpen));
+  };
+  const toggleEvidence = () => {
+    evidenceOpen = !evidenceOpen;
+    updateEvidenceDrawer();
+  };
+  const addEvidenceUi = () => {
+    const button = bigButton(`EVIDENCE LOG (${entries.length}) [TAB]`, toggleEvidence, 'cd-btn cd-evidence-toggle');
+    evidenceButton = button;
+    s.appendChild(button);
+    s.appendChild(drawer);
+    updateEvidenceDrawer();
+  };
+  onKeysWhileMounted(s, (e) => {
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      toggleEvidence();
+      return;
+    }
+    if (e.key === 'Escape' && evidenceOpen) {
+      e.preventDefault();
+      evidenceOpen = false;
+      updateEvidenceDrawer();
+      return;
+    }
+    keyFn?.(e);
+  });
 
   // Avoid objectives have no "done" event: obeyed through a won mission = done.
   const objRows = opts.objectives.map((o, i) => {
@@ -100,6 +146,17 @@ export function debrief(opts: {
       }
       left.appendChild(row);
     }
+    const falsePositiveLesson = teach?.lessons['false-positive'];
+    if (falsePositiveLesson) {
+      const falsePositiveCount = opts.scoreLog.filter((event) => event.tag === 'false-positive').length;
+      const clean = falsePositiveCount === 0;
+      const row = h('div', `cd-result ${clean ? 'good' : 'bad'}`);
+      row.appendChild(h('div', 'cd-result-head',
+        clean ? '✓  NO FALSE POSITIVES' : `✗  FALSE POSITIVES ×${falsePositiveCount}`));
+      row.appendChild(h('div', 'cd-lesson',
+        `[${falsePositiveLesson.objective}] ${clean ? falsePositiveLesson.done : falsePositiveLesson.missed}`));
+      left.appendChild(row);
+    }
     grid.appendChild(left);
     const right = h('div', 'cd-panel');
     right.appendChild(h('h3', '', 'FIELD LOG'));
@@ -116,6 +173,7 @@ export function debrief(opts: {
     s.appendChild(grid);
     const go = () => runCheck(buildFirstCheck(), 'first');
     s.appendChild(bigButton('KNOWLEDGE CHECK ▸  [ENTER]', go));
+    addEvidenceUi();
     keyFn = (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
@@ -189,6 +247,7 @@ export function debrief(opts: {
       });
       s.appendChild(panel);
       s.appendChild(next);
+      addEvidenceUi();
       const advance = () => {
         if (!picked) return;
         i++;
@@ -197,7 +256,9 @@ export function debrief(opts: {
       };
       keyFn = (e) => {
         const n = Number(e.key);
+        const letter = 'abcd'.indexOf(e.key.toLowerCase());
         if (n >= 1 && n <= opts2.length) pick(n - 1);
+        else if (letter >= 0 && letter < opts2.length) pick(letter);
         else if (e.key === 'Enter' && picked) {
           e.preventDefault();
           advance();
@@ -247,6 +308,7 @@ export function debrief(opts: {
       left.appendChild(bar);
     }
     left.appendChild(h('div', 'cd-tally', `EXAM-WEIGHTED READINESS  ${r.overall}%`));
+    left.appendChild(h('div', 'cd-coverage-line', playableCoverageLine()));
     grid.appendChild(left);
     if (teach) {
       const right = h('div', 'cd-panel');
@@ -263,6 +325,7 @@ export function debrief(opts: {
     if (missed.length) btnRow.appendChild(bigButton(`RETRY MISSED (${missed.length})  [R]`, () => runCheck(missed, 'retry'), 'cd-btn alt'));
     btnRow.appendChild(bigButton('CONTINUE ▸  [ENTER]', () => opts.onDone(correct)));
     s.appendChild(btnRow);
+    addEvidenceUi();
     keyFn = (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();

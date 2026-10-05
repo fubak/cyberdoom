@@ -1,5 +1,6 @@
 import type { Gender } from '../core/types';
 import { missionRegistry } from '../content/missions';
+import { playableCoverageLine } from '../content/curriculum';
 import { objectiveById } from '../content/objectives';
 import { isUnlocked } from '../missions/progress';
 import { mountTitle } from '../render/title';
@@ -84,6 +85,7 @@ export function characterSelect(onPick: (g: Gender) => void): HTMLElement {
 export function missionSelect(onPick: (id: string) => void): HTMLElement {
   const s = el('div', 'screen');
   s.appendChild(el('h2', '', 'SELECT MISSION'));
+  s.appendChild(el('div', 'playable-coverage', playableCoverageLine()));
   const missions = missionRegistry.all();
   const orderedIds = missions.map((m) => m.id);
   for (const m of missions) {

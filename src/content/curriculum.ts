@@ -45,11 +45,11 @@ export const ARC: ArcMission[] = [
     id: 'm01', title: 'PATCH TUESDAY', difficulty: 1, built: true,
     briefing: 'Three workstations are misbehaving and a USB stick turned up in the corridor.',
     objectives: [
-      w('2.4', 'Inspect each workstation (resource consumption, resource inaccessibility, unknown beacons) and clean every infected host to win.'),
-      w('2.2', 'A found removable device lies on the route; connecting it (Keyboard) triggers the removable-device vector and fails the objective.'),
+      w('2.4', 'Inspect every workstation, including noisy PRN-02, before acting; scanning or flagging a clean host is a scored false positive. Clean infected hosts to win.'),
+      w('2.2', 'A found removable device lies on the route; plugging it into the unlocked spare PC triggers the removable-device vector and fails the mission.'),
       w('2.5', 'Deploy endpoint protection (scanner charges) to every infected host; charges are finite, so missed shots matter.'),
       qz('3.4', 'Debrief: recover WS-07 from offline backups vs replication vs paying the ransom.'),
-      ev('5.6', 'The found-media inspect text and debrief cover the awareness response to removable media.'),
+      w('5.6', 'Carry the found removable device to the Security Desk and report it (Keyboard): +50 and the IT OPS role needed to reach the server room.'),
     ],
   },
   {
@@ -169,6 +169,38 @@ export function arcObjectiveIds(m: ArcMission): string[] {
   return m.objectives.map((o) => o.id);
 }
 
+export function playableCoverage(): {
+  objectives: string[];
+  winBacked: string[];
+  total: number;
+  builtMissions: number;
+  arcMissions: number;
+} {
+  const built = ARC.filter((mission) => mission.built);
+  const objectives = [...new Set(built.flatMap((mission) => arcObjectiveIds(mission)))].sort();
+  const winBacked = [...new Set(
+    built.flatMap((mission) =>
+      mission.objectives
+        .filter((objective) => objective.kind === 'win')
+        .map((objective) => objective.id),
+    ),
+  )].sort();
+  return {
+    objectives,
+    winBacked,
+    total: OBJECTIVES.length,
+    builtMissions: built.length,
+    arcMissions: ARC.length,
+  };
+}
+
+export function playableCoverageLine(): string {
+  const coverage = playableCoverage();
+  const objectiveCount = coverage.objectives.length;
+  const percentage = Math.round((objectiveCount / coverage.total) * 100);
+  return `PLAYABLE NOW: ${coverage.builtMissions}/${coverage.arcMissions} MISSIONS · ${objectiveCount}/${coverage.total} OBJECTIVES (${percentage}%) · ${coverage.winBacked.length} WIN-BACKED`;
+}
+
 /**
  * Share (%) of teaching weight per domain across the whole arc: each arc
  * mechanic slot counts 1, and each knowledge-check question counts 1, split
@@ -192,6 +224,8 @@ export function coverageShare(questions: { objectives: string[] }[]): Record<num
 
 /** Teaching data attached to each mission (briefing dossier + after-action lessons). */
 export interface MissionTeaching {
+  /** One-line mission pitch shown on the briefing page. */
+  tagline: string;
   /** Short "situation" paragraph shown first in the briefing. */
   situation: string;
   /** Step-by-step "what you must do", each tied to the concept it applies. */
