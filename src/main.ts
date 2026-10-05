@@ -3,8 +3,8 @@ import { EventBus } from './core/events';
 import type { Entity, Gender, Projectile, Screen } from './core/types';
 import { WorldMap } from './engine/map';
 import { Input } from './engine/input';
-import { EYE_HEIGHT, MOVE, Player } from './engine/player';
-import { alertNear, damageEntity, hurtEntity, updateEntities, updateProjectiles } from './engine/ai';
+import { EYE_HEIGHT, Player } from './engine/player';
+import { alertNear, damageEntity, hurtEntity, traceShot, updateEntities, updateProjectiles } from './engine/ai';
 import { Audio } from './engine/audio';
 import { Feel } from './engine/feel';
 import { ParticleSystem } from './engine/fx';
@@ -256,6 +256,7 @@ class Game {
         dz: lostEnd ? -(EYE_HEIGHT - 0.15) * this.deathDrop : this.player.viewBobZ,
         roll: lostEnd ? this.deathRoll : 0,
         hurt: this.feel.red,
+        hurtSide: this.feel.hurtSide,
         bonus: this.feel.bonusAmt,
       };
       this.renderer.render(this.player, pose);
@@ -391,6 +392,11 @@ class Game {
       dt,
       p,
     )) {
+      if (projectile.cosmetic) continue;
+      if (projectile.source === 'usb-scanner' && !projectile.hostile) {
+        this.resolveScannerHit(hit, x, y, projectile.dx, projectile.dy, projectile.traveled);
+        continue;
+      }
       this.audio.sfx('impact', { x, y, gain: projectile.hostile || !hit ? 1 : 0.5 });
       if (hitPlayer && projectile.hostile) {
         this.hurtPlayer(projectile.damage ?? 10, x - projectile.dx, y - projectile.dy);
@@ -477,13 +483,18 @@ class Game {
     const distance = Math.hypot(awayX, awayY) || 1;
     p.damage(dmg, sourceX, sourceY);
     this.lastHurtT = this.simT;
-    this.feel.hurt(dmg);
+    const sourceDx = sourceX - p.x;
+    const sourceDy = sourceY - p.y;
+    const side = Math.max(
+      -1,
+      Math.min(1, (sourceDx * -Math.sin(p.angle) + sourceDy * Math.cos(p.angle)) / distance),
+    );
+    this.feel.hurt(dmg, side);
     this.audio.sfx('hurt');
     let da = Math.atan2(sourceY - p.y, sourceX - p.x) - p.angle;
     da = Math.atan2(Math.sin(da), Math.cos(da));
     this.arsenal.hurt(Math.abs(da) < 0.35 ? 0 : Math.sign(da));
-    const impulse = MOVE.friction * (0.3 + 0.2 * Math.min(1, dmg / 20));
-    p.applyImpulse((awayX / distance) * impulse, (awayY / distance) * impulse);
+    p.knockback(awayX, awayY, Math.min(0.35, 0.1 + dmg * 0.01));
     if (this.simT - this.lastHurtMessageT >= 1.5) {
       this.lastHurtMessageT = this.simT;
       this.hud.pushMessage(`${runtime.entities.find((e) => e.x === sourceX && e.y === sourceY)?.def.inspect?.label ?? 'Malware'} is draining your integrity!`, 'bad');
@@ -491,6 +502,30 @@ class Game {
     if (!p.alive) {
       this.audio.sfx('death');
       this.bus.emit('player-down', {});
+    }
+  }
+
+  private resolveScannerHit(hit: Entity | null, x: number, y: number, dx: number, dy: number, dist: number): void {
+    this.audio.sfx('impact', { x, y, gain: hit ? 0.5 : 1 });
+    if (hit && hit.def.kind === 'workstation' && dist > USB_PLUG_RANGE) {
+      this.bus.emit('tool-hit', { toolId: 'usb', entityId: hit.def.id, good: false });
+      this.hud.pushMessage('Workstations are cleaned at arm\'s length: walk up and plug the scanner stick in.', 'warn');
+    } else if (hit) {
+      if (hit.infected) {
+        const dmg = hit.state.flagCorrect ? 4 : 2;
+        const result = damageEntity(hit, dmg, dx, dy);
+        this.bus.emit('tool-hit', { toolId: 'usb', entityId: hit.def.id, good: true });
+        if (result === 'killed') {
+          this.bus.emit('cleaned', { entityId: hit.def.id });
+        } else {
+          this.particles.burst(x, y, 0.4, 'hit');
+          if (hit.def.kind === 'enemy') this.audio.sfx('enemy-pain', { x: hit.x, y: hit.y });
+        }
+      } else {
+        this.bus.emit('tool-hit', { toolId: 'usb', entityId: hit.def.id, good: false });
+        this.bus.emit('scan-miss', { entityId: hit.def.id });
+        this.hud.pushMessage('Scan session wasted: that target is not infected.', 'warn');
+      }
     }
   }
 
@@ -520,6 +555,19 @@ class Game {
       },
       bus: this.bus,
       fireProjectile: (proj: Omit<Projectile, 'alive' | 'traveled'>) => {
+        if (proj.source === 'usb-scanner') {
+          const shot = traceShot(p.x, p.y, proj.dx, proj.dy, proj.range, rt.entities, map);
+          this.resolveScannerHit(shot.hit, shot.x, shot.y, proj.dx, proj.dy, shot.dist);
+          this.projectiles.push({
+            ...proj,
+            speed: 30,
+            range: shot.dist,
+            alive: true,
+            traveled: 0,
+            cosmetic: true,
+          });
+          return;
+        }
         this.projectiles.push({ ...proj, alive: true, traveled: 0 });
       },
       aimEntity: (maxDist: number, maxAngle: number) => {
@@ -555,6 +603,9 @@ class Game {
   private exposeDebug(): void {
     const g = this;
     (window as unknown as { __cd: unknown }).__cd = {
+      hurtUniform() {
+        return g.renderer.debugHurtUniform();
+      },
       state() {
         return {
           screen: g.screen,

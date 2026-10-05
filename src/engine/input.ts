@@ -18,8 +18,11 @@ export class Input {
   pointerLocked = false;
   private pendingSlot: number | null = null;
   private pendingFire = false;
+  private pendingKeyFire = false;
   private pendingUse = false;
   private mouseDown = false;
+  private lockPressActive = false;
+  private suppressMouseUntilUp = false;
   private unlockedAudio = false;
 
   constructor(private canvas: HTMLElement, private unlockAudio: () => void = () => {}) {
@@ -28,7 +31,7 @@ export class Input {
       this.unlockOnce();
       this.keys.add(e.code);
       if (e.code === 'Space' || e.code === 'KeyE') this.pendingUse = true;
-      if (e.code === 'KeyF') this.pendingFire = true;
+      if (e.code === 'KeyF') this.pendingKeyFire = true;
       if (/^Digit[1-9]$/.test(e.code)) this.pendingSlot = Number(e.code[5]);
       if (e.code === 'Space') e.preventDefault();
     });
@@ -36,30 +39,47 @@ export class Input {
     window.addEventListener('blur', () => {
       this.keys.clear();
       this.mouseDown = false;
+      this.lockPressActive = false;
+      this.suppressMouseUntilUp = false;
+      this.pendingFire = false;
+      this.pendingKeyFire = false;
     });
     window.addEventListener('pointerdown', () => this.unlockOnce());
     canvas.addEventListener('mousedown', (e) => {
-      if (e.button === 0) {
-        if (!this.pointerLocked) {
-          this.requestLock();
-        } else {
-          this.mouseDown = true;
-          this.pendingFire = true;
-        }
+      if (e.button !== 0) return;
+      if (!this.pointerLocked) {
+        this.lockPressActive = true;
+        this.suppressMouseUntilUp = true;
+        this.mouseDown = false;
+        this.pendingFire = false;
+        this.requestLock();
+        return;
       }
+      if (this.suppressMouseUntilUp) return;
+      this.mouseDown = true;
+      this.pendingFire = true;
     });
     window.addEventListener('mouseup', (e) => {
-      if (e.button === 0) this.mouseDown = false;
+      if (e.button === 0) {
+        this.mouseDown = false;
+        this.lockPressActive = false;
+        this.suppressMouseUntilUp = false;
+      }
     });
     window.addEventListener('mousemove', (e) => {
-      if (this.pointerLocked) this.mouseDX += Math.max(-250, Math.min(250, e.movementX));
+      if (!this.pointerLocked) return;
+      if ((e.buttons & 1) !== 0 && !this.mouseDown) this.suppressMouseUntilUp = true;
+      this.mouseDX += Math.max(-250, Math.min(250, e.movementX));
     });
     window.addEventListener('wheel', (e) => {
       this.wheel += Math.sign(e.deltaY);
     });
     document.addEventListener('pointerlockchange', () => {
+      const buttonActive = this.lockPressActive || this.mouseDown;
       this.pointerLocked = document.pointerLockElement === this.canvas;
-      if (!this.pointerLocked) this.mouseDown = false;
+      this.pendingFire = false;
+      this.mouseDown = false;
+      if (buttonActive) this.suppressMouseUntilUp = true;
     });
   }
 
@@ -71,11 +91,12 @@ export class Input {
 
   /** Call once per simulation tick; edges are consumed by exactly one tick. */
   poll(): void {
-    this.firePressed = this.pendingFire;
+    this.firePressed = this.pendingFire || this.pendingKeyFire;
     this.fireHeld = (this.pointerLocked && this.mouseDown) || this.keys.has('KeyF');
     this.usePressed = this.pendingUse;
     this.slotPressed = this.pendingSlot;
     this.pendingFire = false;
+    this.pendingKeyFire = false;
     this.pendingUse = false;
     this.pendingSlot = null;
   }

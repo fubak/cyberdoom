@@ -251,6 +251,7 @@ export interface Projectile {
   alive: boolean;
   hostile?: boolean;
   damage?: number;
+  cosmetic?: boolean;
 }
 
 /** Context handed to ToolDef.use. Implemented by the game shell. */

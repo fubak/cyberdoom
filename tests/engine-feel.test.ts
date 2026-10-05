@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { alertNear, damageEntity, hurtEntity, updateEntities, updateProjectiles, type AiHooks } from '../src/engine/ai';
+import { alertNear, damageEntity, ENEMY_RADIUS, hurtEntity, updateEntities, updateProjectiles, type AiHooks } from '../src/engine/ai';
 import { Feel } from '../src/engine/feel';
 import { WorldMap } from '../src/engine/map';
 import { Player } from '../src/engine/player';
@@ -12,6 +12,16 @@ const mapDef: MapDef = {
     '.': { kind: 'floor', tex: 'floor' },
   },
   spawn: { x: 2.5, y: 2.5, angle: 0 },
+};
+
+const contactMapDef: MapDef = {
+  grid: [
+    '####################',
+    ...Array.from({ length: 18 }, () => `#${'.'.repeat(18)}#`),
+    '####################',
+  ],
+  legend: mapDef.legend,
+  spawn: { x: 10, y: 10, angle: 0 },
 };
 
 function enemy(id: string, sprite = 'worm', x = 2.5, y = 2.5): Entity {
@@ -31,6 +41,12 @@ function hooks(overrides: Partial<AiHooks> = {}): AiHooks {
   };
 }
 
+function movementSolids(entities: Entity[]): { x: number; y: number; r: number }[] {
+  return entities
+    .filter((e) => e.alive && ['enemy', 'npc', 'workstation', 'console'].includes(e.def.kind))
+    .map((e) => ({ x: e.x, y: e.y, r: 0.3 }));
+}
+
 describe('Feel', () => {
   it('applies and decays trauma shake', () => {
     const feel = new Feel();
@@ -44,35 +60,143 @@ describe('Feel', () => {
     expect(Math.hypot(decayed.yaw, decayed.x, decayed.y)).toBe(0);
   });
 
-  it('linearly decays the hurt palette and bonus flash', () => {
-    const feel = new Feel();
+  it('scales, eases, stacks and directs the hurt wash while retaining the bonus flash', () => {
     const smallHit = new Feel();
-    smallHit.hurt(1);
-    expect(smallHit.red).toBeCloseTo(0.15);
+    smallHit.hurt(6, 1);
+    expect(smallHit.red).toBeGreaterThanOrEqual(0.45);
+    expect(smallHit.hurtSide).toBeCloseTo(1);
+    smallHit.update(0.05);
+    expect(smallHit.red).toBeGreaterThanOrEqual(0.45);
+    smallHit.update(0.25);
+    expect(smallHit.red).toBeGreaterThan(0);
+    expect(smallHit.hurtSide).toBeGreaterThan(0);
+    smallHit.update(0.06);
+    expect(smallHit.red).toBe(0);
+    expect(smallHit.hurtSide).toBe(0);
 
-    feel.hurt(10);
-    expect(feel.red).toBeCloseTo(0.4);
-    feel.update(0.2);
-    expect(feel.red).toBeCloseTo(0.2);
-    feel.update(0.2);
-    expect(feel.red).toBe(0);
+    const heavyHit = new Feel();
+    heavyHit.hurt(18, -0.5);
+    expect(heavyHit.red).toBeCloseTo(0.8);
+    expect(heavyHit.hurtSide).toBeCloseTo(-0.5);
+    heavyHit.update(0.55);
+    expect(heavyHit.red).toBeGreaterThan(0);
+    heavyHit.update(0.01);
+    expect(heavyHit.red).toBe(0);
 
-    feel.hurt(100);
-    expect(feel.red).toBeCloseTo(0.6);
+    const cappedHit = new Feel();
+    cappedHit.hurt(40, 0.75);
+    expect(cappedHit.red).toBeCloseTo(0.85);
+    cappedHit.update(0.6);
+    expect(cappedHit.red).toBe(0);
+
+    const stacked = new Feel();
+    stacked.hurt(18, -1);
+    stacked.update(0.2);
+    const current = stacked.red;
+    stacked.hurt(6, 1);
+    expect(stacked.red).toBeCloseTo(current);
+    expect(stacked.hurtSide).toBeCloseTo(1);
+    stacked.update(0.34);
+    expect(stacked.red).toBeGreaterThan(0);
+    stacked.update(0.02);
+    expect(stacked.red).toBe(0);
+
+    const feel = new Feel();
     feel.bonus();
     expect(feel.bonusAmt).toBeCloseTo(0.35);
     feel.update(0.125);
-    expect(feel.red).toBeCloseTo(0.4125);
     expect(feel.bonusAmt).toBeCloseTo(0.175);
     feel.update(0.125);
-    expect(feel.red).toBeCloseTo(0.225);
     expect(feel.bonusAmt).toBe(0);
-    feel.update(0.15);
-    expect(feel.red).toBe(0);
   });
 });
 
 describe('Doom enemy AI', () => {
+  it('keeps a chasing worm at contact without displacing a stationary player', () => {
+    const map = new WorldMap(contactMapDef);
+    const player = new Player(10, 10, 0);
+    const worm = enemy('contact-worm', 'worm', 4, 10);
+    worm.state.facing = 0;
+    const onMelee = vi.fn();
+    const h = hooks({ onMelee });
+    const startX = player.x;
+    const startY = player.y;
+    const dt = 1 / 60;
+
+    for (let i = 0; i < 6 * 60; i++) {
+      player.move(map, 0, 0, false, 0, dt, movementSolids([worm]));
+      updateEntities([worm], map, player, dt, h);
+    }
+
+    expect(Math.hypot(player.x - startX, player.y - startY)).toBeLessThan(0.5);
+    expect(Math.hypot(worm.x - player.x, worm.y - player.y)).toBeGreaterThanOrEqual(player.radius + ENEMY_RADIUS - 1e-6);
+    expect(onMelee).toHaveBeenCalled();
+  });
+
+  it('scales bite knockback to its real friction displacement and prevents stacking', () => {
+    const map = new WorldMap(contactMapDef);
+    const single = new Player(10, 10, 0);
+    single.knockback(1, 0, 0.16);
+    for (let i = 0; i < 120; i++) single.move(map, 0, 0, false, 0, 1 / 60);
+    expect(single.x - 10).toBeCloseTo(0.146, 2);
+
+    const heavy = new Player(10, 10, 0);
+    heavy.knockback(1, 0, 0.28);
+    for (let i = 0; i < 120; i++) heavy.move(map, 0, 0, false, 0, 1 / 60);
+    expect(heavy.x - 10).toBeGreaterThanOrEqual(0.25);
+    expect(heavy.x - 10).toBeLessThanOrEqual(0.28);
+
+    const repeated = new Player(10, 10, 0);
+    for (let i = 0; i < 30; i++) {
+      repeated.knockback(1, 0, 0.16);
+      repeated.move(map, 0, 0, false, 0, 1 / 60);
+    }
+    expect(repeated.x - 10).toBeLessThanOrEqual(0.35);
+  });
+
+  it('keeps bite knockback bounded during a six-second chase', () => {
+    const map = new WorldMap(contactMapDef);
+    const player = new Player(10, 10, 0);
+    const worm = enemy('knockback-worm', 'worm', 4, 10);
+    worm.state.facing = 0;
+    const bites: { tick: number; x: number; y: number }[] = [];
+    let tick = 0;
+    const h = hooks({
+      onMelee: (e, dmg) => {
+        player.knockback(player.x - e.x, player.y - e.y, Math.min(0.35, 0.1 + dmg * 0.01));
+        bites.push({ tick, x: player.x, y: player.y });
+      },
+    });
+    const startX = player.x;
+    const startY = player.y;
+    const positions: { x: number; y: number }[] = [];
+    const dt = 1 / 60;
+
+    for (tick = 0; tick < 6 * 60; tick++) {
+      player.move(map, 0, 0, false, 0, dt, movementSolids([worm]));
+      updateEntities([worm], map, player, dt, h);
+      positions.push({ x: player.x, y: player.y });
+    }
+
+    expect(bites.length).toBeGreaterThanOrEqual(2);
+    for (const bite of bites) {
+      const after = positions[Math.min(positions.length - 1, bite.tick + 30)];
+      expect(Math.hypot(after.x - bite.x, after.y - bite.y)).toBeLessThanOrEqual(0.35);
+    }
+    expect(Math.hypot(player.x - startX, player.y - startY)).toBeLessThan(2);
+    expect(Math.hypot(worm.x - player.x, worm.y - player.y)).toBeGreaterThanOrEqual(player.radius + ENEMY_RADIUS - 1e-6);
+  });
+
+  it('stops enemy knockback before it enters the player contact circle', () => {
+    const map = new WorldMap(contactMapDef);
+    const player = new Player(10, 10, 0);
+    const e = enemy('pushed-toward-player', 'worm', 10.7, 10);
+    e.def.ai = 'stand';
+    e.state.knockVx = -1.5;
+    for (let i = 0; i < 120; i++) updateEntities([e], map, player, 1 / 60, hooks());
+    expect(Math.hypot(e.x - player.x, e.y - player.y)).toBeGreaterThanOrEqual(player.radius + ENEMY_RADIUS - 1e-6);
+  });
+
   it('distinguishes surviving damage from kills and marks every surviving hit', () => {
     const hurt = enemy('hurt', 'worm');
     hurt.hp = 2;

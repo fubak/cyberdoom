@@ -89,14 +89,17 @@ const POST_FS = /* glsl */ `
 uniform sampler2D tScene;
 uniform sampler2D tLut;
 uniform float uHurt;
+uniform float uHurtSide;
 uniform float uBonus;
 varying vec2 vUv;
 void main() {
   vec3 c = texture2D(tScene, vUv).rgb;
   // Doom-style palette shift: push toward red but keep luminance structure
   float l = dot(c, vec3(0.3, 0.59, 0.11));
-  vec3 red = vec3(max(c.r, l * 1.35 + 0.06), c.g * 0.42, c.b * 0.38);
+  vec3 red = vec3(max(c.r, l * 1.7 + 0.2), c.g * 0.15, c.b * 0.12);
   c = mix(c, red, uHurt);
+  float edge = uHurtSide > 0.0 ? smoothstep(0.62, 1.0, vUv.x) : smoothstep(0.38, 0.0, vUv.x);
+  c = mix(c, vec3(max(c.r, 0.75), c.g * 0.2, c.b * 0.2), edge * abs(uHurtSide) * uHurt);
   c = mix(c, c * vec3(1.15, 1.05, 0.7) + vec3(0.22, 0.17, 0.0), uBonus);
   // black level: like Doom's COLORMAP, the darkest light never maps to pure black
   c = 0.045 + c * 0.955;
@@ -276,6 +279,7 @@ export class Renderer {
         tScene: { value: this.rt.texture },
         tLut: { value: buildPaletteLut() },
         uHurt: { value: 0 },
+        uHurtSide: { value: 0 },
         uBonus: { value: 0 },
       },
       depthTest: false,
@@ -642,6 +646,10 @@ export class Renderer {
     this.particleGeometry.setDrawRange(0, count);
   }
 
+  debugHurtUniform(): number {
+    return this.postMat.uniforms.uHurt.value as number;
+  }
+
   /** Entity went away: malware dissolves; cleaned workstations stay as clean props. */
   private retire(st: SpriteState): void {
     const e = st.entity;
@@ -708,11 +716,12 @@ export class Renderer {
     if (!this.debugNoFlash) timeUniform.value = this.time;
 
     // damage → palette red shift
-    if (player.integrity < this.lastIntegrity) this.hurt = Math.min(0.55, this.hurt + 0.3 + (this.lastIntegrity - player.integrity) * 0.012);
+    if (player.integrity < this.lastIntegrity) this.hurt = Math.min(0.85, this.hurt + 0.3 + (this.lastIntegrity - player.integrity) * 0.012);
     this.lastIntegrity = player.integrity;
     this.hurt = Math.max(0, this.hurt - dt * 0.6);
     const lowHp = player.integrity > 0 && player.integrity < 25 ? 0.12 + Math.sin(this.time * 5) * 0.06 : 0;
-    this.postMat.uniforms.uHurt.value = Math.min(0.55, Math.max(pose?.hurt ?? this.hurt, lowHp));
+    this.postMat.uniforms.uHurt.value = Math.min(0.85, Math.max(pose?.hurt ?? this.hurt, lowHp));
+    this.postMat.uniforms.uHurtSide.value = pose?.hurtSide ?? 0;
     this.postMat.uniforms.uBonus.value = pose?.bonus ?? 0;
 
     const speed = Math.min(1, Math.hypot(player.vx, player.vy) / 4);
