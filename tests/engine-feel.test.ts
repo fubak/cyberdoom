@@ -233,6 +233,22 @@ describe('Doom enemy AI', () => {
     expect(ransomware.hurtT).toBe(0.25);
   });
 
+  it('preserves a windup after a non-stunning hit and records the rootkit hurt time', () => {
+    const windup = enemy('windup', 'worm');
+    windup.state.mode = 'windup';
+    windup.state.windupT = 0.5;
+    windup.state.aiClock = 7.5;
+    hurtEntity(windup, 1, 0, () => 0.99);
+    expect(windup.state.mode).toBe('windup');
+    expect(windup.state.windupT).toBe(0.5);
+    expect(windup.state.lastHurtAt).toBe(7.5);
+
+    const profileOverride = enemy('profile-override', 'ransomware');
+    profileOverride.def.threat = 'worm';
+    hurtEntity(profileOverride, 1, 0, () => 0.7);
+    expect(profileOverride.state.mode).toBe('pain');
+  });
+
   it('pauses wandering during pain and resumes afterward', () => {
     const map = new WorldMap(mapDef);
     const e = enemy('wanderer', 'worm');

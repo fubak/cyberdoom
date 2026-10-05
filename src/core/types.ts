@@ -98,6 +98,8 @@ export interface EntityDef {
   x: number;
   y: number;
   sprite: string;
+  /** AI profile id; defaults to the sprite id. */
+  threat?: string;
   ai?: AiMode;
   hp?: number;
   /** For an `ordered` interact objective: lower numbers must be actioned first. */
@@ -126,6 +128,8 @@ export interface EntityDef {
   accepts?: string;
   /** Raw evidence shown when the Keyboard reads this console (logs, alerts). */
   log?: string;
+  /** Option-group id; successfully resolving one option deactivates its siblings. */
+  group?: string;
 }
 
 /** A mission objective tracked by the runtime and shown in the HUD/debrief. */
@@ -151,6 +155,8 @@ export interface MissionObjective {
   ordered?: boolean;
   /** For 'avoid': violations allowed before the mission FAILS (default 1). */
   strikes?: number;
+  /** Avoid objective to violate when an interaction is attempted before its requirements. */
+  earlyViolates?: string;
 }
 
 export interface QuestionOption {

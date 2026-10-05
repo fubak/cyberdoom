@@ -18,12 +18,20 @@ interface EnemyProfile {
   range?: number;
   projectileSpeed?: number;
   windup: number;
+  aggroRange?: number;
+  logicBomb?: boolean;
+  retreatAfterShot?: number;
+  regenerate?: boolean;
+  hidesWhenIdle?: boolean;
 }
 
 export const ENEMY_PROFILES: Record<string, EnemyProfile> = {
   worm: { speed: 2.6, ranged: false, damage: 6, painChance: 0.8, range: 0.95, windup: 0.3 },
   trojan: { speed: 1.8, ranged: true, damage: 10, painChance: 0.6, projectileSpeed: 5.5, windup: 0.5 },
   ransomware: { speed: 1.3, ranged: true, damage: 18, painChance: 0.4, projectileSpeed: 4, windup: 0.7 },
+  logicbomb: { speed: 0, ranged: false, damage: 22, painChance: 0, range: 2.2, windup: 1.4, aggroRange: 4, logicBomb: true },
+  rat: { speed: 3.2, ranged: true, damage: 8, painChance: 0.6, projectileSpeed: 7, windup: 0.35, retreatAfterShot: 0.7 },
+  rootkit: { speed: 1.6, ranged: false, damage: 12, painChance: 0.4, range: 0.95, windup: 0.5, regenerate: true, hidesWhenIdle: true },
 };
 
 export const ENEMY_RADIUS = 0.3;
@@ -119,7 +127,22 @@ export function updateEntities(
     }
     const ai = e.def.ai ?? 'stand';
     if (ai === 'chase') {
-      const profile = ENEMY_PROFILES[e.def.sprite] ?? ENEMY_PROFILES.worm;
+      const profile = ENEMY_PROFILES[e.def.threat ?? e.def.sprite] ?? ENEMY_PROFILES.worm;
+      const speed = profile.speed * ((e.state.speedMul as number | undefined) ?? 1);
+      if (profile.regenerate) {
+        if (e.state.lastHurtAt === undefined) e.state.lastHurtAt = now;
+        const sinceHurt = now - (e.state.lastHurtAt as number);
+        if (sinceHurt >= 3) {
+          let regenT = ((e.state.regenT as number | undefined) ?? 0) + dt;
+          while (regenT >= 3) {
+            e.hp = Math.min((e.state.maxHp as number | undefined) ?? (e.def.hp ?? e.hp), e.hp + 1);
+            regenT -= 3;
+          }
+          e.state.regenT = regenT;
+        } else {
+          e.state.regenT = 0;
+        }
+      }
       const dx = player.x - e.x;
       const dy = player.y - e.y;
       const dist = Math.hypot(dx, dy);
@@ -141,7 +164,23 @@ export function updateEntities(
         const facing = e.state.facing as number;
         const toPlayer = Math.atan2(dy, dx);
         const inFront = Math.abs(Math.atan2(Math.sin(toPlayer - facing), Math.cos(toPlayer - facing))) <= Math.PI / 2;
-        if ((los && dist < 10 && inFront) || dist < 2.5) {
+        const baseAggro = (e.state.aggro as number | undefined) ?? 10;
+        const hiddenAggro = profile.hidesWhenIdle ? baseAggro / 2 : baseAggro;
+        const aggro = Math.min(
+          hiddenAggro,
+          profile.aggroRange ?? Infinity,
+        );
+        if (profile.logicBomb) {
+          if (los && dist <= aggro) {
+            e.state.mode = 'windup';
+            e.state.windupDur = profile.windup;
+            e.state.windupT = 0;
+            e.state.sighted = true;
+            hooks.onSight(e);
+            hooks.onWindup(e, profile.windup);
+            currentMode = 'windup';
+          }
+        } else if ((los && dist < aggro && inFront) || dist < 2.5) {
           e.state.mode = 'chase';
           e.state.reaction = 0.25;
           e.state.attackCooldown = 0.25;
@@ -159,7 +198,7 @@ export function updateEntities(
         const tryMove = () => {
           const dir = (e.state.movedir as number | undefined) ?? movedirFromAngle(Math.atan2(dy, dx));
           const [mx, my] = DIRECTIONS[dir];
-          if (!enemyMoveTo(e, e.x + mx * profile.speed * dt, e.y + my * profile.speed * dt, map, player)) {
+          if (!enemyMoveTo(e, e.x + mx * speed * dt, e.y + my * speed * dt, map, player)) {
             return false;
           }
           turnToward(e, Math.atan2(my, mx), dt, 8);
@@ -196,11 +235,27 @@ export function updateEntities(
           }
         }
         e.state.attackCheckT = checkT;
+      } else if (currentMode === 'retreat') {
+        const retreatT = ((e.state.retreatT as number | undefined) ?? 0) - dt;
+        e.state.retreatT = retreatT;
+        const away = Math.atan2(e.y - player.y, e.x - player.x);
+        const res = map.resolve(
+          e.x + Math.cos(away) * speed * dt,
+          e.y + Math.sin(away) * speed * dt,
+          0.3,
+        );
+        e.x = res.x;
+        e.y = res.y;
+        turnToward(e, away, dt, 8);
+        if (retreatT <= 0) e.state.mode = 'chase';
       } else if (currentMode === 'windup') {
         const windupT = ((e.state.windupT as number | undefined) ?? 0) + dt;
         e.state.windupT = windupT;
         if (windupT >= (e.state.windupDur as number)) {
-          if (profile.ranged) {
+          if (profile.logicBomb) {
+            if (dist <= (profile.range ?? 2.2)) hooks.onMelee(e, profile.damage);
+            e.alive = false;
+          } else if (profile.ranged) {
             const aimDx = player.x - e.x;
             const aimDy = player.y - e.y;
             const aimDist = Math.hypot(aimDx, aimDy) || 1;
@@ -218,8 +273,9 @@ export function updateEntities(
           } else if (dist < (profile.range ?? 0.95) + 0.25) {
             hooks.onMelee(e, profile.damage);
           }
-          e.state.mode = 'recover';
-          e.state.recoverT = 0.3;
+          e.state.mode = profile.retreatAfterShot ? 'retreat' : 'recover';
+          if (profile.retreatAfterShot) e.state.retreatT = profile.retreatAfterShot;
+          else e.state.recoverT = 0.3;
           e.state.popT = 0;
           e.state.attackCooldown = randomCooldown();
         }
@@ -298,7 +354,8 @@ export function hurtEntity(e: Entity, fromDx: number, fromDy: number, rng = Math
     e.state.reaction = 0.25;
     e.state.sighted = true;
   }
-  const painChance = ENEMY_PROFILES[e.def.sprite]?.painChance ?? 0;
+  e.state.lastHurtAt = (e.state.aiClock as number | undefined) ?? 0;
+  const painChance = ENEMY_PROFILES[e.def.threat ?? e.def.sprite]?.painChance ?? 0;
   if (painChance > 0 && rng() < painChance) {
     e.state.mode = 'pain';
     e.state.painT = 0.2;

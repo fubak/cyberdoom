@@ -11,6 +11,7 @@ import { ParticleSystem } from './engine/fx';
 import { lookProbe } from './render/probe';
 import { Renderer } from './render/renderer';
 import { Hud } from './ui/hud';
+import { Automap } from './ui/automap';
 import { Dossier } from './ui/dossier';
 import * as screens from './ui/screens';
 import { MissionRuntime } from './missions/runtime';
@@ -20,6 +21,7 @@ import { Arsenal } from './tools/arsenal';
 import { USB_PLUG_RANGE } from './tools/usb';
 import { characterSelect } from './ui/characterSelect';
 import { markCompleted } from './missions/progress';
+import { registerThreatSprites } from './missions/threatSprites';
 
 /**
  * main.ts — boot + top-level state machine:
@@ -45,6 +47,7 @@ class Game {
   private particles = new ParticleSystem();
   private renderer!: Renderer;
   private hud!: Hud;
+  private automap!: Automap;
   private dossier!: Dossier;
   private input!: Input;
   private screen: Screen = 'title';
@@ -77,9 +80,16 @@ class Game {
     viewport.id = 'viewport';
     app.appendChild(viewport);
     this.renderer = new Renderer(viewport);
+    registerThreatSprites();
     this.renderer.canvas.classList.add('gl');
     this.input = new Input(this.renderer.canvas, () => this.audio.unlock());
     this.hud = new Hud(viewport);
+    this.automap = new Automap(this.hud.canvas);
+    window.addEventListener('keydown', (event) => {
+      if (event.code !== 'KeyM' || event.repeat || this.screen !== 'play' || this.dossier?.isOpen) return;
+      this.automap.toggle();
+    });
+    window.addEventListener('blur', () => this.automap.close());
     const cross = document.createElement('div');
     cross.id = 'crosshair';
     viewport.appendChild(cross);
@@ -282,7 +292,14 @@ class Game {
         },
         credentials: this.runtime.roles[this.runtime.roles.length - 1] ?? this.role,
         objectives: this.runtime.objectiveSummary(),
+        progress: this.runtime.hudProgress(),
       });
+      this.automap.draw(
+        this.map.def,
+        this.runtime.visited,
+        this.player,
+        (doorId) => this.runtime?.isSecretDoorRevealed(doorId) ?? false,
+      );
       this.dossier.draw();
     }
   }

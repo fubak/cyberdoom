@@ -72,7 +72,7 @@ export const mouseTool: ToolDef = {
     const e = ctx.aimEntity(8, 0.26);
     ctx.bus.emit('tool-used', { toolId: 'mouse' });
     if (!e) return;
-    if (!e.state.inspected && e.state.captured && e.def.inspect?.category !== 'person') {
+    if (!e.state.inspected && e.state.captured && e.def.inspect?.category !== 'person' && !e.def.tags?.includes('triage')) {
       // the tap already captured this host's traffic: the evidence is in hand, so go straight to the call
       e.state.inspected = true;
       ctx.bus.emit('inspect', { entityId: e.def.id });
@@ -81,13 +81,17 @@ export const mouseTool: ToolDef = {
       e.state.inspected = true;
       ctx.bus.emit('tool-hit', { toolId: 'mouse', entityId: e.def.id, good: true });
       ctx.bus.emit('inspect', { entityId: e.def.id });
-      if (e.def.kind !== 'item' || isMalicious(e)) {
+      if (!e.def.tags?.includes('triage') && (e.def.kind !== 'item' || isMalicious(e))) {
         ctx.bus.emit('message', { text: 'Click again on the same target to flag it as MALICIOUS.', kind: 'info' });
       }
       return;
     }
     if (e.state.flagged) {
       ctx.bus.emit('message', { text: `${e.def.inspect?.label ?? 'Target'} is already flagged.`, kind: 'info' });
+      return;
+    }
+    if (e.def.tags?.includes('triage')) {
+      ctx.bus.emit('message', { text: 'Decide from the raw evidence: SCANNER quarantines/patches, KEYBOARD releases.', kind: 'info' });
       return;
     }
     if (e.def.inspect?.category === 'person') {

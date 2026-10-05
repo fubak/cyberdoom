@@ -98,6 +98,55 @@ describe('MissionRuntime', () => {
     expect(state.messages.filter((m) => m.text.includes('secret')).length).toBe(1);
   });
 
+  it('requires inspection before cleaning an infected workstation', () => {
+    const state = setup(mission({
+      entities: [{
+        id: 'host', kind: 'workstation', x: 2, y: 2, sprite: 'workstation',
+        infected: true, hp: 2,
+        inspect: { label: 'Unconfirmed host', detail: 'Raw host indicators.', category: 'malware' },
+      }],
+      missionObjectives: [{ id: 'clean', text: 'Clean host', kind: 'clean', tag: 'infected' }],
+    }));
+    const host = state.rt.byId('host')!;
+    host.hp = 0;
+    state.bus.emit('cleaned', { entityId: 'host' });
+    expect(host.alive).toBe(true);
+    expect(host.infected).toBe(true);
+    expect(host.hp).toBe(2);
+    expect(state.rt.score).toBe(-10);
+
+    host.hp = 0;
+    state.bus.emit('cleaned', { entityId: 'host' });
+    expect(host.hp).toBe(2);
+    expect(state.rt.score).toBe(-10);
+
+    state.bus.emit('inspect', { entityId: 'host' });
+    expect(host.state.revealed).toBe(true);
+    state.bus.emit('cleaned', { entityId: 'host' });
+    expect(host.alive).toBe(false);
+    expect(host.infected).toBe(false);
+    expect(state.rt.score).toBe(15);
+  });
+
+  it('exposes partial objective progress in the summary and HUD total', () => {
+    const state = setup(mission({
+      entities: [
+        { id: 'one', kind: 'console', x: 2, y: 2, sprite: 'console', tags: ['work'] },
+        { id: 'two', kind: 'console', x: 3, y: 2, sprite: 'console', tags: ['work'] },
+        { id: 'three', kind: 'console', x: 4, y: 2, sprite: 'console', tags: ['work'] },
+      ],
+      missionObjectives: [
+        { id: 'work', text: 'Apply changes', kind: 'interact', tag: 'work', count: 3 },
+        { id: 'avoid', text: 'Avoid traps', kind: 'avoid' },
+        { id: 'doors', text: 'Use authorized doors', kind: 'doors' },
+      ],
+    }));
+    state.bus.emit('interact', { entityId: 'one' });
+
+    expect(state.rt.objectiveSummary()[0].text).toContain('(1/3)');
+    expect(state.rt.hudProgress()).toEqual({ done: 1, total: 3, failed: false });
+  });
+
   it('picks up carried items, accepts them, and grants a role', () => {
     const state = setup(mission({
       entities: [
@@ -179,6 +228,64 @@ describe('MissionRuntime', () => {
     expect(state.messages.at(-1)?.text).toBe('First: Collect evidence');
   });
 
+  it('fails an early interaction through its configured avoid objective', () => {
+    const state = setup(mission({
+      entities: [{
+        id: 'patch', kind: 'console', x: 2, y: 2, sprite: 'console',
+        tags: ['patch'],
+      }],
+      missionObjectives: [
+        { id: 'docs', text: 'Collect change documents', kind: 'inspect', tag: 'docs' },
+        {
+          id: 'apply', text: 'Apply the patch', kind: 'interact', tag: 'patch',
+          requires: ['docs'], earlyViolates: 'early-patch',
+        },
+        { id: 'early-patch', text: 'Do not patch early', kind: 'avoid' },
+      ],
+    }));
+    state.bus.emit('interact', { entityId: 'patch' });
+    expect(state.rt.finished).toBe('lost');
+    expect(state.rt.lossReason).toBe('Do not patch early');
+    expect(state.rt.objectives.find((objective) => objective.def.id === 'early-patch')?.violations).toBe(1);
+  });
+
+  it('loses after three wrong triage calls and removes integrity each time', () => {
+    const state = setup(mission({
+      entities: [{
+        id: 'false-positive', kind: 'workstation', x: 2, y: 2, sprite: 'workstation',
+        tags: ['triage'], infected: false,
+      }],
+      missionObjectives: [{
+        id: 'wrong-call', text: 'Avoid wrong triage calls', kind: 'avoid',
+        tag: 'wrong-call', strikes: 3,
+      }],
+    }));
+    tick(state);
+    for (let i = 0; i < 3; i++) {
+      state.bus.emit('scan-miss', { entityId: 'false-positive' });
+    }
+    expect(state.rt.finished).toBe('lost');
+    expect(state.rt.lossReason).toBe('Avoid wrong triage calls');
+    expect(state.player.integrity).toBe(70);
+    expect(state.rt.score).toBe(-75);
+  });
+
+  it('deactivates sibling options after a successful grouped choice', () => {
+    const state = setup(mission({
+      entities: [
+        { id: 'correct', kind: 'console', x: 2, y: 2, sprite: 'console', tags: ['fix-gaps'], group: 'gap-1' },
+        { id: 'sibling', kind: 'console', x: 3, y: 2, sprite: 'console', tags: ['wrong-control'], group: 'gap-1' },
+      ],
+      missionObjectives: [
+        { id: 'fix-gaps', text: 'Resolve the gap', kind: 'interact', tag: 'fix-gaps' },
+        { id: 'wrong-control', text: 'Avoid wrong controls', kind: 'avoid', tag: 'wrong-control', strikes: 3 },
+      ],
+    }));
+    state.bus.emit('interact', { entityId: 'correct' });
+    expect(state.rt.byId('sibling')?.alive).toBe(false);
+    expect(state.rt.objectives.find((objective) => objective.def.id === 'wrong-control')?.violations).toBe(0);
+  });
+
   it('marks an obeyed doors objective done at win, but violations are not fatal', () => {
     const make = () => setup(mission({
       missionObjectives: [
@@ -254,9 +361,12 @@ describe('MissionRuntime', () => {
       state: { cleaned: false },
     });
     expect(state.rt.objectives[0]).toMatchObject({ progress: 0, done: false });
-    expect(state.rt.scoreLog).toHaveLength(0);
+    expect(state.rt.scoreLog).toContainEqual(expect.objectContaining({
+      text: 'Scanned an unconfirmed host: inspect it (MOUSE) before removing anything',
+      points: -10,
+    }));
     expect(state.messages.at(-1)?.text).toBe(
-      'Not cleaned: inspect WS-07 first. Analysis before action.',
+      'Scanned an unconfirmed host: inspect it (MOUSE) before removing anything -10',
     );
   });
 
@@ -296,7 +406,10 @@ describe('MissionRuntime', () => {
     }));
     state.bus.emit('interact', { entityId: 'host' });
     expect(state.rt.byId('host')).toMatchObject({ alive: true, infected: true, hp: 3 });
-    expect(state.rt.scoreLog).toHaveLength(0);
+    expect(state.rt.scoreLog).toContainEqual(expect.objectContaining({
+      text: 'Scanned an unconfirmed host: inspect it (MOUSE) before removing anything',
+      points: -10,
+    }));
 
     state.bus.emit('inspect', { entityId: 'host' });
     state.bus.emit('interact', { entityId: 'host' });
@@ -316,6 +429,7 @@ describe('MissionRuntime', () => {
       }],
       missionObjectives: [{ id: 'clean', text: 'Clean host', kind: 'clean', tag: 'infected' }],
     }));
+    state.bus.emit('inspect', { entityId: 'host' });
     state.bus.emit('cleaned', { entityId: 'host' });
 
     expect(state.rt.byId('host')?.alive).toBe(false);

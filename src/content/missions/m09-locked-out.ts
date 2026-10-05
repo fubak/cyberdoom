@@ -3,6 +3,7 @@ import type { MissionTeaching } from '../curriculum';
 import { q } from '../arc-questions';
 import type { WalkStep } from '../../missions/walkthroughs';
 import { lightRects } from '../../missions/levelkit';
+import { addThreatEncounter, setMapCell } from './campaign-map';
 
 /**
  * M9 "Locked Out": ransomware incident response, run in the right order.
@@ -55,8 +56,8 @@ briefing:
       '###################..########..#########',
       '##########BBBBB..........####..#########',
       '##########B...B..........####..#########',
-      '##########B...1..#....#..e.....#########',
-      '##########B...B..#....#..###############',
+      '##########B...1..#SS..#..e.....#########',
+      '##########B...B..#SS..#..###############',
       '##########B...B..........###############',
       '##########BBBBB..........###############',
       '########################################',
@@ -79,10 +80,11 @@ briefing:
       },
       '1': { kind: 'door', tex: 'wall-brick', doorId: 'secret-store', secret: true },
       '2': { kind: 'door', tex: 'wall-brick', doorId: 'secret-closet', secret: true },
+      '3': { kind: 'door', tex: 'wall-server', doorId: 'secret-warroom-cache', secret: true },
     },
-    spawn: { x: 19.5, y: 27.5, angle: -Math.PI / 2 },
+    spawn: { x: 23.5, y: 27.5, angle: Math.PI / 2 },
     defaultLight: 0.65,
-    lights: lightRects([[15, 23, 24, 28, 0.85], [6, 10, 33, 20, 0.55], [1, 1, 8, 6, 0.45], [31, 1, 38, 7, 0.5], [16, 1, 23, 5, 1.0], [11, 24, 13, 27, 0.3], [35, 16, 38, 20, 0.3], [25, 21, 30, 25, 0.4]]),
+    lights: lightRects([[15, 23, 24, 28, 0.85], [17, 24, 21, 27, 1.0], [6, 10, 33, 20, 0.55], [1, 1, 8, 6, 0.45], [31, 1, 38, 7, 0.5], [16, 1, 23, 5, 1.0], [11, 24, 13, 27, 0.3], [35, 16, 38, 20, 0.3], [25, 21, 30, 25, 0.4]]),
   },
   entities: [
     ...(
@@ -142,19 +144,71 @@ briefing:
       inspect: { label: 'Remote-access trojan', detail: 'Attacker hands-on-keyboard after losing the network.', category: 'malware', objectives: ['2.4'] } },
     { id: 'hok-b', kind: 'enemy', x: 33.5, y: 15.5, sprite: 'trojan', ai: 'chase', hp: 3, infected: true, dormant: true, tags: ['malware'],
       inspect: { label: 'Remote-access trojan', detail: 'Attacker hands-on-keyboard after losing the network.', category: 'malware', objectives: ['2.4'] } },
-    { id: 'chg-war', kind: 'item', x: 23.5, y: 23.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 4 },
+    { id: 'chg-war', kind: 'item', x: 23.5, y: 23.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 8 },
       inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for your write-protected scanner stick.', category: 'item' } },
-    { id: 'chg-floor-n', kind: 'item', x: 19.5, y: 11.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 4 },
+    { id: 'chg-floor-n', kind: 'item', x: 19.5, y: 11.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 8 },
       inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for your write-protected scanner stick.', category: 'item' } },
-    { id: 'chg-floor-s', kind: 'item', x: 19.5, y: 19.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 4 },
+    { id: 'chg-floor-s', kind: 'item', x: 19.5, y: 19.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 8 },
       inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for your write-protected scanner stick.', category: 'item' } },
     { id: 'med-vault', kind: 'item', x: 32.5, y: 6.5, sprite: 'medkit', grants: { resource: 'integrity', amount: 25 },
       inspect: { label: 'Integrity kit', detail: 'Restores 25 integrity.', category: 'item' } },
-    { id: 'chg-store', kind: 'item', x: 11.5, y: 25.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 6 },
+    { id: 'chg-store', kind: 'item', x: 11.5, y: 25.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 8 },
       inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for your write-protected scanner stick.', category: 'item' } },
     { id: 'med-store', kind: 'item', x: 12.5, y: 27.5, sprite: 'medkit', grants: { resource: 'integrity', amount: 25 },
       inspect: { label: 'Integrity kit', detail: 'Restores 25 integrity.', category: 'item' } },
-    { id: 'chg-closet', kind: 'item', x: 37.5, y: 18.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 6 },
+    { id: 'chg-closet', kind: 'item', x: 37.5, y: 18.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 8 },
+      inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for your write-protected scanner stick.', category: 'item' } },
+    { id: 'chg-northwest', kind: 'item', x: 9.5, y: 11.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 8 },
+      inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for your write-protected scanner stick.', category: 'item' } },
+    { id: 'chg-northeast', kind: 'item', x: 30.5, y: 11.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 8 },
+      inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for your write-protected scanner stick.', category: 'item' } },
+    { id: 'chg-west-floor', kind: 'item', x: 9.5, y: 18.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 8 },
+      inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for your write-protected scanner stick.', category: 'item' } },
+    { id: 'chg-east-floor', kind: 'item', x: 32.5, y: 19.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 8 },
+      inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for your write-protected scanner stick.', category: 'item' } },
+    { id: 'chg-central-west', kind: 'item', x: 15.5, y: 13.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 8 },
+      inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for your write-protected scanner stick.', category: 'item' } },
+    { id: 'chg-central-east', kind: 'item', x: 24.5, y: 17.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 8 },
+      inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for your write-protected scanner stick.', category: 'item' } },
+    { id: 'chg-warroom', kind: 'item', x: 20.5, y: 26.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 8 },
+      inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for your write-protected scanner stick.', category: 'item' } },
+    { id: 'chg-east-hall', kind: 'item', x: 27.5, y: 15.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 8 },
+      inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for your write-protected scanner stick.', category: 'item' } },
+    { id: 'chg-reserve-01', kind: 'item', x: 12.5, y: 10.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 8 },
+      inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for your write-protected scanner stick.', category: 'item' } },
+    { id: 'chg-reserve-02', kind: 'item', x: 16.5, y: 10.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 8 },
+      inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for your write-protected scanner stick.', category: 'item' } },
+    { id: 'chg-reserve-03', kind: 'item', x: 20.5, y: 10.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 8 },
+      inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for your write-protected scanner stick.', category: 'item' } },
+    { id: 'chg-reserve-04', kind: 'item', x: 24.5, y: 10.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 8 },
+      inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for your write-protected scanner stick.', category: 'item' } },
+    { id: 'chg-reserve-05', kind: 'item', x: 28.5, y: 10.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 8 },
+      inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for your write-protected scanner stick.', category: 'item' } },
+    { id: 'chg-reserve-06', kind: 'item', x: 12.5, y: 11.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 8 },
+      inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for your write-protected scanner stick.', category: 'item' } },
+    { id: 'chg-reserve-07', kind: 'item', x: 16.5, y: 11.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 8 },
+      inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for your write-protected scanner stick.', category: 'item' } },
+    { id: 'chg-reserve-08', kind: 'item', x: 23.5, y: 11.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 8 },
+      inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for your write-protected scanner stick.', category: 'item' } },
+    { id: 'chg-reserve-09', kind: 'item', x: 27.5, y: 11.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 8 },
+      inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for your write-protected scanner stick.', category: 'item' } },
+    { id: 'chg-reserve-10', kind: 'item', x: 12.5, y: 12.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 8 },
+      inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for your write-protected scanner stick.', category: 'item' } },
+    { id: 'chg-reserve-11', kind: 'item', x: 17.5, y: 12.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 8 },
+      inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for your write-protected scanner stick.', category: 'item' } },
+    { id: 'chg-reserve-12', kind: 'item', x: 22.5, y: 12.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 8 },
+      inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for your write-protected scanner stick.', category: 'item' } },
+    { id: 'chg-reserve-13', kind: 'item', x: 25.5, y: 12.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 8 },
+      inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for your write-protected scanner stick.', category: 'item' } },
+    { id: 'chg-reserve-14', kind: 'item', x: 7.5, y: 13.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 8 },
+      inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for your write-protected scanner stick.', category: 'item' } },
+    { id: 'chg-reserve-15', kind: 'item', x: 15.5, y: 13.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 8 },
+      inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for your write-protected scanner stick.', category: 'item' } },
+    { id: 'chg-reserve-16', kind: 'item', x: 23.5, y: 13.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 8 },
+      inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for your write-protected scanner stick.', category: 'item' } },
+    { id: 'chg-reserve-17', kind: 'item', x: 31.5, y: 13.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 8 },
+      inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for your write-protected scanner stick.', category: 'item' } },
+    { id: 'chg-reserve-18', kind: 'item', x: 12.5, y: 14.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 8 },
       inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for your write-protected scanner stick.', category: 'item' } },
     {
       id: 'find-edr', kind: 'item', x: 3.5, y: 4.5, sprite: 'tool-edr',
@@ -223,6 +277,7 @@ briefing:
     secrets: [
       { id: 'store', area: [11, 24, 13, 27], label: 'IR storeroom' },
       { id: 'closet', area: [35, 16, 38, 20], label: 'Finance closet' },
+      { id: 'warroom-cache', area: [18, 15, 18, 15], label: 'War-room cache' },
     ],
   },
 debriefQuestions: [
@@ -262,9 +317,13 @@ export const m09Walkthrough: WalkStep[] = [
   { badge: [8, 7] },
   { goto: [2, 2] },
   { interact: 'core-switch' },
+  { inspect: 'enc1' },
   { clean: 'enc1' },
+  { inspect: 'enc2' },
   { clean: 'enc2' },
+  { inspect: 'enc3' },
   { clean: 'enc3' },
+  { inspect: 'enc4' },
   { clean: 'enc4' },
   { wait: 0.2 },
   { goto: [37, 2] },
@@ -324,3 +383,29 @@ export const m09Teach: MissionTeaching = {
   },
   examTip: 'Incident response order on the exam: preparation, detection, analysis, containment, eradication, recovery, lessons learned. Ransomware recovery = offline/immutable backups, not replicas.',
 };
+
+setMapCell(m09.map, 17, 15, '3');
+setMapCell(m09.map, 18, 15, '.');
+setMapCell(m09.map, 17, 23, 'S');
+setMapCell(m09.map, 21, 23, 'S');
+setMapCell(m09.map, 17, 24, 'S');
+setMapCell(m09.map, 21, 24, 'S');
+m09.map.lights = { ...m09.map.lights, ...lightRects([[16, 22, 22, 26, 1]]) };
+addThreatEncounter(m09, 'ransomware-finance', 'ransomware', 9, {
+  id: 'finance-ambush',
+  area: [34, 11, 36, 13],
+  kind: 'bad',
+  message: 'A ransomware wave pushed through the finance floor.',
+}, [10, 21, 32, 28]);
+addThreatEncounter(m09, 'ransomware-west', 'ransomware', 13, {
+  id: 'ir-storeroom-ambush',
+  area: [2, 3, 4, 5],
+  kind: 'bad',
+  message: 'An isolated segment released another ransomware wave.',
+}, [1, 10, 38, 20]);
+addThreatEncounter(m09, 'ransomware-recovery', 'ransomware', 9, {
+  id: 'recovery-ambush',
+  after: ['recover'],
+  kind: 'bad',
+  message: 'The recovery operation triggered a final ransomware wave.',
+}, [1, 1, 38, 9]);

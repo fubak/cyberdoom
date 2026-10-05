@@ -2,6 +2,7 @@ import type { Mission } from '../../core/types';
 import type { MissionTeaching } from '../curriculum';
 import type { WalkStep } from '../../missions/walkthroughs';
 import { lightRects } from '../../missions/levelkit';
+import { addThreatEncounter, setMapCell } from './campaign-map';
 
 /**
  * M1 "Patch Tuesday" — antimalware, endpoint hygiene, removable media.
@@ -53,11 +54,11 @@ export const m01: Mission = {
       '###B..........B###############..########',
       'BBBB..........B#......................##',
       'B..B..........B#......................##',
-      'B..1..........B#....##.....##.........##',
-      'B..B..........p.....##.....##.........##',
+      'B..1........S.B#....##.....##.........##',
+      'B..B.......S.Sp.....##.....##.........##',
       'BBBB..........B#......................##',
-      '###B..........B#......................##',
-      '###B..........B#########################',
+      '###B.......S.SB#......................##',
+      '###B........S.B#########################',
       '###BBBBBBBBBBBB#########################',
     ],
     legend: {
@@ -78,10 +79,11 @@ export const m01: Mission = {
       },
       '1': { kind: 'door', tex: 'wall-brick', doorId: 'secret-closet', secret: true },
       '2': { kind: 'door', tex: 'wall-server', doorId: 'secret-crawl', secret: true },
+      '3': { kind: 'door', tex: 'wall-server', doorId: 'secret-core', secret: true },
     },
-    spawn: { x: 7.0, y: 26.5, angle: -Math.PI / 2 },
+    spawn: { x: 7.0, y: 26.5, angle: 0 },
     defaultLight: 0.8,
-    lights: lightRects([[10, 6, 29, 15, 0.85], [4, 21, 13, 28, 0.9], [6, 14, 7, 20, 0.55], [6, 16, 7, 18, 1.0], [2, 6, 8, 12, 0.8], [31, 4, 38, 14, 0.45], [36, 12, 38, 14, 0.7], [32, 1, 38, 2, 0.35], [1, 23, 2, 25, 0.35], [16, 1, 23, 4, 1.0], [22, 16, 36, 19, 0.5], [16, 21, 37, 27, 0.6]]),
+    lights: lightRects([[10, 6, 29, 15, 0.85], [4, 21, 13, 28, 0.9], [10, 24, 14, 28, 1.0], [6, 14, 7, 20, 0.55], [6, 16, 7, 18, 1.0], [2, 6, 8, 12, 0.8], [31, 4, 38, 14, 0.45], [36, 12, 38, 14, 0.7], [32, 1, 38, 2, 0.35], [1, 23, 2, 25, 0.35], [16, 1, 23, 4, 1.0], [22, 16, 36, 19, 0.5], [16, 21, 37, 27, 0.6]]),
   },
   entities: [
     {
@@ -150,7 +152,7 @@ export const m01: Mission = {
       },
     },
     {
-      id: 'ws-clean', kind: 'workstation', x: 23.5, y: 6.5, sprite: 'workstation',
+      id: 'ws-clean', kind: 'workstation', x: 14.5, y: 10.5, sprite: 'workstation',
       inspect: {
         label: 'Workstation MKT-11',
         detail: 'Patched last night, AV signatures current, no unusual processes.',
@@ -172,10 +174,10 @@ export const m01: Mission = {
       inspect: { label: 'Worm', detail: 'Scanning the print VLAN for open SMB shares.', category: 'malware', objectives: ['2.4'] } },
     { id: 'worm-lobby', kind: 'enemy', x: 11.5, y: 22.5, sprite: 'worm', ai: 'chase', hp: 2, infected: true, dormant: true, tags: ['malware'],
       inspect: { label: 'Worm', detail: 'Followed you in from the lobby kiosk.', category: 'malware', objectives: ['2.4'] } },
-    { id: 'trojan-a', kind: 'enemy', x: 37.5, y: 4.5, sprite: 'trojan', ai: 'chase', hp: 3, infected: true, dormant: true, tags: ['malware'],
-      inspect: { label: 'Trojan', detail: 'Posed as a "driver update". Needs the user to run it; does not self-spread.', category: 'malware', objectives: ['2.4'] } },
-    { id: 'trojan-b', kind: 'enemy', x: 31.5, y: 13.5, sprite: 'trojan', ai: 'chase', hp: 3, infected: true, dormant: true, tags: ['malware'],
-      inspect: { label: 'Trojan', detail: 'Posed as a "driver update". Needs the user to run it; does not self-spread.', category: 'malware', objectives: ['2.4'] } },
+    { id: 'trojan-a', kind: 'enemy', x: 37.5, y: 4.5, sprite: 'worm', ai: 'chase', hp: 2, infected: true, dormant: true, tags: ['malware'],
+      inspect: { label: 'Worm', detail: 'Self-propagating across the office network.', category: 'malware', objectives: ['2.4'] } },
+    { id: 'trojan-b', kind: 'enemy', x: 31.5, y: 13.5, sprite: 'worm', ai: 'chase', hp: 2, infected: true, dormant: true, tags: ['malware'],
+      inspect: { label: 'Worm', detail: 'Self-propagating across the office network.', category: 'malware', objectives: ['2.4'] } },
     { id: 'chg-hub', kind: 'item', x: 10.5, y: 6.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 4 },
       inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for your write-protected scanner stick: ammo for the USB scanner.', category: 'item' } },
     { id: 'chg-desk', kind: 'item', x: 7.5, y: 7.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 4 },
@@ -186,10 +188,6 @@ export const m01: Mission = {
       inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for your write-protected scanner stick: ammo for the USB scanner.', category: 'item' } },
     { id: 'med-closet', kind: 'item', x: 1.5, y: 24.5, sprite: 'medkit', grants: { resource: 'integrity', amount: 25 },
       inspect: { label: 'Integrity kit', detail: 'Restores 25 integrity.', category: 'item' } },
-    { id: 'chg-closet', kind: 'item', x: 1.5, y: 23.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 4 },
-      inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for your write-protected scanner stick: ammo for the USB scanner.', category: 'item' } },
-    { id: 'chg-crawl', kind: 'item', x: 33.5, y: 1.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 6 },
-      inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for your write-protected scanner stick: ammo for the USB scanner.', category: 'item' } },
     { id: 'med-crawl', kind: 'item', x: 37.5, y: 1.5, sprite: 'medkit', grants: { resource: 'integrity', amount: 25 },
       inspect: { label: 'Integrity kit', detail: 'Restores 25 integrity.', category: 'item' } },
     {
@@ -217,7 +215,7 @@ export const m01: Mission = {
   script: {
     par: 150,
     triggers: [
-      { id: 'usb-ambush', area: [6, 17, 7, 17], spawn: ['worm-lobby'], kind: 'warn',
+      { id: 'usb-ambush', area: [6, 8, 7, 9], spawn: ['worm-lobby'], kind: 'warn',
         message: 'Worm alert: lateral movement behind you in the lobby!' },
       { id: 'server-ambush', area: [31, 9, 32, 11], spawn: ['trojan-a', 'trojan-b'], kind: 'bad',
         message: 'Trojans were hiding between the racks!' },
@@ -227,6 +225,7 @@ export const m01: Mission = {
     secrets: [
       { id: 'closet', area: [1, 23, 2, 25], label: 'Supply closet' },
       { id: 'crawl', area: [32, 1, 38, 2], label: 'Cable crawlspace' },
+      { id: 'core', area: [30, 4, 30, 4], label: 'Server core alcove' },
     ],
   },
   debriefQuestions: [
@@ -307,6 +306,20 @@ export const m01Walkthrough: WalkStep[] = [
   { wait: 0.2 },
   { goto: [19, 1] },
 ];
+
+setMapCell(m01.map, 6, 22, 'S');
+setMapCell(m01.map, 8, 22, 'S');
+setMapCell(m01.map, 6, 23, 'S');
+setMapCell(m01.map, 8, 23, 'S');
+setMapCell(m01.map, 30, 4, '.');
+setMapCell(m01.map, 31, 4, '3');
+m01.map.lights = { ...m01.map.lights, ...lightRects([[5, 20, 9, 24, 1]]) };
+addThreatEncounter(m01, 'worm-turnin', 'worm', 1, {
+  id: 'turnin-ambush',
+  after: ['turn-in'],
+  kind: 'bad',
+  message: 'The USB turn-in triggered a second worm wave from the server floor.',
+}, [18, 10, 37, 19]);
 
 export const m01Teach: MissionTeaching = {
   tagline: 'Screens are screaming and a USB stick is lying by the lifts.',

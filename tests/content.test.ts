@@ -1,7 +1,15 @@
 import { describe, it, expect } from 'vitest';
 import { missionRegistry } from '../src/content/missions';
+import { ARC } from '../src/content/curriculum';
 import { objectiveById, OBJECTIVES } from '../src/content/objectives';
 import type { Mission } from '../src/core/types';
+import { EventBus } from '../src/core/events';
+import { difficultyScale, encounterBudget } from '../src/missions/difficulty';
+import { MissionRuntime } from '../src/missions/runtime';
+import { defaultLoadout } from '../src/tools/arsenal';
+import { toolRegistry } from '../src/tools';
+
+const levelsOwnedMissionIds = new Set(['m01', 'm02', 'm03', 'm04', 'm05', 'm09']);
 
 /** BFS reachability from spawn to an exit tile. */
 function reachableExit(m: Mission): boolean {
@@ -106,6 +114,65 @@ describe('missions', () => {
     const d = missions.map((m) => m.difficulty);
     expect([...d].sort((a, b) => a - b)).toEqual(d);
   });
+  it('ARC encounter budgets and infected-enemy counts increase together', () => {
+    const built = ARC
+      .filter((entry) => entry.built && levelsOwnedMissionIds.has(entry.id))
+      .map((entry) => missionRegistry.get(entry.id)!);
+    const budgets = built.map((m) => encounterBudget(m.difficulty));
+    expect(budgets).toEqual([...budgets].sort((a, b) => a - b));
+    expect([1, 3, 6, 8].map(encounterBudget)).toEqual([6, 10, 20, 32]);
+    for (const m of built) {
+      const budget = encounterBudget(m.difficulty);
+      expect(
+        m.entities.filter((entity) => entity.kind === 'enemy' && entity.infected).length,
+        `${m.id} infected enemies`,
+      ).toBeGreaterThanOrEqual(budget);
+      expect(new MissionRuntime(m, new EventBus()).stats().killsTotal, `${m.id} runtime threat total`)
+        .toBeGreaterThanOrEqual(budget);
+    }
+  });
+  it('built missions have distinct spawn tile and facing pairs', () => {
+    const built = ARC.filter((entry) => entry.built).map((entry) => missionRegistry.get(entry.id)!);
+    const pairs = built.map((m) => {
+      const { x, y, angle } = m.map.spawn;
+      return `${x},${y},${angle.toFixed(6)}`;
+    });
+    expect(new Set(pairs).size, pairs.join(' | ')).toBe(pairs.length);
+  });
+  it('USB charge supply covers post-difficulty infected HP with reserve', () => {
+    const usb = toolRegistry.get('usb')!;
+    for (const m of ARC
+      .filter((entry) => entry.built && levelsOwnedMissionIds.has(entry.id))
+      .map((entry) => missionRegistry.get(entry.id)!)) {
+      const loadout = defaultLoadout(m);
+      const loadoutSupply = loadout.includes('usb') ? usb.ammo?.start ?? 0 : 0;
+      const pickupSupply = m.entities
+        .filter((entity) => entity.kind === 'item' && entity.grants?.resource === 'usb-charge')
+        .reduce((sum, entity) => sum + (entity.grants?.amount ?? 0), 0);
+      const infectedHp = m.entities
+        .filter((entity) => entity.infected && (entity.kind === 'enemy' || entity.kind === 'workstation'))
+        .reduce((sum, entity) => sum + (entity.hp ?? 1) +
+          (entity.kind === 'enemy' ? difficultyScale(m.difficulty).hpBonus : 0), 0);
+      expect(
+        loadoutSupply + pickupSupply,
+        `${m.id} USB supply`,
+      ).toBeGreaterThanOrEqual(1.25 * infectedHp);
+      expect(
+        loadoutSupply + pickupSupply,
+        `${m.id} USB supply upper bound`,
+      ).toBeLessThanOrEqual(2 * infectedHp);
+      for (const pickup of m.entities.filter((entity) => entity.grants?.resource === 'usb-charge')) {
+        expect(pickup.grants?.amount, `${m.id}/${pickup.id} pickup cap`).toBeLessThanOrEqual(8);
+      }
+    }
+  });
+  it('keeps triage evidence categories neutral and consistent within each mission', () => {
+    for (const m of missions) {
+      const triage = m.entities.filter((entity) => entity.tags?.includes('triage'));
+      if (triage.length === 0) continue;
+      expect(new Set(triage.map((entity) => entity.inspect?.category)), m.id).toEqual(new Set(['item']));
+    }
+  });
 
   for (const m of missions) {
     describe(m.id, () => {
@@ -133,12 +200,18 @@ describe('missions', () => {
       it('critical path is gated', () => {
         expect(reachableGatedExit(m)).toBe(false);
       });
-      it('has two reachable secrets with doors open', () => {
+      it('has its required reachable secrets with doors open', () => {
         const secrets = m.script?.secrets ?? [];
-        expect(secrets.length).toBeGreaterThanOrEqual(2);
-        for (const secret of secrets.slice(0, 2)) {
+        if (levelsOwnedMissionIds.has(m.id)) expect(secrets.length).toBeGreaterThanOrEqual(3);
+        for (const secret of secrets) {
           expect(reachableArea(m, secret.area)).toBe(true);
         }
+      });
+      it('has at least three concept gates', () => {
+        const gates = Object.values(m.map.legend).filter(
+          (cell) => cell.kind === 'door' && !cell.secret,
+        );
+        expect(gates.length).toBeGreaterThanOrEqual(3);
       });
       it('is at least 40 by 28 tiles', () => {
         expect(m.map.grid[0].length).toBeGreaterThanOrEqual(40);

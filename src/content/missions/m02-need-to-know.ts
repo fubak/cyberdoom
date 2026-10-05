@@ -2,6 +2,7 @@ import type { Mission } from '../../core/types';
 import type { MissionTeaching } from '../curriculum';
 import type { WalkStep } from '../../missions/walkthroughs';
 import { lightRects } from '../../missions/levelkit';
+import { addThreatEncounter, setMapCell } from './campaign-map';
 
 /**
  * M2 "Need to Know": least privilege, just-in-time access, shared credentials.
@@ -56,7 +57,7 @@ export const m02: Mission = {
       '####S........S............#.........####',
       '####S........S..#......#..#.........####',
       '####S........R..#......#..BBBBBBB#######',
-      '####S........S............B.....B#######',
+      '####S........SSSSSS.......B.....B#######',
       '####S........S............1.....B#######',
       '####S........S............B.....B#######',
       '####SSSSSSSSSS............B.....B#######',
@@ -79,10 +80,11 @@ export const m02: Mission = {
       },
       '1': { kind: 'door', tex: 'wall-brick', doorId: 'secret-break', secret: true },
       '2': { kind: 'door', tex: 'wall-brick', doorId: 'secret-cable', secret: true },
+      '3': { kind: 'door', tex: 'wall-panel', doorId: 'secret-server-room', secret: true },
     },
-    spawn: { x: 19.5, y: 27.5, angle: -Math.PI / 2 },
+    spawn: { x: 19.5, y: 27.5, angle: Math.PI },
     defaultLight: 0.75,
-    lights: lightRects([[14, 21, 25, 28, 0.9], [10, 11, 29, 19, 0.8], [31, 9, 38, 20, 0.45], [5, 22, 12, 27, 0.4], [18, 5, 21, 9, 0.6], [15, 1, 24, 4, 1.0], [27, 21, 35, 23, 0.4], [27, 25, 31, 28, 0.5], [5, 12, 8, 15, 0.3]]),
+    lights: lightRects([[14, 21, 25, 28, 0.9], [12, 26, 18, 28, 1.0], [10, 11, 29, 19, 0.8], [31, 9, 38, 20, 0.45], [5, 22, 12, 27, 0.4], [18, 5, 21, 9, 0.6], [15, 1, 24, 4, 1.0], [27, 21, 35, 23, 0.4], [27, 25, 31, 28, 0.5], [5, 12, 8, 15, 0.3]]),
   },
   entities: [
     {
@@ -146,7 +148,7 @@ export const m02: Mission = {
       inspect: { label: 'Worm', detail: 'Hiding in the maintenance VLAN.', category: 'malware', objectives: ['2.4'] } },
     { id: 'chg-atrium', kind: 'item', x: 15.5, y: 22.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 4 },
       inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for your write-protected scanner stick.', category: 'item' } },
-    { id: 'chg-lab', kind: 'item', x: 10.5, y: 11.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 4 },
+    { id: 'chg-lab', kind: 'item', x: 10.5, y: 11.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 8 },
       inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for your write-protected scanner stick.', category: 'item' } },
     { id: 'chg-switch', kind: 'item', x: 31.5, y: 9.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 4 },
       inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for your write-protected scanner stick.', category: 'item' } },
@@ -206,6 +208,7 @@ export const m02: Mission = {
     secrets: [
       { id: 'break', area: [27, 25, 31, 28], label: 'Break room' },
       { id: 'cable', area: [5, 12, 8, 15], label: 'Cable vault' },
+      { id: 'server-room', area: [36, 23, 36, 23], label: 'Server-side cache' },
     ],
   },
   debriefQuestions: [
@@ -286,6 +289,26 @@ export const m02Walkthrough: WalkStep[] = [
   { wait: 0.2 },
   { goto: [19, 1] },
 ];
+
+setMapCell(m02.map, 18, 23, 'S');
+setMapCell(m02.map, 20, 23, 'S');
+setMapCell(m02.map, 18, 24, 'S');
+setMapCell(m02.map, 20, 24, 'S');
+setMapCell(m02.map, 35, 23, '3');
+setMapCell(m02.map, 36, 23, '.');
+m02.map.lights = { ...m02.map.lights, ...lightRects([[17, 22, 21, 25, 1]]) };
+addThreatEncounter(m02, 'trojan-restore', 'trojan', 3, {
+  id: 'restore-ambush',
+  after: ['restore'],
+  kind: 'bad',
+  message: 'A second trojan wave surfaced after the switch was restored.',
+}, [27, 9, 37, 19]);
+addThreatEncounter(m02, 'trojan-report', 'trojan', 3, {
+  id: 'report-ambush',
+  after: ['report'],
+  kind: 'bad',
+  message: 'The shared-account incident drew another wave into the lab.',
+}, [4, 11, 14, 19]);
 
 export const m02Teach: MissionTeaching = {
   tagline: 'Day one. Your badge says ANALYST, and someone is handing out keys.',
