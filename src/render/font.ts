@@ -100,16 +100,47 @@ function maskFromRows(rows: number[], width: number, baseScale: number): Mask {
   return epx(epx(src));
 }
 
-function rgb(color: string): [number, number, number] {
-  const value = color.startsWith('#') ? color.slice(1) : '000000';
-  const hex = value.length === 3 ? value.split('').map((x) => x + x).join('') : value;
-  const n = parseInt(hex, 16) || 0;
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+type Color = [number, number, number, number];
+const colorCache = new Map<string, Color>();
+let colorContext: CanvasRenderingContext2D | null = null;
+
+function rgb(color: string): Color {
+  const cached = colorCache.get(color);
+  if (cached) return cached;
+  const hex = /^#([\da-f]{3,4}|[\da-f]{6}|[\da-f]{8})$/i.exec(color)?.[1];
+  let parsed: Color;
+  if (hex) {
+    const channels = hex.length <= 4
+      ? [...hex].map((channel) => parseInt(channel + channel, 16))
+      : hex.match(/.{2}/g)!.map((channel) => parseInt(channel, 16));
+    parsed = [channels[0], channels[1], channels[2], channels[3] ?? 255];
+  } else if (typeof document !== 'undefined') {
+    if (!colorContext) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 1;
+      canvas.height = 1;
+      colorContext = canvas.getContext('2d', { willReadFrequently: true });
+    }
+    if (colorContext) {
+      colorContext.clearRect(0, 0, 1, 1);
+      colorContext.fillStyle = 'rgba(0,0,0,0)';
+      colorContext.fillStyle = color;
+      colorContext.fillRect(0, 0, 1, 1);
+      const pixel = colorContext.getImageData(0, 0, 1, 1).data;
+      parsed = [pixel[0], pixel[1], pixel[2], pixel[3]];
+    } else {
+      parsed = [0, 0, 0, 255];
+    }
+  } else {
+    parsed = [0, 0, 0, 255];
+  }
+  colorCache.set(color, parsed);
+  return parsed;
 }
 
-function tone(color: [number, number, number], amount: number): string {
+function tone(color: Color, amount: number): string {
   const c = color.map((v) => Math.max(0, Math.min(255, Math.round(amount >= 0 ? v + (255 - v) * amount : v * (1 + amount)))));
-  return `rgb(${c[0]},${c[1]},${c[2]})`;
+  return `rgba(${c[0]},${c[1]},${c[2]},${color[3] / 255})`;
 }
 
 function nativeGlyph(

@@ -1,6 +1,7 @@
 import type { MapDef } from '../core/types';
 import { roleColor } from '../render/textures';
 import { VIEW3D_H, VIEW_W } from '../render/renderer';
+import { RES } from '../render/res';
 
 export class Automap {
   private readonly context: CanvasRenderingContext2D;
@@ -34,16 +35,18 @@ export class Automap {
     const mapWidth = map.grid[0]?.length ?? 0;
     if (!mapWidth || !mapHeight) return;
 
-    const cellSize = Math.min(5, (VIEW_W - 12) / mapWidth, (VIEW3D_H - 12) / mapHeight);
-    const left = (VIEW_W - mapWidth * cellSize) / 2;
-    const top = (VIEW3D_H - mapHeight * cellSize) / 2;
+    const W = VIEW_W / RES;
+    const H = VIEW3D_H / RES;
+    const cellSize = Math.min(5, (W - 12) / mapWidth, (H - 12) / mapHeight);
+    const left = (W - mapWidth * cellSize) / 2;
+    const top = (H - mapHeight * cellSize) / 2;
     const point = (x: number, y: number) => [left + x * cellSize, top + y * cellSize] as const;
     const cellAt = (x: number, y: number) => map.legend[map.grid[y]?.[x] ?? ''];
 
     g.save();
-    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.setTransform(RES, 0, 0, RES, 0, 0);
     g.fillStyle = '#000';
-    g.fillRect(0, 0, VIEW_W, VIEW3D_H);
+    g.fillRect(0, 0, W, H);
 
     for (let y = 0; y < mapHeight; y++) {
       for (let x = 0; x < mapWidth; x++) {

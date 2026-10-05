@@ -10,6 +10,7 @@ import {
 import { missionRegistry, teachingRegistry } from '../content/missions';
 import { objectiveById } from '../content/objectives';
 import { drawBigText, drawText, measureBig, measureText } from '../render/font';
+import { RES } from '../render/res';
 import { h, onKeysWhileMounted } from './briefing';
 import {
   DB_BODY_ROWS,
@@ -144,9 +145,10 @@ function bevel(g: CanvasRenderingContext2D, x: number, y: number, w: number, hh:
 
 function brickBackdrop(): HTMLCanvasElement {
   const c = document.createElement('canvas');
-  c.width = DB_W;
-  c.height = DB_H;
+  c.width = DB_W * RES;
+  c.height = DB_H * RES;
   const g = c.getContext('2d')!;
+  g.setTransform(RES, 0, 0, RES, 0, 0);
   g.fillStyle = '#2c140e';
   g.fillRect(0, 0, DB_W, DB_H);
   let s = 1337;
@@ -173,11 +175,13 @@ function brickBackdrop(): HTMLCanvasElement {
 
 function bigScaled(g: CanvasRenderingContext2D, text: string, x: number, y: number, ramp: string[], k: number): void {
   const off = document.createElement('canvas');
-  off.width = measureBig(text) + 2;
-  off.height = 16;
-  drawBigText(off.getContext('2d')!, text, 0, 0, ramp);
+  off.width = (measureBig(text) + 2) * RES;
+  off.height = 16 * RES;
+  const og = off.getContext('2d')!;
+  og.setTransform(RES, 0, 0, RES, 0, 0);
+  drawBigText(og, text, 0, 0, ramp);
   g.imageSmoothingEnabled = false;
-  g.drawImage(off, x, y, off.width * k, off.height * k);
+  g.drawImage(off, x, y, (off.width / RES) * k, (off.height / RES) * k);
 }
 
 export function debrief(opts: {
@@ -193,12 +197,13 @@ export function debrief(opts: {
   const teach = teachingRegistry.get(mission.id);
   const s = h('div', 'screen cd-inter cd-pixel');
   const canvas = document.createElement('canvas');
-  canvas.width = DB_W;
-  canvas.height = DB_H;
+  canvas.width = DB_W * RES;
+  canvas.height = DB_H * RES;
   canvas.className = 'cd-pixel-canvas';
   canvas.setAttribute('role', 'img');
   s.appendChild(canvas);
   const g = canvas.getContext('2d')!;
+  g.setTransform(RES, 0, 0, RES, 0, 0);
   const backdrop = brickBackdrop();
   const entries = opts.evidence ?? [];
 
@@ -300,7 +305,7 @@ export function debrief(opts: {
   const render = () => {
     hits = [];
     const t = Math.min(1, view.animate ? (performance.now() - viewStart) / view.animate : 1);
-    g.drawImage(backdrop, 0, 0);
+    g.drawImage(backdrop, 0, 0, DB_W, DB_H);
     drawText(g, view.kicker, (DB_W - measureText(view.kicker)) / 2, 4, C.dim);
     drawBigText(g, view.title, (DB_W - measureBig(view.title)) / 2, 14, view.ramp);
     if (view.sub) drawText(g, view.sub, (DB_W - measureText(view.sub)) / 2, 33, C.white);
