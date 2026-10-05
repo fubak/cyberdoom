@@ -109,7 +109,7 @@ export const tapTool: ToolDef = {
     seen.sort((a, b) => Math.hypot(a.x - ctx.playerX, a.y - ctx.playerY) - Math.hypot(b.x - ctx.playerX, b.y - ctx.playerY));
     for (const e of seen.slice(0, 2)) ctx.bus.emit('message', { text: flowLine(e), kind: 'info' });
     ctx.bus.emit('message', {
-      text: `${seen.length} host(s) copied. The tap makes no verdict: read the flows, then MOUSE (2) flags a captured host in one click.`,
+      text: `${seen.length} host(s) copied. No verdict: MOUSE (2) decides.`,
       kind: 'info',
     });
   },

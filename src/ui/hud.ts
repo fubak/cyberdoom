@@ -11,7 +11,7 @@ import { sortedTools } from '../tools';
  * original CYBERDOOM bitmap font (no browser fonts → crisp at any scale).
  *
  * Bar layout (left → right):
- *   INTEGRITY% | AMMO | TOOLS 1-4 | analyst face | CRED keycard | OBJ n/m
+ *   INTEGRITY% | AMMO | TOOLS 1-8 | analyst face | CRED keycard | RESOURCES cur/max | OBJ n/m
  */
 const RED = ['#ff9a7a', '#ff4a2a', '#e01e10', '#a80c06', '#700604'];
 const AMBER = ['#fff0a0', '#ffd040', '#ffa818', '#d07808', '#8a4804'];
@@ -151,13 +151,14 @@ export class Hud {
     this.drawBar(opts);
   }
 
-  /** Doom-style single-line ticker, top-left: newest message only. */
+  /** Doom-style ticker, top-left: newest message only (wraps to 2 lines). */
   private drawTicker(): void {
     const m = this.messages[this.messages.length - 1];
     if (!m) return;
     if (m.t < 0.4 && Math.floor(m.t * 20) % 2 === 0) return;
-    const line = wrapText(m.text.toUpperCase(), 52, 1)[0] ?? '';
-    drawText(this.g, line, 2, 2, MSG_COL[m.kind] ?? MSG_COL.info, 'small', '#000');
+    // up to two lines so tool teaching text (MFA, patch, tap) isn't cut mid-sentence
+    wrapText(m.text.toUpperCase(), 52, 2).forEach((line, i) =>
+      drawText(this.g, line, 2, 2 + i * 8, MSG_COL[m.kind] ?? MSG_COL.info, 'small', '#000'));
   }
 
   /** Objectives overlay (hold TAB; also flashes up at mission start / on change). */
@@ -245,7 +246,7 @@ export class Hud {
       const t = tools.find((tt) => tt.slot === slot);
       const owned = !!t && (o.owned ? o.owned.includes(t.id) : true);
       const x = P_TOOLS[0] + 4 + (i % 4) * 12;
-      const y = by + 6 + Math.floor(i / 4) * 7;
+      const y = by + 6 + Math.floor(i / 4) * 10;
       const active = !!t && t.slot === o.tool.slot;
       const fresh = !!o.got && o.got.slot === slot && o.got.blink;
       g.fillStyle = fresh ? '#ffd040' : active ? '#3a3010' : '#0c0e12';
@@ -254,7 +255,6 @@ export class Hud {
       g.fillRect(x, y, 11, 1);
       drawText(g, `${slot}`, x + 3, y + 1, fresh ? '#000' : active ? '#fff0a0' : owned ? '#ffa818' : '#3a3e48', 'small', fresh ? null : '#000');
     }
-    label(g, o.tool.name.toUpperCase().slice(0, 13), P_TOOLS, by + 20, '#ffd040');
 
     // FACE
     if (o.face) o.face(g, P_FACE[0] + 4, by + 2);
@@ -281,7 +281,7 @@ export class Hud {
 
     // RESOURCES: every ammo type as current/max, like Doom's BULL/SHEL/RCKT/CELL
     (o.resources ?? []).slice(0, 4).forEach((r, i) => {
-      const y = by + 5 + Math.round(i * 5.4);
+      const y = by + 5 + i * 6;
       const col = !r.owned ? '#3a3e48' : r.cur === 0 ? '#ff4a2a' : r.active ? '#fff0a0' : '#ffa818';
       const lab = r.active ? '#ffd040' : r.owned ? '#8a90a0' : '#3a3e48';
       drawText(g, r.label, P_RES[0] + 3, y, lab, 'tiny', '#000');
