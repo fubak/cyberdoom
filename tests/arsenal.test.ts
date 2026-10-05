@@ -252,8 +252,10 @@ describe('round 3: keyboard containment and arm\'s-length scanning', () => {
     return cleaned;
   };
 
-  it('one keyboard hit within 1.5 tiles kills a 2-hp worm', () => {
+  it('two keyboard hits within 1.5 tiles kill a 2-hp worm', () => {
     const worm = malware('w', 'worm', 2, 2.4);
+    expect(strike(worm)).toEqual([]);
+    expect(worm.hp).toBe(1);
     expect(strike(worm)).toEqual(['w']);
     expect(worm.hp).toBeLessThanOrEqual(0);
   });
@@ -262,13 +264,17 @@ describe('round 3: keyboard containment and arm\'s-length scanning', () => {
     expect(strike(worm)).toEqual([]);
     expect(worm.hp).toBe(2);
   });
-  it('a 3-hp trojan and 4-hp ransomware each take two hits, and the keyboard never runs out', () => {
+  it('a 3-hp trojan and 4-hp ransomware take one strike per hp, and the keyboard never runs out', () => {
     for (const [sprite, hp] of [['trojan', 3], ['ransomware', 4]] as const) {
       const e = malware(sprite, sprite, hp, 2);
-      expect(strike(e, 1)).toEqual([]);
-      expect(e.hp).toBe(hp - 2);
+      for (let i = 1; i < hp; i++) {
+        expect(strike(e, 1)).toEqual([]);
+        expect(e.hp).toBe(hp - i);
+      }
       expect(strike(e, 1)).toEqual([sprite]);
     }
+    // melee is the slow fallback: ranged scanning must be the better answer at range
+    expect(toolForSlot(1)!.cooldown).toBeGreaterThanOrEqual(0.6);
     expect(toolForSlot(1)!.ammo).toBeNull();
     expect(toolForSlot(1)!.control?.objectives).toContain('4.8');
   });

@@ -22,6 +22,8 @@ import { WALL_H, buildTextures, doorTextureFor, textureOr, textureRegistry } fro
  * - Sprites: screen-parallel billboards with walk/attack/rotation frames,
  *   pain flash and a dissolve death; scanner charges are fullbright sprites.
  */
+/** Distance (tiles) a player shot travels before its sprite is drawn. */
+const SHOT_NEAR = 1.4;
 export const VIEW_W = 320;
 export const VIEW_H = 200;
 export const STATUS_H = 32;
@@ -601,7 +603,7 @@ export class Renderer {
       if (!p.hostile) {
         // scanner charge leaves a short trail so its whole flight reads
         st.moveT += Math.hypot(p.x - st.lastX, p.y - st.lastY);
-        if (st.moveT > 0.3) {
+        if (st.moveT > 0.3 && p.traveled > SHOT_NEAR) {
           st.moveT = 0;
           this.spawnFx('fx-scan-trail', ['f0', 'f1'], st.lastX, st.lastY, EYE_H - 0.2, 0.2);
         }
@@ -609,6 +611,8 @@ export class Renderer {
       st.lastX = p.x;
       st.lastY = p.y;
       st.mesh.position.set(p.x, EYE_H - 0.2, p.y);
+      // the player's own shot only appears once clear of the camera, so it never fills the aim area
+      st.mesh.visible = p.hostile || p.traveled > SHOT_NEAR;
     }
     for (const [p, st] of [...this.projSprites]) {
       if (live.has(p)) continue;

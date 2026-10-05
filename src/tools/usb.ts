@@ -1,11 +1,12 @@
 import type { ToolDef } from '../core/types';
 
-/** Max distance (tiles) at which the scanner stick can be plugged into a workstation. */
-export const USB_PLUG_RANGE = 2;
-import { hash, impactBurst, screenFlash, usePhase } from './anim';
+import { hash, impactBurst, screenFlash, usePhase, tipY } from './anim';
 import { bevel, poly, rect, shade } from './pixel';
 import { drawText, textWidth } from './pixelfont';
 import { fist, handLook, sleeve } from './shared';
+
+/** Max distance (tiles) at which the scanner stick can be plugged into a workstation. */
+export const USB_PLUG_RANGE = 2;
 
 const WINDUP = 0.05;
 
@@ -13,9 +14,11 @@ const WINDUP = 0.05;
  * Slot 3 — USB SCANNER (antimalware / endpoint protection).
  * Your own org-issued, write-protected, bootable antimalware stick. A
  * WORKSTATION is cleaned only at arm's length (you plug the stick in); the
- * ranged charge only hits roaming malware (running processes). Uses
- * "usb-charge" ammo (definition updates). Contrast: UNKNOWN found media is
- * a baiting vector and must never be plugged in (2.2).
+ * ranged shot only hits roaming malware (running processes). Ammo
+ * ("usb-charge") is SCAN SESSIONS: one boot-scan-and-quarantine run of the
+ * issued media each (definitions themselves are not used up). This is
+ * eradication; the keyboard does containment. Contrast: UNKNOWN found media
+ * is a baiting vector and must never be plugged in (2.2).
  */
 export const usbTool: ToolDef = {
   id: 'usb',
@@ -30,8 +33,8 @@ export const usbTool: ToolDef = {
     category: 'technical',
     types: ['detective', 'corrective'],
     objectives: ['2.5', '2.4'],
-    use: 'Plug it into an infected workstation at arm\'s length (2 tiles) to boot a scan and clean it; fire it at roaming malware processes from range. Each charge removes one infection, flagged threats take two. Charges (signature updates) are limited, so do not waste them on clean hosts.',
-    lesson: 'Endpoint protection is a core hardening technique. Removable media must be known-good: write-protected and issued by IT. A stick you find lying around is a baiting attack.',
+    use: 'Plug it into an infected workstation at arm\'s length (2 tiles) to boot a scan and quarantine the malware (eradication); fire it at roaming malware processes from range. One SCAN session stops a worm; MOUSE-flagged threats take double. Each session is one boot of the issued media, so do not waste them on clean hosts.',
+    lesson: 'Endpoint protection is a core hardening technique. In incident response, eradication (scan, clean or reimage) follows containment. Removable media must be known-good: write-protected and issued by IT. A stick you find lying around is a baiting attack.',
   },
   drawViewmodel(g, w, _h, _bob, gender, _cd, anim) {
     const look = handLook(gender, anim);
@@ -86,7 +89,7 @@ export const usbTool: ToolDef = {
     const ph = usePhase(anim.sinceUse, WINDUP);
     // the hard-edged muzzle flash is part of the held art (viewmodels.ts usbArt), at the stick tip
     if (ph.phase === 'impact' && ph.u < 0.34) screenFlash(g, w, h, '160,240,255', 0.05);
-    impactBurst(g, w / 2, 92, anim.sinceConfirm, anim.confirmGood);
+    impactBurst(g, w / 2, tipY(h), anim.sinceConfirm, anim.confirmGood);
   },
   use(ctx) {
     const aim = ctx.aimEntity(12, 0.12);

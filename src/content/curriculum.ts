@@ -47,7 +47,7 @@ export const ARC: ArcMission[] = [
     objectives: [
       w('2.4', 'Inspect every workstation, including noisy PRN-02, before acting; a host only counts as cleaned once inspected. Scanning or flagging a clean host is a scored false positive.'),
       w('2.2', 'A found removable device lies on the route; plugging it into the unlocked spare PC triggers the removable-device vector and fails the mission.'),
-      w('2.5', 'Deploy endpoint protection (scanner charges) to every infected host; charges are finite, so missed shots matter.'),
+      w('2.5', 'Deploy endpoint protection to every infected host: each scan session is one boot of the write-protected media, so wasted scans matter.'),
       qz('3.4', 'Debrief: recover WS-07 from offline backups vs replication vs paying the ransom.'),
       w('5.6', 'Carry the found removable device to the Security Desk and report it (Keyboard): +50 and the IT OPS role needed to reach the server room.'),
     ],

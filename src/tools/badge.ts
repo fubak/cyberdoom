@@ -1,5 +1,5 @@
 import type { ToolDef, ToolUseContext } from '../core/types';
-import { impactBurst, usePhase } from './anim';
+import { impactBurst, usePhase, tipY, vmLine } from './anim';
 import { glow, pill, rect, shade } from './pixel';
 import { drawText } from './pixelfont';
 import { ANALYSTS } from './look';
@@ -87,12 +87,12 @@ export const badgeTool: ToolDef = {
       for (let a = 0; a < 3; a++) {
         const r = 6 + a * 7 + k * 6;
         for (let t = -0.7; t <= 0.7; t += 0.12) {
-          g.fillRect(Math.round(w / 2 - 14 + Math.sin(t) * r), Math.round(84 - Math.cos(t) * r * 0.6), 1, 1);
+          g.fillRect(Math.round(w / 2 - 14 + Math.sin(t) * r), Math.round(vmLine(_h) + 26 - Math.cos(t) * r * 0.6), 1, 1);
         }
       }
-      glow(g, w / 2 - 14, 86, 22, '140,220,255', 0.3);
+      glow(g, w / 2 - 14, vmLine(_h) + 26, 14, '140,220,255', 0.3);
     }
-    impactBurst(g, w / 2, 92, anim.sinceConfirm, anim.confirmGood, 0.7);
+    impactBurst(g, w / 2, tipY(_h), anim.sinceConfirm, anim.confirmGood, 0.7);
   },
   use(ctx: ToolUseContext) {
     ctx.bus.emit('tool-used', { toolId: 'badge' });
