@@ -1,4 +1,4 @@
-import type { Gender, Mission, ScoreEvent } from '../core/types';
+import type { Gender } from '../core/types';
 import { missionRegistry } from '../content/missions';
 import { objectiveById } from '../content/objectives';
 
@@ -101,8 +101,8 @@ export function missionSelect(onPick: (id: string) => void): HTMLElement {
         'div',
         'objs',
         m.objectives
-          .map((id) => `${id} ${objectiveById(id)?.title ?? ''}`.slice(0, 70))
-          .join(' · '),
+          .map((id) => `${id} ${objectiveById(id)?.title ?? ''}`)
+          .join('<br>'),
       ),
     );
     row.appendChild(body);
@@ -112,96 +112,5 @@ export function missionSelect(onPick: (id: string) => void): HTMLElement {
   return s;
 }
 
-export function briefing(mission: Mission, onGo: () => void): HTMLElement {
-  const s = el('div', 'screen');
-  s.appendChild(el('h2', '', `MISSION ${mission.id.toUpperCase()}: ${mission.title}`));
-  const box = el('div', 'brief-box');
-  box.appendChild(el('p', '', mission.briefing));
-  const objs = el('div', 'objlist');
-  for (const o of mission.missionObjectives) {
-    objs.appendChild(el('div', 'pending', o.text));
-  }
-  box.appendChild(objs);
-  s.appendChild(box);
-  s.appendChild(button('DEPLOY ▸', onGo));
-  return s;
-}
-
-export function debrief(opts: {
-  mission: Mission;
-  won: boolean;
-  score: number;
-  scoreLog: ScoreEvent[];
-  objectives: { text: string; done: boolean; failed: boolean }[];
-  onDone: (quizScore: number) => void;
-}): HTMLElement {
-  const s = el('div', 'screen');
-  s.appendChild(
-    el('h2', opts.won ? 'debrief-good' : 'debrief-bad',
-      opts.won ? `MISSION COMPLETE — ${opts.mission.title}` : `MISSION FAILED — ${opts.mission.title}`),
-  );
-  s.appendChild(el('div', 'score-big', `SCORE ${opts.score}`));
-
-  const objl = el('div', 'objlist');
-  for (const o of opts.objectives) {
-    objl.appendChild(
-      el('div', o.failed ? 'failed' : o.done ? 'done' : 'pending',
-        `${o.failed ? '✗' : o.done ? '✓' : '·'} ${o.text}`),
-    );
-  }
-  s.appendChild(objl);
-
-  const log = el('div', 'debrief-table');
-  for (const e of opts.scoreLog) {
-    const d = el(
-      'div',
-      e.good ? 'debrief-good' : 'debrief-bad',
-      `${e.points >= 0 ? '+' : ''}${e.points} — ${e.text}` +
-        (e.objectives.length ? ` <small>(${e.objectives.join(', ')})</small>` : ''),
-    );
-    log.appendChild(d);
-  }
-  s.appendChild(log);
-
-  // quiz
-  const quiz = el('div', 'quiz');
-  let correct = 0;
-  let answered = 0;
-  const total = opts.mission.debriefQuestions.length;
-  for (const q of opts.mission.debriefQuestions) {
-    const qd = el('div', 'q');
-    qd.appendChild(el('div', 'qtext', q.prompt));
-    for (const opt of q.options) {
-      const label = el('label');
-      const radio = document.createElement('input');
-      radio.type = 'radio';
-      radio.name = q.id;
-      label.appendChild(radio);
-      label.appendChild(document.createTextNode(' ' + opt.text));
-      const expl = el('div', 'expl', opt.explanation);
-      label.appendChild(expl);
-      radio.addEventListener('change', () => {
-        if (qd.classList.contains('answered')) return;
-        qd.classList.add('answered');
-        answered++;
-        if (opt.correct) {
-          correct++;
-          label.classList.add('opt-correct');
-        } else {
-          label.classList.add('opt-wrong');
-          qd.querySelectorAll('label').forEach((l, i) => {
-            if (q.options[i].correct) l.classList.add('opt-correct');
-          });
-        }
-        if (answered === total) doneBtn.textContent = `CONTINUE ▸ (${correct}/${total} correct)`;
-      });
-      qd.appendChild(label);
-    }
-    quiz.appendChild(qd);
-  }
-  s.appendChild(quiz);
-
-  const doneBtn = button('CONTINUE ▸', () => opts.onDone(correct));
-  s.appendChild(doneBtn);
-  return s;
-}
+export { briefing } from './briefing';
+export { debrief } from './debrief';

@@ -145,7 +145,7 @@ export class MissionRuntime {
       }
       if (e.def.tags?.includes('found-usb')) {
         this.bus.emit('plugged-usb', { entityId });
-        this.log('You plugged in unknown media — baiting attack triggered', -50, ['2.2']);
+        this.log('You connected an unknown removable device — malware delivered', -50, ['2.2']);
         e.alive = false;
         for (const o of this.objectives) {
           if (o.def.kind === 'avoid' && e.def.tags?.includes(o.def.tag ?? '')) o.failed = true;
