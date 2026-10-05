@@ -1,10 +1,68 @@
-import type { EntityDef, Mission } from '../../core/types';
+import type { EntityDef, MapDef, Mission } from '../../core/types';
 import type { MissionTeaching } from '../curriculum';
 import { q } from '../arc-questions';
 import type { WalkStep } from '../../missions/walkthroughs';
-import { campaignMap, stagedThreatWave } from './campaign-map';
+import { lightRects } from '../../missions/levelkit';
+import { stagedThreatWave } from './campaign-map';
 
-const map = campaignMap('mail');
+const map: MapDef = {
+  grid: [
+    '########################################',
+    '##################..E..#################',
+    '##################..X..#################',
+    '##################.....#################',
+    '##.........................WW......#####',
+    '##..........................W......#####',
+    '##...1.............................#####',
+    '##.................................#####',
+    '##.................................#####',
+    '####################O###################',
+    '####....W.....................WW....#.##',
+    '####....W......................W....#.##',
+    '####................................2.##',
+    '####................................#.##',
+    '####................................B.##',
+    '####................................#.##',
+    '####................................#.##',
+    '##...###############Q################.##',
+    '##...#.........................WW.....##',
+    '##...#..............................#.##',
+    '##...3..............................#.##',
+    '##...#..............................#.##',
+    '##...#....W.........S.S....WW.......#.##',
+    '######....WW.......S...S....W.......#.##',
+    '######.............S...S............#.##',
+    '######..............S.S.............####',
+    '######...............A..............####',
+    '##################.......###############',
+    '##################.......###############',
+    '########################################',
+  ],
+  legend: {
+    '#': { kind: 'wall', tex: 'wall-panel' },
+    W: { kind: 'wall', tex: 'wall-brick' },
+    S: { kind: 'wall', tex: 'wall-server' },
+    '.': { kind: 'floor', tex: 'floor' },
+    E: { kind: 'exit', tex: 'exit' },
+    A: { kind: 'door', tex: 'door', doorId: 'mailroom', accessRole: 'analyst' },
+    O: { kind: 'door', tex: 'door', doorId: 'mail-operations', accessRole: 'analyst' },
+    Q: { kind: 'door', tex: 'door', doorId: 'mail-queue', locked: true, lockText: 'Clear the message queue before entering the gateway.' },
+    B: { kind: 'door', tex: 'door', doorId: 'mail-backtrack', locked: true, lockText: 'The return route opens after gateway controls are applied.' },
+    X: { kind: 'door', tex: 'door', doorId: 'mail-exit', locked: true, lockText: 'Complete the incident objectives before exiting.' },
+    '1': { kind: 'door', tex: 'wall-brick', doorId: 'mail-secret-1', secret: true },
+    '2': { kind: 'door', tex: 'wall-server', doorId: 'mail-secret-2', secret: true },
+    '3': { kind: 'door', tex: 'wall-brick', doorId: 'mail-secret-3', secret: true },
+  },
+  spawn: { x: 21.5, y: 28.5, angle: -Math.PI / 2 },
+  defaultLight: 0.65,
+  lights: lightRects([
+    [18, 21, 24, 26, 1],
+    [6, 18, 35, 26, 0.72],
+    [4, 10, 35, 16, 0.82],
+    [5, 4, 34, 8, 0.82],
+    [18, 1, 22, 3, 1],
+  ]),
+};
 
 const terminals: EntityDef[] = [
   {
@@ -286,8 +344,8 @@ export const m04Teach: MissionTeaching = {
 };
 
 export const m04Walkthrough: WalkStep[] = [
-  { goto: [20, 24] },
-  { badge: [20, 23] },
+  { goto: [21, 27] },
+  { badge: [21, 26] },
   { goto: [25, 25] },
   { inspect: 'mail-sms' },
   { clean: 'mail-sms' },
@@ -312,8 +370,8 @@ export const m04Walkthrough: WalkStep[] = [
   { goto: [9, 18] },
   { inspect: 'mail-legit-c' },
   { interact: 'mail-legit-c' },
-  { goto: [20, 17] },
-  { badge: [20, 16] },
+  { goto: [20, 18] },
+  { goto: [20, 16] },
   { goto: [10, 13] },
   { interact: 'gateway-spf' },
   { goto: [29, 13] },
@@ -322,6 +380,7 @@ export const m04Walkthrough: WalkStep[] = [
   { interact: 'gateway-dmarc' },
   { wait: 0.1 },
   { goto: [20, 10] },
+  { badge: [20, 9] },
   { goto: [20, 8] },
   { goto: [12, 5] },
   { interact: 'signin-log' },

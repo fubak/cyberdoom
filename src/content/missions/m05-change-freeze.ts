@@ -1,10 +1,72 @@
-import type { EntityDef, Mission } from '../../core/types';
+import type { EntityDef, MapDef, Mission } from '../../core/types';
 import type { MissionTeaching } from '../curriculum';
 import { q } from '../arc-questions';
 import type { WalkStep } from '../../missions/walkthroughs';
-import { campaignMap, stagedThreatWave } from './campaign-map';
+import { lightRects } from '../../missions/levelkit';
+import { stagedThreatWave } from './campaign-map';
 
-const map = campaignMap('change');
+const map: MapDef = {
+  grid: [
+    '########################################',
+    '##################..E..#################',
+    '##################..X..#################',
+    '##################.....#################',
+    '##.........................WW......#####',
+    '##..........................W......#####',
+    '##...1.............................#####',
+    '##.......WW..................W.....#####',
+    '##...############...X..#################',
+    '#################......#################',
+    '######W.........#......#........WW.#..##',
+    '######W.........#......#.........W.#..##',
+    '######.............................2..##',
+    '######..........#......#..............##',
+    '######.......WW.#......#.W.........#..##',
+    '######........W.#......#...........#..##',
+    '#################...O..Q################',
+    '##...#W..........................W..####',
+    '##...#..........#...................####',
+    '##...#W.........#......#.........WW.####',
+    '##...3..............................####',
+    '##...#.......WW.#......#.W..........####',
+    '##...#..........B......#............####',
+    '#################...A..#################',
+    '###..................................###',
+    '###...........SSS....................###',
+    '###...........SS.....................###',
+    '###..................................###',
+    '########################################',
+    '########################################',
+  ],
+  legend: {
+    '#': { kind: 'wall', tex: 'wall-panel' },
+    W: { kind: 'wall', tex: 'wall-brick' },
+    S: { kind: 'wall', tex: 'wall-server' },
+    '.': { kind: 'floor', tex: 'floor' },
+    E: { kind: 'exit', tex: 'exit' },
+    A: { kind: 'door', tex: 'door', doorId: 'change-board', accessRole: 'analyst' },
+    O: { kind: 'door', tex: 'door', doorId: 'change-operations', accessRole: 'analyst' },
+    B: { kind: 'door', tex: 'door', doorId: 'change-backtrack', locked: true, lockText: 'Cover the four control gaps before opening the return route.' },
+    Q: { kind: 'door', tex: 'door', doorId: 'change-queue', locked: true, lockText: 'Patch every confirmed finding before entering the upper scan wing.' },
+    X: { kind: 'door', tex: 'door', doorId: 'change-exit', locked: true, lockText: 'Complete and validate the change before exiting.' },
+    '1': { kind: 'door', tex: 'wall-brick', doorId: 'change-secret-1', secret: true },
+    '2': { kind: 'door', tex: 'wall-server', doorId: 'change-secret-2', secret: true },
+    '3': { kind: 'door', tex: 'wall-brick', doorId: 'change-secret-3', secret: true },
+  },
+  spawn: { x: 5.5, y: 26.5, angle: 0 },
+  defaultLight: 0.62,
+  lights: lightRects([
+    [3, 24, 17, 27, 0.85],
+    [23, 24, 36, 27, 0.78],
+    [6, 10, 15, 15, 0.68],
+    [24, 10, 34, 15, 0.78],
+    [6, 17, 15, 22, 0.68],
+    [24, 17, 35, 22, 0.78],
+    [17, 8, 22, 23, 0.85],
+    [5, 4, 34, 7, 0.82],
+    [18, 1, 22, 3, 1],
+  ]),
+};
 
 const evidenceAndWork: EntityDef[] = [
   {
