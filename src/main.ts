@@ -153,6 +153,7 @@ class Game {
     this.renderer.buildLevel(this.map, mission.map);
     this.setScreen('play', null);
     if (!DEBUG) this.input.requestLock();
+    this.hud.clearMessages();
     this.hud.pushMessage(`${mission.title} — good luck, analyst`, 'info');
   }
 
