@@ -58,6 +58,30 @@ export const GLOSSARY: Record<string, string> = {
   'code signing':
     'A digital signature binds software to its publisher and lets recipients verify its integrity and source before installation or deployment. [4.1]',
 
+  // --- cryptography & authentication (1.4, 3.3, 4.6) ---
+  'certificate chain':
+    'The ordered path from a leaf certificate through issuing certificates to a trusted root; clients validate signatures and the chain against their trust store. [1.4]',
+  'certificate authority':
+    'A trusted organization or service that validates certificate requests and digitally signs certificates binding identities to public keys. [1.4]',
+  'self-signed certificate':
+    'A certificate signed by its own subject rather than an independent certificate authority; clients do not trust it unless it is explicitly installed as a trust anchor. [1.4]',
+  'certificate revocation':
+    'Invalidating a certificate before its expiration, commonly published in a certificate revocation list (CRL) or checked online through OCSP. [1.4]',
+  'key rotation':
+    'Replacing a cryptographic key with a new independent key pair on a defined schedule or after compromise, then retiring the old key. [1.4]',
+  'hashing':
+    'A one-way transformation that produces a fixed-length digest; password storage should use a dedicated slow password-hashing function, not reversible encryption. [1.4]',
+  'salting':
+    'Adding a unique random value to each password before hashing so identical passwords have different hashes and precomputed tables are less useful. [1.4]',
+  'key stretching':
+    'Making password hashing deliberately costly through repeated or memory-hard computation so each offline guess takes more time and resources. [1.4]',
+  'tokenization':
+    'Replacing sensitive data with a non-sensitive token whose mapping is held in a separate protected token vault, keeping real values out of downstream systems. [3.3]',
+  'encryption at rest':
+    'Cryptographically protecting stored data on disks, backups or other media so it remains unreadable without the required key. [3.3]',
+  'multifactor authentication':
+    'Authentication using two or more different factor types: something you know, have or are; two passwords or questions are still one type. [4.6]',
+
   // --- resilience (3.4) ---
   'backups':
     'Point-in-time copies kept separately (ideally offline or offsite) so data can be restored after loss or ransomware. Unlike replication, they don\u2019t instantly copy the damage. [3.4]',

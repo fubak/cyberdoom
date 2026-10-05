@@ -47,6 +47,7 @@ export class MissionRuntime {
   private triageScored = new Set<string>();
   private falsePositiveSources = new Set<string>();
   private priorityMisses = new Set<string>();
+  private wrongChoicesScored = new Set<string>();
   private counted = new Map<string, Set<string>>();
   private cleaned = new Set<string>();
   private initialHp = new Map<string, number>();
@@ -209,7 +210,7 @@ export class MissionRuntime {
         this.log(
           `Out of risk order: ${e.def.inspect?.label ?? e.def.id}`,
           -20,
-          ['4.3'],
+          e.def.inspect?.objectives ?? [],
           'priority-miss',
         );
       }
@@ -343,6 +344,18 @@ export class MissionRuntime {
 
       if (e.def.kind === 'console') {
         const matching = this.objectivesFor('interact', e);
+        if (e.def.tags?.includes('wrong')) {
+          const text = e.def.log ?? e.def.inspect?.detail ?? '';
+          const label = e.def.inspect?.label ?? e.def.id;
+          this.record(e, 'log', label, text);
+          if (text.trim()) this.message(`READ: ${label}`, 'info');
+          if (!this.wrongChoicesScored.has(e.def.id)) {
+            this.wrongChoicesScored.add(e.def.id);
+            this.log(`Wrong call: ${label}`, -15, e.def.inspect?.objectives ?? [], 'bad-choice');
+          }
+          this.message(text, 'warn');
+          return;
+        }
         if (this.pendingAccusation && e.def.tags?.includes('report-console')) {
           const report = this.objectives.find((o) => o.def.kind === 'report');
           if (this.rejectRequirements(report)) return;
@@ -356,8 +369,8 @@ export class MissionRuntime {
         if (this.rejectOutOfOrderInteract(e, matching)) return;
         if (this.violateMatchingAvoid(e)) return;
         const text = e.def.log ?? e.def.inspect?.detail ?? '';
+        const label = e.def.inspect?.label ?? e.def.id;
         if (text.trim()) {
-          const label = e.def.inspect?.label ?? e.def.id;
           this.message(`READ: ${label}`, 'info');
           this.record(e, 'log', label, text);
         }

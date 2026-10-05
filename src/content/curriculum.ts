@@ -93,12 +93,12 @@ export const ARC: ArcMission[] = [
     ],
   },
   {
-    id: 'm06', title: 'KEYMASTER', difficulty: 7, built: false,
+    id: 'm06', title: 'KEYMASTER', difficulty: 7, built: true,
     briefing: 'The crypto vaults are failing their audit: plaintext passwords, an expired certificate, and a leaked private key.',
     objectives: [
-      w('1.4', 'Open each vault with the correct crypto: salted + stretched hash for passwords, symmetric for bulk data, asymmetric key exchange for sessions, revoke (CRL/OCSP) the leaked cert.'),
-      w('3.3', 'Data states: apply encryption at rest / in transit and tokenize card numbers before the data leaves the vault.'),
-      w('4.6', 'Admin checkpoints accept only two different factor types (e.g. password + security key); two "something you know" factors fail.'),
+      w('1.4', 'Inspect all three certificates and install only the trusted, unexpired chain. Confirm the leaked key by fingerprint; revoke it before generating a new HSM key pair. Wrong choices score; passwords use salted bcrypt, not AES or Base64.'),
+      w('3.3', 'Tokenize card numbers before export and encrypt backups at rest; both controls and the audit are required before the exit unlocks.'),
+      w('4.6', 'Enter the vault with its authorized role and badge-plus-fingerprint MFA; password plus security question is still one factor type.'),
     ],
   },
   {

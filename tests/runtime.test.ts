@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { EventBus } from '../src/core/events';
 import type { Mission } from '../src/core/types';
+import { m08 } from '../src/content/missions/m08-zero-day';
 import { WorldMap } from '../src/engine/map';
 import { MissionRuntime } from '../src/missions/runtime';
 
@@ -452,7 +453,7 @@ describe('MissionRuntime', () => {
       entities: [
         { id: 'web01', kind: 'console', x: 2, y: 2, sprite: 'workstation', priority: 1, tags: ['finding'] },
         { id: 'file02', kind: 'console', x: 3, y: 2, sprite: 'workstation', priority: 2, tags: ['finding'],
-          inspect: { label: 'FILE-02', detail: '', category: 'legit' } },
+          inspect: { label: 'FILE-02', detail: '', category: 'legit', objectives: ['2.3', '4.3'] } },
       ],
       missionObjectives: [{
         id: 'remediate', text: 'Remediate in risk order', kind: 'interact',
@@ -467,7 +468,7 @@ describe('MissionRuntime', () => {
       expect.objectContaining({
         text: 'Out of risk order: FILE-02',
         points: -20,
-        objectives: ['4.3'],
+        objectives: ['2.3', '4.3'],
         tag: 'priority-miss',
       }),
     ]);
@@ -491,6 +492,42 @@ describe('MissionRuntime', () => {
     state.bus.emit('interact', { entityId: 'file02' });
 
     expect(state.rt.objectives[0]).toMatchObject({ progress: 2, done: true });
+  });
+
+  it('keeps M08 host priority penalties credited to the host objectives', () => {
+    const state = setup(m08);
+    state.bus.emit('interact', { entityId: 'vuln-scan' });
+    for (const entityId of ['web01', 'file02', 'hr03', 'lab04']) {
+      state.bus.emit('inspect', { entityId });
+    }
+    state.bus.emit('interact', { entityId: 'file02' });
+
+    expect(state.rt.scoreLog.find((event) => event.tag === 'priority-miss')).toMatchObject({
+      points: -20,
+      objectives: ['2.3', '4.3'],
+    });
+  });
+
+  it('records wrong-console evidence, warns, and scores once without counting', () => {
+    const state = setup(mission({
+      entities: [{
+        id: 'bad-hash', kind: 'console', x: 2, y: 2, sprite: 'console',
+        tags: ['wrong'], log: 'Base64 is not hashing.',
+        inspect: { label: 'Base64 option', detail: 'Encode the password column.', category: 'legit', objectives: ['1.4'] },
+      }],
+      missionObjectives: [{ id: 'passwords', text: 'Fix password storage', kind: 'interact', tag: 'wrong' }],
+    }));
+    state.bus.emit('interact', { entityId: 'bad-hash' });
+    state.bus.emit('interact', { entityId: 'bad-hash' });
+
+    expect(state.rt.evidence).toMatchObject([
+      { entityId: 'bad-hash', source: 'log', label: 'Base64 option', detail: 'Base64 is not hashing.' },
+    ]);
+    expect(state.rt.scoreLog.filter((event) => event.tag === 'bad-choice')).toMatchObject([
+      { text: 'Wrong call: Base64 option', points: -15, objectives: ['1.4'], tag: 'bad-choice' },
+    ]);
+    expect(state.messages.filter((message) => message.text === 'Base64 is not hashing.')).toHaveLength(2);
+    expect(state.rt.objectives[0]).toMatchObject({ progress: 0, done: false });
   });
 
   it('records and scores decoy console patches without counting their objective', () => {
