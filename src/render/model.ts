@@ -170,7 +170,7 @@ export function rasterize(w: number, h: number, prims: Prim[], opts: RasterOpts)
         const z = 500 - best;
         const depth = 0.8 + 0.2 * Math.max(0, Math.min(1, (z + 16) / 32));
         const grad = hit.p.shape === 'box' ? 0.1 * (hl[1] / hit.p.r[1]) : 0;
-        const I = (0.16 + 0.74 * diff + 0.12 * Math.max(0, nv[1]) + rim + grad) * depth;
+        const I = (0.3 + 0.66 * diff + 0.12 * Math.max(0, nv[1]) + rim + grad) * depth;
         const q = Math.max(0, Math.min(15, Math.round((I / 1.1) * 15)));
         col = ramp(base, q);
       }

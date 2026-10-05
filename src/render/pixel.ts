@@ -139,8 +139,12 @@ export function noiseFill(
 ): void {
   for (let y = y0; y < y0 + h; y += cell) {
     for (let x = x0; x < x0 + w; x += cell) {
-      const v = (p.rnd() - 0.5) * vary;
-      p.g.fillStyle = `rgb(${clamp(base[0] + v)},${clamp(base[1] + v)},${clamp(base[2] + v)})`;
+      // value noise + a little per-channel chroma jitter and rare deep pits,
+      // so surfaces carry Doom-like colour richness instead of flat grey
+      const v = (p.rnd() - 0.5) * vary - (p.rnd() < 0.035 ? vary * 0.9 : 0);
+      const cj = vary * 0.3;
+      const j = () => (p.rnd() - 0.5) * cj;
+      p.g.fillStyle = `rgb(${clamp(base[0] + v + j())},${clamp(base[1] + v + j())},${clamp(base[2] + v + j())})`;
       p.g.fillRect(x, y, cell, cell);
     }
   }

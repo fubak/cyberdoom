@@ -1,5 +1,5 @@
 import type { Gender, ToolDef, ViewmodelAnim } from '../core/types';
-import { drawBigText, drawText, measureBig, measureText, wrapText } from '../render/font';
+import { drawBigText, drawChunky, drawText, measureBig, measureChunky, measureText, wrapText } from '../render/font';
 import { STATUS_H, VIEW3D_H, VIEW_H, VIEW_W } from '../render/renderer';
 import { roleColor } from '../render/textures';
 import { drawToolViewmodel } from '../render/viewmodels';
@@ -16,15 +16,24 @@ import { sortedTools } from '../tools';
 const RED = ['#ff9a7a', '#ff4a2a', '#e01e10', '#a80c06', '#700604'];
 const AMBER = ['#fff0a0', '#ffd040', '#ffa818', '#d07808', '#8a4804'];
 const GREEN = ['#c8ffb0', '#6aff5a', '#2ad83a', '#14a024', '#0a6014'];
-const MSG_COL: Record<string, string> = { bad: '#ff5a3a', good: '#5aff6a', warn: '#ffc030', info: '#d8e0f0' };
+/** White-hot alarm ramp: critical numbers get brighter, never dimmer. */
+const RED_HOT = ['#ffffff', '#ffe0d0', '#ff8a6a', '#ff3a1a', '#d01008'];
+const MSG_RAMP: Record<string, string[]> = {
+  bad: ['#ffb09a', '#ff5a3a', '#d82a10'],
+  good: ['#d0ffc8', '#5aff6a', '#20b830'],
+  warn: ['#fff0a0', '#ffc030', '#d08a10'],
+  info: ['#ffffff', '#d8e0f0', '#9aa8c0'],
+};
+/** Objective strip never exceeds 12% of the 168px 3D view. */
+const OBJ_STRIP_MAX = 20;
 
 type Panel = [x: number, w: number];
-const P_INT: Panel = [0, 54];
-const P_AMMO: Panel = [54, 42];
-const P_TOOLS: Panel = [96, 54];
-const P_FACE: Panel = [150, 34];
-const P_CRED: Panel = [184, 42];
-const P_RES: Panel = [226, 54];
+const P_INT: Panel = [0, 64];
+const P_AMMO: Panel = [64, 46];
+const P_TOOLS: Panel = [110, 52];
+const P_FACE: Panel = [162, 34];
+const P_CRED: Panel = [196, 36];
+const P_RES: Panel = [232, 48];
 const P_OBJ: Panel = [280, 40];
 
 type ResRow = { id: string; label: string; cur: number; max: number; owned: boolean; active: boolean };
@@ -45,6 +54,7 @@ export class Hud {
   private tabHeld = false;
   private objShowT = 0;
   private lastObjKey = '';
+  private objIdx = 0;
 
   constructor(container: HTMLElement) {
     this.canvas = document.createElement('canvas');
@@ -143,56 +153,101 @@ export class Hud {
       g.fillRect(0, 0, VIEW_W, VIEW3D_H);
     }
 
-    const objKey = opts.objectives.map((o) => (o.done ? 1 : o.failed ? 2 : 0)).join('');
-    if (this.lastObjKey && objKey !== this.lastObjKey) this.objShowT = 3.5;
+    // objective strip: on change, flash ONLY the line that changed; at mission
+    // start, the first open objective; TAB shows the current one + n/m
+    const states = opts.objectives.map((o) => (o.done ? 1 : o.failed ? 2 : 0));
+    const objKey = states.join('');
+    if (!this.lastObjKey) {
+      if (this.objShowT > 0) this.objIdx = Math.max(0, states.indexOf(0));
+    } else if (objKey !== this.lastObjKey) {
+      const prev = this.lastObjKey;
+      this.objIdx = Math.max(0, states.findIndex((v, k) => `${v}` !== prev[k]));
+      this.objShowT = 3.5;
+    }
     this.lastObjKey = objKey;
-    if (this.tabHeld || this.objShowT > 0) this.drawObjectives(opts.objectives);
+    if (this.tabHeld) this.drawObjectiveStrip(opts.objectives, -1);
+    else if (this.objShowT > 0 && opts.objectives[this.objIdx]) this.drawObjectiveStrip(opts.objectives, this.objIdx);
     else this.drawTicker();
     this.drawBar(opts);
   }
 
-  /** Doom-style ticker, top-left: newest message only (wraps to 2 lines). */
+  /** Doom-style ticker, top-left, in the chunky HUD font (newest message; wraps to 2 lines). */
   private drawTicker(): void {
     const m = this.messages[this.messages.length - 1];
     if (!m) return;
     if (m.t < 0.4 && Math.floor(m.t * 20) % 2 === 0) return;
-    // up to two lines so tool teaching text (MFA, patch, tap) isn't cut mid-sentence
-    wrapText(m.text.toUpperCase(), 52, 2).forEach((line, i) =>
-      drawText(this.g, line, 2, 2 + i * 8, MSG_COL[m.kind] ?? MSG_COL.info, 'small', '#000'));
+    const ramp = MSG_RAMP[m.kind] ?? MSG_RAMP.info;
+    wrapText(m.text.toUpperCase(), 45, 2).forEach((line, i) => drawChunky(this.g, line, 2, 2 + i * 9, ramp));
   }
 
-  /** Objectives overlay (hold TAB; also flashes up at mission start / on change). */
-  private drawObjectives(objs: { text: string; done: boolean; failed: boolean }[]): void {
+  /**
+   * Compact objective strip (<= 20px = 12% of the 3D view). `idx` >= 0 flashes
+   * that one objective (it just changed); -1 = TAB: current open objective + n/m.
+   */
+  private drawObjectiveStrip(objs: { text: string; done: boolean; failed: boolean }[], idx: number): void {
     const g = this.g;
-    const rows = objs.map((o) => ({ o, lines: wrapText(o.text.toUpperCase(), 46, 3) }));
-    const h = 14 + rows.reduce((n, r) => n + r.lines.length * 7 + 3, 0);
-    const w = 214;
-    const x0 = Math.round((VIEW_W - w) / 2);
-    const y0 = 6;
-    // dithered smoke backing (no alpha blending: stays crisp under the palette)
+    if (idx >= 0 && this.objShowT < 0.4 && Math.floor(this.objShowT * 20) % 2 === 0) return;
+    const done = objs.filter((o) => o.done).length;
+    const focus = idx >= 0 ? idx : objs.findIndex((o) => !o.done && !o.failed);
+    const o = objs[focus < 0 ? objs.length - 1 : focus];
+    if (!o) return;
+    const head = idx >= 0 ? (o.failed ? 'FAILED' : o.done ? 'DONE' : 'OBJECTIVE') : `OBJ ${done}/${objs.length}`;
+    const headRamp = o.failed ? MSG_RAMP.bad : o.done ? MSG_RAMP.good : MSG_RAMP.warn;
+    const col = o.failed ? '#ff5a3a' : o.done ? '#5aff6a' : '#f0ece4';
+    const text = o.text.toUpperCase();
+    const tx = 13 + measureChunky(head) + 6;
+    const avail = VIEW_W - tx - 3;
+    const chunky = measureChunky(text) <= avail;
+    const lines = chunky ? [text] : wrapText(text, Math.floor((avail + 1) / 6), 2);
+    const h = Math.min(OBJ_STRIP_MAX, chunky ? 11 : 4 + lines.length * 8);
     g.fillStyle = '#000';
-    for (let y = y0; y < y0 + h; y++) for (let x = x0 + ((y & 1) ? 1 : 0); x < x0 + w; x += 2) g.fillRect(x, y, 1, 1);
-    g.fillStyle = '#6a665e';
-    g.fillRect(x0, y0, w, 1);
-    g.fillRect(x0, y0 + h - 1, w, 1);
-    drawText(g, 'OBJECTIVES', x0 + 4, y0 + 3, '#ffd040', 'small', '#000');
-    drawText(g, 'HOLD TAB', x0 + w - 4 - measureText('HOLD TAB', 'tiny'), y0 + 4, '#8a90a0', 'tiny', '#000');
-    let y = y0 + 13;
-    for (const { o, lines } of rows) {
-      const col = o.failed ? '#ff5a3a' : o.done ? '#5aff6a' : '#e8e4dc';
-      g.fillStyle = '#000';
-      g.fillRect(x0 + 4, y, 6, 6);
-      g.fillStyle = o.failed ? '#e01e10' : o.done ? '#2ad83a' : '#5a6070';
-      g.fillRect(x0 + 5, y + 1, 4, 4);
-      for (const line of lines) {
-        drawText(g, line, x0 + 14, y, col, 'tiny', '#000');
-        if (o.done || o.failed) {
-          g.fillStyle = col;
-          g.fillRect(x0 + 14, y + 2, measureText(line, 'tiny'), 1);
-        }
-        y += 7;
+    for (let y = 0; y < h; y++) for (let x = (y & 1) ? 1 : 0; x < VIEW_W; x += 2) g.fillRect(x, y, 1, 1);
+    g.fillStyle = o.failed ? '#a80c06' : o.done ? '#14a024' : '#a87a10';
+    g.fillRect(0, h - 1, VIEW_W, 1);
+    // status lamp
+    g.fillStyle = '#000';
+    g.fillRect(3, 2, 7, 7);
+    g.fillStyle = o.failed ? '#e01e10' : o.done ? '#2ad83a' : '#ffd040';
+    g.fillRect(4, 3, 5, 5);
+    drawChunky(g, head, 13, 2, headRamp);
+    lines.forEach((line, i) => {
+      const y = chunky ? 2 : 2 + i * 8;
+      const w = chunky ? drawChunky(g, line, tx, y, col) : drawText(g, line, tx, y, col, 'small', '#000');
+      if (o.done || o.failed) {
+        g.fillStyle = col;
+        g.fillRect(tx, y + 3, w - 1, 1);
       }
-      y += 3;
+    });
+  }
+
+  /** Low-integrity (<=25%) damage layered over the arsenal portrait: badly hurt. */
+  private drawCritFace(x: number, y: number, hp: number, pulse: boolean): void {
+    const g = this.g;
+    const p = (c: string, ax: number, ay: number, w = 1, h = 1) => {
+      g.fillStyle = c;
+      g.fillRect(x + ax, y + ay, w, h);
+    };
+    p('#8a0a06', 6, 3, 5, 2); // forehead gash, blood running down
+    p('#c01810', 7, 5, 2, 8);
+    p('#7a0604', 8, 13, 1, 6);
+    p('#c01810', 15, 4, 3, 1);
+    p('#8a0a06', 16, 5, 1, 5);
+    p('#2a0c40', 13, 8, 6, 4); // swollen black eye
+    p('#4a1a60', 14, 12, 4, 1);
+    p('#a01008', 3, 14, 3, 5); // bloodied cheek, split lip
+    p('#e02414', 10, 17, 4, 2);
+    p('#7a0604', 1, 21, 22, 3); // soaked collar
+    if (hp <= 12) {
+      p('#600402', 2, 8, 2, 9);
+      p('#d02010', 18, 12, 3, 7);
+      p('#400000', 9, 19, 6, 2);
+      p('#ffffff', 15, 9, 1, 1);
+    }
+    if (pulse) {
+      p('#ff2010', -2, -2, 28, 1);
+      p('#ff2010', -2, 25, 28, 1);
+      p('#ff2010', -2, -2, 1, 28);
+      p('#ff2010', 25, -2, 1, 28);
     }
   }
 
@@ -213,29 +268,32 @@ export class Hud {
     const by = VIEW_H - STATUS_H;
     g.drawImage(this.bar, 0, by);
 
-    // INTEGRITY
+    const pulse = Math.floor(this.time * 5) % 2 === 0;
+    // INTEGRITY: big fat digits; <=25% the well throbs red and the digits go white-hot
     const hp = Math.ceil(o.integrity);
-    const crit = hp < 25 && Math.floor(this.time * 4) % 2 === 0;
-    const hpRamp = hp >= 50 ? RED : crit ? AMBER : RED;
-    bigCentered(g, `${hp}%`, P_INT, by + 6, hpRamp);
-    label(g, 'INTEGRITY', P_INT, by + 21);
+    const crit = hp > 0 && hp <= 25;
+    if (crit) alarmWell(g, P_INT, by, pulse);
+    bigCentered(g, `${hp}%`, P_INT, by + 5, crit && pulse ? RED_HOT : RED, true);
+    label(g, crit && !pulse ? 'CRITICAL' : 'INTEGRITY', P_INT, by + 20, crit ? '#ff5a3a' : undefined);
 
     // AMMO / bandwidth
     if (o.ammo === null) {
       // unlimited tool: show a READY lamp instead of a meaningless ammo count
       const ready = this.cooldown <= 0.01;
-      const lx = P_AMMO[0] + 17;
+      const lx = P_AMMO[0] + 15;
       g.fillStyle = '#000';
       g.fillRect(lx, by + 7, 16, 12);
       g.fillStyle = ready ? '#14a024' : '#5a4008';
       g.fillRect(lx + 1, by + 8, 14, 10);
       g.fillStyle = ready ? '#8aff9a' : '#ffa818';
       g.fillRect(lx + 2, by + 9, 12, 3);
-      label(g, ready ? 'READY' : 'BUSY', P_AMMO, by + 21, ready ? '#5aff6a' : '#ffc030');
+      label(g, ready ? 'READY' : 'BUSY', P_AMMO, by + 20, ready ? '#5aff6a' : '#ffc030');
     } else {
-      bigCentered(g, `${o.ammo}`, P_AMMO, by + 6, o.ammo === 0 ? RED : AMBER);
       const rr = o.resources?.find((x) => x.active);
-      label(g, rr ? `${rr.label}/${rr.max}` : o.ammoName.toUpperCase().slice(0, 9), P_AMMO, by + 21);
+      const low = o.ammo === 0 || (!!rr && rr.max > 0 && o.ammo <= Math.max(1, Math.floor(rr.max * 0.25)));
+      if (low) alarmWell(g, P_AMMO, by, pulse);
+      bigCentered(g, `${o.ammo}`, P_AMMO, by + 5, low ? (pulse ? RED_HOT : RED) : AMBER, true);
+      label(g, (rr ? rr.label : o.ammoName).toUpperCase().slice(0, 6), P_AMMO, by + 20, low ? '#ff5a3a' : undefined);
     }
 
     // TOOLS grid (Doom ARMS): 4x2, slots 1-8, lit when owned, boxed when held,
@@ -245,7 +303,7 @@ export class Hud {
       const slot = i + 1;
       const t = tools.find((tt) => tt.slot === slot);
       const owned = !!t && (o.owned ? o.owned.includes(t.id) : true);
-      const x = P_TOOLS[0] + 4 + (i % 4) * 12;
+      const x = P_TOOLS[0] + 3 + (i % 4) * 12;
       const y = by + 6 + Math.floor(i / 4) * 10;
       const active = !!t && t.slot === o.tool.slot;
       const fresh = !!o.got && o.got.slot === slot && o.got.blink;
@@ -257,8 +315,9 @@ export class Hud {
     }
 
     // FACE
-    if (o.face) o.face(g, P_FACE[0] + 4, by + 2);
+    if (o.face) o.face(g, P_FACE[0] + 5, by + 4);
     else this.drawFace(P_FACE[0] + 4, by + 2, o.gender, o.integrity);
+    if (crit) this.drawCritFace(P_FACE[0] + 5, by + 4, hp, pulse);
 
     // CRED keycard + current role
     const rc = roleColor(o.credentials);
@@ -277,7 +336,7 @@ export class Hud {
     g.fillStyle = '#3a404c';
     g.fillRect(cx + 9, cy + 7, 5, 1);
     g.fillRect(cx + 9, cy + 9, 4, 1);
-    label(g, o.credentials.toUpperCase().slice(0, 9), P_CRED, by + 21, rc.light);
+    label(g, o.credentials.toUpperCase().slice(0, 7), P_CRED, by + 20, rc.light);
 
     // RESOURCES: every ammo type as current/max, like Doom's BULL/SHEL/RCKT/CELL
     (o.resources ?? []).slice(0, 4).forEach((r, i) => {
@@ -292,8 +351,8 @@ export class Hud {
     // OBJECTIVES n/m
     const done = o.objectives.filter((x) => x.done).length;
     const failed = o.objectives.some((x) => x.failed);
-    bigCentered(g, `${done}/${o.objectives.length}`, P_OBJ, by + 6, failed ? RED : done === o.objectives.length ? GREEN : GREEN.slice(1));
-    label(g, failed ? 'FAILED' : 'OBJ  TAB', P_OBJ, by + 21, failed ? '#ff5a3a' : undefined);
+    bigCentered(g, `${done}/${o.objectives.length}`, P_OBJ, by + 5, failed ? RED : done === o.objectives.length ? GREEN : GREEN.slice(1));
+    label(g, failed ? 'FAIL' : 'OBJ', P_OBJ, by + 20, failed ? '#ff5a3a' : undefined);
   }
 
   /** 26x28 procedural analyst portrait; reacts to damage like Doom's face. */
@@ -423,12 +482,20 @@ export class Hud {
   }
 }
 
-function bigCentered(g: CanvasRenderingContext2D, text: string, p: Panel, y: number, ramp: string[]): void {
-  drawBigText(g, text, p[0] + Math.round((p[1] - measureBig(text)) / 2), y, ramp);
+function bigCentered(g: CanvasRenderingContext2D, text: string, p: Panel, y: number, ramp: string[], fat = false): void {
+  drawBigText(g, text, p[0] + Math.round((p[1] - measureBig(text, fat)) / 2), y, ramp, undefined, fat);
 }
 
-function label(g: CanvasRenderingContext2D, text: string, p: Panel, y: number, col = '#8a90a0'): void {
-  drawText(g, text, p[0] + Math.round((p[1] - measureText(text, 'tiny')) / 2), y, col, 'tiny', '#000');
+/** Panel labels: the 5x7 font (Doom-size), not the 3x5 one. */
+function label(g: CanvasRenderingContext2D, text: string, p: Panel, y: number, col = '#c8c0b0'): void {
+  const font = measureText(text, 'small') <= p[1] - 6 ? 'small' : 'tiny';
+  drawText(g, text, p[0] + Math.round((p[1] - measureText(text, font)) / 2), y + (font === 'tiny' ? 1 : 0), col, font, '#000');
+}
+
+/** Alarm: the recessed well behind a critical number throbs dark red. */
+function alarmWell(g: CanvasRenderingContext2D, p: Panel, by: number, pulse: boolean): void {
+  g.fillStyle = pulse ? '#5a0804' : '#2a0402';
+  g.fillRect(p[0] + 5, by + 6, p[1] - 10, STATUS_H - 12);
 }
 
 /** Static bar art: bold Doom-grey stone/steel plate, thick bevels, recessed wells. */

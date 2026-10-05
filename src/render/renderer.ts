@@ -46,6 +46,8 @@ void main() {
 const WORLD_FS = /* glsl */ `
 uniform sampler2D map;
 uniform float uLight;
+uniform float uFloor;
+uniform float uGain;
 uniform float uFlash;
 uniform vec2 uUvScale;
 uniform vec2 uUvOffset;
@@ -67,11 +69,13 @@ void main() {
       fl = r < 0.3 ? 0.4 : 1.0;
     }
     float s = abs(vShade) * uLight * fl;
-    L = s * 1.4 - vDist * (0.18 - s * 0.09);
-    L = clamp(L, 0.025, 1.0);
+    // distance diminishing never drops below ~30% of the sector light (or the
+    // material floor): far things get dim, never pure black
+    float dim = s * 1.4 - vDist * (0.16 - s * 0.08);
+    L = clamp(max(dim, max(0.5 * s, uFloor)), 0.0, 1.0);
     L = floor(L * 24.0 + 0.5) / 24.0;
   }
-  vec3 c = mix(t.rgb * L, vec3(1.0), uFlash);
+  vec3 c = mix(min(t.rgb * L * uGain, vec3(1.0)), vec3(1.0), uFlash);
   gl_FragColor = vec4(c, 1.0);
 }`;
 
@@ -87,11 +91,17 @@ uniform float uBonus;
 varying vec2 vUv;
 void main() {
   vec3 c = texture2D(tScene, vUv).rgb;
+  // Doom-style palette shift: push toward red but keep luminance structure
   float l = dot(c, vec3(0.3, 0.59, 0.11));
   vec3 red = vec3(max(c.r, l * 1.35 + 0.06), c.g * 0.42, c.b * 0.38);
   c = mix(c, red, uHurt);
   c = mix(c, c * vec3(1.15, 1.05, 0.7) + vec3(0.22, 0.17, 0.0), uBonus);
-  vec3 q = floor(clamp(c, 0.0, 1.0) * 31.0 + 0.5);
+  // black level: like Doom's COLORMAP, the darkest light never maps to pure black
+  c = 0.045 + c * 0.955;
+  // 2x2 ordered dither before palette snap: more tones, less banding
+  vec2 fp = mod(floor(gl_FragCoord.xy), 2.0);
+  float bayer = (fp.x * 2.0 + fp.y * 3.0 - fp.x * fp.y * 4.0) / 4.0 - 0.375;
+  vec3 q = floor(clamp(c, 0.0, 1.0) * 31.0 + 0.5 + bayer * 0.9);
   vec2 luv = vec2((q.r + q.b * 32.0 + 0.5) / 1024.0, (q.g + 0.5) / 32.0);
   gl_FragColor = vec4(texture2D(tLut, luv).rgb, 1.0);
 }`;
@@ -122,6 +132,8 @@ function worldMaterial(map: THREE.Texture, light = 1): THREE.ShaderMaterial {
     uniforms: {
       map: { value: map },
       uLight: { value: light },
+      uFloor: { value: 0.16 },
+      uGain: { value: 1 },
       uFlash: { value: 0 },
       uUvScale: { value: new THREE.Vector2(1, 1) },
       uUvOffset: { value: new THREE.Vector2(0, 0) },
@@ -219,6 +231,15 @@ export class Renderer {
   private lastTime = performance.now();
   private time = 0;
   private lastIntegrity = 100;
+  private captureCb: ((v: { w: number; h: number; data: Uint8Array }) => void) | null = null;
+  /** DEBUG (look probe): sprite ids hidden from the view, sprite-set overrides, no flashes. */
+  readonly debugHidden = new Set<string>();
+  readonly debugSprite = new Map<string, string>();
+  debugSpriteInfo(id: string): { x: number; y: number; z: number; visible: boolean; set: string } | null {
+    const st = this.sprites.get(id);
+    return st ? { x: st.mesh.position.x, y: st.mesh.position.y, z: st.mesh.position.z, visible: st.mesh.visible, set: st.setId } : null;
+  }
+  debugNoFlash = false;
   private hurt = 0;
 
   constructor(container: HTMLElement) {
@@ -493,7 +514,7 @@ export class Renderer {
           if (d2 < 16) best = Math.max(best, ls * Math.exp(-d2 / 3.2));
         }
         const base = map.lightAt(x, y);
-        this.light[y * w + x] = Math.max(0.08, Math.min(1, base * (0.42 + 0.75 * best)));
+        this.light[y * w + x] = Math.max(0.25, Math.min(1, base * (0.5 + 0.7 * best)));
       }
     }
   }
@@ -509,7 +530,7 @@ export class Renderer {
         continue;
       }
       seen.add(id);
-      const setId = e.def.kind === 'workstation' ? (e.infected ? 'workstation-infected' : 'workstation') : e.def.sprite;
+      const setId = this.debugSprite.get(id) ?? (e.def.kind === 'workstation' ? (e.infected ? 'workstation-infected' : 'workstation') : e.def.sprite);
       const set = spriteSets.get(setId) ?? spriteSets.require('npc-m');
       if (!st) {
         const { mesh, mat } = this.makeSpriteMesh(set, this.lightAt(e.x, e.y));
@@ -537,14 +558,21 @@ export class Renderer {
       st.lastX = e.x;
       st.lastY = e.y;
       st.entity = e;
-      const scale = typeof e.state.scale === 'number' ? e.state.scale : 1;
-      const hop = typeof e.state.hop === 'number' ? e.state.hop : 0;
+      const scale = typeof e.state.scale === 'number' && Number.isFinite(e.state.scale) ? e.state.scale : 1;
+      // guard NaN (ai.ts hop uses state.phase, unset on some spawns): NaN y = invisible monster
+      const hop = typeof e.state.hop === 'number' && Number.isFinite(e.state.hop) ? e.state.hop : 0;
       st.scale = scale;
       st.mesh.scale.set(set.w * scale, set.h * scale, 1);
       st.mesh.position.set(e.x, hop, e.y);
       const lit = this.lightAt(e.x, e.y);
       // threats stay readable even in black sectors (Doom's monsters are rarely pure silhouette)
-      st.mat.uniforms.uLight.value = e.def.kind === 'enemy' ? Math.max(0.8, lit) : e.def.kind === 'item' ? Math.max(0.7, lit) : lit;
+      const enemy = e.def.kind === 'enemy';
+      st.mat.uniforms.uLight.value = enemy ? 1 : e.def.kind === 'item' ? Math.max(0.7, lit) : lit;
+      // monsters keep a much higher floor than walls (and a slight gain) so
+      // they read against dark sectors at any range, like Doom's
+      st.mat.uniforms.uFloor.value = enemy ? 0.85 : e.def.kind === 'item' ? 0.45 : 0.2;
+      st.mat.uniforms.uGain.value = enemy ? 1.9 : 1;
+      st.mesh.visible = !this.debugHidden.has(id);
     }
     for (const [id, st] of [...this.sprites]) {
       if (!seen.has(id) && st.entity && st.entity.alive === false) continue;
@@ -673,14 +701,14 @@ export class Renderer {
     const dt = Math.min(0.1, (now - this.lastTime) / 1000);
     this.lastTime = now;
     this.time += dt;
-    timeUniform.value = this.time;
+    if (!this.debugNoFlash) timeUniform.value = this.time;
 
     // damage → palette red shift
-    if (player.integrity < this.lastIntegrity) this.hurt = Math.min(0.62, this.hurt + 0.36 + (this.lastIntegrity - player.integrity) * 0.015);
+    if (player.integrity < this.lastIntegrity) this.hurt = Math.min(0.55, this.hurt + 0.3 + (this.lastIntegrity - player.integrity) * 0.012);
     this.lastIntegrity = player.integrity;
     this.hurt = Math.max(0, this.hurt - dt * 0.6);
-    const lowHp = player.integrity > 0 && player.integrity < 25 ? 0.06 + Math.sin(this.time * 6) * 0.04 : 0;
-    this.postMat.uniforms.uHurt.value = Math.max(pose?.hurt ?? this.hurt, lowHp);
+    const lowHp = player.integrity > 0 && player.integrity < 25 ? 0.12 + Math.sin(this.time * 5) * 0.06 : 0;
+    this.postMat.uniforms.uHurt.value = Math.min(0.55, Math.max(pose?.hurt ?? this.hurt, lowHp));
     this.postMat.uniforms.uBonus.value = pose?.bonus ?? 0;
 
     const speed = Math.min(1, Math.hypot(player.vx, player.vy) / 4);
@@ -720,7 +748,7 @@ export class Renderer {
         st.mesh.scale.set(st.set.w * sc, st.set.h * sc, 1);
       }
       const painFlash = st.set.anim !== 'monster' && st.flash > 0.75 ? 0.6 : 0;
-      st.mat.uniforms.uFlash.value = painFlash;
+      st.mat.uniforms.uFlash.value = this.debugNoFlash ? 0 : painFlash;
     }
     for (const fx of [...this.fx]) {
       fx.t += dt;
@@ -752,5 +780,21 @@ export class Renderer {
     this.renderer.autoClear = false;
     this.renderer.render(this.postScene, this.postCam);
     this.renderer.autoClear = true;
+    if (this.captureCb) {
+      const gl = this.renderer.getContext();
+      const raw = new Uint8Array(VIEW_W * VIEW3D_H * 4);
+      gl.readPixels(0, STATUS_H, VIEW_W, VIEW3D_H, gl.RGBA, gl.UNSIGNED_BYTE, raw);
+      const out = new Uint8Array(raw.length);
+      const row = VIEW_W * 4;
+      for (let y = 0; y < VIEW3D_H; y++) out.set(raw.subarray((VIEW3D_H - 1 - y) * row, (VIEW3D_H - y) * row), y * row);
+      const cb = this.captureCb;
+      this.captureCb = null;
+      cb({ w: VIEW_W, h: VIEW3D_H, data: out });
+    }
+  }
+
+  /** DEBUG (look probe): resolve with the next rendered 3D view, post-palette. */
+  captureView(): Promise<{ w: number; h: number; data: Uint8Array }> {
+    return new Promise((res) => (this.captureCb = res));
   }
 }

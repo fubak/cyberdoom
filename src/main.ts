@@ -9,6 +9,7 @@ import { alertNear, damageEntity, hurtEntity, updateEntities, updateProjectiles 
 import { Audio } from './engine/audio';
 import { Feel } from './engine/feel';
 import { ParticleSystem } from './engine/fx';
+import { lookProbe } from './render/probe';
 import { Renderer } from './render/renderer';
 import { Hud } from './ui/hud';
 import { Dossier } from './ui/dossier';
@@ -628,6 +629,15 @@ class Game {
       /** Pull the trigger once (works without pointer lock). */
       fire() {
         g.debugFire = true;
+      },
+      /** LOOK: set integrity (HUD / low-HP portrait / hurt-tint captures). */
+      setIntegrity(v: number) {
+        if (g.player) g.player.integrity = Math.max(1, Math.min(100, v));
+      },
+      /** LOOK: threat-readability probe (see tools/look-contrast.mjs). */
+      probe(kind: string, dist: number, withImages = false) {
+        if (!g.map || !g.runtime || !g.player) throw new Error('no mission running');
+        return lookProbe(g.renderer, g.map, g.runtime.entities, g.player, kind, dist, withImages);
       },
       setTool(slot: number) {
         const t = toolForSlot(slot);
