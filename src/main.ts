@@ -19,6 +19,7 @@ import { toolForSlot } from './tools';
 import { Arsenal } from './tools/arsenal';
 import { characterSelect } from './ui/characterSelect';
 import { markCompleted } from './missions/progress';
+import { registerThreatSprites } from './missions/threatSprites';
 
 /**
  * main.ts — boot + top-level state machine:
@@ -76,6 +77,7 @@ class Game {
     viewport.id = 'viewport';
     app.appendChild(viewport);
     this.renderer = new Renderer(viewport);
+    registerThreatSprites();
     this.renderer.canvas.classList.add('gl');
     this.input = new Input(this.renderer.canvas, () => this.audio.unlock());
     this.hud = new Hud(viewport);

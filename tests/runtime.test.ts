@@ -97,6 +97,39 @@ describe('MissionRuntime', () => {
     expect(state.messages.filter((m) => m.text.includes('secret')).length).toBe(1);
   });
 
+  it('requires inspection before cleaning an infected workstation', () => {
+    const state = setup(mission({
+      entities: [{
+        id: 'host', kind: 'workstation', x: 2, y: 2, sprite: 'workstation',
+        infected: true, hp: 2,
+        inspect: { label: 'Unconfirmed host', detail: 'Raw host indicators.', category: 'malware' },
+      }],
+      missionObjectives: [{ id: 'clean', text: 'Clean host', kind: 'clean', tag: 'infected' }],
+    }));
+    const host = state.rt.byId('host')!;
+    state.bus.emit('interact', { entityId: 'host' });
+    expect(host.infected).toBe(true);
+    expect(state.rt.score).toBe(-10);
+
+    state.bus.emit('cleaned', { entityId: 'host' });
+    expect(host.alive).toBe(true);
+    expect(host.infected).toBe(true);
+    expect(host.hp).toBe(2);
+    expect(state.rt.score).toBe(-10);
+
+    host.hp = 0;
+    state.bus.emit('cleaned', { entityId: 'host' });
+    expect(host.hp).toBe(2);
+    expect(state.rt.score).toBe(-10);
+
+    state.bus.emit('inspect', { entityId: 'host' });
+    expect(host.state.revealed).toBe(true);
+    state.bus.emit('cleaned', { entityId: 'host' });
+    expect(host.alive).toBe(false);
+    expect(host.infected).toBe(false);
+    expect(state.rt.score).toBe(15);
+  });
+
   it('picks up carried items, accepts them, and grants a role', () => {
     const state = setup(mission({
       entities: [
@@ -176,6 +209,47 @@ describe('MissionRuntime', () => {
     state.bus.emit('interact', { entityId: 'console' });
     expect(state.rt.objectives.find((objective) => objective.def.id === 'report')?.done).toBe(false);
     expect(state.messages.at(-1)?.text).toBe('First: Collect evidence');
+  });
+
+  it('fails an early interaction through its configured avoid objective', () => {
+    const state = setup(mission({
+      entities: [{
+        id: 'patch', kind: 'console', x: 2, y: 2, sprite: 'console',
+        tags: ['patch'],
+      }],
+      missionObjectives: [
+        { id: 'docs', text: 'Collect change documents', kind: 'inspect', tag: 'docs' },
+        {
+          id: 'apply', text: 'Apply the patch', kind: 'interact', tag: 'patch',
+          requires: ['docs'], earlyViolates: 'early-patch',
+        },
+        { id: 'early-patch', text: 'Do not patch early', kind: 'avoid' },
+      ],
+    }));
+    state.bus.emit('interact', { entityId: 'patch' });
+    expect(state.rt.finished).toBe('lost');
+    expect(state.rt.lossReason).toBe('Do not patch early');
+    expect(state.rt.objectives.find((objective) => objective.def.id === 'early-patch')?.violations).toBe(1);
+  });
+
+  it('loses after three wrong triage calls and removes integrity each time', () => {
+    const state = setup(mission({
+      entities: [{
+        id: 'false-positive', kind: 'workstation', x: 2, y: 2, sprite: 'workstation',
+        tags: ['triage'], infected: false,
+      }],
+      missionObjectives: [{
+        id: 'wrong-call', text: 'Avoid wrong triage calls', kind: 'avoid',
+        tag: 'wrong-call', strikes: 3,
+      }],
+    }));
+    tick(state);
+    for (let i = 0; i < 3; i++) {
+      state.bus.emit('tool-hit', { toolId: 'usb', entityId: 'false-positive', good: false });
+    }
+    expect(state.rt.finished).toBe('lost');
+    expect(state.rt.lossReason).toBe('Avoid wrong triage calls');
+    expect(state.player.integrity).toBe(70);
   });
 
   it('marks an obeyed doors objective done at win, but violations are not fatal', () => {

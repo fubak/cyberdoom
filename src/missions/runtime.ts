@@ -8,6 +8,7 @@ import type {
 } from '../core/types';
 import { objectiveById } from '../content/objectives';
 import type { WorldMap } from '../engine/map';
+import { difficultyScale } from './difficulty';
 
 /**
  * LEVELS: mission runtime.
@@ -46,6 +47,7 @@ export class MissionRuntime {
   private inspected = new Set<string>();
   private triageScored = new Set<string>();
   private falsePositiveSources = new Set<string>();
+  private rejectedUnconfirmedHosts = new Set<string>();
   private counted = new Map<string, Set<string>>();
   private cleaned = new Set<string>();
   private initialHp = new Map<string, number>();
@@ -56,6 +58,7 @@ export class MissionRuntime {
   private grantApplied = new Set<string>();
   private outbreakElapsed = 0;
   private lastExitMessage = -Infinity;
+  private currentPlayer: UpdateWorld['player'] | null = null;
   private tallied = false;
 
   finished: 'won' | 'lost' | null = null;
@@ -63,10 +66,12 @@ export class MissionRuntime {
   constructor(mission: Mission, private bus: EventBus) {
     this.mission = mission;
     this.roles = [...mission.authorizedRoles];
+    const scaling = difficultyScale(mission.difficulty);
     this.entities = mission.entities.map((def) => {
-      const hp = def.hp ?? 1;
+      const hp = (def.hp ?? 1) + (def.kind === 'enemy' ? scaling.hpBonus : 0);
       this.initialHp.set(def.id, hp);
       this.initialInfected.set(def.id, def.infected ?? false);
+      const threat = def.threat ?? def.sprite;
       return {
         def,
         x: def.x,
@@ -74,7 +79,13 @@ export class MissionRuntime {
         hp,
         alive: !def.dormant,
         infected: def.infected ?? false,
-        state: {},
+        state: def.kind === 'enemy'
+          ? {
+              speedMul: scaling.speedMul,
+              aggro: scaling.aggro * (threat === 'rootkit' ? 0.5 : 1),
+              maxHp: hp,
+            }
+          : {},
       };
     });
     this.objectives = mission.missionObjectives.map((def) => ({
@@ -179,8 +190,22 @@ export class MissionRuntime {
   private rejectRequirements(objective: ObjectiveStatus | undefined): boolean {
     const unmet = this.firstUnmet(objective?.def.requires);
     if (!unmet) return false;
+    const earlyViolation = objective?.def.earlyViolates && this.obj(objective.def.earlyViolates);
+    if (earlyViolation) {
+      this.violate(earlyViolation);
+      return true;
+    }
     this.message(`First: ${unmet.def.text}`, 'warn');
     return true;
+  }
+
+  private violateObjective(id: string, points: number): void {
+    const objective = this.obj(id);
+    if (!objective) return;
+    this.violate(objective, points);
+    if (this.currentPlayer) {
+      this.currentPlayer.integrity = Math.max(0, this.currentPlayer.integrity - 10);
+    }
   }
 
   private violate(obj: ObjectiveStatus, points = -50): void {
@@ -215,10 +240,26 @@ export class MissionRuntime {
     return violated;
   }
 
+  private rejectUnconfirmedHost(e: Entity): boolean {
+    if (e.def.kind !== 'workstation' || e.state.revealed) return false;
+    const text = 'Scanned an unconfirmed host: inspect it (MOUSE) before removing anything';
+    e.hp = this.initialHp.get(e.def.id) ?? e.hp;
+    e.infected = true;
+    if (this.rejectedUnconfirmedHosts.has(e.def.id)) {
+      this.message(text, 'warn');
+    } else {
+      this.rejectedUnconfirmedHosts.add(e.def.id);
+      this.log(text, -10, e.def.inspect?.objectives ?? []);
+    }
+    return true;
+  }
+
   private bind(): void {
     this.bus.on('inspect', ({ entityId }) => {
       const e = this.byId(entityId);
-      if (!e?.def.inspect) return;
+      if (!e) return;
+      e.state.revealed = true;
+      if (!e.def.inspect) return;
       const info = e.def.inspect;
       this.message(`CASE FILE: ${info.label.slice(0, 29)}`);
       this.record(e, 'inspect', info.label, info.detail);
@@ -243,12 +284,17 @@ export class MissionRuntime {
     this.bus.on('scan-miss', ({ entityId }) => {
       const e = this.byId(entityId);
       if (!e || this.initialInfected.get(entityId)) return;
+      if (e.def.tags?.includes('triage')) {
+        this.violateObjective('wrong-call', -25);
+        return;
+      }
       this.falsePositive(e, -25, 'scan');
     });
 
     this.bus.on('cleaned', ({ entityId }) => {
       const e = this.byId(entityId);
       if (!e || !e.alive || !e.infected) return;
+      if (this.rejectUnconfirmedHost(e)) return;
       e.infected = false;
       e.alive = false;
       e.state.cleaned = true;
@@ -261,6 +307,18 @@ export class MissionRuntime {
     this.bus.on('interact', ({ entityId }) => {
       const e = this.byId(entityId);
       if (!e || !e.alive) return;
+
+      if (e.def.kind === 'workstation' && e.def.tags?.includes('triage')) {
+        if (e.infected) {
+          this.violateObjective('wrong-call', -30);
+          return;
+        }
+        const matching = this.objectivesFor('interact', e);
+        if (matching.some((objective) => this.rejectRequirements(objective))) return;
+        for (const objective of matching) this.countEntity(objective, e.def.id);
+        this.checkWin();
+        return;
+      }
 
       if (e.def.accepts) {
         const item = this.entities.find(
@@ -282,6 +340,11 @@ export class MissionRuntime {
         this.log(`Turned in: ${item.def.inspect?.label ?? item.def.id}`, 50,
           e.def.inspect?.objectives ?? []);
         for (const objective of matching) this.countEntity(objective, e.def.id);
+        if (e.def.group) {
+          for (const sibling of this.entities) {
+            if (sibling !== e && sibling.def.group === e.def.group) sibling.alive = false;
+          }
+        }
         this.applyRoleGrant(e);
         this.checkWin();
         return;
@@ -329,6 +392,7 @@ export class MissionRuntime {
       }
 
       if (e.def.kind === 'workstation' && e.infected) {
+        if (this.rejectUnconfirmedHost(e)) return;
         this.log('Manual patch applied — faster with the scanner', 5, e.def.inspect?.objectives ?? []);
         e.infected = false;
         e.alive = false;
@@ -425,6 +489,7 @@ export class MissionRuntime {
   }
 
   update(dt: number, w: UpdateWorld): void {
+    this.currentPlayer = w.player;
     if (!this.finished) this.elapsed += dt;
 
     if (w.use) {
