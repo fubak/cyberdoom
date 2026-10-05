@@ -158,6 +158,22 @@ briefing:
       inspect: { label: 'Integrity kit', detail: 'Restores 25 integrity.', category: 'item' } },
     { id: 'chg-closet', kind: 'item', x: 37.5, y: 18.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 6 },
       inspect: { label: 'Scanner charges', detail: 'Antimalware definitions.', category: 'item' } },
+    { id: 'chg-northwest', kind: 'item', x: 9.5, y: 11.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 30 },
+      inspect: { label: 'Scanner charges', detail: 'Antimalware definitions.', category: 'item' } },
+    { id: 'chg-northeast', kind: 'item', x: 30.5, y: 11.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 30 },
+      inspect: { label: 'Scanner charges', detail: 'Antimalware definitions.', category: 'item' } },
+    { id: 'chg-west-floor', kind: 'item', x: 9.5, y: 18.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 30 },
+      inspect: { label: 'Scanner charges', detail: 'Antimalware definitions.', category: 'item' } },
+    { id: 'chg-east-floor', kind: 'item', x: 32.5, y: 19.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 30 },
+      inspect: { label: 'Scanner charges', detail: 'Antimalware definitions.', category: 'item' } },
+    { id: 'chg-central-west', kind: 'item', x: 15.5, y: 13.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 30 },
+      inspect: { label: 'Scanner charges', detail: 'Antimalware definitions.', category: 'item' } },
+    { id: 'chg-central-east', kind: 'item', x: 24.5, y: 17.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 30 },
+      inspect: { label: 'Scanner charges', detail: 'Antimalware definitions.', category: 'item' } },
+    { id: 'chg-warroom', kind: 'item', x: 20.5, y: 26.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 30 },
+      inspect: { label: 'Scanner charges', detail: 'Antimalware definitions.', category: 'item' } },
+    { id: 'chg-east-hall', kind: 'item', x: 27.5, y: 15.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 30 },
+      inspect: { label: 'Scanner charges', detail: 'Antimalware definitions.', category: 'item' } },
     {
       id: 'find-edr', kind: 'item', x: 3.5, y: 4.5, sprite: 'tool-edr',
       tags: ['arsenal-pickup'], grants: { resource: 'tool:edr', amount: 1 },
@@ -345,7 +361,7 @@ addThreatEncounter(m09, 'ransomware-finance', 'ransomware', 9, {
   kind: 'bad',
   message: 'A ransomware wave pushed through the finance floor.',
 }, [10, 21, 32, 28]);
-addThreatEncounter(m09, 'ransomware-west', 'ransomware', 9, {
+addThreatEncounter(m09, 'ransomware-west', 'ransomware', 13, {
   id: 'ir-storeroom-ambush',
   area: [2, 3, 4, 5],
   kind: 'bad',

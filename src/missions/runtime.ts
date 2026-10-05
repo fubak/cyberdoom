@@ -40,6 +40,7 @@ export class MissionRuntime {
   score = 0;
   roles: string[];
   inventory = new Set<string>();
+  visited = new Set<string>();
   elapsed = 0;
   lossReason: string | null = null;
 
@@ -54,12 +55,14 @@ export class MissionRuntime {
   private initialInfected = new Map<string, boolean>();
   private firedTriggers = new Set<string>();
   private revealedSecrets = new Set<string>();
+  private revealedSecretDoors = new Set<string>();
   private doorAccessScored = new Set<string>();
   private grantApplied = new Set<string>();
   private outbreakElapsed = 0;
   private lastExitMessage = -Infinity;
   private currentPlayer: UpdateWorld['player'] | null = null;
   private tallied = false;
+  private visitElapsed = 0;
 
   finished: 'won' | 'lost' | null = null;
 
@@ -71,7 +74,6 @@ export class MissionRuntime {
       const hp = (def.hp ?? 1) + (def.kind === 'enemy' ? scaling.hpBonus : 0);
       this.initialHp.set(def.id, hp);
       this.initialInfected.set(def.id, def.infected ?? false);
-      const threat = def.threat ?? def.sprite;
       return {
         def,
         x: def.x,
@@ -82,7 +84,7 @@ export class MissionRuntime {
         state: def.kind === 'enemy'
           ? {
               speedMul: scaling.speedMul,
-              aggro: scaling.aggro * (threat === 'rootkit' ? 0.5 : 1),
+              aggro: scaling.aggro,
               maxHp: hp,
             }
           : {},
@@ -450,6 +452,7 @@ export class MissionRuntime {
         return;
       }
       exit.done = true;
+      exit.progress = exit.target;
       this.checkWin();
     });
 
@@ -469,6 +472,7 @@ export class MissionRuntime {
             objective.def.id === 'report-insider' ||
             objective.def.id === 'report-admin') {
           objective.done = true;
+          objective.progress = objective.target;
         }
       }
       e.alive = false;
@@ -496,6 +500,7 @@ export class MissionRuntime {
   update(dt: number, w: UpdateWorld): void {
     this.currentPlayer = w.player;
     if (!this.finished) this.elapsed += dt;
+    this.updateVisited(dt, w);
 
     if (w.use) {
       const hit = w.map.raycast(w.player.x, w.player.y, w.player.angle, 1.6);
@@ -522,6 +527,24 @@ export class MissionRuntime {
     this.updateTriggers(w);
     this.updateSecrets(w);
     this.updateOutbreak(dt);
+  }
+
+  private updateVisited(dt: number, w: UpdateWorld): void {
+    this.visitElapsed += dt;
+    if (this.visitElapsed < 0.1) return;
+    this.visitElapsed %= 0.1;
+    for (let i = 0; i < 32; i++) {
+      const angle = w.player.angle + (i * Math.PI * 2) / 32;
+      const hit = w.map.raycast(w.player.x, w.player.y, angle, 12);
+      const distance = hit.cell ? Math.min(hit.dist, 12) : 12;
+      for (let d = 0; d <= distance; d += 0.2) {
+        const tx = Math.floor(w.player.x + Math.cos(angle) * d);
+        const ty = Math.floor(w.player.y + Math.sin(angle) * d);
+        if (tx < 0 || ty < 0 || tx >= w.map.w || ty >= w.map.h) break;
+        this.visited.add(`${tx},${ty}`);
+      }
+      if (hit.tx >= 0 && hit.ty >= 0) this.visited.add(`${hit.tx},${hit.ty}`);
+    }
   }
 
   private updateTriggers(w: UpdateWorld): void {
@@ -552,9 +575,31 @@ export class MissionRuntime {
       const a = secret.area;
       if (tx < a[0] || tx > a[2] || ty < a[1] || ty > a[3]) continue;
       this.revealedSecrets.add(secret.id);
+      this.revealNearestSecretDoor(secret.area);
       this.message(`A secret is revealed! ${secret.label}`, 'good');
       this.log(`Secret revealed: ${secret.label}`, 25);
     }
+  }
+
+  private revealNearestSecretDoor(area: [number, number, number, number]): void {
+    let nearest: { id: string; distance: number } | null = null;
+    for (let y = 0; y < this.mission.map.grid.length; y++) {
+      const row = this.mission.map.grid[y];
+      for (let x = 0; x < row.length; x++) {
+        const cell = this.mission.map.legend[row[x]];
+        if (cell?.kind !== 'door' || !cell.secret || !cell.doorId) continue;
+        if (this.revealedSecretDoors.has(cell.doorId)) continue;
+        const dx = Math.max(area[0] - x, 0, x - area[2]);
+        const dy = Math.max(area[1] - y, 0, y - area[3]);
+        const distance = dx + dy;
+        if (!nearest || distance < nearest.distance) nearest = { id: cell.doorId, distance };
+      }
+    }
+    if (nearest) this.revealedSecretDoors.add(nearest.id);
+  }
+
+  isSecretDoorRevealed(doorId: string): boolean {
+    return this.revealedSecretDoors.has(doorId);
   }
 
   private updateOutbreak(dt: number): void {
@@ -646,12 +691,23 @@ export class MissionRuntime {
   }
 
   /** Debrief text mapping objective ids to titles for display. */
-  objectiveSummary(): { text: string; done: boolean; failed: boolean }[] {
+  objectiveSummary(): { text: string; done: boolean; failed: boolean; progress: number; target: number }[] {
     return this.objectives.map((o) => ({
-      text: o.def.text,
+      text: o.target > 1 && !o.done ? `${o.def.text} (${Math.min(o.progress, o.target)}/${o.target})` : o.def.text,
       done: o.done,
       failed: o.failed,
+      progress: o.progress,
+      target: o.target,
     }));
+  }
+
+  hudProgress(): { done: number; total: number; failed: boolean } {
+    const required = this.requiredObjectives();
+    return {
+      done: required.reduce((sum, objective) => sum + Math.min(objective.progress, objective.target), 0),
+      total: required.reduce((sum, objective) => sum + objective.target, 0),
+      failed: this.objectives.some((objective) => objective.failed),
+    };
   }
 
   objectiveTitle(id: string): string {

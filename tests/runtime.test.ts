@@ -107,10 +107,7 @@ describe('MissionRuntime', () => {
       missionObjectives: [{ id: 'clean', text: 'Clean host', kind: 'clean', tag: 'infected' }],
     }));
     const host = state.rt.byId('host')!;
-    state.bus.emit('interact', { entityId: 'host' });
-    expect(host.infected).toBe(true);
-    expect(state.rt.score).toBe(-10);
-
+    host.hp = 0;
     state.bus.emit('cleaned', { entityId: 'host' });
     expect(host.alive).toBe(true);
     expect(host.infected).toBe(true);
@@ -128,6 +125,25 @@ describe('MissionRuntime', () => {
     expect(host.alive).toBe(false);
     expect(host.infected).toBe(false);
     expect(state.rt.score).toBe(15);
+  });
+
+  it('exposes partial objective progress in the summary and HUD total', () => {
+    const state = setup(mission({
+      entities: [
+        { id: 'one', kind: 'console', x: 2, y: 2, sprite: 'console', tags: ['work'] },
+        { id: 'two', kind: 'console', x: 3, y: 2, sprite: 'console', tags: ['work'] },
+        { id: 'three', kind: 'console', x: 4, y: 2, sprite: 'console', tags: ['work'] },
+      ],
+      missionObjectives: [
+        { id: 'work', text: 'Apply changes', kind: 'interact', tag: 'work', count: 3 },
+        { id: 'avoid', text: 'Avoid traps', kind: 'avoid' },
+        { id: 'doors', text: 'Use authorized doors', kind: 'doors' },
+      ],
+    }));
+    state.bus.emit('interact', { entityId: 'one' });
+
+    expect(state.rt.objectiveSummary()[0].text).toContain('(1/3)');
+    expect(state.rt.hudProgress()).toEqual({ done: 1, total: 3, failed: false });
   });
 
   it('picks up carried items, accepts them, and grants a role', () => {

@@ -93,4 +93,25 @@ describe('new threat profiles', () => {
     for (let i = 0; i < 300; i++) updateEntities([rootkit], map, player, 0.025, h);
     expect(rootkit.hp).toBe(3);
   });
+
+  it('keeps rootkits hidden outside half aggro range and uses its melee profile', () => {
+    const map = new WorldMap(mapDef);
+    const rootkit = enemy('rootkit-hidden', 'rootkit', 2.5, 2.5, 3);
+    rootkit.state.aggro = 4;
+    rootkit.state.maxHp = 3;
+    const player = new Player(5.5, 2.5, 0);
+    const onWindup = vi.fn();
+    const onMelee = vi.fn();
+    const h = hooks({ onWindup, onMelee });
+
+    for (let i = 0; i < 20; i++) updateEntities([rootkit], map, player, 0.025, h);
+    expect(rootkit.state.mode).toBeUndefined();
+
+    player.x = 3.2;
+    for (let i = 0; i < 100 && onMelee.mock.calls.length === 0; i++) {
+      updateEntities([rootkit], map, player, 0.025, h);
+    }
+    expect(onWindup).toHaveBeenCalledWith(rootkit, 0.5);
+    expect(onMelee).toHaveBeenCalledWith(rootkit, 12);
+  });
 });

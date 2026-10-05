@@ -4,8 +4,10 @@ import { ARC } from '../src/content/curriculum';
 import { objectiveById, OBJECTIVES } from '../src/content/objectives';
 import type { Mission } from '../src/core/types';
 import { EventBus } from '../src/core/events';
-import { encounterBudget } from '../src/missions/difficulty';
+import { difficultyScale, encounterBudget } from '../src/missions/difficulty';
 import { MissionRuntime } from '../src/missions/runtime';
+import { defaultLoadout } from '../src/tools/arsenal';
+import { toolRegistry } from '../src/tools';
 
 /** BFS reachability from spawn to an exit tile. */
 function reachableExit(m: Mission): boolean {
@@ -123,6 +125,24 @@ describe('missions', () => {
       ).toBeGreaterThanOrEqual(budget);
       expect(new MissionRuntime(m, new EventBus()).stats().killsTotal, `${m.id} runtime threat total`)
         .toBeGreaterThanOrEqual(budget);
+    }
+  });
+  it('USB charge supply covers post-difficulty infected HP with reserve', () => {
+    const usb = toolRegistry.get('usb')!;
+    for (const m of ARC.filter((entry) => entry.built).map((entry) => missionRegistry.get(entry.id)!)) {
+      const loadout = defaultLoadout(m);
+      const loadoutSupply = loadout.includes('usb') ? usb.ammo?.start ?? 0 : 0;
+      const pickupSupply = m.entities
+        .filter((entity) => entity.kind === 'item' && entity.grants?.resource === 'usb-charge')
+        .reduce((sum, entity) => sum + (entity.grants?.amount ?? 0), 0);
+      const infectedHp = m.entities
+        .filter((entity) => entity.infected && (entity.kind === 'enemy' || entity.kind === 'workstation'))
+        .reduce((sum, entity) => sum + (entity.hp ?? 1) +
+          (entity.kind === 'enemy' ? difficultyScale(m.difficulty).hpBonus : 0), 0);
+      expect(
+        loadoutSupply + pickupSupply,
+        `${m.id} USB supply`,
+      ).toBeGreaterThanOrEqual(1.25 * infectedHp);
     }
   });
 

@@ -106,7 +106,8 @@ export class Hud {
     gender: Gender;
     viewmodelOffset?: { x: number; y: number };
     credentials: string;
-    objectives: { text: string; done: boolean; failed: boolean }[];
+    objectives: { text: string; done: boolean; failed: boolean; progress?: number; target?: number }[];
+    progress?: { done: number; total: number; failed: boolean };
     /** ARSENAL: use-cycle/switch animation state for the held tool. */
     anim?: ViewmodelAnim;
     /** ARSENAL: ids of tools the player currently owns (ARMS grid). */
@@ -143,7 +144,9 @@ export class Hud {
       g.fillRect(0, 0, VIEW_W, VIEW3D_H);
     }
 
-    const objKey = opts.objectives.map((o) => (o.done ? 1 : o.failed ? 2 : 0)).join('');
+    const objKey = opts.objectives
+      .map((o) => `${o.done ? 1 : o.failed ? 2 : 0}:${o.progress ?? 0}/${o.target ?? 1}`)
+      .join('|');
     if (this.lastObjKey && objKey !== this.lastObjKey) this.objShowT = 3.5;
     this.lastObjKey = objKey;
     if (this.tabHeld || this.objShowT > 0) this.drawObjectives(opts.objectives);
@@ -204,6 +207,7 @@ export class Hud {
     gender: Gender;
     credentials: string;
     objectives: { done: boolean; failed: boolean }[];
+    progress?: { done: number; total: number; failed: boolean };
     owned?: string[];
     face?: (g: CanvasRenderingContext2D, x: number, y: number) => void;
     resources?: ResRow[];
@@ -290,9 +294,10 @@ export class Hud {
     });
 
     // OBJECTIVES n/m
-    const done = o.objectives.filter((x) => x.done).length;
-    const failed = o.objectives.some((x) => x.failed);
-    bigCentered(g, `${done}/${o.objectives.length}`, P_OBJ, by + 6, failed ? RED : done === o.objectives.length ? GREEN : GREEN.slice(1));
+    const done = o.progress?.done ?? o.objectives.filter((x) => x.done).length;
+    const total = o.progress?.total ?? o.objectives.length;
+    const failed = o.progress?.failed ?? o.objectives.some((x) => x.failed);
+    bigCentered(g, `${done}/${total}`, P_OBJ, by + 6, failed ? RED : done === total ? GREEN : GREEN.slice(1));
     label(g, failed ? 'FAILED' : 'OBJ  TAB', P_OBJ, by + 21, failed ? '#ff5a3a' : undefined);
   }
 
