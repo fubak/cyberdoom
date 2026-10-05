@@ -232,4 +232,24 @@ describe('Doom enemy AI', () => {
     expect(near.state.mode).toBe('chase');
     expect(far.state.mode ?? 'idle').toBe('idle');
   });
+
+  it('keeps render state finite while chasing (regression: uninitialised phase made hop NaN)', () => {
+    const map = new WorldMap(mapDef);
+    const worm = enemy('chase-worm', 'worm', 7, 2.5);
+    const player = new Player(1.5, 2.5, 0); // ~5.5 tiles ahead, clear LOS
+    const h = hooks();
+    for (let i = 0; i < 10; i++) updateEntities([worm], map, player, 0.025, h);
+    expect(worm.state.mode).toBe('chase');
+    expect(Number.isFinite(worm.state.hop)).toBe(true);
+    expect(Number.isFinite(worm.state.scale)).toBe(true);
+  });
+
+  it('keeps hop finite for a fresh idle enemy after one tick', () => {
+    const map = new WorldMap(mapDef);
+    const idle = enemy('idle-worm', 'worm', 7, 2.5);
+    const player = new Player(1.5, 2.5, Math.PI); // facing away, far end of map
+    updateEntities([idle], map, player, 0.025, hooks());
+    expect(Number.isFinite(idle.state.hop)).toBe(true);
+    expect(Number.isFinite(idle.state.scale)).toBe(true);
+  });
 });
