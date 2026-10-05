@@ -353,7 +353,7 @@ export class MissionRuntime {
             this.wrongChoicesScored.add(e.def.id);
             this.log(`Wrong call: ${label}`, -15, e.def.inspect?.objectives ?? [], 'bad-choice');
           }
-          this.message(text, 'warn');
+          this.message(`Wrong call: ${label}. Read why in the case file (L).`, 'warn');
           return;
         }
         if (this.pendingAccusation && e.def.tags?.includes('report-console')) {
