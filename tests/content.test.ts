@@ -151,6 +151,13 @@ describe('missions', () => {
         loadoutSupply + pickupSupply,
         `${m.id} USB supply`,
       ).toBeGreaterThanOrEqual(1.25 * infectedHp);
+      expect(
+        loadoutSupply + pickupSupply,
+        `${m.id} USB supply upper bound`,
+      ).toBeLessThanOrEqual(2 * infectedHp);
+      for (const pickup of m.entities.filter((entity) => entity.grants?.resource === 'usb-charge')) {
+        expect(pickup.grants?.amount, `${m.id}/${pickup.id} pickup cap`).toBeLessThanOrEqual(8);
+      }
     }
   });
   it('keeps triage evidence categories neutral and consistent within each mission', () => {

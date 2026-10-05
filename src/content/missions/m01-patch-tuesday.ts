@@ -188,10 +188,6 @@ export const m01: Mission = {
       inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for your write-protected scanner stick: ammo for the USB scanner.', category: 'item' } },
     { id: 'med-closet', kind: 'item', x: 1.5, y: 24.5, sprite: 'medkit', grants: { resource: 'integrity', amount: 25 },
       inspect: { label: 'Integrity kit', detail: 'Restores 25 integrity.', category: 'item' } },
-    { id: 'chg-closet', kind: 'item', x: 1.5, y: 23.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 4 },
-      inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for your write-protected scanner stick: ammo for the USB scanner.', category: 'item' } },
-    { id: 'chg-crawl', kind: 'item', x: 33.5, y: 1.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 6 },
-      inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for your write-protected scanner stick: ammo for the USB scanner.', category: 'item' } },
     { id: 'med-crawl', kind: 'item', x: 37.5, y: 1.5, sprite: 'medkit', grants: { resource: 'integrity', amount: 25 },
       inspect: { label: 'Integrity kit', detail: 'Restores 25 integrity.', category: 'item' } },
     {
