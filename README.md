@@ -4,6 +4,9 @@ A Doom-style first-person cybersecurity training game built with Three.js.
 Play an SOC analyst clearing missions that teach CompTIA Security+ SY0-701
 objectives — your weapons are IT tools: keyboard, mouse, USB scanner, and badge.
 
+Play: https://fubak.github.io/cyberdoom/ (deployed from `main` by
+`.github/workflows/pages.yml`).
+
 ## Scripts
 
 | Command | What it does |
