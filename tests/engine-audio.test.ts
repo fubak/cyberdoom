@@ -15,4 +15,11 @@ describe('audio spatialization', () => {
   it('does not throw when WebAudio is unavailable', () => {
     expect(() => new Audio().sfx('impact', { x: 1, y: 1 })).not.toThrow();
   });
+
+  it('keeps combat ducking and metering safe without an audio context', () => {
+    const audio = new Audio();
+    expect(() => audio.setCombat(true)).not.toThrow();
+    expect(() => audio.setCombat(false)).not.toThrow();
+    expect(audio.meter()).toEqual({ rmsDb: -Infinity, peakDb: -Infinity });
+  });
 });

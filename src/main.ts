@@ -4,9 +4,10 @@ import type { Entity, Gender, Projectile, Screen } from './core/types';
 import { WorldMap } from './engine/map';
 import { Input } from './engine/input';
 import { EYE_HEIGHT, MOVE, Player } from './engine/player';
-import { alertNear, hurtEntity, updateEntities, updateProjectiles } from './engine/ai';
+import { alertNear, damageEntity, hurtEntity, updateEntities, updateProjectiles } from './engine/ai';
 import { Audio } from './engine/audio';
 import { Feel } from './engine/feel';
+import { ParticleSystem } from './engine/fx';
 import { Renderer } from './render/renderer';
 import { Hud } from './ui/hud';
 import { Dossier } from './ui/dossier';
@@ -29,10 +30,17 @@ const FIXED_DT = 1 / 60;
 const params = new URLSearchParams(location.search);
 const DEBUG = params.get('debug') === '1';
 
+function muzzleHeight(e: Entity): number {
+  const scale = e.def.sprite === 'worm' ? 0.6 : e.def.sprite === 'trojan' ? 0.75 : 0.85;
+  const height = e.def.sprite === 'worm' ? 0.95 : e.def.sprite === 'trojan' ? 1.05 : 1.15;
+  return height * scale;
+}
+
 class Game {
   private bus = new EventBus();
   private audio = new Audio();
   private feel = new Feel();
+  private particles = new ParticleSystem();
   private renderer!: Renderer;
   private hud!: Hud;
   private dossier!: Dossier;
@@ -54,6 +62,7 @@ class Game {
   private last = 0;
   private simT = 0;
   private lastHurtMessageT = -Infinity;
+  private lastHurtT = -Infinity;
   private endTimer: number | null = null;
   private endCalled = false;
   private deathDrop = 0;
@@ -87,9 +96,17 @@ class Game {
       const e = this.runtime?.entities.find((entity) => entity.def.id === entityId);
       if (e?.def.kind === 'enemy') {
         this.audio.sfx('enemy-death', { x: e.x, y: e.y });
+        this.particles.burst(e.x, e.y, 0.4, 'kill');
       } else {
         this.audio.sfx('clean');
       }
+    });
+    this.bus.on('entity-hurt', ({ entityId, fromX, fromY }) => {
+      const e = this.runtime?.entities.find((entity) => entity.def.id === entityId);
+      if (!e?.alive) return;
+      hurtEntity(e, e.x - fromX, e.y - fromY);
+      this.particles.burst(e.x, e.y, 0.4, 'hit');
+      this.audio.sfx('enemy-pain', { x: e.x, y: e.y });
     });
     this.bus.on('badge-door', ({ doorId, allowed }) => {
       if (allowed) {
@@ -100,6 +117,7 @@ class Game {
     });
     this.bus.on('inspect', () => this.audio.sfx('inspect', this.player ? { x: this.player.x, y: this.player.y } : {}));
     this.bus.on('pickup', () => {
+      this.feel.bonus();
       this.audio.sfx('pickup', this.player ? { x: this.player.x, y: this.player.y } : {});
     });
     this.bus.on('reach-exit', () => this.audio.sfx('win'));
@@ -174,11 +192,13 @@ class Game {
     this.player = new Player(sp.x, sp.y, sp.angle);
     this.player.snap();
     this.projectiles = [];
+    this.particles.clear();
     this.feel = new Feel();
     this.arsenal.reset(mission, this.gender);
     this.useCd = 0;
     this.simT = 0;
     this.lastHurtMessageT = -Infinity;
+    this.lastHurtT = -Infinity;
     this.endTimer = null;
     this.endCalled = false;
     this.deathDrop = 0;
@@ -220,6 +240,7 @@ class Game {
       }
       this.audio.setListener(this.player.x, this.player.y, this.player.angle);
       this.renderer.syncEntities(this.runtime.entities, this.projectiles);
+      this.renderer.syncParticles(this.particles.view());
       const alpha = this.acc / FIXED_DT;
       const shake = this.feel.shake(this.simT);
       const lostEnd = this.runtime.finished === 'lost' && this.endTimer !== null;
@@ -229,6 +250,8 @@ class Game {
         angle: this.player.angle + shake.yaw,
         dz: lostEnd ? -(EYE_HEIGHT - 0.15) * this.deathDrop : this.player.viewBobZ,
         roll: lostEnd ? this.deathRoll : 0,
+        hurt: this.feel.red,
+        bonus: this.feel.bonusAmt,
       };
       this.renderer.render(this.player, pose);
       const ars = this.arsenal;
@@ -312,6 +335,7 @@ class Game {
       this.consumeDossierInput();
       return;
     }
+    this.particles.update(dt);
 
     // fire (windup → impact → recover, ammo, auto-repeat and input buffering live in the arsenal)
     const fired = !ending && (this.input.firePressed || this.debugFire);
@@ -336,14 +360,23 @@ class Game {
       onSight: (e) => this.audio.sfx(`sight-${e.def.sprite}`, { x: e.x, y: e.y }),
       onWindup: (e, dur) => this.audio.sfx('windup', { x: e.x, y: e.y, dur }),
       onMelee: (e, dmg) => {
+        this.particles.pop(e.x, e.y, muzzleHeight(e));
         this.audio.sfx('bite', { x: e.x, y: e.y });
         this.hurtPlayer(dmg, e.x, e.y);
       },
       onFire: (e, projectile) => {
         this.projectiles.push({ ...projectile, alive: true, traveled: 0 });
+        this.particles.pop(e.x, e.y, muzzleHeight(e));
         this.audio.sfx('enemy-fire', { x: e.x, y: e.y });
       },
     });
+
+    for (const e of runtime.entities) {
+      if (!e.alive || e.state.mode !== 'windup') continue;
+      const windupT = (e.state.windupT as number | undefined) ?? 0;
+      const windupDur = (e.state.windupDur as number | undefined) ?? 1;
+      this.particles.charge(e.x, e.y, muzzleHeight(e), windupT / windupDur);
+    }
 
     for (const { p: projectile, hit, hitPlayer, x, y } of updateProjectiles(
       this.projectiles,
@@ -359,13 +392,13 @@ class Game {
       if (hit) {
         if (hit.infected) {
           const dmg = hit.state.flagCorrect ? 2 : 1;
-          hit.hp -= dmg;
+          const result = damageEntity(hit, dmg, projectile.dx, projectile.dy);
           this.bus.emit('tool-hit', { toolId: 'usb', entityId: hit.def.id, good: true });
-          if (hit.hp <= 0) {
+          if (result === 'killed') {
             this.bus.emit('cleaned', { entityId: hit.def.id });
           } else {
-            if (hit.def.kind === 'enemy' && hit.hp > 1) {
-              hurtEntity(hit, projectile.dx, projectile.dy);
+            this.particles.burst(x, y, 0.4, 'hit');
+            if (hit.def.kind === 'enemy') {
               this.audio.sfx('enemy-pain', { x: hit.x, y: hit.y });
             }
             this.hud.pushMessage(`Hit${dmg > 1 ? ' x2 (flagged)' : ''}! ${hit.hp} more charge(s) needed.`, 'info');
@@ -405,6 +438,14 @@ class Game {
 
     map.updateDoors(dt);
 
+    const combat = runtime.entities.some((e) =>
+      e.alive &&
+      e.def.kind === 'enemy' &&
+      Math.hypot(e.x - p.x, e.y - p.y) <= 12 &&
+      ['chase', 'windup', 'recover', 'pain'].includes(String(e.state.mode)),
+    );
+    this.audio.setCombat(combat || this.simT - this.lastHurtT < 3);
+
     if (runtime.finished && this.endTimer === null) {
       this.endTimer = runtime.finished === 'lost' ? 1.6 : 0.5;
       if (runtime.finished === 'won') markCompleted(runtime.mission.id);
@@ -427,6 +468,7 @@ class Game {
     const awayY = p.y - sourceY;
     const distance = Math.hypot(awayX, awayY) || 1;
     p.damage(dmg, sourceX, sourceY);
+    this.lastHurtT = this.simT;
     this.feel.hurt(dmg);
     this.audio.sfx('hurt');
     let da = Math.atan2(sourceY - p.y, sourceX - p.x) - p.angle;
@@ -534,6 +576,17 @@ class Game {
               failed: o.failed,
               progress: o.progress,
             })) ?? [],
+          entities:
+            g.runtime?.entities.map((e) => ({
+              id: e.def.id,
+              kind: e.def.kind,
+              sprite: e.def.sprite,
+              x: e.x,
+              y: e.y,
+              hp: e.hp,
+              alive: e.alive,
+              mode: e.state.mode,
+            })) ?? [],
         };
       },
       startMission(id: string, gender?: string) {
@@ -576,6 +629,15 @@ class Game {
         if (!t) return;
         if (!g.arsenal.owns(t.id)) g.arsenal.grant(`tool:${t.id}`, 1);
         else g.arsenal.select(slot);
+      },
+      audioMeter() {
+        return g.audio.meter();
+      },
+      playSfx(name: string) {
+        g.audio.sfx(name);
+      },
+      setCombat(active: boolean) {
+        g.audio.setCombat(active);
       },
     };
   }

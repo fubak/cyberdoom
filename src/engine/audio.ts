@@ -43,6 +43,9 @@ export class Audio {
   private sfxBus: GainNode | null = null;
   private ambBus: GainNode | null = null;
   private master: GainNode | null = null;
+  private compressor: DynamicsCompressorNode | null = null;
+  private analyser: AnalyserNode | null = null;
+  private meterSamples: Float32Array<ArrayBuffer> | null = null;
   private noiseBuffer: AudioBuffer | null = null;
   private activeVoices = 0;
   private lastPlayed = new Map<string, number>();
@@ -50,6 +53,8 @@ export class Audio {
   private listenerY = 0;
   private listenerAngle = 0;
   private unlocked = false;
+  private combat = false;
+  private combatGainApplied = false;
   private ambienceRequested = false;
   private ambience: { sources: AudioScheduledSourceNode[]; nodes: AudioNode[] } | null = null;
 
@@ -86,6 +91,7 @@ export class Audio {
       gritGain.connect(this.master);
       this.ambBus.connect(this.master);
       this.master.connect(compressor).connect(ctx.destination);
+      this.compressor = compressor;
 
       this.noiseBuffer = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
       const samples = this.noiseBuffer.getChannelData(0);
@@ -105,6 +111,46 @@ export class Audio {
     this.listenerX = x;
     this.listenerY = y;
     this.listenerAngle = angle;
+  }
+
+  setCombat(active: boolean): void {
+    if (active !== this.combat) this.combatGainApplied = false;
+    this.combat = active;
+    this.applyCombatGain();
+  }
+
+  private applyCombatGain(): void {
+    if (!this.ctx || !this.ambBus || this.combatGainApplied) return;
+    this.ambBus.gain.setTargetAtTime(this.combat ? 10 ** (-8 / 20) : 1, this.ctx.currentTime, 0.3);
+    this.combatGainApplied = true;
+  }
+
+  meter(): { rmsDb: number; peakDb: number } {
+    const ctx = this.ensure();
+    if (!ctx || !this.compressor) return { rmsDb: -Infinity, peakDb: -Infinity };
+    if (!this.analyser) {
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 2048;
+      analyser.smoothingTimeConstant = 0;
+      this.compressor.disconnect(ctx.destination);
+      this.compressor.connect(analyser).connect(ctx.destination);
+      this.analyser = analyser;
+      this.meterSamples = new Float32Array(analyser.fftSize);
+    }
+    const samples = this.meterSamples!;
+    this.analyser.getFloatTimeDomainData(samples);
+    let sum = 0;
+    let peak = 0;
+    for (const sample of samples) {
+      const magnitude = Math.abs(sample);
+      sum += sample * sample;
+      if (magnitude > peak) peak = magnitude;
+    }
+    const rms = Math.sqrt(sum / samples.length);
+    return {
+      rmsDb: rms > 0 ? 20 * Math.log10(rms) : -Infinity,
+      peakDb: peak > 0 ? 20 * Math.log10(peak) : -Infinity,
+    };
   }
 
   setVoice(_gender: 'male' | 'female'): void {
@@ -267,6 +313,17 @@ export class Audio {
     this.noise('bandpass', 1800, 1100, Math.min(duration, 0.18), 1.2, gain * 0.12, opts);
   }
 
+  private body(
+    freqStart: number,
+    freqEnd: number,
+    duration: number,
+    gain: number,
+    opts: SpatialPosition,
+  ): void {
+    this.oscillator('sine', freqStart, freqEnd, duration, gain, opts,
+      { attack: Math.min(0.012, duration * 0.15), distortion: true, pitchRange: 0.01 });
+  }
+
   private allow(name: string, ctx: AudioContext): boolean {
     const now = ctx.currentTime;
     if (now - (this.lastPlayed.get(name) ?? -Infinity) < 0.05) return false;
@@ -307,7 +364,8 @@ export class Audio {
         this.oscillator('square', 140, 110, 0.17, 0.32, o, { delay: 0.18 });
         break;
       case 'hurt':
-        this.formant(150, 95, 0.22, 0.75, o);
+        this.formant(150, 95, 0.22, 1.15, o);
+        this.body(68, 45, 0.24, 0.58, o);
         break;
       case 'pickup':
         this.oscillator('square', 660, 660, 0.05, 0.28, o);
@@ -330,8 +388,9 @@ export class Audio {
         this.formant(180, 105, 0.12, 0.52, o);
         break;
       case 'death':
-        this.formant(300, 80, 0.9, 0.82, o);
-        this.noise('bandpass', 1400, 500, 0.82, 1.3, 0.22, o);
+        this.formant(300, 80, 0.9, 1.25, o);
+        this.noise('bandpass', 1400, 500, 0.82, 1.3, 0.38, o);
+        this.body(68, 42, 0.88, 0.72, o);
         break;
       case 'badge':
         this.oscillator('square', 1800, 1800, 0.07, 0.2, o);
@@ -359,27 +418,32 @@ export class Audio {
         this.oscillator('sine', 300, 1200, Math.max(0.1, dur ?? 0.5), 0.32, o);
         break;
       case 'bite':
-        this.noise('lowpass', 1600, 180, 0.14, 0.7, 0.48, o);
-        this.oscillator('square', 150, 65, 0.07, 0.25, o);
+        this.noise('lowpass', 1600, 180, 0.14, 0.7, 0.72, o);
+        this.oscillator('square', 150, 65, 0.07, 0.42, o);
+        this.body(70, 48, 0.14, 0.45, o);
         break;
       case 'enemy-fire':
-        this.noise('bandpass', 400, 1500, 0.25, 1, 0.42, o);
-        this.oscillator('square', 110, 55, 0.24, 0.25, o);
+        this.noise('bandpass', 400, 1500, 0.25, 1, 0.68, o);
+        this.oscillator('square', 110, 55, 0.24, 0.42, o);
+        this.body(70, 46, 0.24, 0.42, o);
         break;
       case 'impact':
-        this.noise('lowpass', 1500, 200, 0.3, 0.8, 0.46, o);
-        this.oscillator('sine', 90, 40, 0.25, 0.42, o);
+        this.noise('lowpass', 1500, 200, 0.3, 0.8, 0.76, o);
+        this.oscillator('sine', 90, 40, 0.25, 0.68, o);
+        this.body(70, 45, 0.28, 0.62, o);
         break;
       case 'enemy-pain':
-        this.oscillator('sawtooth', 600, 300, 0.15, 0.35, o, { filter: { type: 'bandpass', frequency: 700, q: 5 } });
+        this.oscillator('sawtooth', 600, 300, 0.15, 0.52, o, { filter: { type: 'bandpass', frequency: 700, q: 5 } });
         break;
       case 'enemy-death':
-        this.noise('bandpass', 1400, 220, 0.45, 1, 0.44, o);
-        this.oscillator('sawtooth', 400, 60, 0.5, 0.36, o, { filter: { type: 'lowpass', frequency: 900, q: 1 } });
+        this.noise('bandpass', 1400, 220, 0.45, 1, 0.88, o);
+        this.oscillator('sawtooth', 400, 60, 0.5, 0.72, o, { filter: { type: 'lowpass', frequency: 900, q: 1 } });
+        this.body(70, 45, 0.5, 0.72, o);
         break;
       case 'step':
-        this.noise('lowpass', 250, 140, 0.06, 0.8, 0.16, o);
-        this.oscillator('sine', 90, 60, 0.06, 0.16, o, { pitchRange: 0.16 });
+        this.noise('lowpass', 320, 180, 0.06, 0.8, 0.09, o);
+        this.oscillator('sine', 90, 60, 0.06, 0.09, o, { pitchRange: 0.08 });
+        this.noise('bandpass', 1500, 850, 0.018, 1.2, 0.045, o);
         break;
       default:
         break;
@@ -424,6 +488,7 @@ export class Audio {
     this.ambienceRequested = true;
     const ctx = this.ensure();
     if (!ctx || !this.noiseBuffer || !this.ambBus || this.ambience) return;
+    this.setCombat(this.combat);
     const lowpass = ctx.createBiquadFilter();
     lowpass.type = 'lowpass';
     lowpass.frequency.value = 180;

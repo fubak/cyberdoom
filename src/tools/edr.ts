@@ -91,7 +91,10 @@ export const edrTool: ToolDef = {
       if (e.hp <= 0) {
         contained++;
         ctx.bus.emit('cleaned', { entityId: e.def.id });
-      } else weakened++;
+      } else {
+        weakened++;
+        ctx.bus.emit('entity-hurt', { entityId: e.def.id, fromX: ctx.playerX, fromY: ctx.playerY });
+      }
     }
     ctx.bus.emit('tool-hit', { toolId: 'edr', good: contained + weakened > 0 });
     ctx.bus.emit('message', contained + weakened > 0

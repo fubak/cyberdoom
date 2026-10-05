@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { Entity, MapDef, Projectile } from '../core/types';
+import { MAX_PARTICLES, type ParticleView } from '../engine/fx';
 import type { WorldMap } from '../engine/map';
 import type { Player } from '../engine/player';
 import type { ViewPose } from '../engine/feel';
@@ -81,15 +82,36 @@ void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`;
 const POST_FS = /* glsl */ `
 uniform sampler2D tScene;
 uniform sampler2D tLut;
-uniform vec4 uTint;
+uniform float uHurt;
+uniform float uBonus;
 varying vec2 vUv;
 void main() {
   vec3 c = texture2D(tScene, vUv).rgb;
-  c = mix(c, uTint.rgb, uTint.a);
+  float l = dot(c, vec3(0.3, 0.59, 0.11));
+  vec3 red = vec3(max(c.r, l * 1.35 + 0.06), c.g * 0.42, c.b * 0.38);
+  c = mix(c, red, uHurt);
+  c = mix(c, c * vec3(1.15, 1.05, 0.7) + vec3(0.22, 0.17, 0.0), uBonus);
   vec3 q = floor(clamp(c, 0.0, 1.0) * 31.0 + 0.5);
   vec2 luv = vec2((q.r + q.b * 32.0 + 0.5) / 1024.0, (q.g + 0.5) / 32.0);
   gl_FragColor = vec4(texture2D(tLut, luv).rgb, 1.0);
 }`;
+
+const PARTICLE_VS = /* glsl */ `
+attribute float size;
+attribute float minPx;
+attribute vec3 color;
+uniform float uScale;
+varying vec3 vColor;
+void main() {
+  vec4 mv = modelViewMatrix * vec4(position, 1.0);
+  vColor = color;
+  gl_PointSize = max(minPx, size * uScale / -mv.z);
+  gl_Position = projectionMatrix * mv;
+}`;
+
+const PARTICLE_FS = /* glsl */ `
+varying vec3 vColor;
+void main() { gl_FragColor = vec4(vColor, 1.0); }`;
 
 const timeUniform = { value: 0 };
 
@@ -186,6 +208,13 @@ export class Renderer {
   private postScene = new THREE.Scene();
   private postCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
   private postMat: THREE.ShaderMaterial;
+  private particleGeometry = new THREE.BufferGeometry();
+  private particlePositions = new Float32Array(MAX_PARTICLES * 3);
+  private particleColors = new Float32Array(MAX_PARTICLES * 3);
+  private particleSizes = new Float32Array(MAX_PARTICLES);
+  private particleMinPx = new Float32Array(MAX_PARTICLES);
+  private particleMat: THREE.ShaderMaterial;
+  private particlePoints: THREE.Points;
   private planeGeo = new THREE.PlaneGeometry(1, 1).translate(0, 0.5, 0);
   private lastTime = performance.now();
   private time = 0;
@@ -223,17 +252,41 @@ export class Renderer {
       uniforms: {
         tScene: { value: this.rt.texture },
         tLut: { value: buildPaletteLut() },
-        uTint: { value: new THREE.Vector4(1, 0, 0, 0) },
+        uHurt: { value: 0 },
+        uBonus: { value: 0 },
       },
       depthTest: false,
       depthWrite: false,
     });
     this.postScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.postMat));
+
+    this.particleGeometry.setAttribute('position', new THREE.BufferAttribute(this.particlePositions, 3));
+    this.particleGeometry.setAttribute('color', new THREE.BufferAttribute(this.particleColors, 3));
+    this.particleGeometry.setAttribute('size', new THREE.BufferAttribute(this.particleSizes, 1));
+    this.particleGeometry.setAttribute('minPx', new THREE.BufferAttribute(this.particleMinPx, 1));
+    this.particleGeometry.setDrawRange(0, 0);
+    this.camera.updateProjectionMatrix();
+    this.particleMat = new THREE.ShaderMaterial({
+      vertexShader: PARTICLE_VS,
+      fragmentShader: PARTICLE_FS,
+      uniforms: {
+        uScale: { value: this.camera.projectionMatrix.elements[5] * VIEW3D_H / 2 },
+      },
+      transparent: true,
+      depthTest: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+    this.particlePoints = new THREE.Points(this.particleGeometry, this.particleMat);
+    this.particlePoints.frustumCulled = false;
+    this.scene.add(this.particlePoints);
   }
 
   dispose(): void {
     this.canvas.remove();
     this.rt.dispose();
+    this.particleGeometry.dispose();
+    this.particleMat.dispose();
     this.renderer.dispose();
   }
 
@@ -529,6 +582,26 @@ export class Renderer {
     }
   }
 
+  syncParticles(view: ParticleView): void {
+    const count = Math.min(view.count, MAX_PARTICLES);
+    for (let i = 0; i < count; i++) {
+      const i3 = i * 3;
+      this.particlePositions[i3] = view.x[i];
+      this.particlePositions[i3 + 1] = view.z[i];
+      this.particlePositions[i3 + 2] = view.y[i];
+      this.particleColors[i3] = view.color[i3];
+      this.particleColors[i3 + 1] = view.color[i3 + 1];
+      this.particleColors[i3 + 2] = view.color[i3 + 2];
+      this.particleSizes[i] = view.size[i];
+      this.particleMinPx[i] = view.minPx[i];
+    }
+    (this.particleGeometry.getAttribute('position') as THREE.BufferAttribute).needsUpdate = true;
+    (this.particleGeometry.getAttribute('color') as THREE.BufferAttribute).needsUpdate = true;
+    (this.particleGeometry.getAttribute('size') as THREE.BufferAttribute).needsUpdate = true;
+    (this.particleGeometry.getAttribute('minPx') as THREE.BufferAttribute).needsUpdate = true;
+    this.particleGeometry.setDrawRange(0, count);
+  }
+
   /** Entity went away: malware dissolves; cleaned workstations stay as clean props. */
   private retire(st: SpriteState): void {
     const e = st.entity;
@@ -599,7 +672,8 @@ export class Renderer {
     this.lastIntegrity = player.integrity;
     this.hurt = Math.max(0, this.hurt - dt * 0.6);
     const lowHp = player.integrity > 0 && player.integrity < 25 ? 0.06 + Math.sin(this.time * 6) * 0.04 : 0;
-    (this.postMat.uniforms.uTint.value as THREE.Vector4).set(1, 0.04, 0.02, Math.max(this.hurt, lowHp));
+    this.postMat.uniforms.uHurt.value = Math.max(pose?.hurt ?? this.hurt, lowHp);
+    this.postMat.uniforms.uBonus.value = pose?.bonus ?? 0;
 
     const speed = Math.min(1, Math.hypot(player.vx, player.vy) / 4);
     const bobY = Math.abs(Math.sin(player.bob)) * 0.035 * speed;
@@ -638,8 +712,7 @@ export class Renderer {
         st.mesh.scale.set(st.set.w * sc, st.set.h * sc, 1);
       }
       const painFlash = st.set.anim !== 'monster' && st.flash > 0.75 ? 0.6 : 0;
-      const windupFlash = st.entity?.state.mode === 'windup' && Math.floor(this.time * 12) % 2 === 0 ? 0.35 : 0;
-      st.mat.uniforms.uFlash.value = Math.max(painFlash, windupFlash);
+      st.mat.uniforms.uFlash.value = painFlash;
     }
     for (const fx of [...this.fx]) {
       fx.t += dt;
