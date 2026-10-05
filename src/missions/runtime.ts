@@ -386,6 +386,11 @@ export class MissionRuntime {
           this.record(e, 'log', label, text);
         }
         for (const objective of matching) this.countEntity(objective, e.def.id);
+        if (matching.length > 0 && e.def.group) {
+          for (const sibling of this.entities) {
+            if (sibling !== e && sibling.def.group === e.def.group) sibling.alive = false;
+          }
+        }
         this.applyRoleGrant(e);
         this.checkWin();
         return;

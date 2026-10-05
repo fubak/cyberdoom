@@ -73,7 +73,7 @@ export const ARC: ArcMission[] = [
     ],
   },
   {
-    id: 'm04', title: 'HOOK, LINE & SINKER', difficulty: 6, built: false,
+    id: 'm04', title: 'HOOK, LINE & SINKER', difficulty: 6, built: true,
     briefing: 'The reported-phishing queue is overflowing and finance just got an "urgent" wire request from the CEO.',
     objectives: [
       w('5.6', 'Mailroom triage: inspect each message terminal and QUARANTINE phish / BEC / typosquats or RELEASE legitimate mail; a wrong call costs integrity, and the queue must be cleared to exit.'),
@@ -83,7 +83,7 @@ export const ARC: ArcMission[] = [
     ],
   },
   {
-    id: 'm05', title: 'CHANGE FREEZE', difficulty: 6, built: false,
+    id: 'm05', title: 'CHANGE FREEZE', difficulty: 6, built: true,
     briefing: 'A critical patch has to land on the payroll server tonight, and the change board meets in ten minutes.',
     objectives: [
       w('1.3', 'Collect impact analysis, backout plan and owner approval before the maintenance window; patching without them reverts the server and fails the mission.'),

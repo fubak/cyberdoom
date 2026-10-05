@@ -2,6 +2,7 @@ import type { Mission } from '../../core/types';
 import type { MissionTeaching } from '../curriculum';
 import type { WalkStep } from '../../missions/walkthroughs';
 import { lightRects } from '../../missions/levelkit';
+import { addThreatEncounter, setMapCell } from './campaign-map';
 
 /**
  * M1 "Patch Tuesday" — antimalware, endpoint hygiene, removable media.
@@ -78,6 +79,7 @@ export const m01: Mission = {
       },
       '1': { kind: 'door', tex: 'wall-brick', doorId: 'secret-closet', secret: true },
       '2': { kind: 'door', tex: 'wall-server', doorId: 'secret-crawl', secret: true },
+      '3': { kind: 'door', tex: 'wall-server', doorId: 'secret-core', secret: true },
     },
     spawn: { x: 7.0, y: 26.5, angle: -Math.PI / 2 },
     defaultLight: 0.8,
@@ -217,7 +219,7 @@ export const m01: Mission = {
   script: {
     par: 150,
     triggers: [
-      { id: 'usb-ambush', area: [6, 17, 7, 17], spawn: ['worm-lobby'], kind: 'warn',
+      { id: 'usb-ambush', area: [6, 8, 7, 9], spawn: ['worm-lobby'], kind: 'warn',
         message: 'Worm alert: lateral movement behind you in the lobby!' },
       { id: 'server-ambush', area: [31, 9, 32, 11], spawn: ['trojan-a', 'trojan-b'], kind: 'bad',
         message: 'Trojans were hiding between the racks!' },
@@ -227,6 +229,7 @@ export const m01: Mission = {
     secrets: [
       { id: 'closet', area: [1, 23, 2, 25], label: 'Supply closet' },
       { id: 'crawl', area: [32, 1, 38, 2], label: 'Cable crawlspace' },
+      { id: 'core', area: [30, 4, 30, 4], label: 'Server core alcove' },
     ],
   },
   debriefQuestions: [
@@ -307,6 +310,20 @@ export const m01Walkthrough: WalkStep[] = [
   { wait: 0.2 },
   { goto: [19, 1] },
 ];
+
+setMapCell(m01.map, 6, 22, 'S');
+setMapCell(m01.map, 8, 22, 'S');
+setMapCell(m01.map, 6, 23, 'S');
+setMapCell(m01.map, 8, 23, 'S');
+setMapCell(m01.map, 30, 4, '.');
+setMapCell(m01.map, 31, 4, '3');
+m01.map.lights = { ...m01.map.lights, ...lightRects([[5, 20, 9, 24, 1]]) };
+addThreatEncounter(m01, 'worm-turnin', 'worm', 1, {
+  id: 'turnin-ambush',
+  after: ['turn-in'],
+  kind: 'bad',
+  message: 'The USB turn-in triggered a second worm wave from the server floor.',
+}, [18, 10, 37, 19]);
 
 export const m01Teach: MissionTeaching = {
   tagline: 'Screens are screaming and a USB stick is lying by the lifts.',
