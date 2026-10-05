@@ -1,18 +1,20 @@
 import './ui/style.css';
 import { EventBus } from './core/events';
-import type { Entity, Gender, Projectile, Screen, ToolDef } from './core/types';
+import type { Entity, Gender, Projectile, Screen } from './core/types';
 import { WorldMap } from './engine/map';
 import { Input } from './engine/input';
 import { EYE_HEIGHT, MOVE, Player } from './engine/player';
 import { alertNear, hurtEntity, updateEntities, updateProjectiles } from './engine/ai';
 import { Audio } from './engine/audio';
-import { Feel, WeaponSwitch } from './engine/feel';
+import { Feel } from './engine/feel';
 import { Renderer } from './render/renderer';
 import { Hud } from './ui/hud';
 import * as screens from './ui/screens';
 import { MissionRuntime } from './missions/runtime';
 import { missionRegistry } from './content/missions';
-import { toolForSlot, sortedTools } from './tools';
+import { toolForSlot } from './tools';
+import { Arsenal } from './tools/arsenal';
+import { characterSelect } from './ui/characterSelect';
 
 /**
  * main.ts — boot + top-level state machine:
@@ -42,14 +44,12 @@ class Game {
   private runtime: MissionRuntime | null = null;
   private player: Player | null = null;
   private projectiles: Projectile[] = [];
-  private currentTool: ToolDef = sortedTools()[0];
-  private weaponSwitch = new WeaponSwitch(this.currentTool);
-  private ammo = new Map<string, number>();
-  private cooldown = 0;
+  private arsenal = new Arsenal(this.bus);
+  private useCd = 0;
+  private debugFire = false;
   private acc = 0;
   private last = 0;
   private simT = 0;
-  private fireQueued = false;
   private lastHurtMessageT = -Infinity;
   private endTimer: number | null = null;
   private endCalled = false;
@@ -71,12 +71,9 @@ class Game {
     viewport.appendChild(cross);
 
     this.bus.on('message', ({ text, kind }) => this.hud.pushMessage(text, kind ?? 'info'));
-    this.bus.on('tool-used', ({ toolId }) => {
-      const sound = toolId === 'usb' ? 'scan'
-        : toolId === 'keyboard' ? 'keyboard'
-          : toolId === 'mouse' ? 'mouse'
-            : toolId === 'badge' ? 'badge' : 'click';
-      this.audio.sfx(sound, this.player ? { x: this.player.x, y: this.player.y } : {});
+    // tool sfx are the arsenal's (per-tool, per-phase); using a tool still wakes nearby enemies
+    this.bus.on('tool-used', () => {
+      if (this.player && this.runtime) alertNear(this.runtime.entities, this.player.x, this.player.y, 8);
     });
     this.bus.on('cleaned', ({ entityId }) => {
       const e = this.runtime?.entities.find((entity) => entity.def.id === entityId);
@@ -99,8 +96,6 @@ class Game {
             this.audio.sfx('door', cell ? { x: cell.x + 0.5, y: cell.y + 0.5 } : {});
           }
         }
-      } else {
-        this.audio.sfx('denied');
       }
     });
     this.bus.on('inspect', () => this.audio.sfx('inspect', this.player ? { x: this.player.x, y: this.player.y } : {}));
@@ -136,7 +131,7 @@ class Game {
   }
 
   private showCharSelect(): void {
-    this.setScreen('character-select', screens.characterSelect((g) => {
+    this.setScreen('character-select', characterSelect((g) => {
       this.gender = g;
       this.audio.sfx('click');
       this.showMissionSelect();
@@ -177,14 +172,8 @@ class Game {
     this.player.snap();
     this.projectiles = [];
     this.feel = new Feel();
-    this.ammo.clear();
-    for (const t of sortedTools()) {
-      if (t.ammo) this.ammo.set(t.ammo.resource, t.ammo.start);
-    }
-    this.currentTool = sortedTools()[0];
-    this.weaponSwitch = new WeaponSwitch(this.currentTool);
-    this.cooldown = 0;
-    this.fireQueued = false;
+    this.arsenal.reset(mission, this.gender);
+    this.useCd = 0;
     this.simT = 0;
     this.lastHurtMessageT = -Infinity;
     this.endTimer = null;
@@ -237,18 +226,23 @@ class Game {
         roll: lostEnd ? this.deathRoll : 0,
       };
       this.renderer.render(this.player, pose);
-      const ammoSpec = this.currentTool.ammo;
+      const ars = this.arsenal;
+      const integrity = this.player.integrity;
       this.hud.draw({
-        integrity: this.player.integrity,
-        ammo: ammoSpec ? (this.ammo.get(ammoSpec.resource) ?? 0) : null,
-        ammoName: ammoSpec?.resource ?? '',
-        tool: this.currentTool,
+        integrity,
+        ammo: ars.ammoFor(),
+        ammoName: ars.current.ammo?.resource ?? '',
+        tool: ars.current,
         bob: this.player.bob,
-        cooldownFrac: this.cooldown / this.currentTool.cooldown,
+        cooldownFrac: ars.cooldownFrac,
         gender: this.gender,
+        anim: ars.anim(),
+        owned: [...ars.owned],
+        face: (g, x, y) => ars.drawFace(g, x, y, integrity),
+        // lower/raise on switch comes from anim.lower; death drops the hands off-screen
         viewmodelOffset: {
           x: this.player.weaponBobX,
-          y: this.player.weaponBobY + this.weaponSwitch.offsetY + (lostEnd ? 240 : 0),
+          y: this.player.weaponBobY + (lostEnd ? 240 : 0),
         },
         credentials: this.role,
         objectives: this.runtime.objectiveSummary(),
@@ -264,23 +258,11 @@ class Game {
     this.simT += dt;
     this.feel.update(dt);
 
-    // Weapon changes lower before swapping and raise afterward.
+    // Tool switching (lower → swap → raise) is owned by the arsenal.
     const ending = runtime.finished !== null;
-    if (!ending && this.input.slotPressed) {
-      const t = toolForSlot(this.input.slotPressed);
-      if (t) this.weaponSwitch.request(t);
-    }
+    if (!ending && this.input.slotPressed) this.arsenal.select(this.input.slotPressed);
     const wheel = this.input.consumeWheel();
-    if (!ending && wheel !== 0) {
-      const tools = sortedTools();
-      const i = tools.indexOf(this.currentTool);
-      this.weaponSwitch.request(tools[(i + wheel + tools.length) % tools.length]);
-    }
-    const switched = this.weaponSwitch.update(dt);
-    if (switched) {
-      this.currentTool = switched;
-      this.audio.sfx('switch');
-    }
+    if (!ending && wheel !== 0) this.arsenal.cycle(wheel);
 
     const solids = runtime.entities
       .filter((e) => e.alive && ['enemy', 'npc', 'workstation', 'console'].includes(e.def.kind))
@@ -297,32 +279,15 @@ class Game {
       this.audio.sfx('step', { pan: this.stepPan * 0.15 });
       this.stepPan *= -1;
     }
-    this.cooldown = Math.max(0, this.cooldown - dt);
+    this.useCd = Math.max(0, this.useCd - dt);
     this.hud.tick(dt);
 
-    let fireIntent = !ending && this.input.firePressed;
-    const spec = this.currentTool.ammo;
-    if (this.weaponSwitch.ready && fireIntent && this.cooldown > 0 && this.cooldown <= 0.15) {
-      this.fireQueued = true;
-    }
-    fireIntent ||= !ending && (this.fireQueued || (!!spec && this.input.fireHeld));
-    if (!this.weaponSwitch.ready) fireIntent = false;
-    if (fireIntent && this.cooldown <= 0) {
-      const have = spec ? (this.ammo.get(spec.resource) ?? 0) : Infinity;
-      if (have <= 0) {
-        this.hud.pushMessage(`Out of ${spec!.resource} — find more charges`, 'warn');
-        this.audio.sfx('denied');
-      } else {
-        if (spec) this.ammo.set(spec.resource, have - 1);
-        this.cooldown = this.currentTool.cooldown;
-        this.useTool(this.currentTool);
-      }
-      this.fireQueued = false;
-    } else if (this.cooldown <= 0) {
-      this.fireQueued = false;
-    }
+    // fire (windup → impact → recover, ammo, auto-repeat and input buffering live in the arsenal)
+    const fired = !ending && (this.input.firePressed || this.debugFire);
+    this.debugFire = false;
+    this.arsenal.update(dt, !ending && this.input.fireHeld, fired, () => this.toolCtx());
 
-    if (!ending && this.weaponSwitch.ready && this.input.usePressed && this.cooldown <= 0) {
+    if (!ending && !this.arsenal.switching && this.input.usePressed && this.useCd <= 0) {
       const ctx = this.toolCtx();
       const door = ctx.isDoorAhead();
       if (door && !map.isDoorOpen(door.doorId)) {
@@ -331,8 +296,8 @@ class Game {
       } else if (!ctx.aimEntity(1.4, 0.5) && ctx.wallDistance < 1.2) {
         this.audio.sfx('oof');
       } else {
-        this.cooldown = 0.3;
-        this.useTool(toolForSlot(1)!);
+        this.useCd = 0.3;
+        toolForSlot(1)!.use(this.toolCtx());
       }
     }
 
@@ -362,7 +327,9 @@ class Game {
       }
       if (hit) {
         if (hit.infected) {
-          hit.hp -= 1;
+          const dmg = hit.state.flagCorrect ? 2 : 1;
+          hit.hp -= dmg;
+          this.bus.emit('tool-hit', { toolId: 'usb', entityId: hit.def.id, good: true });
           if (hit.hp <= 0) {
             this.bus.emit('cleaned', { entityId: hit.def.id });
           } else {
@@ -370,10 +337,11 @@ class Game {
               hurtEntity(hit, projectile.dx, projectile.dy);
               this.audio.sfx('enemy-pain', { x: hit.x, y: hit.y });
             }
-            this.hud.pushMessage('Hit! It needs another charge.', 'info');
+            this.hud.pushMessage(`Hit${dmg > 1 ? ' x2 (flagged)' : ''}! ${hit.hp} more charge(s) needed.`, 'info');
           }
         } else {
-          this.hud.pushMessage('The charge fizzles — that target is not infected.', 'warn');
+          this.bus.emit('tool-hit', { toolId: 'usb', entityId: hit.def.id, good: false });
+          this.hud.pushMessage('The charge fizzles: that target is not infected.', 'warn');
         }
       }
     }
@@ -384,9 +352,9 @@ class Game {
       if (Math.hypot(e.x - p.x, e.y - p.y) < 0.6) {
         e.alive = false;
         const { resource, amount } = e.def.grants;
-        this.ammo.set(resource, Math.min(20, (this.ammo.get(resource) ?? 0) + amount));
+        const text = this.arsenal.grant(resource, amount);
         this.bus.emit('pickup', { entityId: e.def.id });
-        this.hud.pushMessage(`+${amount} ${resource}`, 'good');
+        this.hud.pushMessage(text, 'good');
       }
     }
     const cell = map.cellAtF(p.x, p.y);
@@ -410,12 +378,6 @@ class Game {
     }
   }
 
-  private useTool(tool: ToolDef): void {
-    if (!this.player || !this.runtime || !this.weaponSwitch.ready) return;
-    alertNear(this.runtime.entities, this.player.x, this.player.y, 8);
-    tool.use(this.toolCtx());
-  }
-
   private hurtPlayer(dmg: number, sourceX: number, sourceY: number): void {
     const p = this.player;
     const runtime = this.runtime;
@@ -426,6 +388,9 @@ class Game {
     p.damage(dmg, sourceX, sourceY);
     this.feel.hurt(dmg);
     this.audio.sfx('hurt');
+    let da = Math.atan2(sourceY - p.y, sourceX - p.x) - p.angle;
+    da = Math.atan2(Math.sin(da), Math.cos(da));
+    this.arsenal.hurt(Math.abs(da) < 0.35 ? 0 : Math.sign(da));
     const impulse = MOVE.friction * (0.3 + 0.2 * Math.min(1, dmg / 20));
     p.applyImpulse((awayX / distance) * impulse, (awayY / distance) * impulse);
     if (this.simT - this.lastHurtMessageT >= 1.5) {
@@ -492,6 +457,10 @@ class Game {
       },
       authorizedRoles: this.runtime!.mission.authorizedRoles,
       role: this.role,
+      lineOfSight: (x0: number, y0: number, x1: number, y1: number) => {
+        const d = Math.hypot(x1 - x0, y1 - y0);
+        return map.raycast(x0, y0, Math.atan2(y1 - y0, x1 - x0), d).dist >= d - 0.3;
+      },
     };
   }
 
@@ -508,7 +477,9 @@ class Game {
           y: g.player?.y ?? null,
           angle: g.player?.angle ?? null,
           integrity: g.player?.integrity ?? null,
-          tool: g.currentTool.id,
+          tool: g.arsenal.current.id,
+          owned: [...g.arsenal.owned],
+          ammo: Object.fromEntries(g.arsenal.ammo),
           score: g.runtime?.score ?? null,
           objectives:
             g.runtime?.objectives.map((o) => ({
@@ -524,18 +495,35 @@ class Game {
         g.startMission(id);
       },
       teleport(x: number, y: number, angle?: number) {
-        if (!g.player) return;
+        if (!g.player || !g.map) return;
+        const map = g.map;
+        // never drop the camera inside a wall (renders black): snap to nearest open tile
+        if (map.blockedF(x, y)) {
+          let best: { x: number; y: number } | null = null;
+          for (let r = 1; r < 8 && !best; r++) {
+            for (let ty = Math.floor(y) - r; ty <= Math.floor(y) + r && !best; ty++) {
+              for (let tx = Math.floor(x) - r; tx <= Math.floor(x) + r && !best; tx++) {
+                if (!map.blocked(tx, ty)) best = { x: tx + 0.5, y: ty + 0.5 };
+              }
+            }
+          }
+          if (best) ({ x, y } = best);
+        }
+        ({ x, y } = map.resolve(x, y, 0.25));
         g.player.x = x;
         g.player.y = y;
         if (angle !== undefined) g.player.angle = angle;
         g.player.snap();
       },
+      /** Pull the trigger once (works without pointer lock). */
+      fire() {
+        g.debugFire = true;
+      },
       setTool(slot: number) {
         const t = toolForSlot(slot);
-        if (t) {
-          g.currentTool = t;
-          g.weaponSwitch = new WeaponSwitch(t);
-        }
+        if (!t) return;
+        if (!g.arsenal.owns(t.id)) g.arsenal.grant(`tool:${t.id}`, 1);
+        else g.arsenal.select(slot);
       },
     };
   }

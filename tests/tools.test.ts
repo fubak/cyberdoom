@@ -23,7 +23,7 @@ function ctx(over: Partial<ToolUseContext> = {}): ToolUseContext {
 }
 
 describe('tool registry', () => {
-  it('has the four v0 tools on slots 1-4', () => {
+  it('keeps the four core tools on slots 1-4', () => {
     expect(toolForSlot(1)?.id).toBe('keyboard');
     expect(toolForSlot(2)?.id).toBe('mouse');
     expect(toolForSlot(3)?.id).toBe('usb');
