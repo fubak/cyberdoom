@@ -53,7 +53,7 @@ const map: MapDef = {
     '2': { kind: 'door', tex: 'wall-server', doorId: 'change-secret-2', secret: true },
     '3': { kind: 'door', tex: 'wall-brick', doorId: 'change-secret-3', secret: true },
   },
-  spawn: { x: 5.5, y: 26.5, angle: 0 },
+  spawn: { x: 5.5, y: 26.5, angle: Math.PI / 4 },
   defaultLight: 0.62,
   lights: lightRects([
     [3, 24, 17, 27, 0.85],

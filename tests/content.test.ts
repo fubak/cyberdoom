@@ -127,6 +127,14 @@ describe('missions', () => {
         .toBeGreaterThanOrEqual(budget);
     }
   });
+  it('built missions have distinct spawn tile and facing pairs', () => {
+    const built = ARC.filter((entry) => entry.built).map((entry) => missionRegistry.get(entry.id)!);
+    const pairs = built.map((m) => {
+      const { x, y, angle } = m.map.spawn;
+      return `${x},${y},${angle.toFixed(6)}`;
+    });
+    expect(new Set(pairs).size, pairs.join(' | ')).toBe(pairs.length);
+  });
   it('USB charge supply covers post-difficulty infected HP with reserve', () => {
     const usb = toolRegistry.get('usb')!;
     for (const m of ARC.filter((entry) => entry.built).map((entry) => missionRegistry.get(entry.id)!)) {
