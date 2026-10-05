@@ -630,6 +630,10 @@ class Game {
       fire() {
         g.debugFire = true;
       },
+      /** LOOK: set integrity (HUD / low-HP portrait / hurt-tint captures). */
+      setIntegrity(v: number) {
+        if (g.player) g.player.integrity = Math.max(1, Math.min(100, v));
+      },
       /** LOOK: threat-readability probe (see tools/look-contrast.mjs). */
       probe(kind: string, dist: number, withImages = false) {
         if (!g.map || !g.runtime || !g.player) throw new Error('no mission running');

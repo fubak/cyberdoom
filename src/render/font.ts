@@ -147,12 +147,14 @@ export function drawBigText(
   y: number,
   ramp: string[],
   shadow = '#120808',
+  fat = false,
 ): number {
-  const spec = FONTS.small;
+  const spec = { w: fat ? 6 : 5 };
   let cx = Math.round(x);
   for (const raw of text) {
     const ch = norm(raw);
-    const rows = spec.glyphs[ch];
+    const src = FONTS.small.glyphs[ch];
+    const rows = src && fat ? fatRows(src) : src;
     if (rows) {
       for (let pass = 0; pass < 2; pass++) {
         rows.forEach((bits, ry) => {
@@ -171,14 +173,53 @@ export function drawBigText(
         });
       }
     }
-    cx += 12;
+    cx += fat ? 13 : 12;
   }
   return cx - Math.round(x);
 }
 
-export function measureBig(text: string): number {
+export function measureBig(text: string, fat = false): number {
   const n = [...text].length;
-  return n === 0 ? 0 : n * 12 - 2;
+  return n === 0 ? 0 : fat ? n * 13 - 1 : n * 12 - 2;
+}
+
+/** 5-wide glyph rows emboldened to 6 columns (each lit pixel also lights its right neighbour). */
+const fatRows = (rows: number[]) => rows.map((b) => (b << 1) | b);
+
+/**
+ * Chunky HUD font (ticker, banners, panel labels): the 5x7 glyphs emboldened
+ * to 6x7, with a top→bottom colour ramp and a hard 1px drop shadow. 7px advance.
+ */
+export function drawChunky(
+  g: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  ramp: string | string[],
+  shadow: string | null = '#000',
+): number {
+  const rs = typeof ramp === 'string' ? [ramp] : ramp;
+  let cx = Math.round(x);
+  const cy = Math.round(y);
+  for (const raw of text) {
+    const rows = FONTS.small.glyphs[norm(raw)];
+    if (rows) {
+      const fr = fatRows(rows);
+      for (let pass = shadow ? 0 : 1; pass < 2; pass++) {
+        fr.forEach((bits, ry) => {
+          g.fillStyle = pass === 0 ? shadow! : rs[Math.min(rs.length - 1, Math.floor((ry * rs.length) / 7))];
+          for (let rx = 0; rx < 6; rx++) if (bits & (1 << (5 - rx))) g.fillRect(cx + rx + (pass === 0 ? 1 : 0), cy + ry + (pass === 0 ? 1 : 0), 1, 1);
+        });
+      }
+    }
+    cx += 7;
+  }
+  return cx - Math.round(x);
+}
+
+export function measureChunky(text: string): number {
+  const n = [...text].length;
+  return n === 0 ? 0 : n * 7 - 1;
 }
 
 /** Word-wrap to a max character count. */
