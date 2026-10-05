@@ -228,7 +228,7 @@ briefing:
 debriefQuestions: [
     q('q1', ['4.8'], 'Ransomware is actively spreading across the finance VLAN. You have confirmed it. What is the NEXT incident-response activity?', 1, [
       ['Eradication: re-image the infected hosts', 'While it is still spreading, newly re-imaged hosts get reinfected. Contain first.'],
-      ['Containment: isolate the finance VLAN', 'Containment stops the spread so eradication and recovery can succeed. Order: detection, analysis, containment, eradication, recovery, lessons learned.'],
+      ['Containment: isolate the finance VLAN', 'Containment stops the spread so eradication and recovery can succeed. Order: preparation, detection, analysis, containment, eradication, recovery, lessons learned.'],
       ['Recovery: restore from backups now', 'Restored systems on a live infected network will be encrypted again.'],
       ['Lessons learned: hold the post-incident review', 'Lessons learned comes after recovery, not while the attack is live.'],
     ]),

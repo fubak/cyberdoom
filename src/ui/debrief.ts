@@ -1,9 +1,18 @@
 import type { EvidenceEntry, Mission, Question, ScoreEvent } from '../core/types';
-import { loadMastery, playableCoverageLine, readiness, recordAnswer } from '../content/curriculum';
+import {
+  gradeMission,
+  loadMastery,
+  playableCoverageLine,
+  readiness,
+  recordAnswer,
+  recordField,
+} from '../content/curriculum';
 import { missionRegistry, teachingRegistry } from '../content/missions';
 import { objectiveById } from '../content/objectives';
 import { bigButton, h, onKeysWhileMounted } from './briefing';
 import './curriculum.css';
+
+export { letterGrade } from '../content/curriculum';
 
 /**
  * CURRICULUM: after-action report -> knowledge check -> grade.
@@ -38,10 +47,6 @@ function shuffled<T>(a: readonly T[]): T[] {
     [out[i], out[j]] = [out[j], out[i]];
   }
   return out;
-}
-
-export function letterGrade(pct: number): string {
-  return pct >= 90 ? 'A' : pct >= 80 ? 'B' : pct >= 70 ? 'C' : pct >= 60 ? 'D' : 'F';
 }
 
 interface CheckItem {
@@ -117,9 +122,23 @@ export function debrief(opts: {
     return { ...o, def, done: o.done || avoided };
   });
   const fieldPct = objRows.length ? (objRows.filter((o) => o.done && !o.failed).length / objRows.length) * 100 : 100;
+  const falsePositives = opts.scoreLog.filter((event) => event.tag === 'false-positive').length;
 
   const firstTry = new Map<string, boolean>();
   let mastery = loadMastery();
+  if (opts.won) {
+    const demonstrated = opts.scoreLog
+      .filter((event) =>
+        event.points > 0 && event.tag !== 'false-positive' && event.tag !== 'priority-miss',
+      )
+      .flatMap((event) => event.objectives);
+    for (const objective of objRows) {
+      if (!objective.done || objective.failed || !objective.def) continue;
+      const lesson = teach?.lessons[objective.def.id];
+      if (lesson) demonstrated.push(lesson.objective);
+    }
+    mastery = recordField(mastery, demonstrated);
+  }
   let review = loadReview();
 
   const clear = () => {
@@ -274,18 +293,19 @@ export function debrief(opts: {
     const total = mission.debriefQuestions.length;
     const correct = [...firstTry.values()].filter(Boolean).length;
     const quizPct = total ? (correct / total) * 100 : 100;
-    let pct = Math.round(fieldPct * 0.5 + quizPct * 0.5);
-    if (!opts.won) pct = Math.min(pct, 59);
-    const grade = letterGrade(pct);
+    const result = gradeMission({ fieldPct, quizPct, won: opts.won, falsePositives });
 
     s.appendChild(h('div', 'cd-kicker', `${mission.title}  ·  MISSION GRADE`));
-    const g = h('div', `cd-grade g${grade}`, grade);
+    const g = h('div', `cd-grade g${result.grade}`, result.grade);
     s.appendChild(g);
     const row = h('div', 'cd-stats');
-    row.appendChild(h('div', '', `FIELD  ${Math.round(fieldPct)}%`));
+    row.appendChild(h('div', '', `FIELD  ${Math.round(result.field)}%`));
     row.appendChild(h('div', '', `KNOWLEDGE  ${correct}/${total}`));
-    row.appendChild(h('div', '', `TOTAL  ${pct}%`));
+    row.appendChild(h('div', '', `TOTAL  ${result.total}%`));
     s.appendChild(row);
+    if (result.capped === 'false-positive') {
+      s.appendChild(h('div', 'cd-note bad', 'FALSE POSITIVE: FIELD AND GRADE CAPPED AT B'));
+    }
     if (!opts.won) s.appendChild(h('div', 'cd-note bad', 'Mission failed: grade capped at F. Redeploy to pass.'));
     if (retried) {
       const fixed = retried.filter((it) => !review.includes(`${it.missionId}:${it.q.id}`)).length;

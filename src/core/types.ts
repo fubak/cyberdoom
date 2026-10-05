@@ -100,6 +100,8 @@ export interface EntityDef {
   sprite: string;
   ai?: AiMode;
   hp?: number;
+  /** For an `ordered` interact objective: lower numbers must be actioned first. */
+  priority?: number;
   /** Whether the entity is infected / hostile for cleaning purposes. */
   infected?: boolean;
   /** Can be reported/accused as the insider. */
@@ -107,6 +109,8 @@ export interface EntityDef {
   /** Is this entity actually the culprit in its mission (content decision). */
   culprit?: boolean;
   inspect?: InspectInfo;
+  /** Objective ids credited when this entity is cleaned; defaults to inspect.objectives. */
+  cleanObjectives?: string[];
   /** Custom tags for objective matching (e.g. "found-usb"). */
   tags?: string[];
   /** Amount of a resource granted on pickup, e.g. {resource:'usb-charge',amount:4}.
@@ -141,6 +145,10 @@ export interface MissionObjective {
   /** Objective ids that must be done before this one can progress
    *  (e.g. a report is refused until the evidence is collected). */
   requires?: string[];
+  /** For 'clean': a matching entity counts only if it was inspected before it was cleaned. */
+  requiresInspect?: boolean;
+  /** Interact with tagged entities in ascending EntityDef.priority order. */
+  ordered?: boolean;
   /** For 'avoid': violations allowed before the mission FAILS (default 1). */
   strikes?: number;
 }

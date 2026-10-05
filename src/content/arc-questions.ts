@@ -151,38 +151,6 @@ export const ARC_QUESTIONS: Record<string, Question[]> = {
       ['Cross-site scripting', 'XSS is a web-application flaw. This is a network device problem.'],
     ]),
   ],
-  m08: [
-    q('q1', ['2.3'], 'Entering  \' OR \'1\'=\'1  in a login form returns every user record. What is the vulnerability, and what fixes it?', 0, [
-      ['SQL injection; use parameterized queries and input validation', 'The input became part of the SQL statement. Parameterization keeps user data separate from query code.'],
-      ['Cross-site scripting; encode output', 'XSS runs script in a victim\u2019s browser. Here the database query itself was altered.'],
-      ['Buffer overflow; enable memory protections', 'Nothing overran a memory buffer. The query logic was rewritten.'],
-      ['Directory traversal; restrict file paths', 'Traversal uses ../ to reach files outside the web root, but this attack changed a database query.'],
-    ]),
-    q('q2', ['2.3'], 'A setuid program checks that the user may write /tmp/report, then opens it. Between the check and the open, the attacker swaps the file for a link to /etc/passwd. What is this?', 3, [
-      ['Memory injection', 'Memory injection puts code into a running process\u2019s memory. Here a file was swapped.'],
-      ['Malicious update', 'No update channel is involved.'],
-      ['Buffer overflow', 'No data overran a buffer. The flaw is the gap between check and use.'],
-      ['Race condition (time-of-check / time-of-use)', 'The resource changed between the check (TOC) and the use (TOU), which is the textbook race condition.'],
-    ]),
-    q('q3', ['4.3'], 'Two findings: CVSS 9.8 on an isolated lab server with no sensitive data, and CVSS 7.5 on the internet-facing payment portal. What do you remediate FIRST?', 1, [
-      ['The 9.8, because the highest base score always goes first', 'The CVSS base score ignores your environment. Exposure and impact can outweigh a higher base score.'],
-      ['The 7.5 payment portal, because exposure and impact make its real risk higher', 'Prioritization adds environmental factors to the base score: who can reach it and what is at stake.'],
-      ['Neither until both can be patched in one window', 'Delaying an exposed payment system to batch changes increases risk.'],
-      ['Whichever is cheaper to fix', 'Cost matters in planning, but risk drives priority.'],
-    ]),
-    q('q4', ['4.1'], 'Twenty new web servers must start from a known-good, hardened configuration that is checked for drift over time. What should you implement?', 2, [
-      ['Let each admin harden servers to personal preference', 'That produces inconsistent configurations, with no reference to measure drift against.'],
-      ['Install every package so nothing is missing later', 'Unneeded software is extra attack surface. Hardening removes it.'],
-      ['A secure baseline (e.g. from a CIS benchmark): establish, deploy, maintain', 'A baseline defines the hardened state, deploys it consistently, and is monitored and updated as threats change.'],
-      ['Harden servers only after an incident', 'Reactive hardening means the first attacker gets the weak configuration.'],
-    ]),
-    q('q5', ['4.1'], 'Production servers must run only approved builds that have not been modified since release. Which technique verifies this at install time?', 0, [
-      ['Code signing', 'A valid signature proves who published the build and that it has not been altered since it was signed.'],
-      ['Static code analysis', 'Static analysis finds flaws in the source before release. It cannot prove the deployed binary is unmodified.'],
-      ['Sandboxing', 'A sandbox isolates what code can do when it runs. It does not verify where the code came from.'],
-      ['Secure cookies', 'Secure cookies protect session tokens in the browser and have nothing to do with build integrity.'],
-    ]),
-  ],
   m10: [
     q('q1', ['5.3'], 'Before signing, you want the contractual right to inspect the vendor\u2019s security controls yourself. Which clause do you need?', 2, [
       ['Non-disclosure agreement', 'An NDA protects confidential information. It gives you no right to inspect anything.'],

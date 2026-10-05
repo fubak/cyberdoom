@@ -41,6 +41,22 @@ export const GLOSSARY: Record<string, string> = {
     'Reducing a host\u2019s attack surface: patching, endpoint protection, host-based firewall, HIPS, disabling unused ports/protocols, changing default passwords, removing unnecessary software. [2.5]',
   'patching':
     'Applying vendor updates that fix known vulnerabilities. A core mitigation and vulnerability-management activity. [2.5, 4.3]',
+  'vulnerability scan':
+    'An automated examination of systems for known weaknesses, such as missing patches, unsafe configurations or vulnerable software versions. [4.3]',
+  'cvss':
+    'The Common Vulnerability Scoring System rates vulnerability severity with standardized metrics; its base score alone does not determine local risk. [4.3]',
+  'sql injection':
+    'An injection attack in which untrusted input is interpreted as part of a database query, potentially exposing or changing data. [2.3]',
+  'buffer overflow':
+    'A flaw where data exceeds a memory buffer and may overwrite adjacent memory, potentially changing program behavior. [2.3]',
+  'cross-site scripting':
+    'An injection flaw that causes a web application to deliver attacker-controlled script to users\u2019 browsers. [2.3]',
+  'race condition':
+    'A flaw where behavior depends on the timing or order of concurrent operations, potentially allowing an unsafe state or unauthorized action. [2.3]',
+  'secure baseline':
+    'A documented minimum configuration standard that reduces attack surface by disabling unnecessary services and setting approved security controls. [4.1]',
+  'code signing':
+    'A digital signature binds software to its publisher and lets recipients verify its integrity and source before installation or deployment. [4.1]',
 
   // --- resilience (3.4) ---
   'backups':

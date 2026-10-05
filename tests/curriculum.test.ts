@@ -3,11 +3,13 @@ import {
   ARC,
   arcObjectiveIds,
   coverageShare,
+  gradeMission,
   isDemonstrated,
   playableCoverage,
   playableCoverageLine,
   readiness,
   recordAnswer,
+  recordField,
   type Mastery,
 } from '../src/content/curriculum';
 import { ARC_QUESTIONS } from '../src/content/arc-questions';
@@ -336,6 +338,30 @@ describe('mastery', () => {
     expect(isDemonstrated({ '1.1': { right: 1, wrong: 2 } }, '1.1')).toBe(false);
   });
 
+  it('records field demonstrations, ignores unknown ids, and counts field-only readiness', () => {
+    const mastery: Mastery = {};
+    recordField(mastery, ['4.6', 'not-an-objective']);
+
+    expect(mastery['4.6']).toEqual({ right: 0, wrong: 0, field: 1 });
+    expect(mastery['not-an-objective']).toBeUndefined();
+    expect(isDemonstrated(mastery, '4.6')).toBe(true);
+    expect(readiness(mastery).byDomain.find((domain) => domain.domain === 4))
+      .toMatchObject({ demonstrated: 1, total: 9 });
+    expect(isDemonstrated({ '4.6': { right: 0, wrong: 2, field: 1 } }, '4.6')).toBe(true);
+  });
+
+  it('persists field demonstrations when storage is available', () => {
+    const setItem = vi.fn();
+    vi.stubGlobal('localStorage', { setItem });
+    try {
+      const mastery: Mastery = {};
+      recordField(mastery, ['4.6']);
+      expect(setItem).toHaveBeenCalledOnce();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('records answers and increments counts when localStorage is unavailable', () => {
     vi.stubGlobal('localStorage', undefined);
     try {
@@ -350,5 +376,17 @@ describe('mastery', () => {
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+});
+
+describe('mission grading', () => {
+  it('caps field and total at B after any false positive', () => {
+    expect(gradeMission({ fieldPct: 100, quizPct: 100, won: true, falsePositives: 1 }))
+      .toEqual({ field: 89, total: 89, grade: 'B', capped: 'false-positive' });
+  });
+
+  it('caps a lost mission at F', () => {
+    expect(gradeMission({ fieldPct: 100, quizPct: 100, won: false, falsePositives: 0 }))
+      .toEqual({ field: 100, total: 59, grade: 'F', capped: 'fail' });
   });
 });

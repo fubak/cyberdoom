@@ -230,6 +230,98 @@ describe('MissionRuntime', () => {
     expect(state.rt.objectives.find((objective) => objective.def.id === 'clean')?.done).toBe(false);
   });
 
+  it('restores a requiresInspect host when it is cleaned before inspection', () => {
+    const state = setup(mission({
+      entities: [{
+        id: 'host', kind: 'workstation', x: 2, y: 2, sprite: 'workstation-infected',
+        infected: true, hp: 3, tags: ['infected'], cleanObjectives: ['2.5', '4.8'],
+        inspect: { label: 'WS-07', detail: 'Evidence.', category: 'malware', objectives: ['2.4', '3.4'] },
+      }],
+      missionObjectives: [{
+        id: 'clean', text: 'Inspect and clean host', kind: 'clean',
+        tag: 'infected', requiresInspect: true,
+      }],
+    }));
+    const host = state.rt.byId('host')!;
+    host.hp = 0;
+    state.bus.emit('cleaned', { entityId: 'host' });
+
+    expect(host).toMatchObject({
+      alive: true,
+      infected: true,
+      hp: 3,
+      state: { cleaned: false },
+    });
+    expect(state.rt.objectives[0]).toMatchObject({ progress: 0, done: false });
+    expect(state.rt.scoreLog).toHaveLength(0);
+    expect(state.messages.at(-1)?.text).toBe(
+      'Not cleaned: inspect WS-07 first. Analysis before action.',
+    );
+  });
+
+  it('counts a requiresInspect clean after the host is inspected', () => {
+    const state = setup(mission({
+      entities: [{
+        id: 'host', kind: 'workstation', x: 2, y: 2, sprite: 'workstation-infected',
+        infected: true, hp: 3, tags: ['infected'], cleanObjectives: ['2.5', '4.8'],
+        inspect: { label: 'WS-07', detail: 'Evidence.', category: 'malware', objectives: ['2.4', '3.4'] },
+      }],
+      missionObjectives: [{
+        id: 'clean', text: 'Inspect and clean host', kind: 'clean',
+        tag: 'infected', requiresInspect: true,
+      }],
+    }));
+    state.bus.emit('inspect', { entityId: 'host' });
+    state.bus.emit('cleaned', { entityId: 'host' });
+
+    expect(state.rt.byId('host')).toMatchObject({ alive: false, infected: false });
+    expect(state.rt.objectives[0]).toMatchObject({ progress: 1, done: true });
+    expect(state.rt.scoreLog).toContainEqual(expect.objectContaining({
+      text: 'Cleaned WS-07', points: 25, objectives: ['2.5', '4.8'],
+    }));
+  });
+
+  it('blocks manual patching before inspection and credits cleanObjectives after inspection', () => {
+    const state = setup(mission({
+      entities: [{
+        id: 'host', kind: 'workstation', x: 2, y: 2, sprite: 'workstation-infected',
+        infected: true, hp: 3, tags: ['infected'], cleanObjectives: ['2.5', '4.8'],
+        inspect: { label: 'WS-07', detail: 'Evidence.', category: 'malware', objectives: ['2.4', '3.4'] },
+      }],
+      missionObjectives: [{
+        id: 'clean', text: 'Inspect and clean host', kind: 'clean',
+        tag: 'infected', requiresInspect: true,
+      }],
+    }));
+    state.bus.emit('interact', { entityId: 'host' });
+    expect(state.rt.byId('host')).toMatchObject({ alive: true, infected: true, hp: 3 });
+    expect(state.rt.scoreLog).toHaveLength(0);
+
+    state.bus.emit('inspect', { entityId: 'host' });
+    state.bus.emit('interact', { entityId: 'host' });
+    expect(state.rt.byId('host')).toMatchObject({ alive: false, infected: false });
+    expect(state.rt.objectives[0]).toMatchObject({ progress: 1, done: true });
+    expect(state.rt.scoreLog).toContainEqual(expect.objectContaining({
+      text: 'Manual patch applied — faster with the scanner', points: 5, objectives: ['2.5', '4.8'],
+    }));
+  });
+
+  it('keeps legacy clean objectives working without requiresInspect', () => {
+    const state = setup(mission({
+      entities: [{
+        id: 'host', kind: 'workstation', x: 2, y: 2, sprite: 'workstation-infected',
+        infected: true, tags: ['infected'],
+        inspect: { label: 'WS-07', detail: 'Evidence.', category: 'malware' },
+      }],
+      missionObjectives: [{ id: 'clean', text: 'Clean host', kind: 'clean', tag: 'infected' }],
+    }));
+    state.bus.emit('cleaned', { entityId: 'host' });
+
+    expect(state.rt.byId('host')?.alive).toBe(false);
+    expect(state.rt.objectives[0]).toMatchObject({ progress: 1, done: true });
+    expect(state.rt.scoreLog.some((event) => event.text === 'Cleaned WS-07')).toBe(true);
+  });
+
   it('credits a correct report to the culprit inspection objectives', () => {
     const state = setup(mission({
       entities: [{
@@ -353,5 +445,73 @@ describe('MissionRuntime', () => {
     state.bus.emit('scan-miss', { entityId: 'infected' });
     expect(state.rt.score).toBe(0);
     expect(state.rt.scoreLog).toHaveLength(0);
+  });
+
+  it('refuses out-of-order interactions and scores each entity at most once', () => {
+    const state = setup(mission({
+      entities: [
+        { id: 'web01', kind: 'console', x: 2, y: 2, sprite: 'workstation', priority: 1, tags: ['finding'] },
+        { id: 'file02', kind: 'console', x: 3, y: 2, sprite: 'workstation', priority: 2, tags: ['finding'],
+          inspect: { label: 'FILE-02', detail: '', category: 'legit' } },
+      ],
+      missionObjectives: [{
+        id: 'remediate', text: 'Remediate in risk order', kind: 'interact',
+        tag: 'finding', count: 2, ordered: true,
+      }],
+    }));
+    state.bus.emit('interact', { entityId: 'file02' });
+    state.bus.emit('interact', { entityId: 'file02' });
+
+    expect(state.rt.objectives[0]).toMatchObject({ progress: 0, done: false });
+    expect(state.rt.scoreLog.filter((event) => event.tag === 'priority-miss')).toEqual([
+      expect.objectContaining({
+        text: 'Out of risk order: FILE-02',
+        points: -20,
+        objectives: ['4.3'],
+        tag: 'priority-miss',
+      }),
+    ]);
+    expect(state.messages.filter((message) =>
+      message.text === 'Change board: a higher-risk finding is still open. Re-read the scan.',
+    )).toHaveLength(2);
+  });
+
+  it('completes an ordered interact objective when findings are actioned in order', () => {
+    const state = setup(mission({
+      entities: [
+        { id: 'web01', kind: 'console', x: 2, y: 2, sprite: 'workstation', priority: 1, tags: ['finding'] },
+        { id: 'file02', kind: 'console', x: 3, y: 2, sprite: 'workstation', priority: 2, tags: ['finding'] },
+      ],
+      missionObjectives: [{
+        id: 'remediate', text: 'Remediate in risk order', kind: 'interact',
+        tag: 'finding', count: 2, ordered: true,
+      }],
+    }));
+    state.bus.emit('interact', { entityId: 'web01' });
+    state.bus.emit('interact', { entityId: 'file02' });
+
+    expect(state.rt.objectives[0]).toMatchObject({ progress: 2, done: true });
+  });
+
+  it('records and scores decoy console patches without counting their objective', () => {
+    const state = setup(mission({
+      entities: [{
+        id: 'lab04', kind: 'console', x: 2, y: 2, sprite: 'workstation',
+        tags: ['decoy'], log: 'The fix was already installed.',
+        inspect: { label: 'Server LAB-04', detail: 'Banner-only match.', category: 'legit' },
+      }],
+      missionObjectives: [{ id: 'patch', text: 'Patch findings', kind: 'interact', tag: 'decoy' }],
+    }));
+    state.bus.emit('interact', { entityId: 'lab04' });
+    state.bus.emit('interact', { entityId: 'lab04' });
+
+    expect(state.rt.evidence).toHaveLength(1);
+    expect(state.rt.evidence[0]).toMatchObject({
+      entityId: 'lab04', source: 'log', label: 'Server LAB-04', detail: 'The fix was already installed.',
+    });
+    expect(state.rt.scoreLog.filter((event) => event.tag === 'false-positive')).toMatchObject([
+      { points: -25, tag: 'false-positive', objectives: ['2.4'] },
+    ]);
+    expect(state.rt.objectives[0]).toMatchObject({ progress: 0, done: false });
   });
 });
