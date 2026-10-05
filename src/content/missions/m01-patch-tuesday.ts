@@ -152,7 +152,7 @@ export const m01: Mission = {
       },
     },
     {
-      id: 'ws-clean', kind: 'workstation', x: 23.5, y: 6.5, sprite: 'workstation',
+      id: 'ws-clean', kind: 'workstation', x: 14.5, y: 10.5, sprite: 'workstation',
       inspect: {
         label: 'Workstation MKT-11',
         detail: 'Patched last night, AV signatures current, no unusual processes.',
