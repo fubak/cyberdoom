@@ -18,6 +18,9 @@ interface Art {
 
 const cache = new Map<string, Art>();
 
+/** Overall on-screen size of the bespoke viewmodels (1 = native 1:1 pixels). */
+export const VIEWMODEL_SCALE = 1;
+
 /** Hand palette from the player's chosen skin tone (independent of gender). */
 const SKIN: Record<Gender, string[]> = new Proxy({} as Record<Gender, string[]>, {
   get: () => {
@@ -286,7 +289,11 @@ export function drawToolViewmodel(
   } else dy = Math.round(cooldownFrac * (tool.id === 'usb' ? 10 : tool.id === 'badge' ? -10 : 6));
   const drop = Math.round((anim?.lower ?? 0) * (a.c.height + 10));
   const side = tool.id === 'mouse' ? 56 : tool.id === 'badge' ? 40 : tool.id === 'usb' ? 20 : 0;
-  g.drawImage(a.c, Math.round(w / 2 - a.ox + side + bx + dx), h - a.c.height + 8 + byy + dy + drop);
+  const S = VIEWMODEL_SCALE;
+  const cw = Math.round(a.c.width * S);
+  const ch = Math.round(a.c.height * S);
+  g.imageSmoothingEnabled = false;
+  g.drawImage(a.c, Math.round(w / 2 - (a.ox - side) * S + bx + dx), h - ch + Math.round(8 * S) + byy + dy + drop, cw, ch);
   if (anim && !anim.lower) tool.drawFx?.(g, w, h, anim);
   return true;
 }

@@ -66,7 +66,7 @@ void main() {
       fl = r < 0.3 ? 0.4 : 1.0;
     }
     float s = abs(vShade) * uLight * fl;
-    L = s * 1.38 - vDist * (0.17 - s * 0.095);
+    L = s * 1.4 - vDist * (0.2 - s * 0.1);
     L = clamp(L, 0.025, 1.0);
     L = floor(L * 24.0 + 0.5) / 24.0;
   }
@@ -151,6 +151,7 @@ interface SpriteState {
   animT: number;
   lastHp: number;
   flash: number;
+  scale: number;
   kind: Entity['def']['kind'];
   entity: Entity | null;
 }
@@ -178,6 +179,9 @@ export class Renderer {
   private doorMeshes = new Map<string, THREE.Mesh>();
   private openingDoors: { mesh: THREE.Mesh; t: number }[] = [];
   private map: WorldMap | null = null;
+  private light = new Float32Array(0);
+  private lamps = new Set<string>();
+  private deadLamps = new Set<string>();
   private rt: THREE.WebGLRenderTarget;
   private postScene = new THREE.Scene();
   private postCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
@@ -248,6 +252,8 @@ export class Renderer {
     this.hurt = 0;
 
     const isWall = (x: number, y: number) => map.cellAt(x, y)?.kind === 'wall' || !map.cellAt(x, y);
+    this.computeLight(map, _def);
+    const lightAt = (x: number, y: number) => this.tileLight(x, y);
     const builders = new Map<string, { tex: THREE.Texture; b: GeoBuilder }>();
     const builder = (key: string, tex: THREE.Texture) => {
       let e = builders.get(key);
@@ -276,7 +282,7 @@ export class Renderer {
     };
 
     const flicker = (x: number, y: number) =>
-      map.cellAt(x, y)?.kind === 'floor' && map.lightAt(x, y) < 0.7 && (x * 7 + y * 13) % 5 === 0 ? -1 : 1;
+      map.cellAt(x, y)?.kind === 'floor' && lightAt(x, y) > 0.28 && lightAt(x, y) < 0.6 && (x * 7 + y * 13) % 4 === 0 ? -1 : 1;
     for (let ty = 0; ty < map.h; ty++) {
       for (let tx = 0; tx < map.w; tx++) {
         const cell = map.cellAt(tx, ty);
@@ -289,7 +295,7 @@ export class Renderer {
             const b = isTrack
               ? builder('doortrak', textureOr('doortrak'))
               : builder(`w:${cell.tex}`, textureOr(cell.tex));
-            wallFace(b, tx, ty, dx, dz, map.lightAt(tx + dx, ty + dz) * flicker(tx + dx, ty + dz));
+            wallFace(b, tx, ty, dx, dz, lightAt(tx + dx, ty + dz) * flicker(tx + dx, ty + dz));
           }
           continue;
         }
@@ -301,7 +307,7 @@ export class Renderer {
             const n = map.cellAt(tx + dx, ty + dz);
             if (!n || n.kind === 'wall' || n.kind === 'door') continue;
             // door faces are inset slightly so the jamb tracks show
-            wallFace(b, tx, ty, dx, dz, map.lightAt(tx + dx, ty + dz));
+            wallFace(b, tx, ty, dx, dz, lightAt(tx + dx, ty + dz));
           }
           b.quad(
             [[tx, 0.002, ty], [tx + 1, 0.002, ty], [tx + 1, 0.002, ty + 1], [tx, 0.002, ty + 1]],
@@ -313,7 +319,7 @@ export class Renderer {
           this.doorMeshes.set(id, mesh);
         }
         // floor + ceiling (also under doors)
-        const L = map.lightAt(tx, ty);
+        const L = lightAt(tx, ty);
         const ao = (cx: number, cy: number) => {
           // corner occlusion: count walls among the 4 cells touching this corner
           let n = 0;
@@ -328,8 +334,8 @@ export class Renderer {
           [[0, 1], [1, 1], [1, 0], [0, 0]],
           s,
         );
-        const lamp = cell.kind !== 'door' && ((tx % 3 === 1 && ty % 3 === 1) || L >= 0.98);
-        const ceilTex = lamp ? 'ceil-light' : 'ceil';
+        const key = `${tx},${ty}`;
+        const ceilTex = this.lamps.has(key) ? 'ceil-light' : this.deadLamps.has(key) ? 'ceil-light-off' : 'ceil';
         builder(`c:${ceilTex}`, textureOr(ceilTex, 'ceil')).quad(
           [[tx, H, ty], [tx + 1, H, ty], [tx + 1, H, ty + 1], [tx, H, ty + 1]],
           [[0, 1], [1, 1], [1, 0], [0, 0]],
@@ -360,7 +366,7 @@ export class Renderer {
     const { mesh, mat } = this.makeSpriteMesh(set, light);
     mesh.position.set(x, y, z);
     this.ghosts.push({
-      mesh, mat, set, setId, lastX: x, lastY: z, facing: null, moveT: 0, animT: 0, lastHp: 0, flash: 0,
+      mesh, mat, set, setId, lastX: x, lastY: z, facing: null, moveT: 0, animT: 0, lastHp: 0, flash: 0, scale: 1,
       kind: 'prop', entity: null,
     });
   }
@@ -383,8 +389,62 @@ export class Renderer {
   }
 
   private lightAt(x: number, y: number): number {
-    return this.map ? this.map.lightAt(Math.floor(x), Math.floor(y)) : 1;
+    return this.tileLight(Math.floor(x), Math.floor(y));
   }
+
+  private tileLight(tx: number, ty: number): number {
+    const m = this.map;
+    if (!m || tx < 0 || ty < 0 || tx >= m.w || ty >= m.h) return 0.5;
+    return this.light[ty * m.w + tx];
+  }
+
+  /**
+   * Sector lighting: the mission's per-tile light is the sector level; within
+   * a sector, ceiling lamps on a 3-tile grid cast pools that fall off toward
+   * near-black between them. Dark sectors (< 0.5) and ~1 in 5 lamps elsewhere
+   * are dead, leaving black patches; the spawn area always stays lit.
+   */
+  private computeLight(map: WorldMap, def: MapDef): void {
+    const w = map.w;
+    const h = map.h;
+    this.light = new Float32Array(w * h);
+    this.lamps.clear();
+    this.deadLamps.clear();
+    const src: [number, number, number][] = [];
+    const open = (x: number, y: number) => {
+      const k = map.cellAt(x, y)?.kind;
+      return k !== undefined && k !== 'wall' && k !== 'door';
+    };
+    const sx = def.spawn.x;
+    const sy = def.spawn.y;
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        if (map.cellAt(x, y)?.kind === 'exit') src.push([x + 0.5, y + 0.5, 0.8]);
+        if (!open(x, y) || x % 3 !== 1 || y % 3 !== 1) continue;
+        const key = `${x},${y}`;
+        const hash = (Math.imul(x, 73856093) ^ Math.imul(y, 19349663)) >>> 0;
+        const nearSpawn = Math.hypot(x + 0.5 - sx, y + 0.5 - sy) < 2.5;
+        if (!nearSpawn && (map.lightAt(x, y) < 0.5 || hash % 5 === 0)) {
+          this.deadLamps.add(key);
+          continue;
+        }
+        this.lamps.add(key);
+        src.push([x + 0.5, y + 0.5, 1]);
+      }
+    }
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        let best = 0;
+        for (const [lx, ly, ls] of src) {
+          const d2 = (x + 0.5 - lx) ** 2 + (y + 0.5 - ly) ** 2;
+          if (d2 < 16) best = Math.max(best, ls * Math.exp(-d2 / 3.2));
+        }
+        const base = map.lightAt(x, y);
+        this.light[y * w + x] = Math.max(0.06, Math.min(1, base * (0.3 + 0.85 * best)));
+      }
+    }
+  }
+
 
   syncEntities(entities: Entity[], projectiles: Projectile[]): void {
     const seen = new Set<string>();
@@ -402,7 +462,7 @@ export class Renderer {
         const { mesh, mat } = this.makeSpriteMesh(set, this.lightAt(e.x, e.y));
         st = {
           mesh, mat, set, setId, lastX: e.x, lastY: e.y, facing: null, moveT: 0, animT: Math.random() * 3,
-          lastHp: e.hp, flash: 0, kind: e.def.kind, entity: e,
+          lastHp: e.hp, flash: 0, scale: 1, kind: e.def.kind, entity: e,
         };
         this.sprites.set(id, st);
       }
@@ -426,6 +486,7 @@ export class Renderer {
       st.entity = e;
       const scale = typeof e.state.scale === 'number' ? e.state.scale : 1;
       const hop = typeof e.state.hop === 'number' ? e.state.hop : 0;
+      st.scale = scale;
       st.mesh.scale.set(set.w * scale, set.h * scale, 1);
       st.mesh.position.set(e.x, hop, e.y);
       st.mat.uniforms.uLight.value = this.lightAt(e.x, e.y);
@@ -450,7 +511,7 @@ export class Renderer {
         const { mesh, mat } = this.makeSpriteMesh(set, 1);
         st = {
           mesh, mat, set, setId, lastX: p.x, lastY: p.y, facing: null, moveT: 0, animT: 0, lastHp: 0,
-          flash: 0, kind: 'prop', entity: null,
+          flash: 0, scale: 1, kind: 'prop', entity: null,
         };
         this.projSprites.set(p, st);
       }
@@ -485,15 +546,23 @@ export class Renderer {
     const anim = st.set.anim;
     const t = st.animT;
     if (anim === 'monster') {
-      if (st.flash > 0.25 && f.pain) return { tex: f.pain };
+      // Doom-style rotations: which of 8 views faces the camera
+      const toCam = Math.atan2(py - st.lastY, px - st.lastX);
+      const facing = st.facing ?? toCam;
+      const rel = (toCam - facing) / (Math.PI / 4);
+      const rot = ((Math.round(rel) % 8) + 8) % 8;
+      const pick = (k: string) => f[`${k}_${rot}`] ?? f[k];
+      if (st.flash > 0.45 && f.pain) return { tex: pick('pain') };
+      const walk = pick(`walk${Math.floor(t * 6) % 4}`);
       const stateMode = st.entity?.state.mode;
       if (typeof stateMode === 'string') {
-        const walk = Math.floor(t * 4) % 2 === 0 ? f.walk0 : f.walk1;
-        return { tex: stateMode === 'windup' || stateMode === 'recover' ? f.attack ?? walk : walk };
+        if (stateMode === 'windup') return { tex: pick('attack0') };
+        if (stateMode === 'recover') return { tex: pick('attack1') };
+        return { tex: walk };
       }
       const dist = Math.hypot(px - st.lastX, py - st.lastY);
-      if (dist < 0.95 && f.attack) return { tex: Math.floor(t * 5) % 2 === 0 ? f.attack : f.walk0 };
-      return { tex: Math.floor(t * 4) % 2 === 0 ? f.walk0 : f.walk1 };
+      if (dist < 0.95 && f.attack0) return { tex: pick(Math.floor(t * 5) % 2 === 0 ? 'attack1' : 'attack0') };
+      return { tex: walk };
     }
     if (anim === 'person') {
       const moving = st.moveT > 0;
@@ -524,9 +593,9 @@ export class Renderer {
     timeUniform.value = this.time;
 
     // damage → palette red shift
-    if (player.integrity < this.lastIntegrity) this.hurt = Math.min(0.55, this.hurt + 0.28 + (this.lastIntegrity - player.integrity) * 0.01);
+    if (player.integrity < this.lastIntegrity) this.hurt = Math.min(0.62, this.hurt + 0.36 + (this.lastIntegrity - player.integrity) * 0.015);
     this.lastIntegrity = player.integrity;
-    this.hurt = Math.max(0, this.hurt - dt * 1.1);
+    this.hurt = Math.max(0, this.hurt - dt * 0.9);
     const lowHp = player.integrity > 0 && player.integrity < 25 ? 0.06 + Math.sin(this.time * 6) * 0.04 : 0;
     (this.postMat.uniforms.uTint.value as THREE.Vector4).set(1, 0.04, 0.02, Math.max(this.hurt, lowHp));
 
@@ -545,7 +614,14 @@ export class Renderer {
       st.flash = Math.max(0, st.flash - dt * 3);
       st.mesh.rotation.set(0, yaw, 0);
       st.mat.uniforms.map.value = this.pickFrame(st, cameraAngle, cameraX, cameraY).tex;
-      const painFlash = st.flash > 0.75 ? 0.6 : 0;
+      if (st.entity) {
+        // point-blank clamp: never let a sprite exceed ~90% of view height
+        const d = Math.hypot(st.mesh.position.x - cameraX, st.mesh.position.z - cameraY);
+        const maxH = 0.9 * 2 * Math.max(0.05, d) * Math.tan((this.camera.fov * Math.PI) / 360);
+        const sc = Math.min(st.scale, maxH / st.set.h);
+        st.mesh.scale.set(st.set.w * sc, st.set.h * sc, 1);
+      }
+      const painFlash = st.set.anim !== 'monster' && st.flash > 0.75 ? 0.6 : 0;
       const windupFlash = st.entity?.state.mode === 'windup' && Math.floor(this.time * 12) % 2 === 0 ? 0.35 : 0;
       st.mat.uniforms.uFlash.value = Math.max(painFlash, windupFlash);
     }
