@@ -46,6 +46,8 @@ export class MissionRuntime {
   private inspected = new Set<string>();
   private triageScored = new Set<string>();
   private falsePositiveSources = new Set<string>();
+  private priorityMisses = new Set<string>();
+  private wrongChoicesScored = new Set<string>();
   private counted = new Map<string, Set<string>>();
   private cleaned = new Set<string>();
   private initialHp = new Map<string, number>();
@@ -114,7 +116,7 @@ export class MissionRuntime {
     this.bus.emit('evidence', entry);
   }
 
-  private falsePositive(e: Entity, points: number, source: 'scan' | 'flag'): void {
+  private falsePositive(e: Entity, points: number, source: 'scan' | 'flag' | 'patch'): void {
     const key = `${e.def.id}:${source}`;
     if (this.falsePositiveSources.has(key)) return;
     this.falsePositiveSources.add(key);
@@ -144,6 +146,17 @@ export class MissionRuntime {
     ids.add(entityId);
     objective.progress++;
     if (objective.progress >= objective.target) objective.done = true;
+  }
+
+  private rejectUninspectedClean(e: Entity): boolean {
+    if (!this.objectivesFor('clean', e).some((objective) => objective.def.requiresInspect) ||
+        this.inspected.has(e.def.id)) return false;
+    e.alive = true;
+    e.infected = true;
+    e.hp = this.initialHp.get(e.def.id) ?? e.hp;
+    e.state.cleaned = false;
+    this.message(`Not cleaned: inspect ${e.def.inspect?.label ?? e.def.id} first. Analysis before action.`, 'warn');
+    return true;
   }
 
   private objectivesFor(kind: MissionObjective['kind'], e: Entity): ObjectiveStatus[] {
@@ -181,6 +194,30 @@ export class MissionRuntime {
     if (!unmet) return false;
     this.message(`First: ${unmet.def.text}`, 'warn');
     return true;
+  }
+
+  private rejectOutOfOrderInteract(e: Entity, matching: ObjectiveStatus[]): boolean {
+    for (const objective of matching) {
+      if (!objective.def.ordered || !objective.def.tag) continue;
+      const counted = this.counted.get(objective.def.id) ?? new Set<string>();
+      const lowest = this.entities.reduce((priority, candidate) => {
+        if (counted.has(candidate.def.id) || !candidate.def.tags?.includes(objective.def.tag!)) return priority;
+        return Math.min(priority, candidate.def.priority ?? Infinity);
+      }, Infinity);
+      if (e.def.priority === undefined || e.def.priority <= lowest) continue;
+      if (!this.priorityMisses.has(e.def.id)) {
+        this.priorityMisses.add(e.def.id);
+        this.log(
+          `Out of risk order: ${e.def.inspect?.label ?? e.def.id}`,
+          -20,
+          e.def.inspect?.objectives ?? [],
+          'priority-miss',
+        );
+      }
+      this.message('Change board: a higher-risk finding is still open. Re-read the scan.', 'warn');
+      return true;
+    }
+    return false;
   }
 
   private violate(obj: ObjectiveStatus, points = -50): void {
@@ -249,11 +286,13 @@ export class MissionRuntime {
     this.bus.on('cleaned', ({ entityId }) => {
       const e = this.byId(entityId);
       if (!e || !e.alive || !e.infected) return;
+      if (this.rejectUninspectedClean(e)) return;
       e.infected = false;
       e.alive = false;
       e.state.cleaned = true;
       this.cleaned.add(entityId);
-      this.log(`Cleaned ${e.def.inspect?.label ?? 'host'}`, 25, e.def.inspect?.objectives ?? []);
+      this.log(`Cleaned ${e.def.inspect?.label ?? 'host'}`, 25,
+        e.def.cleanObjectives ?? e.def.inspect?.objectives ?? []);
       for (const objective of this.objectivesFor('clean', e)) this.countEntity(objective, entityId);
       this.checkWin();
     });
@@ -305,6 +344,18 @@ export class MissionRuntime {
 
       if (e.def.kind === 'console') {
         const matching = this.objectivesFor('interact', e);
+        if (e.def.tags?.includes('wrong')) {
+          const text = e.def.log ?? e.def.inspect?.detail ?? '';
+          const label = e.def.inspect?.label ?? e.def.id;
+          this.record(e, 'log', label, text);
+          if (text.trim()) this.message(`READ: ${label}`, 'info');
+          if (!this.wrongChoicesScored.has(e.def.id)) {
+            this.wrongChoicesScored.add(e.def.id);
+            this.log(`Wrong call: ${label}`, -15, e.def.inspect?.objectives ?? [], 'bad-choice');
+          }
+          this.message(`Wrong call: ${label}. Read why in the case file (L).`, 'warn');
+          return;
+        }
         if (this.pendingAccusation && e.def.tags?.includes('report-console')) {
           const report = this.objectives.find((o) => o.def.kind === 'report');
           if (this.rejectRequirements(report)) return;
@@ -315,12 +366,17 @@ export class MissionRuntime {
           return;
         }
         if (matching.some((objective) => this.rejectRequirements(objective))) return;
+        if (this.rejectOutOfOrderInteract(e, matching)) return;
         if (this.violateMatchingAvoid(e)) return;
         const text = e.def.log ?? e.def.inspect?.detail ?? '';
+        const label = e.def.inspect?.label ?? e.def.id;
         if (text.trim()) {
-          const label = e.def.inspect?.label ?? e.def.id;
           this.message(`READ: ${label}`, 'info');
           this.record(e, 'log', label, text);
+        }
+        if (e.def.tags?.includes('decoy')) {
+          this.falsePositive(e, -25, 'patch');
+          return;
         }
         for (const objective of matching) this.countEntity(objective, e.def.id);
         this.applyRoleGrant(e);
@@ -329,7 +385,9 @@ export class MissionRuntime {
       }
 
       if (e.def.kind === 'workstation' && e.infected) {
-        this.log('Manual patch applied — faster with the scanner', 5, e.def.inspect?.objectives ?? []);
+        if (this.rejectUninspectedClean(e)) return;
+        this.log('Manual patch applied — faster with the scanner', 5,
+          e.def.cleanObjectives ?? e.def.inspect?.objectives ?? []);
         e.infected = false;
         e.alive = false;
         e.state.cleaned = true;

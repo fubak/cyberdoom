@@ -173,3 +173,10 @@
   margin: 8px 0 0; color: #e8dcc0; font: 700 13px/1.45 'Courier New', monospace;
   white-space: pre-wrap; overflow-wrap: anywhere;
 }
+
+/* Pixel debrief: one fixed 400x250 bitmap-font canvas, letterboxed and scaled. */
+.screen.cd-inter.cd-pixel { padding: 0; justify-content: center; background: #000; overflow: hidden; }
+.cd-pixel-canvas {
+  width: min(100vw, 160vh); height: auto; aspect-ratio: 400 / 250;
+  image-rendering: pixelated; image-rendering: crisp-edges;
+}

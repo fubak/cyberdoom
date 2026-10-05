@@ -41,6 +41,46 @@ export const GLOSSARY: Record<string, string> = {
     'Reducing a host\u2019s attack surface: patching, endpoint protection, host-based firewall, HIPS, disabling unused ports/protocols, changing default passwords, removing unnecessary software. [2.5]',
   'patching':
     'Applying vendor updates that fix known vulnerabilities. A core mitigation and vulnerability-management activity. [2.5, 4.3]',
+  'vulnerability scan':
+    'An automated examination of systems for known weaknesses, such as missing patches, unsafe configurations or vulnerable software versions. [4.3]',
+  'cvss':
+    'The Common Vulnerability Scoring System rates vulnerability severity with standardized metrics; its base score alone does not determine local risk. [4.3]',
+  'sql injection':
+    'An injection attack in which untrusted input is interpreted as part of a database query, potentially exposing or changing data. [2.3]',
+  'buffer overflow':
+    'A flaw where data exceeds a memory buffer and may overwrite adjacent memory, potentially changing program behavior. [2.3]',
+  'cross-site scripting':
+    'An injection flaw that causes a web application to deliver attacker-controlled script to users\u2019 browsers. [2.3]',
+  'race condition':
+    'A flaw where behavior depends on the timing or order of concurrent operations, potentially allowing an unsafe state or unauthorized action. [2.3]',
+  'secure baseline':
+    'A documented minimum configuration standard that reduces attack surface by disabling unnecessary services and setting approved security controls. [4.1]',
+  'code signing':
+    'A digital signature binds software to its publisher and lets recipients verify its integrity and source before installation or deployment. [4.1]',
+
+  // --- cryptography & authentication (1.4, 3.3, 4.6) ---
+  'certificate chain':
+    'The ordered path from a leaf certificate through issuing certificates to a trusted root; clients validate signatures and the chain against their trust store. [1.4]',
+  'certificate authority':
+    'A trusted organization or service that validates certificate requests and digitally signs certificates binding identities to public keys. [1.4]',
+  'self-signed certificate':
+    'A certificate signed by its own subject rather than an independent certificate authority; clients do not trust it unless it is explicitly installed as a trust anchor. [1.4]',
+  'certificate revocation':
+    'Invalidating a certificate before its expiration, commonly published in a certificate revocation list (CRL) or checked online through OCSP. [1.4]',
+  'key rotation':
+    'Replacing a cryptographic key with a new independent key pair on a defined schedule or after compromise, then retiring the old key. [1.4]',
+  'hashing':
+    'A one-way transformation that produces a fixed-length digest; password storage should use a dedicated slow password-hashing function, not reversible encryption. [1.4]',
+  'salting':
+    'Adding a unique random value to each password before hashing so identical passwords have different hashes and precomputed tables are less useful. [1.4]',
+  'key stretching':
+    'Making password hashing deliberately costly through repeated or memory-hard computation so each offline guess takes more time and resources. [1.4]',
+  'tokenization':
+    'Replacing sensitive data with a non-sensitive token whose mapping is held in a separate protected token vault, keeping real values out of downstream systems. [3.3]',
+  'encryption at rest':
+    'Cryptographically protecting stored data on disks, backups or other media so it remains unreadable without the required key. [3.3]',
+  'multifactor authentication':
+    'Authentication using two or more different factor types: something you know, have or are; two passwords or questions are still one type. [4.6]',
 
   // --- resilience (3.4) ---
   'backups':

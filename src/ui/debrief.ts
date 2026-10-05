@@ -1,15 +1,39 @@
 import type { EvidenceEntry, Mission, Question, ScoreEvent } from '../core/types';
-import { loadMastery, playableCoverageLine, readiness, recordAnswer } from '../content/curriculum';
+import {
+  gradeMission,
+  loadMastery,
+  playableCoverageLine,
+  readiness,
+  recordAnswer,
+  recordField,
+} from '../content/curriculum';
 import { missionRegistry, teachingRegistry } from '../content/missions';
 import { objectiveById } from '../content/objectives';
-import { bigButton, h, onKeysWhileMounted } from './briefing';
+import { drawBigText, drawText, measureBig, measureText } from '../render/font';
+import { h, onKeysWhileMounted } from './briefing';
+import {
+  DB_BODY_ROWS,
+  DB_BODY_TOP,
+  DB_H,
+  DB_LINE,
+  DB_W,
+  DB_X,
+  block,
+  paginate,
+  type PLine,
+  wrapPixel,
+} from './debrief-layout';
 import './curriculum.css';
 
+export { letterGrade } from '../content/curriculum';
+
 /**
- * CURRICULUM: after-action report -> knowledge check -> grade.
- * The knowledge check counts for half the mission grade, every question must be
- * answered before continuing, options are shuffled each time, missed items can be
- * retried and are queued for spaced review in later debriefs.
+ * CURRICULUM: after-action report -> knowledge check -> grade, drawn as a
+ * Doom-style intermission on a fixed 400x250 pixel canvas with the bitmap
+ * font. Every page is laid out by measured pixel width and paginated (no
+ * scrolling). The knowledge check counts for half the mission grade, every
+ * question must be answered before continuing, options are shuffled, missed
+ * items can be retried and are queued for spaced review in later debriefs.
  */
 
 const REVIEW_KEY = 'cyberdoom.review.v1';
@@ -40,14 +64,120 @@ function shuffled<T>(a: readonly T[]): T[] {
   return out;
 }
 
-export function letterGrade(pct: number): string {
-  return pct >= 90 ? 'A' : pct >= 80 ? 'B' : pct >= 70 ? 'C' : pct >= 60 ? 'D' : 'F';
-}
-
 interface CheckItem {
   q: Question;
   missionId: string;
   review: boolean;
+}
+
+const C = {
+  text: '#f4e6c8',
+  dim: '#a88c68',
+  gold: '#f0c020',
+  red: '#ff5a3c',
+  green: '#5ce88a',
+  cyan: '#7ad0ff',
+  white: '#ffffff',
+  orange: '#ff9a40',
+};
+const RAMP = {
+  red: ['#ffb08a', '#ff5a30', '#e02810', '#a01008', '#600800'],
+  gold: ['#fff4b0', '#ffd84a', '#f0b020', '#b87010', '#704000'],
+  green: ['#d0ffd0', '#7cf0a0', '#3cc068', '#1a8040', '#0a5020'],
+};
+const DOMAIN_COLOR: Record<number, string> = { 1: '#4cc3ff', 2: '#ff5a3c', 3: '#b07cff', 4: '#4ce07a', 5: '#ffc83c' };
+const DOMAIN_SHORT: Record<number, string> = {
+  1: 'GENERAL CONCEPTS',
+  2: 'THREATS & VULNS',
+  3: 'ARCHITECTURE',
+  4: 'OPERATIONS',
+  5: 'PROGRAM MGMT',
+};
+
+/** Special scored outcomes that get their own row when the mission teaches them. */
+const TAG_ROWS: [tag: string, clean: string, dirty: string][] = [
+  ['false-positive', 'NO FALSE POSITIVES', 'FALSE POSITIVES'],
+  ['priority-miss', 'CHANGES IN RISK ORDER', 'OUT-OF-ORDER CHANGES'],
+  ['bad-choice', 'NO WRONG CALLS', 'WRONG CALLS'],
+];
+
+interface Page {
+  lines?: PLine[];
+  draw?: (g: CanvasRenderingContext2D, t: number) => void;
+  /** Plain-text summary for the canvas aria-label. */
+  label?: string;
+}
+
+interface View {
+  kicker: string;
+  title: string;
+  ramp: string[];
+  sub?: string;
+  pages: Page[];
+  nextLabel: string;
+  canNext: () => boolean;
+  next: () => void;
+  onHit?: (i: number) => void;
+  onKey?: (e: KeyboardEvent) => boolean;
+  extraButton?: { label: string; go: () => void };
+  animate?: number;
+}
+
+interface Hit {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  go: () => void;
+}
+
+function bevel(g: CanvasRenderingContext2D, x: number, y: number, w: number, hh: number, fill: string): void {
+  g.fillStyle = fill;
+  g.fillRect(x, y, w, hh);
+  g.fillStyle = '#8a6a48';
+  g.fillRect(x, y, w, 1);
+  g.fillRect(x, y, 1, hh);
+  g.fillStyle = '#000';
+  g.fillRect(x, y + hh - 1, w, 1);
+  g.fillRect(x + w - 1, y, 1, hh);
+}
+
+function brickBackdrop(): HTMLCanvasElement {
+  const c = document.createElement('canvas');
+  c.width = DB_W;
+  c.height = DB_H;
+  const g = c.getContext('2d')!;
+  g.fillStyle = '#2c140e';
+  g.fillRect(0, 0, DB_W, DB_H);
+  let s = 1337;
+  const rnd = () => (s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+  for (let y = 0; y < DB_H; y += 16) {
+    const off = (y / 16) % 2 ? 16 : 0;
+    for (let x = -off; x < DB_W; x += 32) {
+      const v = 34 + Math.floor(rnd() * 12);
+      g.fillStyle = `rgb(${v + 8},${Math.floor(v / 2)},${Math.floor(v / 3)})`;
+      g.fillRect(x + 1, y + 1, 30, 14);
+      g.fillStyle = '#4a2418';
+      g.fillRect(x + 1, y + 1, 30, 1);
+    }
+    g.fillStyle = '#140604';
+    g.fillRect(0, y + 15, DB_W, 1);
+    for (let x = -off; x < DB_W; x += 32) g.fillRect(x + 31, y, 1, 16);
+  }
+  for (let i = 0; i < 1600; i++) {
+    g.fillStyle = i % 2 ? '#3e1e14' : '#120604';
+    g.fillRect(Math.floor(rnd() * DB_W), Math.floor(rnd() * DB_H), 1, 1);
+  }
+  return c;
+}
+
+function bigScaled(g: CanvasRenderingContext2D, text: string, x: number, y: number, ramp: string[], k: number): void {
+  const off = document.createElement('canvas');
+  off.width = measureBig(text) + 2;
+  off.height = 16;
+  drawBigText(off.getContext('2d')!, text, 0, 0, ramp);
+  g.imageSmoothingEnabled = false;
+  g.drawImage(off, x, y, off.width * k, off.height * k);
 }
 
 export function debrief(opts: {
@@ -61,54 +191,22 @@ export function debrief(opts: {
 }): HTMLElement {
   const { mission } = opts;
   const teach = teachingRegistry.get(mission.id);
-  const s = h('div', 'screen cd-inter');
-  let keyFn: ((e: KeyboardEvent) => void) | null = null;
-  let evidenceOpen = false;
-  let evidenceButton: HTMLButtonElement | null = null;
-  const drawer = h('aside', 'cd-evidence-drawer');
-  drawer.setAttribute('aria-label', 'Evidence log');
+  const s = h('div', 'screen cd-inter cd-pixel');
+  const canvas = document.createElement('canvas');
+  canvas.width = DB_W;
+  canvas.height = DB_H;
+  canvas.className = 'cd-pixel-canvas';
+  canvas.setAttribute('role', 'img');
+  s.appendChild(canvas);
+  const g = canvas.getContext('2d')!;
+  const backdrop = brickBackdrop();
   const entries = opts.evidence ?? [];
-  if (entries.length) {
-    for (const entry of entries) {
-      const row = h('article', 'cd-evidence-entry');
-      row.appendChild(h('strong', '', entry.label));
-      row.appendChild(h('span', 'cd-evidence-source', entry.source.toUpperCase()));
-      row.appendChild(h('pre', 'cd-evidence-detail', entry.detail));
-      drawer.appendChild(row);
-    }
-  } else {
-    drawer.appendChild(h('p', 'cd-body', 'No evidence was logged during this mission.'));
-  }
-  const updateEvidenceDrawer = () => {
-    drawer.classList.toggle('open', evidenceOpen);
-    drawer.setAttribute('aria-hidden', String(!evidenceOpen));
-    evidenceButton?.setAttribute('aria-expanded', String(evidenceOpen));
-  };
-  const toggleEvidence = () => {
-    evidenceOpen = !evidenceOpen;
-    updateEvidenceDrawer();
-  };
-  const addEvidenceUi = () => {
-    const button = bigButton(`EVIDENCE LOG (${entries.length}) [L]`, toggleEvidence, 'cd-btn cd-evidence-toggle');
-    evidenceButton = button;
-    s.appendChild(button);
-    s.appendChild(drawer);
-    updateEvidenceDrawer();
-  };
-  onKeysWhileMounted(s, (e) => {
-    if (e.code === 'KeyL' || e.key === 'Tab') {
-      e.preventDefault();
-      toggleEvidence();
-      return;
-    }
-    if (e.key === 'Escape' && evidenceOpen) {
-      e.preventDefault();
-      evidenceOpen = false;
-      updateEvidenceDrawer();
-      return;
-    }
-    keyFn?.(e);
-  });
+
+  let view: View;
+  let page = 0;
+  let viewStart = performance.now();
+  let hits: Hit[] = [];
+  const ev = { open: false, sel: 0, detail: false, page: 0 };
 
   // Avoid objectives have no "done" event: obeyed through a won mission = done.
   const objRows = opts.objectives.map((o, i) => {
@@ -117,69 +215,261 @@ export function debrief(opts: {
     return { ...o, def, done: o.done || avoided };
   });
   const fieldPct = objRows.length ? (objRows.filter((o) => o.done && !o.failed).length / objRows.length) * 100 : 100;
+  const falsePositives = opts.scoreLog.filter((event) => event.tag === 'false-positive').length;
 
   const firstTry = new Map<string, boolean>();
   let mastery = loadMastery();
+  if (opts.won) {
+    const demonstrated = opts.scoreLog
+      .filter((event) => event.points > 0 && event.tag !== 'false-positive' && event.tag !== 'priority-miss')
+      .flatMap((event) => event.objectives);
+    for (const objective of objRows) {
+      if (!objective.done || objective.failed || !objective.def) continue;
+      const lesson = teach?.lessons[objective.def.id];
+      if (lesson) demonstrated.push(lesson.objective);
+    }
+    mastery = recordField(mastery, demonstrated);
+  }
   let review = loadReview();
 
-  const clear = () => {
-    s.replaceChildren();
-    keyFn = null;
+  // ---------- rendering ----------
+  const button = (label: string, x: number, y: number, enabled: boolean, go: () => void, align: 'l' | 'r' = 'l') => {
+    const w = measureText(label) + 10;
+    const bx = align === 'r' ? x - w : x;
+    bevel(g, bx, y, w, 13, enabled ? '#5a1a0c' : '#241410');
+    drawText(g, label, bx + 5, y + 3, enabled ? C.gold : '#6a5440');
+    if (enabled) hits.push({ x: bx, y, w, h: 13, go });
+    return w;
   };
 
+  const drawLines = (lines: PLine[]) => {
+    lines.forEach((l, i) => {
+      const y = DB_BODY_TOP + i * DB_LINE;
+      if (l.prefix) drawText(g, l.prefix, DB_X, y, l.prefixColor ?? l.color);
+      if (l.text) drawText(g, l.text, DB_X + (l.indent ?? 0), y, l.color);
+      if (l.hit !== undefined && view.onHit) {
+        const idx = l.hit;
+        hits.push({ x: 10, y: y - 1, w: DB_W - 20, h: DB_LINE, go: () => view.onHit?.(idx) });
+      }
+    });
+  };
+
+  const drawEvidence = () => {
+    g.fillStyle = 'rgba(0,0,0,0.6)';
+    g.fillRect(0, 0, DB_W, DB_H);
+    bevel(g, 14, 10, DB_W - 28, DB_H - 20, '#0c0806');
+    g.fillStyle = '#b08a3c';
+    g.fillRect(14, 24, DB_W - 28, 1);
+    drawText(g, `EVIDENCE LOG (${entries.length})  -  ${mission.title}`, 22, 14, C.gold);
+    const listRows = 21;
+    if (!entries.length) {
+      drawText(g, 'NO EVIDENCE WAS LOGGED DURING THIS MISSION.', 22, 32, C.text);
+    } else if (!ev.detail) {
+      const start = Math.max(0, Math.min(ev.sel - Math.floor(listRows / 2), entries.length - listRows));
+      entries.slice(start, start + listRows).forEach((entry, k) => {
+        const i = start + k;
+        const y = 30 + k * DB_LINE;
+        const on = i === ev.sel;
+        if (on) {
+          g.fillStyle = '#4a1a0c';
+          g.fillRect(18, y - 1, DB_W - 36, DB_LINE);
+        }
+        const tag = entry.source.toUpperCase();
+        const label = wrapPixel(`${i + 1}. ${entry.label}`, DB_W - 60 - measureText(tag))[0] ?? '';
+        drawText(g, label, 22, y, on ? C.white : C.text);
+        drawText(g, tag, DB_W - 22 - measureText(tag), y, C.dim);
+        hits.push({ x: 18, y: y - 1, w: DB_W - 36, h: DB_LINE, go: () => { ev.sel = i; ev.detail = true; ev.page = 0; } });
+      });
+    } else {
+      const entry = entries[ev.sel];
+      const title = wrapPixel(entry.label, DB_W - 48);
+      const detail = wrapPixel(entry.detail, DB_W - 48);
+      const rows = listRows - title.length - 1;
+      const pages = Math.max(1, Math.ceil(detail.length / rows));
+      ev.page = Math.min(ev.page, pages - 1);
+      title.forEach((t, i) => drawText(g, t, 22, 30 + i * DB_LINE, C.gold));
+      detail.slice(ev.page * rows, (ev.page + 1) * rows).forEach((t, i) =>
+        drawText(g, t, 22, 30 + (title.length + 1 + i) * DB_LINE, C.text));
+      drawText(g, `${entry.source.toUpperCase()}  -  PAGE ${ev.page + 1}/${pages}`, 22, DB_H - 40, C.dim);
+    }
+    const hint = ev.detail ? '<- -> PAGE   ESC BACK   L CLOSE' : 'UP/DOWN SELECT   ENTER OPEN   ESC/L CLOSE';
+    drawText(g, hint, 22, DB_H - 28, C.orange);
+    button('CLOSE [L]', DB_W - 20, DB_H - 30, true, () => { ev.open = false; ev.detail = false; }, 'r');
+  };
+
+  const render = () => {
+    hits = [];
+    const t = Math.min(1, view.animate ? (performance.now() - viewStart) / view.animate : 1);
+    g.drawImage(backdrop, 0, 0);
+    drawText(g, view.kicker, (DB_W - measureText(view.kicker)) / 2, 4, C.dim);
+    drawBigText(g, view.title, (DB_W - measureBig(view.title)) / 2, 14, view.ramp);
+    if (view.sub) drawText(g, view.sub, (DB_W - measureText(view.sub)) / 2, 33, C.white);
+    bevel(g, 10, 43, DB_W - 20, DB_BODY_ROWS * DB_LINE + 7, 'rgba(12,8,6,0.9)');
+    const p = view.pages[Math.min(page, view.pages.length - 1)];
+    if (p.draw) p.draw(g, t);
+    if (p.lines) drawLines(p.lines);
+
+    const fy = DB_H - 17;
+    const n = view.pages.length;
+    let x = 10;
+    if (n > 1) x += button('< PREV', x, fy, page > 0, () => go(-1)) + 4;
+    x += button(`EVIDENCE ${entries.length} [L]`, x, fy, true, () => { ev.open = true; }) + 4;
+    if (view.extraButton) button(view.extraButton.label, x, fy, true, view.extraButton.go);
+    const last = page >= n - 1;
+    const nextLabel = !last ? 'NEXT PAGE [ENTER] >' : view.canNext() ? `${view.nextLabel} [ENTER] >` : view.nextLabel;
+    const nw = button(nextLabel, DB_W - 10, fy, !last || view.canNext(), () => advance(), 'r');
+    if (n > 1) {
+      const label = `${page + 1}/${n}`;
+      drawText(g, label, DB_W - 10 - nw - 6 - measureText(label), fy + 3, C.dim);
+    }
+    if (ev.open) drawEvidence();
+    const text = ev.open ? 'Evidence log' : [view.title, view.sub ?? '', p.label ?? (p.lines ?? []).map((l) => `${l.prefix ?? ''} ${l.text}`).join(' ')].join(' | ');
+    canvas.setAttribute('aria-label', text);
+    canvas.dataset.page = `${page + 1}/${n}`;
+    if (t < 1) setTimeout(() => { if (s.isConnected) render(); }, 33);
+  };
+
+  const show = (v: View) => {
+    view = v;
+    page = 0;
+    viewStart = performance.now();
+    render();
+  };
+  const go = (d: number) => {
+    page = Math.max(0, Math.min(view.pages.length - 1, page + d));
+    render();
+  };
+  const advance = () => {
+    if (view.animate && performance.now() - viewStart < view.animate) {
+      viewStart = -1e9;
+      render();
+      return;
+    }
+    if (page < view.pages.length - 1) go(1);
+    else if (view.canNext()) view.next();
+  };
+
+  canvas.addEventListener('click', (e) => {
+    const r = canvas.getBoundingClientRect();
+    const x = ((e.clientX - r.left) / r.width) * DB_W;
+    const y = ((e.clientY - r.top) / r.height) * DB_H;
+    const hit = [...hits].reverse().find((b) => x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h);
+    if (hit) {
+      hit.go();
+      if (s.isConnected) render();
+    }
+  });
+  canvas.addEventListener('mousemove', (e) => {
+    const r = canvas.getBoundingClientRect();
+    const x = ((e.clientX - r.left) / r.width) * DB_W;
+    const y = ((e.clientY - r.top) / r.height) * DB_H;
+    canvas.style.cursor = hits.some((b) => x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h) ? 'pointer' : 'default';
+  });
+
+  onKeysWhileMounted(s, (e) => {
+    const k = e.key;
+    if (ev.open) {
+      e.preventDefault();
+      if (k === 'Escape' || k === 'Backspace') {
+        if (ev.detail) ev.detail = false;
+        else ev.open = false;
+      } else if (e.code === 'KeyL' || k === 'Tab') {
+        ev.open = false;
+        ev.detail = false;
+      } else if (!ev.detail && (k === 'ArrowUp' || k === 'w' || k === 'W')) ev.sel = Math.max(0, ev.sel - 1);
+      else if (!ev.detail && (k === 'ArrowDown' || k === 's' || k === 'S')) ev.sel = Math.min(entries.length - 1, ev.sel + 1);
+      else if (!ev.detail && k === 'Enter' && entries.length) {
+        ev.detail = true;
+        ev.page = 0;
+      } else if (ev.detail && (k === 'ArrowLeft' || k === 'PageUp')) ev.page = Math.max(0, ev.page - 1);
+      else if (ev.detail && (k === 'ArrowRight' || k === 'PageDown' || k === 'Enter')) ev.page++;
+      render();
+      return;
+    }
+    if (e.code === 'KeyL' || k === 'Tab') {
+      e.preventDefault();
+      ev.open = true;
+      ev.detail = false;
+      render();
+      return;
+    }
+    if (view.onKey?.(e)) return;
+    if (k === 'ArrowLeft' || k === 'PageUp') {
+      e.preventDefault();
+      go(-1);
+    } else if (k === 'ArrowRight' || k === 'PageDown') {
+      e.preventDefault();
+      go(1);
+    } else if (k === 'Enter' || k === ' ') {
+      e.preventDefault();
+      advance();
+    }
+  });
+
   // ---------- 1. after-action report ----------
+  const tagRows = TAG_ROWS.filter(([tag]) => teach?.lessons[tag]).map(([tag, clean, dirty]) => {
+    const count = opts.scoreLog.filter((event) => event.tag === tag).length;
+    return { tag, count, label: count ? `${dirty} X${count}` : clean };
+  });
+
   const report = () => {
-    clear();
-    s.appendChild(h('div', 'cd-kicker', 'AFTER-ACTION REPORT'));
-    s.appendChild(h('h1', `cd-title ${opts.won ? 'good' : 'bad'}`, opts.won ? 'MISSION COMPLETE' : 'MISSION FAILED'));
-    s.appendChild(h('div', 'cd-sub', mission.title));
-    const grid = h('div', 'cd-grid');
-    const left = h('div', 'cd-panel');
-    left.appendChild(h('h3', '', 'OBJECTIVES'));
+    const doneCount = objRows.filter((o) => o.done && !o.failed).length;
+    const tallies: [string, number, string][] = [
+      ['OBJECTIVES', doneCount, `/${objRows.length}`],
+      ['FIELD SCORE', opts.score, ''],
+      ...tagRows.filter((r) => r.tag !== 'priority-miss' || r.count).map((r): [string, number, string] => [
+        r.tag === 'false-positive' ? 'FALSE POS.' : r.tag === 'priority-miss' ? 'OUT OF ORDER' : 'WRONG CALLS', r.count, '']),
+      ['EVIDENCE', entries.length, ''],
+    ];
+    const tally: Page = {
+      label: tallies.map(([l, v, suf]) => `${l} ${v}${suf}`).join(', '),
+      draw: (gg, t) => {
+        tallies.slice(0, 6).forEach(([label, value, suffix], i) => {
+          const y = 56 + i * 27;
+          drawBigText(gg, label, 34, y, RAMP.gold);
+          const shown = `${Math.round(value * t)}${suffix}`;
+          const bad = (label === 'FALSE POS.' || label === 'OUT OF ORDER' || label === 'WRONG CALLS') && value > 0;
+          drawBigText(gg, shown, DB_W - 34 - measureBig(shown), y, bad ? RAMP.red : label === 'OBJECTIVES' && value < objRows.length ? RAMP.red : RAMP.green);
+        });
+      },
+    };
+    const blocks: PLine[][] = [block('OBJECTIVES', C.gold)];
     for (const o of objRows) {
       const ok = o.done && !o.failed;
-      const row = h('div', `cd-result ${ok ? 'good' : 'bad'}`);
-      row.appendChild(h('div', 'cd-result-head', `${ok ? '✓' : '✗'}  ${o.text}`));
       const lesson = o.def ? teach?.lessons[o.def.id] : undefined;
-      if (lesson) {
-        row.appendChild(h('div', 'cd-lesson', `[${lesson.objective}] ${ok ? lesson.done : lesson.missed}`));
-      }
-      left.appendChild(row);
+      const b = block(o.text, ok ? C.green : C.red, { prefix: ok ? '+' : 'X' });
+      if (lesson) b.push(...block(`[${lesson.objective}] ${ok ? lesson.done : lesson.missed}`, C.text, { indent: 14 }));
+      blocks.push(b);
     }
-    const falsePositiveLesson = teach?.lessons['false-positive'];
-    if (falsePositiveLesson) {
-      const falsePositiveCount = opts.scoreLog.filter((event) => event.tag === 'false-positive').length;
-      const clean = falsePositiveCount === 0;
-      const row = h('div', `cd-result ${clean ? 'good' : 'bad'}`);
-      row.appendChild(h('div', 'cd-result-head',
-        clean ? '✓  NO FALSE POSITIVES' : `✗  FALSE POSITIVES ×${falsePositiveCount}`));
-      row.appendChild(h('div', 'cd-lesson',
-        `[${falsePositiveLesson.objective}] ${clean ? falsePositiveLesson.done : falsePositiveLesson.missed}`));
-      left.appendChild(row);
+    for (const r of tagRows) {
+      const lesson = teach!.lessons[r.tag];
+      const ok = r.count === 0;
+      blocks.push([
+        ...block(r.label, ok ? C.green : C.red, { prefix: ok ? '+' : 'X' }),
+        ...block(`[${lesson.objective}] ${ok ? lesson.done : lesson.missed}`, C.text, { indent: 14 }),
+      ]);
     }
-    grid.appendChild(left);
-    const right = h('div', 'cd-panel');
-    right.appendChild(h('h3', '', 'FIELD LOG'));
-    const log = h('div', 'cd-log');
+    const logBlocks: PLine[][] = [block('FIELD LOG', C.gold)];
     for (const e of opts.scoreLog) {
-      log.appendChild(
-        h('div', e.good ? 'good' : 'bad',
-          `${e.points >= 0 ? '+' : ''}${e.points}  ${e.text}${e.objectives.length ? `  (${e.objectives.join(', ')})` : ''}`),
+      logBlocks[logBlocks.length - 1].push(
+        ...block(`${e.text}${e.objectives.length ? `  (${e.objectives.join(', ')})` : ''}`, e.good ? C.text : C.red, {
+          prefix: `${e.points >= 0 ? '+' : ''}${e.points}`,
+          prefixColor: e.good ? C.green : C.red,
+          indent: 16,
+        }),
       );
     }
-    right.appendChild(log);
-    right.appendChild(h('div', 'cd-tally', `FIELD SCORE  ${opts.score}`));
-    grid.appendChild(right);
-    s.appendChild(grid);
-    const go = () => runCheck(buildFirstCheck(), 'first');
-    s.appendChild(bigButton('KNOWLEDGE CHECK ▸  [ENTER]', go));
-    addEvidenceUi();
-    keyFn = (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        go();
-      }
-    };
+    logBlocks[logBlocks.length - 1].push({ text: '', color: C.text }, ...block(`FIELD SCORE  ${opts.score}`, C.gold));
+    show({
+      kicker: `AFTER-ACTION REPORT  -  ${mission.title}`,
+      title: opts.won ? 'MISSION COMPLETE' : 'MISSION FAILED',
+      ramp: opts.won ? RAMP.gold : RAMP.red,
+      pages: [tally, ...paginate(blocks).map((lines) => ({ lines })), ...paginate(logBlocks).map((lines) => ({ lines }))],
+      nextLabel: 'KNOWLEDGE CHECK',
+      canNext: () => true,
+      next: () => runCheck(buildFirstCheck(), 'first'),
+      animate: 900,
+    });
   };
 
   const buildFirstCheck = (): CheckItem[] => {
@@ -200,138 +490,139 @@ export function debrief(opts: {
   // ---------- 2. knowledge check, one question at a time ----------
   const runCheck = (items: CheckItem[], mode: 'first' | 'retry') => {
     let i = 0;
-    const show = () => {
-      clear();
+    const ask = () => {
       const item = items[i];
       const { q } = item;
-      s.appendChild(h('div', 'cd-kicker',
-        `${mode === 'retry' ? 'RETRY' : 'KNOWLEDGE CHECK'}  ·  ${i + 1} / ${items.length}` +
-          (item.review ? `  ·  SPACED REVIEW FROM ${item.missionId.toUpperCase()}` : '')));
-      const panel = h('div', 'cd-panel cd-quiz');
-      panel.appendChild(h('div', 'cd-tags', q.objectives.map((id) => `${id} ${objectiveById(id)?.title ?? ''}`).join('  ·  ')));
-      panel.appendChild(h('div', 'cd-prompt', q.prompt));
-      const opts2 = shuffled(q.options);
-      const btns: HTMLButtonElement[] = [];
-      let picked = false;
-      const next = bigButton(i + 1 < items.length ? 'NEXT ▸  [ENTER]' : 'RESULTS ▸  [ENTER]', () => advance());
-      next.disabled = true;
-      next.classList.add('locked');
+      const order = shuffled(q.options);
+      let picked = -1;
+      const kicker = `${mode === 'retry' ? 'RETRY' : 'KNOWLEDGE CHECK'}  ${i + 1}/${items.length}` +
+        (item.review ? `  -  SPACED REVIEW FROM ${item.missionId.toUpperCase()}` : '');
+      const tags = block(q.objectives.map((id) => `${id} ${objectiveById(id)?.title ?? ''}`).join(' / '), C.cyan);
+      const questionPages = () => paginate([
+        tags,
+        block(q.prompt, C.white),
+        ...order.map((o, j) => block(o.text, C.text, { prefix: String(j + 1), prefixColor: C.gold, hit: j })),
+        block('PRESS 1-4 OR CLICK AN ANSWER.', C.orange),
+      ]).map((lines) => ({ lines }));
+      const feedbackPages = () => {
+        const chosen = order[picked];
+        return paginate([
+          block(chosen.correct ? 'CORRECT.' : 'MISSED. QUEUED FOR SPACED REVIEW.', chosen.correct ? C.green : C.red),
+          block(q.prompt, C.dim),
+          ...order.map((o, j) => [
+            ...block(`${o.correct ? '[RIGHT] ' : j === picked ? '[YOUR PICK] ' : ''}${o.text}`,
+              o.correct ? C.green : j === picked ? C.red : C.dim, { prefix: String(j + 1), prefixColor: C.gold }),
+            ...block(o.explanation, C.text, { indent: 14 }),
+          ]),
+        ]).map((lines) => ({ lines }));
+      };
       const pick = (k: number) => {
-        if (picked) return;
-        picked = true;
-        const chosen = opts2[k];
+        if (picked >= 0 || k < 0 || k >= order.length) return;
+        picked = k;
+        const chosen = order[k];
         const key = `${item.missionId}:${q.id}`;
         mastery = recordAnswer(mastery, q.objectives, chosen.correct);
         if (mode === 'first' && !item.review) firstTry.set(q.id, chosen.correct);
         if (chosen.correct) review = review.filter((r) => r !== key);
         else review = [...review, key];
         saveReview(review);
-        opts2.forEach((o, j) => {
-          const b = btns[j];
-          b.disabled = true;
-          b.classList.add('revealed', o.correct ? 'right' : j === k ? 'wrong' : 'other');
-          b.appendChild(h('div', 'cd-expl', `${o.correct ? 'CORRECT. ' : j === k ? 'NO. ' : ''}${o.explanation}`));
-        });
-        panel.appendChild(h('div', `cd-verdict ${chosen.correct ? 'good' : 'bad'}`, chosen.correct ? 'CORRECT' : 'MISSED. QUEUED FOR REVIEW'));
-        next.disabled = false;
-        next.classList.remove('locked');
-        next.focus();
+        view.pages = feedbackPages();
+        view.title = chosen.correct ? 'CORRECT' : 'MISSED';
+        view.ramp = chosen.correct ? RAMP.green : RAMP.red;
+        page = 0;
+        render();
       };
-      opts2.forEach((o, j) => {
-        const b = h('button', 'cd-opt') as HTMLButtonElement;
-        b.appendChild(h('span', 'cd-key', String(j + 1)));
-        b.appendChild(h('span', 'cd-opt-text', o.text));
-        b.addEventListener('click', () => pick(j));
-        btns.push(b);
-        panel.appendChild(b);
+      show({
+        kicker,
+        title: mode === 'retry' ? 'RETRY' : 'KNOWLEDGE CHECK',
+        ramp: RAMP.gold,
+        pages: questionPages(),
+        nextLabel: i + 1 < items.length ? 'NEXT QUESTION' : 'RESULTS',
+        canNext: () => picked >= 0,
+        next: () => {
+          i++;
+          if (i < items.length) ask();
+          else summary(mode === 'retry' ? items : null);
+        },
+        onHit: (j) => pick(j),
+        onKey: (e) => {
+          const n = Number(e.key);
+          if (picked < 0 && n >= 1 && n <= order.length) {
+            pick(n - 1);
+            return true;
+          }
+          return false;
+        },
       });
-      s.appendChild(panel);
-      s.appendChild(next);
-      addEvidenceUi();
-      const advance = () => {
-        if (!picked) return;
-        i++;
-        if (i < items.length) show();
-        else summary(mode === 'retry' ? items : null);
-      };
-      keyFn = (e) => {
-        const n = Number(e.key);
-        const letter = 'abcd'.indexOf(e.key.toLowerCase());
-        if (n >= 1 && n <= opts2.length) pick(n - 1);
-        else if (letter >= 0 && letter < opts2.length) pick(letter);
-        else if (e.key === 'Enter' && picked) {
-          e.preventDefault();
-          advance();
-        }
-      };
     };
-    show();
+    if (!items.length) summary(null);
+    else ask();
   };
 
   // ---------- 3. grade ----------
   const summary = (retried: CheckItem[] | null) => {
-    clear();
     const total = mission.debriefQuestions.length;
     const correct = [...firstTry.values()].filter(Boolean).length;
     const quizPct = total ? (correct / total) * 100 : 100;
-    let pct = Math.round(fieldPct * 0.5 + quizPct * 0.5);
-    if (!opts.won) pct = Math.min(pct, 59);
-    const grade = letterGrade(pct);
-
-    s.appendChild(h('div', 'cd-kicker', `${mission.title}  ·  MISSION GRADE`));
-    const g = h('div', `cd-grade g${grade}`, grade);
-    s.appendChild(g);
-    const row = h('div', 'cd-stats');
-    row.appendChild(h('div', '', `FIELD  ${Math.round(fieldPct)}%`));
-    row.appendChild(h('div', '', `KNOWLEDGE  ${correct}/${total}`));
-    row.appendChild(h('div', '', `TOTAL  ${pct}%`));
-    s.appendChild(row);
-    if (!opts.won) s.appendChild(h('div', 'cd-note bad', 'Mission failed: grade capped at F. Redeploy to pass.'));
-    if (retried) {
-      const fixed = retried.filter((it) => !review.includes(`${it.missionId}:${it.q.id}`)).length;
-      s.appendChild(h('div', 'cd-note', `Retry: ${fixed}/${retried.length} now correct (grade keeps first-try answers).`));
-    }
-
-    const grid = h('div', 'cd-grid');
-    const left = h('div', 'cd-panel');
-    left.appendChild(h('h3', '', 'SY0-701 READINESS'));
+    const result = gradeMission({ fieldPct, quizPct, won: opts.won, falsePositives });
     const r = readiness(mastery);
-    for (const d of r.byDomain) {
-      const bar = h('div', 'cd-bar');
-      bar.appendChild(h('span', 'cd-bar-label', `D${d.domain} ${d.title.toUpperCase()} (${d.weight}%)`));
-      const track = h('span', 'cd-bar-track');
-      const fill = h('span', `cd-bar-fill d${d.domain}`);
-      fill.style.width = `${(d.demonstrated / d.total) * 100}%`;
-      track.appendChild(fill);
-      bar.appendChild(track);
-      bar.appendChild(h('span', 'cd-bar-n', `${d.demonstrated}/${d.total}`));
-      left.appendChild(bar);
-    }
-    left.appendChild(h('div', 'cd-tally', `EXAM-WEIGHTED READINESS  ${r.overall}%`));
-    left.appendChild(h('div', 'cd-coverage-line', playableCoverageLine()));
-    grid.appendChild(left);
-    if (teach) {
-      const right = h('div', 'cd-panel');
-      right.appendChild(h('h3', '', 'EXAM TIP'));
-      right.appendChild(h('p', 'cd-body', teach.examTip));
-      grid.appendChild(right);
-    }
-    s.appendChild(grid);
-
+    const gradeRamp = result.grade === 'A' || result.grade === 'B' ? RAMP.gold : result.grade === 'F' ? RAMP.red : RAMP.gold;
     const missed: CheckItem[] = mission.debriefQuestions
       .filter((q) => review.includes(`${mission.id}:${q.id}`))
       .map((q) => ({ q, missionId: mission.id, review: false }));
-    const btnRow = h('div', 'cd-btn-row');
-    if (missed.length) btnRow.appendChild(bigButton(`RETRY MISSED (${missed.length})  [R]`, () => runCheck(missed, 'retry'), 'cd-btn alt'));
-    btnRow.appendChild(bigButton('CONTINUE ▸  [ENTER]', () => opts.onDone(correct)));
-    s.appendChild(btnRow);
-    addEvidenceUi();
-    keyFn = (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        opts.onDone(correct);
-      } else if ((e.key === 'r' || e.key === 'R') && missed.length) runCheck(missed, 'retry');
+    const note = result.capped === 'false-positive'
+      ? 'FALSE POSITIVE: FIELD AND GRADE CAPPED AT B'
+      : result.capped === 'fail' ? 'MISSION FAILED: GRADE CAPPED AT F. REDEPLOY TO PASS.' : '';
+    const gradePage: Page = {
+      label: `GRADE ${result.grade}, FIELD ${Math.round(result.field)}%, KNOWLEDGE ${correct}/${total}, TOTAL ${result.total}%. ${note} READINESS ${r.overall}%: ` +
+        r.byDomain.map((d) => `D${d.domain} ${d.demonstrated}/${d.total}`).join(', '),
+      draw: (gg) => {
+        bevel(gg, 20, 50, 64, 72, '#1a0a06');
+        bigScaled(gg, result.grade, 28, 54, gradeRamp, 4);
+        drawBigText(gg, `FIELD ${Math.round(result.field)}%`, 100, 54, RAMP.gold);
+        drawBigText(gg, `KNOWLEDGE ${correct}/${total}`, 100, 76, RAMP.gold);
+        drawBigText(gg, `TOTAL ${result.total}%`, 100, 98, result.capped ? RAMP.red : RAMP.green);
+        if (note) drawText(gg, note, 100, 116, C.red);
+        drawText(gg, `SY0-701 READINESS (EXAM-WEIGHTED)  ${r.overall}%`, DB_X, 132, C.gold);
+        r.byDomain.forEach((d, k) => {
+          const y = 145 + k * 14;
+          drawText(gg, `D${d.domain} ${DOMAIN_SHORT[d.domain] ?? d.title}`, DB_X, y, C.text);
+          drawText(gg, `${d.weight}%`, 142, y, C.dim);
+          gg.fillStyle = '#000';
+          gg.fillRect(170, y - 1, 170, 9);
+          gg.fillStyle = '#6a4a30';
+          gg.fillRect(170, y - 1, 170, 1);
+          gg.fillStyle = DOMAIN_COLOR[d.domain] ?? C.gold;
+          gg.fillRect(171, y, Math.round((168 * d.demonstrated) / d.total), 7);
+          drawText(gg, `${d.demonstrated}/${d.total}`, 348, y, C.white);
+        });
+      },
     };
+    const notes: PLine[][] = [];
+    if (teach) notes.push([...block('EXAM TIP', C.gold), ...block(teach.examTip, C.white)]);
+    if (retried) {
+      const fixed = retried.filter((it) => !review.includes(`${it.missionId}:${it.q.id}`)).length;
+      notes.push(block(`RETRY: ${fixed}/${retried.length} NOW CORRECT. THE GRADE KEEPS FIRST-TRY ANSWERS.`, C.text));
+    }
+    if (missed.length) notes.push(block(`${missed.length} MISSED ITEM(S) QUEUED FOR SPACED REVIEW. PRESS R TO RETRY NOW.`, C.orange));
+    notes.push([...block('PLAYABLE COVERAGE', C.gold), ...block(playableCoverageLine(), C.text)]);
+    show({
+      kicker: `${mission.title}  -  MISSION GRADE`,
+      title: 'MISSION GRADE',
+      ramp: RAMP.gold,
+      pages: [gradePage, ...paginate(notes).map((lines) => ({ lines }))],
+      nextLabel: 'CONTINUE',
+      canNext: () => true,
+      next: () => opts.onDone(correct),
+      extraButton: missed.length ? { label: `RETRY ${missed.length} [R]`, go: () => runCheck(missed, 'retry') } : undefined,
+      onKey: (e) => {
+        if ((e.key === 'r' || e.key === 'R') && missed.length) {
+          runCheck(missed, 'retry');
+          return true;
+        }
+        return false;
+      },
+    });
   };
 
   report();

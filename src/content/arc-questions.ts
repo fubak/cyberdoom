@@ -81,44 +81,6 @@ export const ARC_QUESTIONS: Record<string, Question[]> = {
       ['Guideline', 'Guidelines are recommendations, and "must" makes this mandatory.'],
     ]),
   ],
-  m06: [
-    q('q1', ['1.4'], 'You must store user passwords so that a thief who dumps the database cannot reverse them or look them up in precomputed tables. What is BEST?', 2, [
-      ['Encrypt them with AES, with the key on the same server', 'Encryption is reversible. Whoever steals the database and the key gets every password.'],
-      ['Hash them with unsalted SHA-256', 'Unsalted fast hashes fall to rainbow tables and GPU brute force, and identical passwords produce identical hashes.'],
-      ['Salt each password and hash it with a key-stretching algorithm (bcrypt, PBKDF2)', 'Salting defeats precomputed tables, and key stretching makes every guess expensive. Hashing is one-way, so nothing can be decrypted.'],
-      ['Base64-encode them', 'Base64 is encoding, not cryptography. Anyone can decode it instantly.'],
-    ]),
-    q('q2', ['1.4'], 'The private key for www.example.com has leaked. What must happen to the certificate?', 3, [
-      ['Nothing until it expires next year', 'Until then, anyone holding the key can impersonate the site with a certificate browsers still trust.'],
-      ['Renew it with the same key pair', 'The leaked key would still be valid, so the compromise carries over to the new certificate.'],
-      ['Replace it with a self-signed certificate', 'Browsers do not trust self-signed certificates, and the leaked certificate would still be valid.'],
-      ['Revoke it so it appears on the CRL / OCSP, then reissue it with a new key pair', 'Revocation tells clients to stop trusting the compromised certificate. A new key pair ends the attacker\u2019s ability to impersonate the site.'],
-    ]),
-    q('q3', ['1.4'], 'A browser and a server that have never communicated must agree on a fast bulk-encryption key over the open internet. How does TLS do it?', 0, [
-      ['Asymmetric key exchange (e.g. Diffie-Hellman) to agree a symmetric session key', 'Asymmetric crypto solves secure key exchange between strangers, and the symmetric session key then encrypts the bulk data quickly.'],
-      ['The server emails the symmetric key in advance', 'That moves the key-distribution problem to email, which is not secure.'],
-      ['Both sides hash the data instead of encrypting it', 'Hashing is one-way and provides integrity, not confidentiality. The other side could not read the data.'],
-      ['Steganography hides the key inside an image', 'Steganography is obscurity, not encryption. Anyone who finds the hidden key can use it.'],
-    ]),
-    q('q4', ['3.3'], 'A payment app must keep issuing refunds against stored cards, but the systems that hold those records must not contain real card numbers. What is BEST?', 1, [
-      ['Masking the numbers on screen', 'Masking hides digits when displayed, but the full number is still stored underneath.'],
-      ['Tokenization', 'A random token replaces the card number, and only the secure token vault can map it back. Downstream systems hold nothing of value.'],
-      ['Hashing the numbers', 'Hashing is one-way, so the original number could never be recovered to process a refund.'],
-      ['Moving the database to another country', 'That changes data sovereignty, not exposure. The real numbers would still be stored.'],
-    ]),
-    q('q5', ['4.6'], 'Admin sign-in currently requires a password plus a security question. Which change adds a genuinely different authentication factor?', 2, [
-      ['Require a longer password', 'A stronger password is still the same single factor: something you know.'],
-      ['Add a second security question', 'Security questions are also something you know, so this is still one factor type.'],
-      ['Add a FIDO2 hardware security key', 'A security key is something you have. Combined with the password, that is true MFA, and FIDO2 also resists phishing.'],
-      ['Add a 6-digit PIN', 'A PIN is also something you know.'],
-    ]),
-    q('q6', ['3.3'], 'A stolen laptop had full-disk encryption, and the thief never got the pre-boot password. Which data state did that encryption protect?', 2, [
-      ['Data in transit', 'In transit is data moving across a network, which TLS or a VPN protects.'],
-      ['Data in use', 'In use is data being processed in memory by a running system. A powered-off stolen laptop is not processing anything.'],
-      ['Data at rest', 'Data stored on the drive is at rest. Full-disk encryption keeps it unreadable without the key.'],
-      ['Data sovereignty', 'Sovereignty is about which jurisdiction\u2019s laws apply to data. It is not a data state.'],
-    ]),
-  ],
   m07: [
     q('q1', ['3.2'], 'Admins must manage servers in a high-security zone from the user network. Which design MOST reduces the attack surface?', 3, [
       ['Allow RDP into the zone from every workstation', 'Every workstation becomes a path into the zone, so one phished PC reaches the servers.'],
@@ -149,38 +111,6 @@ export const ARC_QUESTIONS: Record<string, Question[]> = {
       ['Misconfiguration and end-of-life hardware', 'Unchanged defaults are a misconfiguration. A device with no more firmware updates is end-of-life, so future flaws will never be fixed.'],
       ['VM escape and resource reuse', 'Those are virtualization vulnerabilities, and the switch is physical hardware.'],
       ['Cross-site scripting', 'XSS is a web-application flaw. This is a network device problem.'],
-    ]),
-  ],
-  m08: [
-    q('q1', ['2.3'], 'Entering  \' OR \'1\'=\'1  in a login form returns every user record. What is the vulnerability, and what fixes it?', 0, [
-      ['SQL injection; use parameterized queries and input validation', 'The input became part of the SQL statement. Parameterization keeps user data separate from query code.'],
-      ['Cross-site scripting; encode output', 'XSS runs script in a victim\u2019s browser. Here the database query itself was altered.'],
-      ['Buffer overflow; enable memory protections', 'Nothing overran a memory buffer. The query logic was rewritten.'],
-      ['Directory traversal; restrict file paths', 'Traversal uses ../ to reach files outside the web root, but this attack changed a database query.'],
-    ]),
-    q('q2', ['2.3'], 'A setuid program checks that the user may write /tmp/report, then opens it. Between the check and the open, the attacker swaps the file for a link to /etc/passwd. What is this?', 3, [
-      ['Memory injection', 'Memory injection puts code into a running process\u2019s memory. Here a file was swapped.'],
-      ['Malicious update', 'No update channel is involved.'],
-      ['Buffer overflow', 'No data overran a buffer. The flaw is the gap between check and use.'],
-      ['Race condition (time-of-check / time-of-use)', 'The resource changed between the check (TOC) and the use (TOU), which is the textbook race condition.'],
-    ]),
-    q('q3', ['4.3'], 'Two findings: CVSS 9.8 on an isolated lab server with no sensitive data, and CVSS 7.5 on the internet-facing payment portal. What do you remediate FIRST?', 1, [
-      ['The 9.8, because the highest base score always goes first', 'The CVSS base score ignores your environment. Exposure and impact can outweigh a higher base score.'],
-      ['The 7.5 payment portal, because exposure and impact make its real risk higher', 'Prioritization adds environmental factors to the base score: who can reach it and what is at stake.'],
-      ['Neither until both can be patched in one window', 'Delaying an exposed payment system to batch changes increases risk.'],
-      ['Whichever is cheaper to fix', 'Cost matters in planning, but risk drives priority.'],
-    ]),
-    q('q4', ['4.1'], 'Twenty new web servers must start from a known-good, hardened configuration that is checked for drift over time. What should you implement?', 2, [
-      ['Let each admin harden servers to personal preference', 'That produces inconsistent configurations, with no reference to measure drift against.'],
-      ['Install every package so nothing is missing later', 'Unneeded software is extra attack surface. Hardening removes it.'],
-      ['A secure baseline (e.g. from a CIS benchmark): establish, deploy, maintain', 'A baseline defines the hardened state, deploys it consistently, and is monitored and updated as threats change.'],
-      ['Harden servers only after an incident', 'Reactive hardening means the first attacker gets the weak configuration.'],
-    ]),
-    q('q5', ['4.1'], 'Production servers must run only approved builds that have not been modified since release. Which technique verifies this at install time?', 0, [
-      ['Code signing', 'A valid signature proves who published the build and that it has not been altered since it was signed.'],
-      ['Static code analysis', 'Static analysis finds flaws in the source before release. It cannot prove the deployed binary is unmodified.'],
-      ['Sandboxing', 'A sandbox isolates what code can do when it runs. It does not verify where the code came from.'],
-      ['Secure cookies', 'Secure cookies protect session tokens in the browser and have nothing to do with build integrity.'],
     ]),
   ],
   m10: [

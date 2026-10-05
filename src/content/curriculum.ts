@@ -45,7 +45,7 @@ export const ARC: ArcMission[] = [
     id: 'm01', title: 'PATCH TUESDAY', difficulty: 1, built: true,
     briefing: 'Three workstations are misbehaving and a USB stick turned up in the corridor.',
     objectives: [
-      w('2.4', 'Inspect every workstation, including noisy PRN-02, before acting; scanning or flagging a clean host is a scored false positive. Clean infected hosts to win.'),
+      w('2.4', 'Inspect every workstation, including noisy PRN-02, before acting; a host only counts as cleaned once inspected. Scanning or flagging a clean host is a scored false positive.'),
       w('2.2', 'A found removable device lies on the route; plugging it into the unlocked spare PC triggers the removable-device vector and fails the mission.'),
       w('2.5', 'Deploy endpoint protection (scanner charges) to every infected host; charges are finite, so missed shots matter.'),
       qz('3.4', 'Debrief: recover WS-07 from offline backups vs replication vs paying the ransom.'),
@@ -93,12 +93,12 @@ export const ARC: ArcMission[] = [
     ],
   },
   {
-    id: 'm06', title: 'KEYMASTER', difficulty: 7, built: false,
+    id: 'm06', title: 'KEYMASTER', difficulty: 7, built: true,
     briefing: 'The crypto vaults are failing their audit: plaintext passwords, an expired certificate, and a leaked private key.',
     objectives: [
-      w('1.4', 'Open each vault with the correct crypto: salted + stretched hash for passwords, symmetric for bulk data, asymmetric key exchange for sessions, revoke (CRL/OCSP) the leaked cert.'),
-      w('3.3', 'Data states: apply encryption at rest / in transit and tokenize card numbers before the data leaves the vault.'),
-      w('4.6', 'Admin checkpoints accept only two different factor types (e.g. password + security key); two "something you know" factors fail.'),
+      w('1.4', 'Inspect all three certificates and install only the trusted, unexpired chain. Confirm the leaked key by fingerprint; revoke it before generating a new HSM key pair. Wrong choices score; passwords use salted bcrypt, not AES or Base64.'),
+      w('3.3', 'Tokenize card numbers before export and encrypt backups at rest; both controls and the audit are required before the exit unlocks.'),
+      w('4.6', 'Enter the vault with its authorized role and badge-plus-fingerprint MFA; password plus security question is still one factor type.'),
     ],
   },
   {
@@ -112,12 +112,12 @@ export const ARC: ArcMission[] = [
     ],
   },
   {
-    id: 'm08', title: 'ZERO DAY', difficulty: 8, built: false,
+    id: 'm08', title: 'ZERO DAY', difficulty: 8, built: true,
     briefing: 'Exploit chatter on a threat feed names your stack. You have until the next shift to close the holes.',
     objectives: [
-      w('2.3', 'Identify each server\u2019s vulnerability class (SQLi, XSS, buffer overflow, race condition) from inspect evidence before its exploit spawns.'),
-      w('4.3', 'Scan, mark false positives, then remediate by CVSS + exposure; rescan to validate or the server stays red.'),
-      w('4.1', 'Harden each server to the secure baseline: disable unneeded services, apply the benchmark, code-signed deploys only.'),
+      w('2.3', 'Classify each server\u2019s flaw from raw WAF log, crash dump, page source and changelog evidence; remediation is refused until every flagged server is analyzed.'),
+      w('4.3', 'Remediate by exposure and active exploitation rather than raw CVSS; out-of-order changes are refused and scored, patching the false positive is scored, and a rescan gates the exit.'),
+      w('4.1', 'Disable unneeded services and enforce code-signed deploys; deploying the unsigned forum hotfix fails the mission.'),
     ],
   },
   {
@@ -241,12 +241,35 @@ export interface MissionTeaching {
   examTip: string;
 }
 
+export function letterGrade(pct: number): string {
+  return pct >= 90 ? 'A' : pct >= 80 ? 'B' : pct >= 70 ? 'C' : pct >= 60 ? 'D' : 'F';
+}
+
+export function gradeMission(o: {
+  fieldPct: number;
+  quizPct: number;
+  won: boolean;
+  falsePositives: number;
+}): { field: number; total: number; grade: string; capped: 'fail' | 'false-positive' | null } {
+  const field = o.falsePositives > 0 ? Math.min(o.fieldPct, 89) : o.fieldPct;
+  let total = Math.round(field * 0.5 + o.quizPct * 0.5);
+  let capped: 'fail' | 'false-positive' | null = null;
+  if (!o.won) {
+    total = Math.min(total, 59);
+    capped = 'fail';
+  } else if (o.falsePositives > 0) {
+    total = Math.min(total, 89);
+    capped = 'false-positive';
+  }
+  return { field, total, grade: letterGrade(total), capped };
+}
+
 // ---------- learner mastery (persisted locally) ----------
 
 const STORE_KEY = 'cyberdoom.mastery.v1';
 
-/** objective id -> { right, wrong } knowledge-check answers. */
-export type Mastery = Record<string, { right: number; wrong: number }>;
+/** objective id -> quiz answers and field demonstrations. */
+export type Mastery = Record<string, { right: number; wrong: number; field?: number }>;
 
 export function loadMastery(): Mastery {
   try {
@@ -271,10 +294,24 @@ export function recordAnswer(m: Mastery, objectiveIds: string[], correct: boolea
   return m;
 }
 
-/** An objective counts as demonstrated once answered right more often than wrong. */
+export function recordField(m: Mastery, objectiveIds: string[]): Mastery {
+  for (const id of objectiveIds) {
+    if (!objectiveById(id)) continue;
+    const e = (m[id] ??= { right: 0, wrong: 0 });
+    e.field = (e.field ?? 0) + 1;
+  }
+  try {
+    globalThis.localStorage?.setItem(STORE_KEY, JSON.stringify(m));
+  } catch {
+    /* storage unavailable — mastery is session-only */
+  }
+  return m;
+}
+
+/** An objective counts as demonstrated once answered right or demonstrated in the field. */
 export function isDemonstrated(m: Mastery, id: string): boolean {
   const e = m[id];
-  return !!e && e.right > 0 && e.right >= e.wrong;
+  return !!e && ((e.field ?? 0) > 0 || (e.right > 0 && e.right >= e.wrong));
 }
 
 /**

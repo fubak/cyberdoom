@@ -118,18 +118,18 @@ export const m01: Mission = {
     },
     {
       id: 'ws1', kind: 'workstation', x: 12.5, y: 10.5, sprite: 'workstation-infected',
-      infected: true, tags: ['infected'],
+      infected: true, tags: ['infected'], cleanObjectives: ['2.5', '4.8'],
       inspect: {
         label: 'WS-07 (finance)',
         detail: 'Resource inaccessibility: every file in Documents now ends in .lkd and will not open. New file README_RESTORE.txt: "Pay 0.5 BTC for your key." Disk activity spiked at 02:00.',
         category: 'malware',
-        objectives: ['2.4', '3.4'],
+        objectives: ['2.4'],
         flags: ['resource inaccessibility', 'ransom note', 'mass file renames'],
       },
     },
     {
       id: 'ws2', kind: 'workstation', x: 27.5, y: 14.5, sprite: 'workstation-infected',
-      infected: true, tags: ['infected'],
+      infected: true, tags: ['infected'], cleanObjectives: ['2.5', '4.8'],
       inspect: {
         label: 'WS-04 (accounts payable)',
         detail: 'Pop-ups: "VIRUS DETECTED, call 1-800 support". Browser homepage changed overnight. New toolbar; proxy log shows it contacting tr4ck-cdn.biz every 60 s, even when idle.',
@@ -140,7 +140,7 @@ export const m01: Mission = {
     },
     {
       id: 'ws3', kind: 'workstation', x: 37.5, y: 13.5, sprite: 'workstation-infected',
-      infected: true, tags: ['infected'],
+      infected: true, tags: ['infected'], cleanObjectives: ['2.5', '4.8'],
       inspect: {
         label: 'WS-12 (reception)',
         detail: 'Resource consumption: CPU pinned at 100%. Firewall log: SMB (445) connections to 63 internal hosts it has never contacted before. User: "I didn\'t open or run anything."',
@@ -210,7 +210,7 @@ export const m01: Mission = {
   ],
   missionObjectives: [
     { id: 'turn-in', text: 'Handle the found USB stick per policy', kind: 'interact', tag: 'security-desk' },
-    { id: 'clean-all', text: 'Clean all 3 infected workstations', kind: 'clean', tag: 'infected', count: 3 },
+    { id: 'clean-all', text: 'Clean all 3 infected workstations', kind: 'clean', tag: 'infected', count: 3, requiresInspect: true },
     { id: 'no-plug', text: 'Never plug in unknown media', kind: 'avoid', tag: 'plug-usb' },
     { id: 'exit', text: 'Reach the exit', kind: 'reach-exit' },
   ],
@@ -294,12 +294,15 @@ export const m01Walkthrough: WalkStep[] = [
   { use: [9, 9] },
   { goto: [4, 9] },
   { interact: 'sec-desk' },
+  { inspect: 'ws1' },
   { clean: 'ws1' },
   { goto: [29, 10] },
   { badge: [30, 10] },
   { goto: [31, 10] },
   { goto: [36, 13] },
+  { inspect: 'ws3' },
   { clean: 'ws3' },
+  { inspect: 'ws2' },
   { clean: 'ws2' },
   { wait: 0.2 },
   { goto: [19, 1] },

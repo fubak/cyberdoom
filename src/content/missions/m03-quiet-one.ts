@@ -88,7 +88,7 @@ export const m03: Mission = {
       id: 'dana', kind: 'npc', x: 8.5, y: 12.5, sprite: 'npc-f', ai: 'stand', reportable: true, culprit: true,
       inspect: {
         label: 'R. Kell, R&D lead',
-        detail: 'BADGE: Sun 03:12 entry, R&D wing (usually Mon-Fri 09-17). FILE SRV: 1,284 files / 40 GB read from \\\\designs\\confidential; his project share is \\\\designs\\atlas. ENDPOINT: USB mass-storage mounted 03:40, 40 GB written. HR: promotion denied last week.',
+        detail: 'BADGE: Sun 03:12 entry, R&D wing (usually Mon-Fri 09-17). FILE SRV: 1,284 files / 40 GB read from \\\\designs\\confidential; her project share is \\\\designs\\atlas. ENDPOINT: USB mass-storage mounted 03:40, 40 GB written. HR: promotion denied last week.',
         category: 'person',
         objectives: ['2.1', '2.4', '4.9'],
         flags: ['after-hours badge-in', 'bulk access outside role', 'USB mass-storage write'],
@@ -223,7 +223,7 @@ export const m03: Mission = {
   debriefQuestions: [
     {
       id: 'q1',
-      prompt: 'An R&D lead, denied promotion last week, uses his own valid access to copy 40 GB of confidential designs to a personal USB drive. Which threat actor and motivation BEST fit?',
+      prompt: 'An R&D lead, denied promotion last week, uses her own valid access to copy 40 GB of confidential designs to a personal USB drive. Which threat actor and motivation BEST fit?',
       objectives: ['2.1'],
       options: [
         { id: 'a', text: 'Nation-state; espionage', correct: false, explanation: 'Nation-states sometimes recruit insiders, but the person acting here is an employee using authorized access. Nothing points to a foreign government.' },
@@ -250,7 +250,7 @@ export const m03: Mission = {
       options: [
         { id: 'a', text: 'Firewall logs', correct: false, explanation: 'Copying to USB never touches the network, so the firewall saw nothing.' },
         { id: 'b', text: 'Endpoint logs (OS/EDR device-connection and file-write events)', correct: true, explanation: 'Only the host records that a mass-storage device was mounted and which files were written to it.' },
-        { id: 'c', text: 'Badge access logs', correct: false, explanation: 'They place him in the building at 03:12, which is useful for correlation, but they cannot show what happened on the laptop.' },
+        { id: 'c', text: 'Badge access logs', correct: false, explanation: 'They place her in the building at 03:12, which is useful for correlation, but they cannot show what happened on the laptop.' },
         { id: 'd', text: 'Vulnerability scan results', correct: false, explanation: 'Scans list weaknesses in systems, not what a user did with them.' },
       ],
     },
@@ -271,7 +271,7 @@ export const m03: Mission = {
       objectives: ['4.8'],
       options: [
         { id: 'a', text: 'Report through the incident response process and preserve the evidence with chain of custody', correct: true, explanation: 'Escalating through IR keeps the investigation coordinated with HR and legal. Chain of custody keeps the logs and device usable as evidence.' },
-        { id: 'b', text: 'Confront the employee at their desk', correct: false, explanation: 'Confronting him tips him off, so evidence may be destroyed, and it puts you at personal and legal risk. Containment is a coordinated IR step.' },
+        { id: 'b', text: 'Confront the employee at their desk', correct: false, explanation: 'Confronting her tips her off, so evidence may be destroyed, and it puts you at personal and legal risk. Containment is a coordinated IR step.' },
         { id: 'c', text: 'Remotely wipe their laptop to stop further leaks', correct: false, explanation: 'Wiping destroys the evidence you need. Containment should isolate the device while preserving it.' },
         { id: 'd', text: 'Quietly keep watching for a few weeks to collect more', correct: false, explanation: 'Confidential data is already leaving. Waiting without reporting lets the damage grow and leaves the response to one person.' },
       ],
@@ -316,7 +316,7 @@ export const m03Teach: MissionTeaching = {
     'report': {
       objective: '2.1',
       done: 'You reported the right person. Badge, file-server and endpoint logs each showed one piece, and correlated they told the whole story (4.9). That is how insider cases are built.',
-      missed: 'The insider is still on the floor with confidential designs. The answer was in the logs: an after-hours badge-in, bulk access outside his role and a USB write, all from one person.',
+      missed: 'The insider is still on the floor with confidential designs. The answer was in the logs: an after-hours badge-in, bulk access outside her role and a USB write, all from one person.',
     },
     'no-false': {
       objective: '2.4',

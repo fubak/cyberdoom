@@ -95,13 +95,16 @@ class Game {
       if (this.player && this.runtime) alertNear(this.runtime.entities, this.player.x, this.player.y, 8);
     });
     this.bus.on('cleaned', ({ entityId }) => {
-      const e = this.runtime?.entities.find((entity) => entity.def.id === entityId);
-      if (e?.def.kind === 'enemy') {
-        this.audio.sfx('enemy-death', { x: e.x, y: e.y });
-        this.particles.burst(e.x, e.y, 0.4, 'kill');
-      } else {
-        this.audio.sfx('clean');
-      }
+      queueMicrotask(() => {
+        const e = this.runtime?.entities.find((entity) => entity.def.id === entityId);
+        if (!e || e.alive) return;
+        if (e.def.kind === 'enemy') {
+          this.audio.sfx('enemy-death', { x: e.x, y: e.y });
+          this.particles.burst(e.x, e.y, 0.4, 'kill');
+        } else {
+          this.audio.sfx('clean');
+        }
+      });
     });
     this.bus.on('entity-hurt', ({ entityId, fromX, fromY, applied }) => {
       const e = this.runtime?.entities.find((entity) => entity.def.id === entityId);
