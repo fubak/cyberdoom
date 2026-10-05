@@ -86,6 +86,11 @@ export const mouseTool: ToolDef = {
     const e = ctx.aimEntity(8, 0.26);
     ctx.bus.emit('tool-used', { toolId: 'mouse' });
     if (!e) return;
+    if (!e.state.inspected && e.state.captured && e.def.inspect?.category !== 'person') {
+      // the tap already captured this host's traffic: the evidence is in hand, so go straight to the call
+      e.state.inspected = true;
+      ctx.bus.emit('inspect', { entityId: e.def.id });
+    }
     if (!e.state.inspected) {
       e.state.inspected = true;
       ctx.bus.emit('tool-hit', { toolId: 'mouse', entityId: e.def.id, good: true });

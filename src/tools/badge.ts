@@ -9,6 +9,13 @@ const WINDUP = 0.08;
 
 /** Doors this badge has already been refused at (per mission run). */
 const refused = new WeakMap<object, Set<string>>();
+/** MFA doors where the badge factor has been presented and the token is awaited. */
+const badged = new WeakMap<object, Set<string>>();
+export function mfaPending(key: object): Set<string> {
+  let s = badged.get(key);
+  if (!s) badged.set(key, (s = new Set()));
+  return s;
+}
 
 /**
  * Slot 4 — BADGE / CREDENTIAL (physical access control + least privilege).
@@ -107,6 +114,15 @@ export const badgeTool: ToolDef = {
         return;
       }
       set.add(door.doorId);
+    }
+    if (allowed && door.mfa) {
+      mfaPending(ctx.entities).add(door.doorId);
+      ctx.bus.emit('badge-confirm', { allowed: true });
+      ctx.bus.emit('message', {
+        text: 'BADGE OK: one factor (something you have). This door enforces MFA: touch your TOKEN (7) to the reader.',
+        kind: 'warn',
+      });
+      return;
     }
     ctx.bus.emit('badge-door', { doorId: door.doorId, accessRole: door.accessRole, allowed });
   },

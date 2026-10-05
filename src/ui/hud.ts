@@ -19,12 +19,16 @@ const GREEN = ['#c8ffb0', '#6aff5a', '#2ad83a', '#14a024', '#0a6014'];
 const MSG_COL: Record<string, string> = { bad: '#ff5a3a', good: '#5aff6a', warn: '#ffc030', info: '#d8e0f0' };
 
 type Panel = [x: number, w: number];
-const P_INT: Panel = [0, 58];
-const P_AMMO: Panel = [58, 50];
-const P_TOOLS: Panel = [108, 52];
-const P_FACE: Panel = [160, 34];
-const P_CRED: Panel = [194, 72];
-const P_OBJ: Panel = [266, 54];
+const P_INT: Panel = [0, 54];
+const P_AMMO: Panel = [54, 42];
+const P_TOOLS: Panel = [96, 54];
+const P_FACE: Panel = [150, 34];
+const P_CRED: Panel = [184, 42];
+const P_RES: Panel = [226, 54];
+const P_OBJ: Panel = [280, 40];
+
+type ResRow = { id: string; label: string; cur: number; max: number; owned: boolean; active: boolean };
+type GotFx = { k: number; slot: number; blink: boolean } | null;
 
 export class Hud {
   readonly canvas: HTMLCanvasElement;
@@ -109,6 +113,10 @@ export class Hud {
     owned?: string[];
     /** ARSENAL: status-face painter (portrait + damage/direction states). */
     face?: (g: CanvasRenderingContext2D, x: number, y: number) => void;
+    /** ARSENAL: every resource as current/max (Doom's AMMO table). */
+    resources?: ResRow[];
+    /** ARSENAL: new-tool pickup moment (gold flash, ARMS slot blink). */
+    got?: GotFx;
   }): void {
     const g = this.g;
     g.clearRect(0, 0, VIEW_W, VIEW_H);
@@ -130,6 +138,10 @@ export class Hud {
       if (opts.anim) opts.tool.drawFx?.(g, VIEW_W, VIEW3D_H, opts.anim);
     }
     g.restore();
+    if (opts.got && opts.got.k > 0) {
+      g.fillStyle = `rgba(255,196,40,${(0.38 * opts.got.k).toFixed(3)})`;
+      g.fillRect(0, 0, VIEW_W, VIEW3D_H);
+    }
 
     const objKey = opts.objectives.map((o) => (o.done ? 1 : o.failed ? 2 : 0)).join('');
     if (this.lastObjKey && objKey !== this.lastObjKey) this.objShowT = 3.5;
@@ -193,6 +205,8 @@ export class Hud {
     objectives: { done: boolean; failed: boolean }[];
     owned?: string[];
     face?: (g: CanvasRenderingContext2D, x: number, y: number) => void;
+    resources?: ResRow[];
+    got?: GotFx;
   }): void {
     const g = this.g;
     const by = VIEW_H - STATUS_H;
@@ -219,34 +233,36 @@ export class Hud {
       label(g, ready ? 'READY' : 'BUSY', P_AMMO, by + 21, ready ? '#5aff6a' : '#ffc030');
     } else {
       bigCentered(g, `${o.ammo}`, P_AMMO, by + 6, o.ammo === 0 ? RED : AMBER);
-      label(g, o.ammoName.toUpperCase().slice(0, 11), P_AMMO, by + 21);
+      const rr = o.resources?.find((x) => x.active);
+      label(g, rr ? `${rr.label}/${rr.max}` : o.ammoName.toUpperCase().slice(0, 9), P_AMMO, by + 21);
     }
 
-    // TOOLS grid (Doom ARMS)
-    // 3x2 like Doom's ARMS: slots 1-6, lit when owned, boxed when held
+    // TOOLS grid (Doom ARMS): 4x2, slots 1-8, lit when owned, boxed when held,
+    // blinking gold right after a tool is found
     const tools = sortedTools();
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 8; i++) {
       const slot = i + 1;
       const t = tools.find((tt) => tt.slot === slot);
       const owned = !!t && (o.owned ? o.owned.includes(t.id) : true);
-      const x = P_TOOLS[0] + 5 + (i % 3) * 14;
-      const y = by + 4 + Math.floor(i / 3) * 8;
+      const x = P_TOOLS[0] + 4 + (i % 4) * 12;
+      const y = by + 6 + Math.floor(i / 4) * 7;
       const active = !!t && t.slot === o.tool.slot;
-      g.fillStyle = active ? '#3a3010' : '#0c0e12';
-      g.fillRect(x, y, 13, 7);
-      g.fillStyle = active ? '#ffd040' : '#2a2e38';
-      g.fillRect(x, y, 13, 1);
-      drawText(g, `${slot}`, x + 5, y + 1, active ? '#fff0a0' : owned ? '#ffa818' : '#3a3e48', 'small', '#000');
+      const fresh = !!o.got && o.got.slot === slot && o.got.blink;
+      g.fillStyle = fresh ? '#ffd040' : active ? '#3a3010' : '#0c0e12';
+      g.fillRect(x, y, 11, 7);
+      g.fillStyle = active || fresh ? '#ffd040' : '#2a2e38';
+      g.fillRect(x, y, 11, 1);
+      drawText(g, `${slot}`, x + 3, y + 1, fresh ? '#000' : active ? '#fff0a0' : owned ? '#ffa818' : '#3a3e48', 'small', fresh ? null : '#000');
     }
-    label(g, o.tool.name.toUpperCase().slice(0, 12), P_TOOLS, by + 20, '#ffd040');
+    label(g, o.tool.name.toUpperCase().slice(0, 13), P_TOOLS, by + 20, '#ffd040');
 
     // FACE
     if (o.face) o.face(g, P_FACE[0] + 4, by + 2);
     else this.drawFace(P_FACE[0] + 4, by + 2, o.gender, o.integrity);
 
-    // CRED keycard
+    // CRED keycard + current role
     const rc = roleColor(o.credentials);
-    const cx = P_CRED[0] + 6;
+    const cx = P_CRED[0] + Math.round((P_CRED[1] - 16) / 2);
     const cy = by + 6;
     g.fillStyle = '#000';
     g.fillRect(cx + 1, cy + 1, 16, 12);
@@ -261,8 +277,17 @@ export class Hud {
     g.fillStyle = '#3a404c';
     g.fillRect(cx + 9, cy + 7, 5, 1);
     g.fillRect(cx + 9, cy + 9, 4, 1);
-    drawText(g, o.credentials.toUpperCase().slice(0, 7), cx + 20, cy + 3, rc.light, 'small', '#000');
-    label(g, 'CREDENTIAL', P_CRED, by + 21);
+    label(g, o.credentials.toUpperCase().slice(0, 9), P_CRED, by + 21, rc.light);
+
+    // RESOURCES: every ammo type as current/max, like Doom's BULL/SHEL/RCKT/CELL
+    (o.resources ?? []).slice(0, 4).forEach((r, i) => {
+      const y = by + 5 + Math.round(i * 5.4);
+      const col = !r.owned ? '#3a3e48' : r.cur === 0 ? '#ff4a2a' : r.active ? '#fff0a0' : '#ffa818';
+      const lab = r.active ? '#ffd040' : r.owned ? '#8a90a0' : '#3a3e48';
+      drawText(g, r.label, P_RES[0] + 3, y, lab, 'tiny', '#000');
+      const v = `${r.cur}/${r.max}`;
+      drawText(g, v, P_RES[0] + P_RES[1] - 3 - measureText(v, 'tiny'), y, col, 'tiny', '#000');
+    });
 
     // OBJECTIVES n/m
     const done = o.objectives.filter((x) => x.done).length;
@@ -430,7 +455,7 @@ function paintBarBackground(): HTMLCanvasElement {
   g.fillRect(0, STATUS_H - 1, VIEW_W, 1);
   g.fillStyle = '#5a554a';
   g.fillRect(0, STATUS_H - 2, VIEW_W, 1);
-  for (const [x, w] of [P_INT, P_AMMO, P_TOOLS, P_FACE, P_CRED, P_OBJ]) {
+  for (const [x, w] of [P_INT, P_AMMO, P_TOOLS, P_FACE, P_CRED, P_RES, P_OBJ]) {
     // raised ridge between panels
     g.fillStyle = '#d8d0c0';
     g.fillRect(x, 2, 1, STATUS_H - 4);

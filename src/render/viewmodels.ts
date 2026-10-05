@@ -94,47 +94,43 @@ function hand(px: Px, x: number, y: number, gender: Gender, mirror = false): voi
 }
 
 function keyboardArt(gender: Gender, fire: boolean): Art {
-  return paint(176, 70, 88, (px) => {
-    // keyboard in perspective: body trapezoid, rows narrower towards the top
-    for (let r = 0; r < 34; r++) {
-      const inset = Math.floor((34 - r) * 0.45);
-      px(r < 2 ? '#8a92a8' : '#3a404c', 8 + inset, 4 + r, 160 - inset * 2, 1);
+  // compact board (~25% of view width with hands), like Doom's pistol-sized footprint
+  return paint(80, 50, 40, (px) => {
+    for (let r = 0; r < 22; r++) {
+      const inset = Math.floor((22 - r) * 0.3);
+      px(r < 2 ? '#8a92a8' : '#3a404c', 10 + inset, 2 + r, 60 - inset * 2, 1);
     }
-    px('#1a1c22', 8, 38, 160, 4);
-    const rows = 5;
+    px('#1a1c22', 10, 24, 60, 3);
+    const rows = 4;
     for (let row = 0; row < rows; row++) {
-      const y = 7 + row * 6;
-      const inset = Math.floor((rows - row) * 2.6) + 4;
-      const x0 = 8 + inset;
-      const x1 = 168 - inset;
-      const n = 14;
+      const y = 5 + row * 5;
+      const x0 = 10 + (rows - row) * 2 + 2;
+      const x1 = 70 - (rows - row) * 2 - 2;
+      const n = 10;
       const kw = (x1 - x0) / n;
       for (let k = 0; k < n; k++) {
         let cap = '#c8ccd8';
         let top = '#eef0f6';
-        if (row === 4 && k > 3 && k < 10) {
-          if (k !== 4) continue;
-          // space bar
-          const sx = Math.round(x0 + k * kw);
-          px('#9aa0b0', sx, y, Math.round(kw * 6) - 1, 5);
-          px('#dde0e8', sx, y, Math.round(kw * 6) - 1, 1);
+        const kx = Math.round(x0 + k * kw);
+        if (row === 3 && k > 2 && k < 7) {
+          if (k !== 3) continue;
+          px('#9aa0b0', kx, y, Math.round(kw * 4) - 1, 3);
+          px('#dde0e8', kx, y, Math.round(kw * 4) - 1, 1);
           continue;
         }
-        if (row === 2 && k === 13) { cap = '#2ad83a'; top = '#8aff9a'; }
+        if (row === 1 && k === 9) { cap = '#2ad83a'; top = '#8aff9a'; }
         if (row === 0 && k === 0) { cap = '#e01e10'; top = '#ff7a5a'; }
-        const pressed = fire && ((row === 2 && k === 13) || (row === 1 && (k === 5 || k === 9)));
-        const kx = Math.round(x0 + k * kw);
+        const pressed = fire && ((row === 1 && k === 9) || (row === 1 && (k === 3 || k === 6)));
         const ky = y + (pressed ? 1 : 0);
-        px('#5a6070', kx, ky + 4, Math.round(kw) - 1, 1);
-        px(cap, kx, ky, Math.round(kw) - 1, 4);
+        px('#5a6070', kx, ky + 3, Math.round(kw) - 1, 1);
+        px(cap, kx, ky, Math.round(kw) - 1, 3);
         px(top, kx, ky, Math.round(kw) - 1, 1);
       }
     }
-    // status LEDs (Enter = "report")
-    px(fire ? '#8aff9a' : '#2ad83a', 150, 5, 3, 1);
-    px('#ffd040', 144, 5, 3, 1);
-    hand(px, 2, 30, gender, false);
-    hand(px, 152, 30, gender, true);
+    px(fire ? '#8aff9a' : '#2ad83a', 60, 3, 2, 1);
+    px('#ffd040', 56, 3, 2, 1);
+    hand(px, 3, 12, gender, false);
+    hand(px, 55, 12, gender, true);
   });
 }
 
@@ -288,7 +284,7 @@ export function drawToolViewmodel(
     dy = Math.round(s[1] * Math.abs(k));
   } else dy = Math.round(cooldownFrac * (tool.id === 'usb' ? 10 : tool.id === 'badge' ? -10 : 6));
   const drop = Math.round((anim?.lower ?? 0) * (a.c.height + 10));
-  const side = tool.id === 'mouse' ? 56 : tool.id === 'badge' ? 40 : tool.id === 'usb' ? 20 : 0;
+  const side = SIDE[tool.id] ?? 0;
   const S = VIEWMODEL_SCALE;
   const cw = Math.round(a.c.width * S);
   const ch = Math.round(a.c.height * S);
@@ -299,8 +295,11 @@ export function drawToolViewmodel(
 }
 
 /** Per-tool [dx, dy] at full windup and at the impact frame. */
+/** Horizontal nudge so each tool's visible mass sits bottom-centre. */
+const SIDE: Record<string, number> = { mouse: 0, badge: 0, usb: 0 };
+
 const POSE: Record<string, { wind: [number, number]; strike: [number, number] }> = {
-  keyboard: { wind: [0, 10], strike: [0, -22] }, // lift and slam forward
+  keyboard: { wind: [0, 8], strike: [0, -14] }, // lift and slam forward
   mouse: { wind: [0, 0], strike: [0, 3] }, // click press
   usb: { wind: [0, -3], strike: [2, 12] }, // recoil kick
   badge: { wind: [6, 8], strike: [-18, -20] }, // thrust at the reader

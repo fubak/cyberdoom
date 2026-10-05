@@ -29,6 +29,7 @@ export const m03: Mission = {
     'Accuse the wrong person and an innocent colleague\'s career burns. ' +
     'Malware is also loose on the floor.',
   authorizedRoles: ['analyst'],
+  loadout: ['keyboard', 'mouse', 'usb', 'badge', 'mfa', 'tap'],
   map: {
     grid: [
       '############################SSSSSSSSSSSS',
@@ -70,7 +71,7 @@ export const m03: Mission = {
       'E': { kind: 'exit', tex: 'exit' },
       'd': { kind: 'door', tex: 'door', doorId: 'secoffice' },
       'g': { kind: 'door', tex: 'door', doorId: 'legal' },
-      'V': { kind: 'door', tex: 'door', doorId: 'records', accessRole: 'investigator' },
+      'V': { kind: 'door', tex: 'door', doorId: 'records', accessRole: 'investigator', mfa: true },
       'X': {
         kind: 'door', tex: 'door', doorId: 'exit-door', locked: true,
         lockText: 'Building is in lockdown until the insider case is reported',
@@ -167,6 +168,36 @@ export const m03: Mission = {
       inspect: { label: 'Scanner charges', detail: 'Antimalware definitions.', category: 'item' } },
     { id: 'med-mail', kind: 'item', x: 9.5, y: 5.5, sprite: 'medkit', grants: { resource: 'integrity', amount: 25 },
       inspect: { label: 'Integrity kit', detail: 'Restores 25 integrity.', category: 'item' } },
+    {
+      id: 'find-edr', kind: 'item', x: 34.5, y: 24.5, sprite: 'tool-edr',
+      tags: ['arsenal-pickup'], grants: { resource: 'tool:edr', amount: 1 },
+      inspect: { label: 'EDR console (found)', detail: 'Endpoint detection and response console with containment.', category: 'item', objectives: ['4.5'] },
+    },
+    {
+      id: 'cell-floor', kind: 'item', x: 10.5, y: 9.5, sprite: 'edr-cell',
+      tags: ['arsenal-pickup'], grants: { resource: 'edr-cell', amount: 1 },
+      inspect: { label: 'EDR cell', detail: 'Licence/compute for one EDR containment pulse.', category: 'item', objectives: ['4.5'] },
+    },
+    {
+      id: 'cell-records', kind: 'item', x: 33.5, y: 14.5, sprite: 'edr-cell',
+      tags: ['arsenal-pickup'], grants: { resource: 'edr-cell', amount: 1 },
+      inspect: { label: 'EDR cell', detail: 'Licence/compute for one EDR containment pulse.', category: 'item', objectives: ['4.5'] },
+    },
+    {
+      id: 'cell-legal', kind: 'item', x: 31.5, y: 26.5, sprite: 'edr-cell',
+      tags: ['arsenal-pickup'], grants: { resource: 'edr-cell', amount: 1 },
+      inspect: { label: 'EDR cell', detail: 'Licence/compute for one EDR containment pulse.', category: 'item', objectives: ['4.5'] },
+    },
+    {
+      id: 'pcap-floor', kind: 'item', x: 21.5, y: 17.5, sprite: 'pcap',
+      tags: ['arsenal-pickup'], grants: { resource: 'pcap', amount: 3 },
+      inspect: { label: 'Capture buffer', detail: 'Blank capture storage for the network tap.', category: 'item', objectives: ['3.2'] },
+    },
+    {
+      id: 'pcap-west', kind: 'item', x: 5.5, y: 14.5, sprite: 'pcap',
+      tags: ['arsenal-pickup'], grants: { resource: 'pcap', amount: 3 },
+      inspect: { label: 'Capture buffer', detail: 'Blank capture storage for the network tap.', category: 'item', objectives: ['3.2'] },
+    },
   ],
   missionObjectives: [
     { id: 'badge', text: 'Pull the after-hours badge log (security office)', kind: 'interact', tag: 'badge-log' },

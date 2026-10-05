@@ -526,6 +526,99 @@ export function buildSprites(): void {
       p.glow.fillRect(0, 0, 32, 32);
     },
   })));
+  // ARSENAL pickups: resources (small, flicker) and found tools (gold-ringed, bigger)
+  makeSet('pcap', 32, 32, 0.5, 'flicker', [0, 1].map((f) => ({
+    key: `f${f}`,
+    draw: (p: PaintCtx) => {
+      const { g } = p;
+      g.fillStyle = '#2a2e38';
+      g.fillRect(5, 11, 22, 15);
+      g.fillStyle = '#4a5060';
+      g.fillRect(5, 11, 22, 2);
+      g.fillStyle = '#e8e4d8';
+      g.fillRect(8, 15, 16, 6);
+      g.fillStyle = '#14161c';
+      g.fillRect(10, 17, 3, 3);
+      g.fillRect(19, 17, 3, 3);
+      lit(p, f ? '#8aff9a' : '#2ad83a', 8, 23, 4, 2);
+      lit(p, '#3dff8a', 14, 23, 10, 1);
+      drawText(g, 'PCAP', 8, 4, '#ffd040', 'tiny', '#000');
+    },
+  })));
+  makeSet('edr-cell', 32, 32, 0.52, 'flicker', [0, 1].map((f) => ({
+    key: `f${f}`,
+    draw: (p: PaintCtx) => {
+      const { g } = p;
+      g.fillStyle = '#9aa2b0';
+      g.fillRect(13, 4, 6, 3);
+      g.fillStyle = '#20242c';
+      g.fillRect(10, 7, 12, 22);
+      lit(p, f ? '#a8fcff' : '#5df2ff', 12, 9 + f * 2, 8, 18 - f * 2);
+      g.fillStyle = '#0a3040';
+      g.fillRect(15, 12, 2, 8);
+      g.fillRect(12, 15, 8, 2);
+    },
+  })));
+  makeSet('patch-disk', 32, 32, 0.46, 'static', [{
+    key: 'idle',
+    draw: (p: PaintCtx) => {
+      const { g } = p;
+      g.fillStyle = '#1e3a8a';
+      g.fillRect(6, 7, 20, 20);
+      g.fillStyle = '#b8bcc8';
+      g.fillRect(11, 7, 10, 7);
+      g.fillStyle = '#3a404c';
+      g.fillRect(17, 8, 3, 5);
+      g.fillStyle = '#f0ede4';
+      g.fillRect(8, 17, 16, 9);
+      lit(p, '#ff8a1a', 8, 17, 16, 2);
+    },
+  }]);
+  const toolPickup = (id: string, device: (p: PaintCtx) => void) =>
+    makeSet(id, 32, 32, 0.7, 'flicker', [0, 1].map((f) => ({
+      key: `f${f}`,
+      draw: (p: PaintCtx) => {
+        // gold pedestal ring that blinks, so a found tool reads as special
+        lit(p, f ? '#fff0a0' : '#ffb000', 2, 27, 28, 2);
+        lit(p, f ? '#ffb000' : '#fff0a0', 4, 29, 24, 2);
+        device(p);
+      },
+    })));
+  toolPickup('tool-tap', (p) => {
+    const { g } = p;
+    g.fillStyle = '#2a7bd8';
+    g.fillRect(6, 4, 3, 8);
+    g.fillStyle = '#d8a02a';
+    g.fillRect(23, 4, 3, 8);
+    g.fillStyle = '#4a505e';
+    g.fillRect(4, 10, 24, 15);
+    g.fillStyle = '#04170d';
+    g.fillRect(7, 15, 18, 6);
+    lit(p, '#3dff8a', 8, 17, 16, 2);
+  });
+  toolPickup('tool-edr', (p) => {
+    const { g } = p;
+    g.fillStyle = '#2a2e3a';
+    g.fillRect(3, 7, 26, 19);
+    g.fillStyle = '#071018';
+    g.fillRect(5, 9, 22, 15);
+    lit(p, '#5df2ff', 12, 11, 8, 5);
+    lit(p, '#5df2ff', 14, 16, 4, 4);
+  });
+  toolPickup('tool-patch', (p) => {
+    const { g } = p;
+    g.fillStyle = '#1e3a8a';
+    g.fillRect(7, 6, 18, 18);
+    g.fillStyle = '#b8bcc8';
+    g.fillRect(11, 6, 10, 6);
+    lit(p, '#ff8a1a', 9, 15, 14, 3);
+  });
+  toolPickup('tool-mfa', (p) => {
+    const { g } = p;
+    g.fillStyle = '#23262e';
+    g.fillRect(11, 6, 10, 20);
+    lit(p, '#ffd040', 13, 10, 6, 6);
+  });
   makeSet('medkit', 32, 32, 0.5, 'static', [{
     key: 'idle',
     draw: (p) => {

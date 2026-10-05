@@ -28,6 +28,7 @@ export const m02: Mission = {
     'KEYBOARD (1) flags a person, and on the security console it files a report. ' +
     'Get across the floor to the exit.',
   authorizedRoles: ['analyst'],
+  loadout: ['keyboard', 'mouse', 'usb', 'badge', 'mfa'],
   map: {
     grid: [
       '##############SSSSSSSSSSSS##############',
@@ -68,7 +69,7 @@ export const m02: Mission = {
       '.': { kind: 'floor', tex: 'floor' },
       'E': { kind: 'exit', tex: 'exit' },
       'A': { kind: 'door', tex: 'door', doorId: 'lab', accessRole: 'analyst' },
-      'N': { kind: 'door', tex: 'door', doorId: 'netops', accessRole: 'netops' },
+      'N': { kind: 'door', tex: 'door', doorId: 'netops', accessRole: 'netops', mfa: true },
       'm': { kind: 'door', tex: 'door', doorId: 'netops-back', accessRole: 'netops' },
       'l': { kind: 'door', tex: 'door', doorId: 'maint' },
       'R': { kind: 'door', tex: 'door', doorId: 'admin', accessRole: 'admin' },
@@ -86,7 +87,7 @@ export const m02: Mission = {
   entities: [
     {
       id: 'greg', kind: 'npc', x: 12.5, y: 12.5, sprite: 'npc-m', ai: 'stand',
-      reportable: true, culprit: true,
+      reportable: true, culprit: true, tags: ['shared-account'],
       inspect: {
         label: 'M. Grant, sysadmin',
         detail: '"Tickets take forever. Here: admin / Winter2024!, the whole team uses it." SERVER AUTH LOG (24 h): 212 logins as "admin" from 4 different workstations; 0 logins by named accounts.',
@@ -155,6 +156,32 @@ export const m02: Mission = {
       inspect: { label: 'Scanner charges', detail: 'Antimalware definitions.', category: 'item' } },
     { id: 'chg-cable', kind: 'item', x: 6.5, y: 13.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 6 },
       inspect: { label: 'Scanner charges', detail: 'Antimalware definitions.', category: 'item' } },
+    {
+      id: 'find-tap', kind: 'item', x: 34.5, y: 10.5, sprite: 'tool-tap',
+      tags: ['arsenal-pickup'], grants: { resource: 'tool:tap', amount: 1 },
+      inspect: { label: 'Network tap (found)', detail: 'A passive tap: copies traffic out of band, never blocks.', category: 'item', objectives: ['3.2'] },
+    },
+    {
+      id: 'pcap-switch', kind: 'item', x: 31.5, y: 12.5, sprite: 'pcap',
+      tags: ['arsenal-pickup'], grants: { resource: 'pcap', amount: 3 },
+      inspect: { label: 'Capture buffer', detail: 'Blank capture storage for the network tap.', category: 'item', objectives: ['3.2'] },
+    },
+    {
+      id: 'pcap-break', kind: 'item', x: 30.5, y: 25.5, sprite: 'pcap',
+      tags: ['arsenal-pickup'], grants: { resource: 'pcap', amount: 3 },
+      inspect: { label: 'Capture buffer', detail: 'Blank capture storage for the network tap.', category: 'item', objectives: ['3.2'] },
+    },
+    {
+      id: 'mfa-phish', kind: 'console', x: 28.5, y: 13.5, sprite: 'console', tags: ['phish-prompt'],
+      log: 'POP-UP: "Session expired. Sign in to SW-B portal: sw-b-portal.netops-login.co. Touch your key to continue."',
+      inspect: {
+        label: 'Sign-in prompt (sw-b-portal.netops-login.co)',
+        detail: 'Kiosk browser opened a sign-in page by itself. The domain is not the company IdP; it was registered 2 days ago.',
+        category: 'phishing',
+        objectives: ['2.2', '4.6'],
+        flags: ['look-alike domain', 'unsolicited sign-in prompt'],
+      },
+    },
   ],
   missionObjectives: [
     { id: 'read-ticket', text: 'Read ticket CHG-4471', kind: 'interact', tag: 'ticket' },

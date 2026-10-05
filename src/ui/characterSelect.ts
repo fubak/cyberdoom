@@ -12,19 +12,19 @@ import { drawToolViewmodel } from '../render/viewmodels';
  */
 
 const CSS = `
-.cs-wrap{display:flex;gap:28px;justify-content:center;flex-wrap:wrap;margin-top:8px}
-.cs-card{width:250px;padding:14px;background:#0d1018;border:3px solid #2a2f40;cursor:pointer;text-align:left;transition:transform .08s}
+.cs-wrap{display:flex;gap:20px;justify-content:center;flex-wrap:nowrap;margin-top:4px}
+.cs-card{width:232px;padding:10px;background:#0d1018;border:3px solid #2a2f40;cursor:pointer;text-align:left;transition:transform .08s}
 .cs-card.sel{border-color:#ffb000;transform:translateY(-4px);box-shadow:0 0 0 2px #000,0 0 24px rgba(255,176,0,.35)}
 .cs-card canvas{image-rendering:pixelated;display:block}
-.cs-card .cs-face{width:144px;height:144px;margin:0 auto 8px;border:2px solid #000}
-.cs-card .cs-hands{width:222px;height:152px;image-rendering:pixelated;border:2px solid #000;background:#0a0c12;margin-top:8px}
+.cs-card .cs-face{width:112px;height:112px;margin:0 auto 6px;border:2px solid #000}
+.cs-card .cs-hands{width:208px;height:143px;image-rendering:pixelated;border:2px solid #000;background:#0a0c12;margin-top:8px}
 .cs-name{color:#fff;font-size:20px;letter-spacing:2px}
 .cs-call{color:#ffb000;font-size:12px}
-.cs-bio{color:#9aa;font-size:12px;margin-top:4px;min-height:30px}
-.cs-skins{display:flex;gap:8px;justify-content:center;margin:14px 0 6px}
+.cs-bio{color:#9aa;font-size:12px;margin-top:4px;min-height:0;line-height:1.3}
+.cs-skins{display:flex;gap:8px;justify-content:center;margin:8px 0 4px}
 .cs-skin{width:26px;height:26px;border:3px solid #000;cursor:pointer}
 .cs-skin.sel{border-color:#fff}
-.cs-hint{color:#666;font-size:11px;margin-top:6px}
+.cs-hint{color:#666;font-size:11px;margin-top:3px}
 `;
 
 function ensureCss(): void {

@@ -16,6 +16,8 @@ const SOUNDS: Record<string, { wind?: ToolSound; fire?: ToolSound; hit?: ToolSou
   badge: { wind: 'badge-swipe' },
   tap: { fire: 'tap-sweep', hit: 'confirm' },
   edr: { wind: 'edr-charge', fire: 'edr-blast', hit: 'confirm' },
+  mfa: { fire: 'mfa-beep', hit: 'confirm' },
+  patch: { wind: 'patch-insert', hit: 'confirm' },
 };
 
 function sorted(): ToolDef[] {
@@ -36,10 +38,15 @@ export function defaultLoadout(m: Pick<Mission, 'difficulty' | 'loadout'>): stri
  */
 const BUFFER = 0.15;
 
+const RES_LABEL: Record<string, string> = { 'usb-charge': 'CHG', pcap: 'PCAP', 'edr-cell': 'CELL', 'patch-disk': 'DISK' };
+
 export class Arsenal {
   readonly owned = new Set<string>();
   readonly ammo = new Map<string, number>();
   readonly face = new Face();
+  /** Seconds since the last new-tool pickup (gold flash + ARMS slot blink). */
+  gotT = 9;
+  gotSlot = 0;
   current: ToolDef = sorted()[0];
   gender: Gender = 'male';
   private queued = false;
@@ -100,7 +107,9 @@ export class Arsenal {
       playTool('new-tool');
       playVoice(this.gender, 'pickup');
       this.face.grin();
-      this.bus.emit('message', { text: `NEW TOOL: [${t.slot}] ${t.name}. ${t.control?.use ?? ''}`, kind: 'good' });
+      this.gotT = 0;
+      this.gotSlot = t.slot;
+      this.bus.emit('message', { text: `[${t.slot}] ${t.name}: ${t.control?.use ?? ''}`, kind: 'info' });
       this.switchTo(t);
     }
   }
@@ -110,7 +119,8 @@ export class Arsenal {
   }
 
   maxFor(resource: string): number {
-    return Math.max(20, ...sorted().filter((t) => t.ammo?.resource === resource).map((t) => t.ammo!.max));
+    const caps = sorted().filter((t) => t.ammo?.resource === resource).map((t) => t.ammo!.max);
+    return caps.length ? Math.max(...caps) : 20;
   }
 
   /** Apply an item grant. Returns the ticker text. */
@@ -119,7 +129,7 @@ export class Arsenal {
       const t = toolRegistry.get(resource.slice(5));
       if (t) {
         this.own(t, true);
-        return `Picked up the ${t.name}`;
+        return `YOU GOT THE ${t.name}!`;
       }
       return 'Picked up an unknown tool';
     }
@@ -190,6 +200,7 @@ export class Arsenal {
    */
   update(dt: number, held: boolean, pressed: boolean, ctx: () => ToolUseContext): void {
     this.time += dt;
+    this.gotT += dt;
     this.sinceUse += dt;
     this.sinceConfirm += dt;
     this.dryMsgT = Math.max(0, this.dryMsgT - dt);
@@ -217,7 +228,10 @@ export class Arsenal {
         this.windT = -1;
         const s = SOUNDS[this.current.id]?.fire;
         if (s) playTool(s);
-        this.current.use(ctx());
+        const spec = this.current.ammo;
+        if (this.current.use(ctx()) === false && spec) {
+          this.ammo.set(spec.resource, Math.min(spec.max, (this.ammo.get(spec.resource) ?? 0) + 1));
+        }
       }
       return;
     }
@@ -252,6 +266,30 @@ export class Arsenal {
   hurt(dir: number): void {
     this.face.hurt(dir);
     playVoice(this.gender, 'pain');
+  }
+
+  /** Every resource any tool uses, as current/max (Doom's AMMO table). */
+  resources(): { id: string; label: string; cur: number; max: number; owned: boolean; active: boolean }[] {
+    const out: { id: string; label: string; cur: number; max: number; owned: boolean; active: boolean }[] = [];
+    for (const t of sorted()) {
+      if (!t.ammo || out.some((r) => r.id === t.ammo!.resource)) continue;
+      const id = t.ammo.resource;
+      out.push({
+        id,
+        label: RES_LABEL[id] ?? id.slice(0, 4).toUpperCase(),
+        cur: this.ammo.get(id) ?? 0,
+        max: this.maxFor(id),
+        owned: sorted().some((x) => x.ammo?.resource === id && this.owned.has(x.id)),
+        active: this.current.ammo?.resource === id,
+      });
+    }
+    return out;
+  }
+
+  /** New-tool pickup moment: k fades 1→0 over the gold flash; slot blinks longer. */
+  got(): { k: number; slot: number; blink: boolean } | null {
+    if (this.gotT > 1.6) return null;
+    return { k: Math.max(0, 1 - this.gotT / 0.45), slot: this.gotSlot, blink: Math.floor(this.gotT * 8) % 2 === 0 };
   }
 
   anim(): ViewmodelAnim {
