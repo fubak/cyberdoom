@@ -119,7 +119,7 @@ varying vec3 vColor;
 void main() {
   vec4 mv = modelViewMatrix * vec4(position, 1.0);
   vColor = color;
-  gl_PointSize = max(minPx * ${RES.toFixed(1)}, size * uScale / -mv.z);
+  gl_PointSize = min(max(minPx * ${RES.toFixed(1)}, size * uScale / -mv.z), ${(6 * RES).toFixed(1)});
   gl_Position = projectionMatrix * mv;
 }`;
 

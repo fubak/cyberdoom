@@ -91,9 +91,13 @@ export class ParticleSystem {
     switch (tool) {
       case 'keyboard': {
         // amber/white keycap shards flung outward, heavy gravity
+        // spray away from the player (tangentially at most) so shards
+        // never fly at the camera and smear across the view
+        const away = tx === undefined ? 0 : Math.atan2(y - ty!, x - tx);
+        const haveTarget = tx !== undefined && (x - tx !== 0 || y - ty! !== 0);
         for (let i = 0; i < 14; i++) {
-          const a = rng() * Math.PI * 2;
-          const sp = 0.9 + rng() * 1.6;
+          const a = haveTarget ? away + (rng() - 0.5) * 2.4 : rng() * Math.PI * 2;
+          const sp = 0.4 + rng() * 0.7;
           this.add(x, y, z + rng() * 0.2,
             Math.cos(a) * sp, Math.sin(a) * sp, 1.2 + rng() * 1.4, 4.5,
             0.35 + rng() * 0.2,

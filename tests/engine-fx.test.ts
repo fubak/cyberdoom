@@ -70,4 +70,17 @@ describe('particle system', () => {
     badgeOk.toolImpact('badge', 5, 5, 0.4, undefined, undefined, true);
     expect(badgeOk.color[1]).toBe(1); // green reader sparkle
   });
+
+  it('keyboard shards never fly toward the camera (spawned 1 tile ahead)', () => {
+    const p = new ParticleSystem(); // full rng spread: worst-case tangential angles
+    const px = 0, py = 0;
+    p.toolImpact('keyboard', 0, 1, 0.4, px, py); // target 1 tile in front
+    for (let step = 0; step < 12; step++) {
+      p.update(1 / 60);
+      const v = p.view();
+      for (let i = 0; i < v.count; i++) {
+        expect(Math.hypot(v.x[i] - px, v.y[i] - py)).toBeGreaterThanOrEqual(1 - 1e-9);
+      }
+    }
+  });
 });
