@@ -115,8 +115,8 @@ export class Automap {
     g.closePath();
     g.fill();
     g.fillStyle = 'rgba(0,0,0,0.8)';
-    g.fillRect(0, H - 12, W, 12);
-    drawText(g, MAP_HINT, 4, H - 10, '#ffd040', 'small', '#000');
+    g.fillRect(0, H - 16, W, 14);
+    drawText(g, MAP_HINT, 4, H - 14, '#ffd040', 'small', '#000');
     g.restore();
   }
 }

@@ -95,8 +95,8 @@ export function missionSelect(onPick: (id: string) => void, onBack: () => void):
   back.addEventListener('click', onBack);
   bar.appendChild(back);
   bar.appendChild(el('h2', '', 'SELECT MISSION'));
+  bar.appendChild(el('div', 'playable-coverage', playableCoverageLine()));
   s.appendChild(bar);
-  s.appendChild(el('div', 'playable-coverage', playableCoverageLine()));
   const missions = missionRegistry.all();
   const orderedIds = missions.map((m) => m.id);
   const states = missionRowStates(orderedIds);

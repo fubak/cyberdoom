@@ -142,15 +142,20 @@ html, body {
   position: sticky;
   top: 0;
   z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
   width: min(640px, 92vw);
-  background: #0a0a10f2;
-  padding: 6px 0 8px;
+  background: #0a0a10;
+  padding: 8px 0 10px;
 }
 .menu-bar h2 { margin: 0; }
+.menu-bar .playable-coverage { margin: 0; }
 .menu-bar .btn {
   position: absolute;
   left: 0;
-  top: 8px;
+  top: 10px;
   margin: 0;
   min-width: 0;
 }
