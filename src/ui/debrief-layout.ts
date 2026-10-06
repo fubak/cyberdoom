@@ -110,3 +110,36 @@ export function paginate(blocks: PLine[][], rows: number = DB_BODY_ROWS): PLine[
 export function drawable(text: string): boolean {
   return canDraw(pixelSafe(text), 'small');
 }
+
+/**
+ * Intermission tallies line drawn on the tally page. Y sits below the
+ * ~30px title block and above the first tally row (y=56), so it never
+ * overlaps even when all six tally rows are shown.
+ */
+export const STATS_Y = 42;
+
+export interface IntermissionStats {
+  kills: number;
+  killsTotal: number;
+  secrets: number;
+  secretsTotal: number;
+  time: number;
+  par: number;
+}
+
+export function formatStatsTime(seconds: number): string {
+  const whole = Math.max(0, Math.floor(seconds));
+  return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`;
+}
+
+export function statsSegments(stats: IntermissionStats): { text: string; overPar: boolean }[] {
+  return [
+    { text: `KILLS ${stats.kills}/${stats.killsTotal}`, overPar: false },
+    { text: `SECRETS ${stats.secrets}/${stats.secretsTotal}`, overPar: false },
+    { text: `TIME ${formatStatsTime(stats.time)} / PAR ${formatStatsTime(stats.par)}`, overPar: stats.time > stats.par },
+  ];
+}
+
+export function statsLine(stats: IntermissionStats): string {
+  return statsSegments(stats).map((s) => s.text).join('   ');
+}

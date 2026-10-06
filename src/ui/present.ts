@@ -1,18 +1,33 @@
 import { VIEW_H, VIEW_W } from '../render/res';
 
+/**
+ * Fit the 1280×800 viewport to the window. Integer scaling stays crisp, so
+ * when floor(fit) is within 90% of the true fit we use it; otherwise a
+ * fractional fit is preferred over wasting screen area on big borders.
+ */
+export function presentSize(
+  innerW: number,
+  innerH: number,
+  dpr: number,
+): { cssW: number; cssH: number; integer: boolean } {
+  const fit = Math.min((innerW * dpr) / VIEW_W, (innerH * dpr) / VIEW_H);
+  const k = Math.floor(fit);
+  if (k >= 1 && k / fit >= 0.9) {
+    return { cssW: (VIEW_W * k) / dpr, cssH: (VIEW_H * k) / dpr, integer: true };
+  }
+  const scale = Math.min(innerW / VIEW_W, innerH / VIEW_H);
+  return { cssW: VIEW_W * scale, cssH: VIEW_H * scale, integer: false };
+}
+
 export function setupPresentation(viewport: HTMLElement): void {
   const resize = () => {
-    const dpr = window.devicePixelRatio || 1;
-    const k = Math.floor(Math.min((window.innerWidth * dpr) / VIEW_W, (window.innerHeight * dpr) / VIEW_H));
-    if (k >= 1) {
-      viewport.style.width = `${(VIEW_W * k) / dpr}px`;
-      viewport.style.height = `${(VIEW_H * k) / dpr}px`;
-    } else {
-      // Fractional fitting is unavoidable when the physical window is below 1280×800.
-      const scale = Math.min(window.innerWidth / VIEW_W, window.innerHeight / VIEW_H);
-      viewport.style.width = `${VIEW_W * scale}px`;
-      viewport.style.height = `${VIEW_H * scale}px`;
-    }
+    const { cssW, cssH } = presentSize(
+      window.innerWidth,
+      window.innerHeight,
+      window.devicePixelRatio || 1,
+    );
+    viewport.style.width = `${cssW}px`;
+    viewport.style.height = `${cssH}px`;
   };
   let dprQuery: MediaQueryList | null = null;
   const armDprListener = () => {

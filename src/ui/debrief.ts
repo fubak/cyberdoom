@@ -19,8 +19,11 @@ import {
   DB_LINE,
   DB_W,
   DB_X,
+  STATS_Y,
   block,
   paginate,
+  statsLine,
+  statsSegments,
   type PLine,
   wrapPixel,
 } from './debrief-layout';
@@ -39,6 +42,7 @@ export { letterGrade } from '../content/curriculum';
 
 const REVIEW_KEY = 'cyberdoom.review.v1';
 const REVIEW_PER_DEBRIEF = 2;
+
 
 function loadReview(): string[] {
   try {
@@ -191,6 +195,8 @@ export function debrief(opts: {
   scoreLog: ScoreEvent[];
   objectives: { text: string; done: boolean; failed: boolean }[];
   evidence?: EvidenceEntry[];
+  /** Intermission tallies from rt.stats() (Doom intermission parity). */
+  stats?: { kills: number; killsTotal: number; secrets: number; secretsTotal: number; time: number; par: number };
   onDone: (quizScore: number) => void;
 }): HTMLElement {
   const { mission } = opts;
@@ -426,9 +432,22 @@ export function debrief(opts: {
         r.tag === 'false-positive' ? 'FALSE POS.' : r.tag === 'priority-miss' ? 'OUT OF ORDER' : 'WRONG CALLS', r.count, '']),
       ['EVIDENCE', entries.length, ''],
     ];
+    const stats = opts.stats;
     const tally: Page = {
-      label: tallies.map(([l, v, suf]) => `${l} ${v}${suf}`).join(', '),
+      label: tallies.map(([l, v, suf]) => `${l} ${v}${suf}`).join(', ') +
+        (stats ? ` | ${statsLine(stats)}` : ''),
       draw: (gg, t) => {
+        if (stats) {
+          // STATS_Y sits below the title (~30) and above the first tally row
+          // (56), inside DB_W x DB_H even when all 6 tally rows are shown.
+          let x = 34;
+          for (const seg of statsSegments(stats)) {
+            drawText(gg, seg.text, x, STATS_Y, seg.text.startsWith('TIME')
+              ? (seg.overPar ? C.red : C.green)
+              : C.text);
+            x += measureText(seg.text) + 12;
+          }
+        }
         tallies.slice(0, 6).forEach(([label, value, suffix], i) => {
           const y = 56 + i * 27;
           drawBigText(gg, label, 34, y, RAMP.gold);

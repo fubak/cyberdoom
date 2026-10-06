@@ -414,6 +414,12 @@ export class Audio {
           filter: { type: 'lowpass', frequency: 420, q: 1 }, distortion: true,
         });
         break;
+      case 'spawn':
+        // teleport-fog whoosh + materialise thump
+        this.noise('bandpass', 300, 2600, 0.32, 1, 0.5, o);
+        this.oscillator('sine', 90, 300, 0.3, 0.42, o);
+        this.oscillator('square', 1600, 400, 0.12, 0.18, o, { delay: 0.05 });
+        break;
       case 'windup':
         this.oscillator('sine', 300, 1200, Math.max(0.1, dur ?? 0.5), 0.32, o);
         break;

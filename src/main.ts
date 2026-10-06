@@ -141,6 +141,12 @@ class Game {
       this.audio.sfx('pickup', this.player ? { x: this.player.x, y: this.player.y } : {});
     });
     this.bus.on('reach-exit', () => this.audio.sfx('win'));
+    this.bus.on('ambush-spawn', ({ entityId }) => {
+      const e = this.runtime?.entities.find((entity) => entity.def.id === entityId);
+      if (!e) return;
+      this.particles.spawn(e.x, e.y);
+      this.audio.sfx('spawn', { x: e.x, y: e.y });
+    });
     // deep link: ?mission=m01&gender=female
     const dm = params.get('mission');
     const dg = params.get('gender');
@@ -197,6 +203,7 @@ class Game {
       scoreLog: rt.scoreLog,
       objectives: rt.objectiveSummary(),
       evidence: rt.evidence,
+      stats: rt.stats(),
       onDone: () => this.showMissionSelect(),
     }));
   }
@@ -358,6 +365,7 @@ class Game {
       map: this.map,
       use: this.input.usePressed,
       openDoor: (doorId) => this.openDoor(doorId),
+      hasBadge: this.arsenal.owns('badge'),
     });
     if (this.dossier.isOpen) {
       this.consumeDossierInput();
@@ -374,8 +382,11 @@ class Game {
       const ctx = this.toolCtx();
       const door = ctx.isDoorAhead();
       if (door && !map.isDoorOpen(door.doorId)) {
-        // runtime.update() opens plain doors and explains badge/locked ones
-        if (door.accessRole !== undefined) this.audio.sfx('oof');
+        // runtime.update() handled the door above (open / swipe / reader info).
+        this.useCd = 0.3;
+        if (door.accessRole !== undefined && !runtime.roles.includes(door.accessRole)) {
+          this.audio.sfx('oof');
+        }
       } else if (!ctx.aimEntity(1.4, 0.5) && ctx.wallDistance < 1.2) {
         this.audio.sfx('oof');
       } else {

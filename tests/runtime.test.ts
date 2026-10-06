@@ -243,6 +243,9 @@ describe('MissionRuntime', () => {
         { id: 'early-patch', text: 'Do not patch early', kind: 'avoid' },
       ],
     }));
+    // first press warns; a second press within 4 s is the violation
+    state.bus.emit('interact', { entityId: 'patch' });
+    expect(state.rt.finished).toBeNull();
     state.bus.emit('interact', { entityId: 'patch' });
     expect(state.rt.finished).toBe('lost');
     expect(state.rt.lossReason).toBe('Do not patch early');
@@ -251,10 +254,11 @@ describe('MissionRuntime', () => {
 
   it('loses after three wrong triage calls and removes integrity each time', () => {
     const state = setup(mission({
-      entities: [{
-        id: 'false-positive', kind: 'workstation', x: 2, y: 2, sprite: 'workstation',
+      entities: [0, 1, 2].map((i) => ({
+        id: `false-positive-${i}`, kind: 'workstation' as const, x: 2, y: 2, sprite: 'workstation',
         tags: ['triage'], infected: false,
-      }],
+        inspect: { label: `Mail ${i}`, detail: '', category: 'legit' as const },
+      })),
       missionObjectives: [{
         id: 'wrong-call', text: 'Avoid wrong triage calls', kind: 'avoid',
         tag: 'wrong-call', strikes: 3,
@@ -262,7 +266,8 @@ describe('MissionRuntime', () => {
     }));
     tick(state);
     for (let i = 0; i < 3; i++) {
-      state.bus.emit('scan-miss', { entityId: 'false-positive' });
+      state.bus.emit('inspect', { entityId: `false-positive-${i}` });
+      state.bus.emit('scan-miss', { entityId: `false-positive-${i}` });
     }
     expect(state.rt.finished).toBe('lost');
     expect(state.rt.lossReason).toBe('Avoid wrong triage calls');

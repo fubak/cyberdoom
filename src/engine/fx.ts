@@ -81,6 +81,28 @@ export class ParticleSystem {
     this.add(x, y, z, 0, 0, 0, 0, 0.1, [1, 1, 0.72], 0.28, 7);
   }
 
+  /** Doom teleport-fog analogue: a pale column rising where a threat spawns. */
+  spawn(x: number, y: number): void {
+    for (let i = 0; i < 40; i++) {
+      const angle = this.rng() * Math.PI * 2;
+      const r = 0.1 + this.rng() * 0.35;
+      this.add(
+        x + Math.cos(angle) * r,
+        y + Math.sin(angle) * r,
+        this.rng() * 0.15,
+        Math.cos(angle) * 0.35,
+        Math.sin(angle) * 0.35,
+        1.4 + this.rng() * 1.6,
+        0.4,
+        0.5 + this.rng() * 0.35,
+        [0.55 + this.rng() * 0.25, 0.92 + this.rng() * 0.08, 0.85 + this.rng() * 0.15],
+        0.04 + this.rng() * 0.05,
+        3,
+      );
+    }
+    this.add(x, y, 0.5, 0, 0, 0.2, 0, 0.5, [0.9, 1, 0.95], 0.4, 8);
+  }
+
   update(dt: number): void {
     if (dt <= 0) return;
     let i = 0;
