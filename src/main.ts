@@ -1,6 +1,6 @@
 import './ui/style.css';
 import { EventBus } from './core/events';
-import type { Entity, Gender, Projectile, Screen } from './core/types';
+import type { Entity, Gender, Mission, Projectile, Screen } from './core/types';
 import { WorldMap } from './engine/map';
 import { Input } from './engine/input';
 import { EYE_HEIGHT, Player } from './engine/player';
@@ -12,7 +12,7 @@ import { Feel } from './engine/feel';
 import { ParticleSystem } from './engine/fx';
 import { lookProbe, placeThreat } from './render/probe';
 import { Renderer } from './render/renderer';
-import { spriteSets } from './render/sprites';
+import { prewarmLazySpriteFrames, prioritizeLazySprites, spriteSets } from './render/sprites';
 import { textureRegistry } from './render/textures';
 import { Hud } from './ui/hud';
 import { Automap } from './ui/automap';
@@ -23,6 +23,7 @@ import * as screens from './ui/screens';
 import { MissionRuntime } from './missions/runtime';
 import { mfaPending } from './tools/badge';
 import { missionRegistry } from './content/missions';
+import { objectiveById } from './content/objectives';
 import { toolForSlot } from './tools';
 import { Arsenal } from './tools/arsenal';
 import { USB_PLUG_RANGE } from './tools/usb';
@@ -108,6 +109,9 @@ class Game {
     setupPresentation(viewport);
     this.renderer = new Renderer(viewport);
     registerThreatSprites();
+    // warm lazy sprite frames in idle slices from boot — the player sits on
+    // title/menus for seconds before the first level render, plenty of idle
+    prewarmLazySpriteFrames();
     this.renderer.canvas.classList.add('gl');
     this.input = new Input(this.renderer.canvas, () => this.audio.unlock());
     this.hud = new Hud(viewport);
@@ -228,7 +232,165 @@ class Game {
 
   private showBriefing(id: string): void {
     const m = missionRegistry.require(id);
-    this.setScreen('briefing', screens.briefing(m, () => this.startMission(id)));
+    this.prepareMission(id);
+    this.setScreen('briefing', screens.briefing(m, () => this.deploy(id)));
+  }
+
+  // ---------- mission prep (background work while the briefing is up) ----------
+
+  private prepared: {
+    id: string;
+    map: WorldMap | null;
+    built: boolean;
+    textures: Parameters<Renderer['initTexture']>[0][];
+    texIndex: number;
+    stage: number;
+    ready: boolean;
+  } | null = null;
+
+  private scheduleIdle(cb: () => void): void {
+    const w = window as Window & {
+      requestIdleCallback?: (c: () => void, opts?: { timeout: number }) => number;
+    };
+    if (w.requestIdleCallback) w.requestIdleCallback(cb, { timeout: 200 });
+    else window.setTimeout(cb, 0);
+  }
+
+  /** Idle-slice setup for a mission the player is about to deploy into. */
+  private prepareMission(id: string): void {
+    const p = { id, map: null as WorldMap | null, built: false, textures: [] as Parameters<Renderer['initTexture']>[0][], texIndex: 0, stage: 0, ready: false };
+    this.prepared = p;
+    const step = () => {
+      if (this.prepared !== p || p.ready) return; // superseded or finished
+      const t0 = performance.now();
+      while (performance.now() - t0 < 3 && !p.ready) this.prepStep(p);
+      if (!p.ready) this.scheduleIdle(step);
+    };
+    this.scheduleIdle(step);
+  }
+
+  private prepStep(p: NonNullable<Game['prepared']>): void {
+    const mission = missionRegistry.require(p.id);
+    switch (p.stage) {
+      case 0: // pure setup: parse the map
+        p.map = new WorldMap(mission.map);
+        p.stage++;
+        break;
+      case 1: { // level geometry + light
+        this.renderer.buildLevel(p.map!, mission.map);
+        p.built = true;
+        // texture warm list: every level texture + already-materialized sprite
+        // frames for the sets this mission uses (lazy getters are skipped so
+        // prep never forces a raster here)
+        const setIds = [...new Set(mission.entities.map((e) => e.sprite))];
+        const texs: Parameters<Renderer['initTexture']>[0][] = [...textureRegistry.all()];
+        for (const id of setIds) {
+          const set = spriteSets.get(id);
+          if (!set) continue;
+          for (const desc of Object.values(Object.getOwnPropertyDescriptors(set.frames))) {
+            if (!desc.get && desc.value) texs.push(desc.value);
+          }
+        }
+        p.textures = texs;
+        p.stage++;
+        break;
+      }
+      case 2: { // GPU texture uploads, a few per slice
+        const setIds = [...new Set(mission.entities.map((e) => e.sprite))];
+        prioritizeLazySprites(setIds);
+        for (let i = 0; i < 8 && p.texIndex < p.textures.length; i++) {
+          this.renderer.initTexture(p.textures[p.texIndex++]);
+        }
+        if (p.texIndex >= p.textures.length) p.stage++;
+        break;
+      }
+      case 3: { // throwaway runtime on a dead bus: builds initial entities so
+        // syncEntities can create their meshes/materials during prep; startMission
+        // still builds its own runtime on the real bus
+        const rt = new MissionRuntime(mission, new EventBus());
+        this.renderer.syncEntities(rt.entities, []);
+        p.stage++;
+        break;
+      }
+      case 4: // shader compile (scene now includes the sprite materials)
+        this.renderer.compileScene();
+        p.stage++;
+        break;
+      case 5: { // first-frame uploads/program links off the critical path
+        const sp = mission.map.spawn;
+        this.renderer.warmRender(sp.x, sp.y, sp.angle);
+        p.stage++;
+        break;
+      }
+      case 6: // HUD glyph/bar caches
+        this.warmHud(mission);
+        p.ready = true;
+        break;
+    }
+  }
+
+  /** One offscreen-style hud.draw so glyph/bar caches are hot before the first in-level frame. */
+  private warmHud(mission: Mission): void {
+    const ars = this.arsenal;
+    ars.reset(mission, this.gender);
+    this.hud.draw({
+      integrity: 100,
+      ammo: ars.ammoFor(),
+      ammoName: ars.current.ammo?.resource ?? '',
+      tool: ars.current,
+      bob: 0,
+      cooldownFrac: 0,
+      gender: this.gender,
+      anim: ars.anim(),
+      owned: [...ars.owned],
+      resources: ars.resources(),
+      face: (g, x, y) => ars.drawFace(g, x, y, 100),
+      credentials: this.role,
+      objectives: mission.objectives.map((id) => ({ text: objectiveById(id)?.title ?? id, done: false, failed: false })),
+      progress: { done: 0, total: mission.objectives.length, failed: false },
+      prompt: {
+        lmb: { text: 'INSPECT WORKSTATION', ready: true },
+        use: 'INSPECT FIRST (MOUSE 2)',
+        banner: { title: '2 MOUSE', blurb: 'INSPECT / FLAG' },
+        footer: '1-8 / WHEEL / Q: SWITCH TOOL',
+      },
+    });
+    // entry message glyphs + the forced objective strip
+    this.hud.pushMessage(`${mission.title} — good luck, analyst`, 'info');
+    this.hud.warmDraw({
+      integrity: 94,
+      ammo: ars.ammoFor(),
+      ammoName: ars.current.ammo?.resource ?? '',
+      tool: ars.current,
+      bob: 0,
+      cooldownFrac: 0.4,
+      gender: this.gender,
+      anim: ars.anim(),
+      owned: [...ars.owned],
+      resources: ars.resources(),
+      face: (g, x, y) => ars.drawFace(g, x, y, 94),
+      credentials: this.role,
+      objectives: mission.objectives.map((id) => ({ text: objectiveById(id)?.title ?? id, done: false, failed: false })),
+      progress: { done: 0, total: mission.objectives.length, failed: false },
+    });
+    this.hud.clearMessages();
+  }
+
+  /** DEPLOY: enter immediately if prep is done; otherwise plate up and finish it off-screen. */
+  private deploy(id: string): void {
+    const p = this.prepared;
+    if (p && p.id === id && !p.ready) {
+      this.setScreen('loading', screens.loadingScreen());
+      // two rAFs: let the plate paint, then finish remaining prep synchronously
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          while (!p.ready) this.prepStep(p);
+          this.startMission(id);
+        }),
+      );
+      return;
+    }
+    this.startMission(id);
   }
 
   private showDebrief(): void {
@@ -251,7 +413,9 @@ class Game {
 
   private startMission(id: string): void {
     const mission = missionRegistry.require(id);
-    this.map = new WorldMap(mission.map);
+    const prep = this.prepared && this.prepared.id === id ? this.prepared : null;
+    this.prepared = null; // prep is consumed; a retry re-runs the synchronous path
+    this.map = prep?.map ?? new WorldMap(mission.map);
     this.runtime = new MissionRuntime(mission, this.bus);
     this.dossier.reset();
     const sp = mission.map.spawn;
@@ -280,7 +444,7 @@ class Game {
     this.toolFxUntil.clear();
     this.edrPulseUntil = -Infinity;
     this.edrPulseCount = 0;
-    this.renderer.buildLevel(this.map, mission.map);
+    if (!prep?.built) this.renderer.buildLevel(this.map, mission.map);
     this.audio.setVoice(this.gender);
     this.audio.setListener(this.player.x, this.player.y, this.player.angle);
     this.audio.startAmbience();

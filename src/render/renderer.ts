@@ -317,6 +317,33 @@ export class Renderer {
     this.scene.add(this.particlePoints);
   }
 
+  /** GPU-warm a texture ahead of first use (called in idle slices during briefing). */
+  initTexture(tex: THREE.Texture): void {
+    this.renderer.initTexture(tex);
+  }
+
+  /** Compile scene + post shaders ahead of the first real frame. */
+  compileScene(): void {
+    this.renderer.compile(this.scene, this.camera);
+    this.renderer.compile(this.postScene, this.postCam);
+  }
+
+  /**
+   * One throwaway frame at a pose: uploads level VBOs and lazily-bound
+   * textures and links programs so the first real frame doesn't pay for it.
+   */
+  warmRender(px: number, py: number, angle: number): void {
+    this.camera.position.set(px, EYE_H, py);
+    this.camera.rotation.set(0, -angle - Math.PI / 2, 0, 'YXZ');
+    this.camera.updateMatrixWorld();
+    this.renderer.setRenderTarget(this.rt);
+    this.renderer.setViewport(0, 0, VIEW_W, VIEW3D_H);
+    this.renderer.render(this.scene, this.camera);
+    this.renderer.setRenderTarget(null);
+    this.renderer.setViewport(0, 0, VIEW_W, VIEW_H);
+    this.renderer.render(this.postScene, this.postCam);
+  }
+
   dispose(): void {
     this.canvas.remove();
     this.rt.dispose();
@@ -822,6 +849,8 @@ export class Renderer {
     }
     if (!this.prewarmStarted) {
       this.prewarmStarted = true;
+      // usually already kicked at boot; this stays as a fallback for renderers
+      // constructed late (tests, probes)
       prewarmLazySpriteFrames((ms) => {
         this.gen.lazyPrewarmMs = ms;
         console.info(`[render] lazy sprite prewarm ${ms.toFixed(1)} ms`);

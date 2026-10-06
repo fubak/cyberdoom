@@ -229,10 +229,16 @@ const ransomModel: Model = (pose) => {
 };
 
 interface LazyFrame {
+  /** Sprite set this frame belongs to (for prewarm prioritization). */
+  setId: string;
+  /** First lazy frame pushed for the set — prewarmed before all others. */
+  first: boolean;
   /** Advance by at most `ms` milliseconds of raster work; true when installed. */
   step: (deadline: number) => boolean;
 }
 const lazyFrames: LazyFrame[] = [];
+let lazyOwner = '';
+const lazyFirstDone = new Set<string>();
 
 /** TESTING: exported so tests/model-raster.test.ts can pin rasterizer output on real models. */
 export const spriteModels = { worm: wormModel, trojan: trojanModel, ransom: ransomModel };
@@ -247,6 +253,7 @@ export function scaleModel(prims: Prim[]): Prim[] {
 }
 
 function makeMonster(id: string, worldH: number, model: Model): void {
+  lazyOwner = id;
   const W = TEX.monster;
   const H = TEX.monster;
   const frames: Record<string, THREE.Texture> = {};
@@ -306,7 +313,11 @@ function makeMonster(id: string, worldH: number, model: Model): void {
       return install(p.finish());
     };
     Object.defineProperty(frames, key, { configurable: true, enumerable: true, get: getter });
+    const first = !lazyFirstDone.has(lazyOwner);
+    lazyFirstDone.add(lazyOwner);
     lazyFrames.push({
+      setId: lazyOwner,
+      first,
       step: (deadline) => {
         const p = start();
         if (p.job && p.job.next < p.job.h) {
@@ -362,17 +373,39 @@ function makeMonster(id: string, worldH: number, model: Model): void {
   spriteRegistry.register(id, frames.walk0);
 }
 
+let prewarmIndex = 0;
+let prewarmRunning = false;
+
+/** Pure queue reorder: priority sets' frames first, then remaining first-frames, then the rest. */
+export function reorderLazyQueue<T extends { setId: string; first: boolean }>(queue: readonly T[], priority: readonly string[]): T[] {
+  const pri = new Set(priority);
+  return [
+    ...queue.filter((f) => pri.has(f.setId)),
+    ...queue.filter((f) => !pri.has(f.setId) && f.first),
+    ...queue.filter((f) => !pri.has(f.setId) && !f.first),
+  ];
+}
+
+/** Move the named sets' pending frames to the front of the prewarm queue. */
+export function prioritizeLazySprites(setIds: string[]): void {
+  const tail = reorderLazyQueue(lazyFrames.slice(prewarmIndex), setIds);
+  lazyFrames.splice(prewarmIndex, lazyFrames.length - prewarmIndex, ...tail);
+}
+
 export function prewarmLazySpriteFrames(onComplete?: (ms: number) => void): void {
-  let index = 0;
+  if (prewarmRunning) return;
+  prewarmRunning = true;
+  // first frames before everything else, so a demanded getter never hits a cold set
+  lazyFrames.splice(0, lazyFrames.length, ...reorderLazyQueue(lazyFrames, []));
   const start = performance.now();
   const runSlice = (deadline?: { didTimeout?: boolean; timeRemaining: () => number }) => {
     const sliceStart = performance.now();
     // ~3 ms slices: each step() advances a frame by a small row band
-    while (index < lazyFrames.length && performance.now() - sliceStart < 3 && (!deadline || deadline.didTimeout || deadline.timeRemaining() > 1)) {
-      if (lazyFrames[index].step(sliceStart + 2.5)) index++;
+    while (prewarmIndex < lazyFrames.length && performance.now() - sliceStart < 3 && (!deadline || deadline.didTimeout || deadline.timeRemaining() > 1)) {
+      if (lazyFrames[prewarmIndex].step(sliceStart + 2.5)) prewarmIndex++;
       else break;
     }
-    if (index < lazyFrames.length) {
+    if (prewarmIndex < lazyFrames.length) {
       const idleWindow = window as Window & {
         requestIdleCallback?: (cb: (d: { didTimeout?: boolean; timeRemaining: () => number }) => void, opts?: { timeout: number }) => number;
       };

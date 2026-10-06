@@ -126,6 +126,14 @@ export class Hud {
     this.messages = this.messages.filter((m) => m.t > 0);
   }
 
+  /** Cache warm-up: draw once with every gated path forced on (objective strip). */
+  warmDraw(opts: Parameters<Hud['draw']>[0]): void {
+    const held = this.tabHeld;
+    this.tabHeld = true;
+    this.draw(opts);
+    this.tabHeld = held;
+  }
+
   draw(opts: {
     integrity: number;
     ammo: number | null;

@@ -136,5 +136,15 @@ export function missionSelect(onPick: (id: string) => void): HTMLElement {
   return s;
 }
 
+/** DEPLOY pressed before background prep finished: Doom-style plate while the last steps run. */
+export function loadingScreen(): HTMLElement {
+  const s = el('div', 'screen cd-inter');
+  const inner = el('div', 'cd-loading-plate');
+  inner.appendChild(el('h1', '', 'LOADING SECTOR…'));
+  inner.appendChild(el('p', '', 'STAND BY'));
+  s.appendChild(inner);
+  return s;
+}
+
 export { briefing } from './briefing';
 export { debrief } from './debrief';

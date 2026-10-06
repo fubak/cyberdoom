@@ -12,6 +12,7 @@ export type Screen =
   | 'character-select'
   | 'mission-select'
   | 'briefing'
+  | 'loading'
   | 'play'
   | 'debrief';
 
