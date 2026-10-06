@@ -1,4 +1,5 @@
-import type { ToolDef, ToolUseContext } from '../core/types';
+import type { Entity, ToolDef, ToolUseContext } from '../core/types';
+import type { EventBus } from '../core/events';
 import { impactBurst, usePhase, tipY, vmLine } from './anim';
 import { glow, pill, rect, shade } from './pixel';
 import { drawText } from './pixelfont';
@@ -15,6 +16,50 @@ export function mfaPending(key: object): Set<string> {
   let s = badged.get(key);
   if (!s) badged.set(key, (s = new Set()));
   return s;
+}
+
+export interface BadgeSwipeContext {
+  bus: EventBus;
+  /** The entity array is the WeakMap key — pass the runtime's own list. */
+  entities: Entity[];
+  authorizedRoles: string[];
+}
+
+/**
+ * ONE swipe path, shared by the badge tool and the E-at-door press. Emits
+ * 'badge-door' (opens + scores), 'badge-confirm' and messages on the bus; a
+ * refused swipe logs a least-privilege violation downstream via 'badge-door'
+ * with allowed:false — only callers that represent a deliberate badge swipe
+ * (tool use, or an authorized E press) should call this.
+ */
+export function swipeBadge(
+  ctx: BadgeSwipeContext,
+  door: { doorId: string; accessRole?: string; mfa?: boolean },
+): void {
+  const allowed = door.accessRole === undefined || ctx.authorizedRoles.includes(door.accessRole);
+  if (!allowed) {
+    let set = refused.get(ctx.entities);
+    if (!set) refused.set(ctx.entities, (set = new Set()));
+    if (set.has(door.doorId)) {
+      ctx.bus.emit('message', {
+        text: `ACCESS DENIED: ${door.accessRole ?? 'restricted'} role required. Already logged; find another route.`,
+        kind: 'warn',
+      });
+      ctx.bus.emit('badge-confirm', { allowed: false });
+      return;
+    }
+    set.add(door.doorId);
+  }
+  if (allowed && door.mfa) {
+    mfaPending(ctx.entities).add(door.doorId);
+    ctx.bus.emit('badge-confirm', { allowed: true });
+    ctx.bus.emit('message', {
+      text: 'BADGE OK: one factor (something you have). This door enforces MFA: touch your TOKEN (7) to the reader.',
+      kind: 'warn',
+    });
+    return;
+  }
+  ctx.bus.emit('badge-door', { doorId: door.doorId, accessRole: door.accessRole, allowed });
 }
 
 /**
@@ -101,29 +146,6 @@ export const badgeTool: ToolDef = {
       ctx.bus.emit('message', { text: 'No badge reader in reach.', kind: 'info' });
       return;
     }
-    const allowed = door.accessRole === undefined || ctx.authorizedRoles.includes(door.accessRole);
-    if (!allowed) {
-      let set = refused.get(ctx.entities);
-      if (!set) refused.set(ctx.entities, (set = new Set()));
-      if (set.has(door.doorId)) {
-        ctx.bus.emit('message', {
-          text: `ACCESS DENIED: ${door.accessRole ?? 'restricted'} role required. Already logged; find another route.`,
-          kind: 'warn',
-        });
-        ctx.bus.emit('badge-confirm', { allowed: false });
-        return;
-      }
-      set.add(door.doorId);
-    }
-    if (allowed && door.mfa) {
-      mfaPending(ctx.entities).add(door.doorId);
-      ctx.bus.emit('badge-confirm', { allowed: true });
-      ctx.bus.emit('message', {
-        text: 'BADGE OK: one factor (something you have). This door enforces MFA: touch your TOKEN (7) to the reader.',
-        kind: 'warn',
-      });
-      return;
-    }
-    ctx.bus.emit('badge-door', { doorId: door.doorId, accessRole: door.accessRole, allowed });
+    swipeBadge(ctx, door);
   },
 };

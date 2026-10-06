@@ -4,7 +4,13 @@ import { VIEW_H, VIEW_W } from '../render/renderer';
 import { RES } from '../render/res';
 
 export const DOSSIER_TEXT_W = 276;
-export const DOSSIER_ROWS = 12;
+export const DOSSIER_ROWS = 10;
+// Panel bounds in base (320x200) coords: below the top message lines and
+// above the 32px status bar (STATUS_H).
+export const DOSSIER_X = 12;
+export const DOSSIER_Y = 44;
+export const DOSSIER_W = 296;
+export const DOSSIER_H = 118;
 
 export type DossierMode = 'file' | 'log';
 
@@ -151,22 +157,22 @@ export class Dossier {
     g.clearRect(0, 0, VIEW_W, VIEW_H);
     g.setTransform(RES, 0, 0, RES, 0, 0);
     g.fillStyle = '#100806';
-    g.fillRect(12, 12, 296, 176);
+    g.fillRect(DOSSIER_X, DOSSIER_Y, DOSSIER_W, DOSSIER_H);
     g.fillStyle = '#806050';
-    g.fillRect(12, 12, 296, 2);
-    g.fillRect(12, 12, 2, 176);
+    g.fillRect(DOSSIER_X, DOSSIER_Y, DOSSIER_W, 2);
+    g.fillRect(DOSSIER_X, DOSSIER_Y, 2, DOSSIER_H);
     g.fillStyle = '#2a100c';
-    g.fillRect(12, 186, 296, 2);
-    g.fillRect(306, 12, 2, 176);
+    g.fillRect(DOSSIER_X, DOSSIER_Y + DOSSIER_H, DOSSIER_W, 2);
+    g.fillRect(DOSSIER_X + DOSSIER_W - 2, DOSSIER_Y, 2, DOSSIER_H);
     g.fillStyle = '#5a1b14';
-    g.fillRect(16, 16, 288, 16);
+    g.fillRect(DOSSIER_X + 4, DOSSIER_Y + 4, DOSSIER_W - 8, 16);
     g.fillStyle = '#c04428';
-    g.fillRect(16, 16, 288, 2);
+    g.fillRect(DOSSIER_X + 4, DOSSIER_Y + 4, DOSSIER_W - 8, 2);
     drawText(
       g,
       this.mode === 'log' ? 'CASE FILE LOG' : `CASE FILE ${entries.length ? this.fileIndex + 1 : 0}/${entries.length}`,
-      21,
-      21,
+      DOSSIER_X + 9,
+      DOSSIER_Y + 9,
       '#fff0c0',
     );
 
@@ -176,20 +182,20 @@ export class Dossier {
       this.drawFile(entries);
     }
     const hint = this.mode === 'log' ? 'W/S SELECT  ENTER OPEN  ESC BACK' : 'A/D PAGE  L LOG  ESC CLOSE';
-    drawText(g, hint, 21, 177, '#8a7868', 'small', null);
+    drawText(g, hint, DOSSIER_X + 9, DOSSIER_Y + DOSSIER_H - 11, '#8a7868', 'small', null);
   }
 
   private drawFile(entries: EvidenceEntry[]): void {
     const g = this.g;
     const entry = entries[this.fileIndex];
     if (!entry) {
-      drawText(g, 'NO EVIDENCE LOGGED', 21, 44, '#e8d8b0');
+      drawText(g, 'NO EVIDENCE LOGGED', DOSSIER_X + 9, DOSSIER_Y + 28, '#e8d8b0');
       return;
     }
     const layout = layoutCaseFile(entry);
     const pageCount = layout.pages.length;
-    drawText(g, `PAGE ${this.pageIndex + 1}/${pageCount}`, 231, 21, '#ffc080');
-    let y = 40;
+    drawText(g, `PAGE ${this.pageIndex + 1}/${pageCount}`, DOSSIER_X + DOSSIER_W - 77, DOSSIER_Y + 9, '#ffc080');
+    let y = DOSSIER_Y + 26;
     for (const line of layout.title) {
       drawText(g, line, 21, y, '#ffd040');
       y += 8;
@@ -208,19 +214,19 @@ export class Dossier {
     const start = Math.max(0, Math.min(this.selectedIndex - visibleRows + 1, entries.length - visibleRows));
     const visible = entries.slice(start, start + visibleRows);
     if (!visible.length) {
-      drawText(this.g, 'NO EVIDENCE LOGGED', 21, 44, '#e8d8b0');
+      drawText(this.g, 'NO EVIDENCE LOGGED', DOSSIER_X + 9, DOSSIER_Y + 28, '#e8d8b0');
       return;
     }
     visible.forEach((entry, index) => {
       const entryIndex = start + index;
       const selected = entryIndex === this.selectedIndex;
       const label = entry.label.slice(0, maxChars - 3);
-      const y = 43 + index * 9;
+      const y = DOSSIER_Y + 26 + index * 9;
       if (selected) {
         this.g.fillStyle = '#3a2114';
-        this.g.fillRect(18, y - 2, 284, 9);
+        this.g.fillRect(DOSSIER_X + 6, y - 2, DOSSIER_W - 12, 9);
       }
-      drawText(this.g, `${selected ? '>' : ' '} ${label}`, 21, y, selected ? '#ffd040' : '#e8e0d0');
+      drawText(this.g, `${selected ? '>' : ' '} ${label}`, DOSSIER_X + 9, y, selected ? '#ffd040' : '#e8e0d0');
     });
   }
 

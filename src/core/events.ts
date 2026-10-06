@@ -31,6 +31,8 @@ export interface EventMap {
   'player-down': Record<string, never>;
   /** Player picked up an item. */
   pickup: { entityId: string };
+  /** A script trigger spawned a dormant enemy (telegraphing: fog + sfx). */
+  'ambush-spawn': { entityId: string };
   /** Player committed a triage verdict on an entity (Mouse, second click). */
   triage: { entityId: string; verdict: 'malicious'; correct: boolean };
   /** Badge reader refused a repeat swipe (no new violation logged). */

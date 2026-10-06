@@ -138,6 +138,7 @@ export interface MissionObjective {
   text: string;
   kind:
     | 'clean' // clean N entities with tag
+    | 'patch' // patch N entities with tag (tool-hit {toolId:'patch', good:true})
     | 'reach-exit'
     | 'avoid' // do NOT trigger tag (e.g. plug found usb)
     | 'inspect' // inspect entity/tag
@@ -278,6 +279,8 @@ export interface ToolUseContext {
   authorizedRoles: string[];
   /** Current player role. */
   role: string;
+  /** Whether the entity was inspected (analysis-before-action guards). */
+  isInspected?: (entityId: string) => boolean;
   /** Unobstructed line of sight between two points (tile coords). Optional. */
   lineOfSight?: (x0: number, y0: number, x1: number, y1: number) => boolean;
 }

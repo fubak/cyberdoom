@@ -622,7 +622,7 @@ export const m06Teach: MissionTeaching = {
     },
     'priority-miss': {
       objective: '1.4',
-      done: 'You revoked the compromised certificate before rekeying. Revocation immediately tells clients to stop trusting the leaked key; the replacement uses a new key pair.',
+      done: 'You revoked the compromised certificate before rekeying. Clients stop trusting the leaked key once they check CRL/OCSP — caching and soft-fail can delay that, so rekey and replace the pair as well.',
       missed: 'Rekeying before revocation leaves the compromised certificate trusted during the gap. Revoke first, then issue a replacement with an independent key pair.',
     },
   },

@@ -152,9 +152,13 @@ html, body {
 }
 .mission-row:hover { border-color: var(--red); }
 .mission-row.locked { opacity: 0.5; cursor: not-allowed; }
+.mission-row.next { border-color: var(--gold, #f0c020); }
+.mission-row.cleared { border-left-color: #5ce88a; }
+.mission-row.cleared .mtitle::after { content: ' ✓'; color: #5ce88a; }
 .mission-row .diff { color: var(--red); font-size: 20px; min-width: 2ch; }
 .mission-row .mtitle { color: #fff; font-size: 18px; }
-.mission-row .objs { color: #7a9; font-size: 11px; }
+.mission-row .objs { color: #9fd8b0; font-size: 13px; line-height: 1.5; }
+.mission-select { overflow-y: auto; justify-content: flex-start; padding-top: 4vh; }
 
 .brief-box {
   border: 2px solid var(--border);

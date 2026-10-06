@@ -109,6 +109,25 @@ briefing:
       log: 'NETFLOW, VLAN 30 -> internet, last 6 h\n01:52 10.30.0.43 -> 203.0.113.66:443 first seen, then every 60 s\n01:58 10.30.0.12 / .27 / .51 -> 203.0.113.66:443 (each after SMB from 10.30.0.43)\nDHCP: .12 FIN-01, .27 FIN-02, .43 FIN-03, .51 FIN-04',
       inspect: { label: 'Firewall / NetFlow console', detail: 'Connection records: source, destination, port, time.', category: 'legit', objectives: ['4.9'] },
     },
+    // War-room decision: mark the actual patient zero (grouped pick, decoys are false positives).
+    ...(
+      [
+        ['pz-fin01', 15.5, 'FIN-01', '10.30.0.12'],
+        ['pz-fin02', 16.5, 'FIN-02', '10.30.0.27'],
+        ['pz-fin03', 18.5, 'FIN-03', '10.30.0.43'],
+        ['pz-fin04', 19.5, 'FIN-04', '10.30.0.51'],
+      ] as const
+    ).map(([id, x, name, ip]) => ({
+      id, kind: 'console' as const, x, y: 23.5, sprite: 'console', group: 'pz-pick',
+      tags: id === 'pz-fin03' ? ['patient-zero'] : ['decoy'],
+      log: `MARK ${name} (${ip}) AS PATIENT ZERO.`,
+      inspect: {
+        label: `Mark ${name} (${ip}) as patient zero`,
+        detail: `Confirms ${name} as the initial compromise and 203.0.113.66 as the C2 — check the NetFlow records first.`,
+        category: 'legit' as const,
+        objectives: ['4.9'],
+      },
+    })),
     {
       id: 'ransom-portal', kind: 'console', x: 9.5, y: 10.5, sprite: 'console', tags: ['pay-ransom'],
       log: 'PAYMENT PORTAL: 14 BTC transfer initiated to the attacker wallet.',
@@ -252,7 +271,8 @@ briefing:
     },
   ],
   missionObjectives: [
-    { id: 'identify', text: 'Identify patient zero and the C2 in NetFlow (war room)', kind: 'interact', tag: 'netflow' },
+    { id: 'read-netflow', text: 'Read the NetFlow connection records (war room)', kind: 'interact', tag: 'netflow' },
+    { id: 'identify', text: 'Mark patient zero and the C2 (203.0.113.66) at a war-room terminal', kind: 'interact', tag: 'patient-zero', requires: ['read-netflow'] },
     { id: 'contain', text: 'Contain: isolate VLAN 30 at the core switch', kind: 'interact', tag: 'contain', requires: ['identify'] },
     { id: 'eradicate', text: 'Eradicate: clean all 4 encrypted hosts', kind: 'clean', tag: 'enc-host', count: 4 },
     { id: 'recover', text: 'Recover: restore from offline backup', kind: 'interact', tag: 'recover', requires: ['eradicate'] },
@@ -300,7 +320,7 @@ debriefQuestions: [
       ['Hot site', 'A hot site is fully equipped with near-current data and can take over in minutes to an hour.'],
     ]),
     q('q4', ['4.9'], 'Which data source BEST shows which internal host first connected to the ransomware\u2019s command-and-control IP, and when?', 0, [
-      ['Firewall logs / NetFlow records', 'Network logs record source, destination and time for every connection, so filtering on the C2 IP finds patient zero.'],
+      ['Firewall logs / NetFlow records', 'Flow logs record source, destination and time for the connections they capture (coverage and sampling matter), so filtering on the C2 IP gives the earliest beaconing host — the leading patient-zero candidate, confirmed with host evidence.'],
       ['Vulnerability scan results', 'Scans show weaknesses, not who talked to whom.'],
       ['Badge access logs', 'Badge logs show people entering doors, not hosts making connections.'],
       ['The payroll application\u2019s log', 'An application log records app events, not outbound connections from every host.'],
@@ -311,6 +331,8 @@ debriefQuestions: [
 export const m09Walkthrough: WalkStep[] = [
   { goto: [16, 25] },
   { interact: 'netflow' },
+  { goto: [18, 24] },
+  { interact: 'pz-fin03' },
   { goto: [8, 11] },
   { inspect: 'enc1' },
   { goto: [8, 8] },
@@ -345,10 +367,20 @@ export const m09Teach: MissionTeaching = {
   ],
   keyTerms: ['ransomware', 'backups', 'replication', 'correlation', 'chain of custody'],
   lessons: {
+    'read-netflow': {
+      objective: '4.9',
+      done: 'NetFlow showed 10.30.0.43 (FIN-03) beaconing to 203.0.113.66 first; every other host followed after SMB from it.',
+      missed: 'You never checked the network logs, so patient zero and the C2 address were unknown and the attacker could return the same way.',
+    },
     'identify': {
       objective: '4.9',
-      done: 'NetFlow showed 10.30.0.43 (FIN-03) beaconing to 203.0.113.66 first; every other host followed after SMB from it. Network logs find patient zero and the C2.',
-      missed: 'You never checked the network logs, so patient zero and the C2 address were unknown and the attacker could return the same way.',
+      done: 'FIN-03 was the earliest beaconing host in the flow data — the leading patient-zero candidate, confirmed against host evidence.',
+      missed: 'Patient zero was never marked, so the investigation could not attribute the intrusion or rule out a return path.',
+    },
+    'false-positive': {
+      objective: '4.9',
+      done: 'You marked the right host. Flow data showed the earliest C2 beacon.',
+      missed: 'You marked the wrong host as patient zero — misattribution sends containment at the wrong asset while the real foothold survives.',
     },
     'contain': {
       objective: '4.8',

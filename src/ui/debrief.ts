@@ -19,8 +19,12 @@ import {
   DB_LINE,
   DB_W,
   DB_X,
+  STATS_Y,
+  avoidViolated,
   block,
   paginate,
+  statsLine,
+  statsSegments,
   type PLine,
   wrapPixel,
 } from './debrief-layout';
@@ -39,6 +43,7 @@ export { letterGrade } from '../content/curriculum';
 
 const REVIEW_KEY = 'cyberdoom.review.v1';
 const REVIEW_PER_DEBRIEF = 2;
+
 
 function loadReview(): string[] {
   try {
@@ -189,8 +194,10 @@ export function debrief(opts: {
   won: boolean;
   score: number;
   scoreLog: ScoreEvent[];
-  objectives: { text: string; done: boolean; failed: boolean }[];
+  objectives: { text: string; done: boolean; failed: boolean; violations?: number; kind?: string }[];
   evidence?: EvidenceEntry[];
+  /** Intermission tallies from rt.stats() (Doom intermission parity). */
+  stats?: { kills: number; killsTotal: number; secrets: number; secretsTotal: number; time: number; par: number };
   onDone: (quizScore: number) => void;
 }): HTMLElement {
   const { mission } = opts;
@@ -213,10 +220,11 @@ export function debrief(opts: {
   let hits: Hit[] = [];
   const ev = { open: false, sel: 0, detail: false, page: 0 };
 
-  // Avoid objectives have no "done" event: obeyed through a won mission = done.
+  // Avoid objectives are upheld whenever they were not actually violated —
+  // on a lost mission an unviolated avoid shows done, never the missed text.
   const objRows = opts.objectives.map((o, i) => {
     const def = mission.missionObjectives.find((m) => m.text === o.text) ?? mission.missionObjectives[i];
-    const avoided = def?.kind === 'avoid' && !o.failed && opts.won;
+    const avoided = def?.kind === 'avoid' && !avoidViolated(o);
     return { ...o, def, done: o.done || avoided };
   });
   const fieldPct = objRows.length ? (objRows.filter((o) => o.done && !o.failed).length / objRows.length) * 100 : 100;
@@ -426,9 +434,22 @@ export function debrief(opts: {
         r.tag === 'false-positive' ? 'FALSE POS.' : r.tag === 'priority-miss' ? 'OUT OF ORDER' : 'WRONG CALLS', r.count, '']),
       ['EVIDENCE', entries.length, ''],
     ];
+    const stats = opts.stats;
     const tally: Page = {
-      label: tallies.map(([l, v, suf]) => `${l} ${v}${suf}`).join(', '),
+      label: tallies.map(([l, v, suf]) => `${l} ${v}${suf}`).join(', ') +
+        (stats ? ` | ${statsLine(stats)}` : ''),
       draw: (gg, t) => {
+        if (stats) {
+          // STATS_Y sits below the title (~30) and above the first tally row
+          // (56), inside DB_W x DB_H even when all 6 tally rows are shown.
+          let x = 34;
+          for (const seg of statsSegments(stats)) {
+            drawText(gg, seg.text, x, STATS_Y, seg.text.startsWith('TIME')
+              ? (seg.overPar ? C.red : C.green)
+              : C.text);
+            x += measureText(seg.text) + 12;
+          }
+        }
         tallies.slice(0, 6).forEach(([label, value, suffix], i) => {
           const y = 56 + i * 27;
           drawBigText(gg, label, 34, y, RAMP.gold);

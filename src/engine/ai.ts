@@ -148,6 +148,9 @@ export function updateEntities(
       const dist = Math.hypot(dx, dy);
       let currentMode = mode(e);
       e.state.flashT = Math.max(0, ((e.state.flashT as number | undefined) ?? 0) - dt);
+      // Materialise grace: freshly spawned enemies can turn/move but cannot start an attack.
+      const spawnGrace = Math.max(0, ((e.state.spawnGrace as number | undefined) ?? 0) - dt);
+      e.state.spawnGrace = spawnGrace;
       if (e.state.facing === undefined) {
         e.state.facing = Math.atan2(map.h / 2 - e.y, map.w / 2 - e.x);
       }
@@ -171,7 +174,7 @@ export function updateEntities(
           profile.aggroRange ?? Infinity,
         );
         if (profile.logicBomb) {
-          if (los && dist <= aggro) {
+          if (los && dist <= aggro && spawnGrace <= 0) {
             e.state.mode = 'windup';
             e.state.windupDur = profile.windup;
             e.state.windupT = 0;
@@ -221,7 +224,7 @@ export function updateEntities(
         e.state.reaction = Math.max(0, ((e.state.reaction as number | undefined) ?? 0) - dt);
         const attackCooldown = e.state.attackCooldown as number;
         let checkT = ((e.state.attackCheckT as number | undefined) ?? 0) - dt;
-        if (attackCooldown <= 0 && los && checkT <= 0) {
+        if (attackCooldown <= 0 && los && checkT <= 0 && spawnGrace <= 0) {
           checkT = 0.1;
           const inAttackRange = profile.ranged
             ? dist < 12 && Math.random() < Math.max(0.08, 0.35 - dist * 0.02)

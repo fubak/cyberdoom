@@ -8,6 +8,7 @@ import type {
 } from '../core/types';
 import { objectiveById } from '../content/objectives';
 import type { WorldMap } from '../engine/map';
+import { mfaPending, swipeBadge } from '../tools/badge';
 import { difficultyScale } from './difficulty';
 
 /**
@@ -29,6 +30,8 @@ type UpdateWorld = {
   map: WorldMap;
   use: boolean;
   openDoor: (doorId: string) => void;
+  /** Whether the badge tool is in the kit (E at a reader swipes it). */
+  hasBadge?: boolean;
 };
 
 export class MissionRuntime {
@@ -50,6 +53,8 @@ export class MissionRuntime {
   private falsePositiveSources = new Set<string>();
   private priorityMisses = new Set<string>();
   private wrongChoicesScored = new Set<string>();
+  private wrongCallStrikes = new Set<string>();
+  private earlyWarnAt = new Map<string, number>();
   private rejectedUnconfirmedHosts = new Set<string>();
   private counted = new Map<string, Set<string>>();
   private cleaned = new Set<string>();
@@ -202,16 +207,46 @@ export class MissionRuntime {
     return this.objectives.filter((o) => o.def.kind !== 'avoid' && o.def.kind !== 'doors');
   }
 
-  private rejectRequirements(objective: ObjectiveStatus | undefined): boolean {
+  private rejectRequirements(objective: ObjectiveStatus | undefined, e?: Entity): boolean {
     const unmet = this.firstUnmet(objective?.def.requires);
     if (!unmet) return false;
     const earlyViolation = objective?.def.earlyViolates && this.obj(objective.def.earlyViolates);
     if (earlyViolation) {
-      this.violate(earlyViolation);
+      const key = e?.def.id ?? objective!.def.id;
+      const warnedAt = this.earlyWarnAt.get(key);
+      if (warnedAt !== undefined && this.elapsed - warnedAt <= 4) {
+        this.earlyWarnAt.delete(key);
+        this.violate(earlyViolation);
+        return true;
+      }
+      this.earlyWarnAt.set(key, this.elapsed);
+      this.message(
+        `CHANGE NOT APPROVED — missing: ${unmet.def.text}. Press E again within 4 s to deploy anyway (logged as an unauthorized change.)`,
+        'warn',
+      );
       return true;
     }
     this.message(`First: ${unmet.def.text}`, 'warn');
     return true;
+  }
+
+  private guardUninspectedTriage(e: Entity): boolean {
+    if (!e.def.tags?.includes('triage') || this.inspected.has(e.def.id)) return false;
+    this.message(
+      `Read the evidence first: inspect ${e.def.inspect?.label ?? e.def.id} with MOUSE [2] before deciding.`,
+      'warn',
+    );
+    return true;
+  }
+
+  /** Each entity may contribute at most one wrong-call strike. */
+  private wrongCallOnce(e: Entity, points: number): void {
+    if (this.wrongCallStrikes.has(e.def.id)) {
+      this.message(`Already logged as a wrong call: ${e.def.inspect?.label ?? e.def.id}.`, 'warn');
+      return;
+    }
+    this.wrongCallStrikes.add(e.def.id);
+    this.violateObjective('wrong-call', points);
   }
 
   private rejectOutOfOrderInteract(e: Entity, matching: ObjectiveStatus[]): boolean {
@@ -307,7 +342,7 @@ export class MissionRuntime {
       if (this.inspected.has(entityId)) return;
       this.inspected.add(entityId);
       for (const objective of this.objectivesFor('inspect', e)) {
-        if (!this.rejectRequirements(objective)) this.countEntity(objective, entityId);
+        if (!this.rejectRequirements(objective, e)) this.countEntity(objective, entityId);
       }
     });
 
@@ -326,7 +361,8 @@ export class MissionRuntime {
       const e = this.byId(entityId);
       if (!e || this.initialInfected.get(entityId)) return;
       if (e.def.tags?.includes('triage')) {
-        this.violateObjective('wrong-call', -25);
+        if (this.guardUninspectedTriage(e)) return;
+        this.wrongCallOnce(e, -25);
         return;
       }
       this.falsePositive(e, -25, 'scan');
@@ -351,12 +387,13 @@ export class MissionRuntime {
       if (!e || !e.alive) return;
 
       if (e.def.kind === 'workstation' && e.def.tags?.includes('triage')) {
+        if (this.guardUninspectedTriage(e)) return;
         if (e.infected) {
-          this.violateObjective('wrong-call', -30);
+          this.wrongCallOnce(e, -30);
           return;
         }
         const matching = this.objectivesFor('interact', e);
-        if (matching.some((objective) => this.rejectRequirements(objective))) return;
+        if (matching.some((objective) => this.rejectRequirements(objective, e))) return;
         for (const objective of matching) this.countEntity(objective, e.def.id);
         this.checkWin();
         return;
@@ -373,7 +410,7 @@ export class MissionRuntime {
           return;
         }
         const matching = this.objectivesFor('interact', e);
-        if (matching.some((objective) => this.rejectRequirements(objective))) return;
+        if (matching.some((objective) => this.rejectRequirements(objective, e))) return;
         this.inventory.delete(item.def.id);
         if (this.violateMatchingAvoid(e)) {
           this.bus.emit('plugged-usb', { entityId: item.def.id });
@@ -424,14 +461,14 @@ export class MissionRuntime {
         }
         if (this.pendingAccusation && e.def.tags?.includes('report-console')) {
           const report = this.objectives.find((o) => o.def.kind === 'report');
-          if (this.rejectRequirements(report)) return;
-          if (matching.some((objective) => this.rejectRequirements(objective))) return;
+          if (this.rejectRequirements(report, e)) return;
+          if (matching.some((objective) => this.rejectRequirements(objective, e))) return;
           this.resolveAccusation(this.pendingAccusation);
           for (const objective of matching) this.countEntity(objective, e.def.id);
           this.checkWin();
           return;
         }
-        if (matching.some((objective) => this.rejectRequirements(objective))) return;
+        if (matching.some((objective) => this.rejectRequirements(objective, e))) return;
         if (this.rejectOutOfOrderInteract(e, matching)) return;
         if (this.violateMatchingAvoid(e)) return;
         const text = e.def.log ?? e.def.inspect?.detail ?? '';
@@ -471,6 +508,14 @@ export class MissionRuntime {
     this.bus.on('report', ({ entityId }) => {
       const e = this.byId(entityId);
       if (e) this.resolveAccusation(e);
+    });
+
+    this.bus.on('tool-hit', ({ toolId, entityId, good }) => {
+      if (toolId !== 'patch' || !good || !entityId) return;
+      const e = this.byId(entityId);
+      if (!e) return;
+      for (const objective of this.objectivesFor('patch', e)) this.countEntity(objective, entityId);
+      this.checkWin();
     });
 
     this.bus.on('badge-door', ({ doorId, accessRole, allowed }) => {
@@ -522,7 +567,7 @@ export class MissionRuntime {
 
   private resolveAccusation(e: Entity): void {
     const report = this.objectives.find((o) => o.def.kind === 'report');
-    if (this.rejectRequirements(report)) return;
+    if (this.rejectRequirements(report, e)) return;
     if (e.def.culprit) {
       this.log('Correct! The insider is contained', 100, e.def.inspect?.objectives ?? []);
       for (const objective of this.objectives) {
@@ -555,6 +600,10 @@ export class MissionRuntime {
     return this.entities.find((e) => e.def.id === id);
   }
 
+  wasInspected(id: string): boolean {
+    return this.inspected.has(id);
+  }
+
   update(dt: number, w: UpdateWorld): void {
     this.currentPlayer = w.player;
     if (!this.finished) this.elapsed += dt;
@@ -564,11 +613,29 @@ export class MissionRuntime {
       const hit = w.map.raycast(w.player.x, w.player.y, w.player.angle, 1.6);
       if (hit.cell?.kind === 'door' && !w.map.isDoorOpen(hit.cell.doorId ?? '')) {
         const door = hit.cell;
-        if (door.locked) this.message(door.lockText ?? 'Locked.', 'warn');
-        else if (door.accessRole !== undefined) {
-          this.message(`Badge reader: ${door.accessRole.toUpperCase()} only — select BADGE [4]`, 'warn');
+        const doorId = door.doorId ?? '';
+        if (door.locked) {
+          this.message(door.lockText ?? 'Locked.', 'warn');
+        } else if (door.accessRole !== undefined) {
+          if (door.mfa && mfaPending(this.entities).has(doorId)) {
+            this.message('Badge accepted. Second factor: select TOKEN [7] and touch the reader.', 'warn');
+          } else if (!this.roles.includes(door.accessRole)) {
+            // A rejected badge swipe is a least-privilege violation — E only warns.
+            const roles = this.roles.map((r) => r.toUpperCase()).join(', ') || 'none';
+            this.message(
+              `Badge reader: ${door.accessRole.toUpperCase()} only. Your roles: ${roles}. Swiping BADGE [4] here would be logged as a violation.`,
+              'info',
+            );
+          } else if (w.hasBadge) {
+            swipeBadge(
+              { bus: this.bus, entities: this.entities, authorizedRoles: this.roles },
+              { doorId, accessRole: door.accessRole, mfa: door.mfa },
+            );
+          } else {
+            this.message(`Badge reader: ${door.accessRole.toUpperCase()} only — select BADGE [4]`, 'warn');
+          }
         } else {
-          w.openDoor(door.doorId ?? '');
+          w.openDoor(doorId);
         }
       }
     }
@@ -617,7 +684,11 @@ export class MissionRuntime {
       if (trigger.message) this.message(trigger.message, trigger.kind ?? 'info');
       for (const id of trigger.spawn ?? []) {
         const e = this.byId(id);
-        if (e && e.def.dormant) e.alive = true;
+        if (e && e.def.dormant) {
+          e.alive = true;
+          e.state.spawnGrace = 0.75;
+          this.bus.emit('ambush-spawn', { entityId: id });
+        }
       }
       for (const doorId of trigger.openDoors ?? []) w.openDoor(doorId);
       for (const role of trigger.grantRoles ?? []) this.grantRole(role);
@@ -749,13 +820,15 @@ export class MissionRuntime {
   }
 
   /** Debrief text mapping objective ids to titles for display. */
-  objectiveSummary(): { text: string; done: boolean; failed: boolean; progress: number; target: number }[] {
+  objectiveSummary(): { text: string; done: boolean; failed: boolean; progress: number; target: number; violations: number; kind: MissionObjective['kind'] }[] {
     return this.objectives.map((o) => ({
       text: o.target > 1 && !o.done ? `${o.def.text} (${Math.min(o.progress, o.target)}/${o.target})` : o.def.text,
       done: o.done,
       failed: o.failed,
       progress: o.progress,
       target: o.target,
+      violations: o.violations,
+      kind: o.def.kind,
     }));
   }
 

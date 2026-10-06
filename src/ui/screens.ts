@@ -2,7 +2,7 @@ import type { Gender } from '../core/types';
 import { missionRegistry } from '../content/missions';
 import { playableCoverageLine } from '../content/curriculum';
 import { objectiveById } from '../content/objectives';
-import { isUnlocked } from '../missions/progress';
+import { missionRowStates } from '../missions/progress';
 import { mountTitle } from '../render/title';
 
 /**
@@ -84,18 +84,25 @@ export function characterSelect(onPick: (g: Gender) => void): HTMLElement {
 }
 
 export function missionSelect(onPick: (id: string) => void): HTMLElement {
-  const s = el('div', 'screen');
+  const s = el('div', 'screen mission-select');
   s.appendChild(el('h2', '', 'SELECT MISSION'));
   s.appendChild(el('div', 'playable-coverage', playableCoverageLine()));
   const missions = missionRegistry.all();
   const orderedIds = missions.map((m) => m.id);
+  const states = missionRowStates(orderedIds);
+  let nextRow: HTMLElement | null = null;
   for (const m of missions) {
-    const unlocked = isUnlocked(m.id, orderedIds);
-    const row = el('div', 'mission-row');
-    if (!unlocked) row.classList.add('locked');
+    const state = states.get(m.id) ?? 'locked';
+    const unlocked = state !== 'locked';
+    const row = el('div', `mission-row ${state}`);
     row.appendChild(el('span', 'diff', '☣'.repeat(Math.min(3, Math.ceil(m.difficulty / 3)))));
     const body = el('div');
-    body.appendChild(el('div', 'mtitle', `M${m.id.slice(1)} — ${m.title}${unlocked ? '' : ' — LOCKED'}`));
+    const badge =
+      state === 'cleared' ? ' — CLEARED'
+      : state === 'next' ? ' — NEXT'
+      : state === 'locked' ? ' — LOCKED'
+      : '';
+    body.appendChild(el('div', 'mtitle', `M${m.id.slice(1)} — ${m.title}${badge}`));
     body.appendChild(
       el(
         'div',
@@ -108,8 +115,24 @@ export function missionSelect(onPick: (id: string) => void): HTMLElement {
     row.appendChild(body);
     row.setAttribute('aria-disabled', String(!unlocked));
     if (unlocked) row.addEventListener('click', () => onPick(m.id));
+    if (state === 'next') nextRow = row;
     s.appendChild(row);
   }
+  // Keep the heading visible and scroll the NEXT row into view on open:
+  // if NEXT fits on the first screen, stay at scrollTop 0 (heading visible);
+  // otherwise scroll so NEXT is visible with a couple of rows of context.
+  requestAnimationFrame(() => {
+    if (!nextRow) {
+      s.scrollTop = 0;
+      return;
+    }
+    const viewH = s.clientHeight || globalThis.innerHeight || 0;
+    if (nextRow.offsetTop + nextRow.offsetHeight <= viewH) {
+      s.scrollTop = 0;
+    } else {
+      s.scrollTop = Math.max(0, nextRow.offsetTop - 96);
+    }
+  });
   return s;
 }
 

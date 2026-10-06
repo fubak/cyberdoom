@@ -110,23 +110,23 @@ const evidenceAndWork: EntityDef[] = [
     inspect: { label: 'Control gap: service recovery', detail: 'Payroll has no tested process to restore the last known-good service state after a failed deployment.', category: 'legit', objectives: ['1.1'] },
   },
   {
-    id: 'vuln-hr', kind: 'workstation', x: 15.5, y: 18.5, sprite: 'workstation-infected',
-    infected: true, tags: ['triage', 'vulnerability-confirmed'],
+    id: 'vuln-hr', kind: 'workstation', x: 15.5, y: 18.5, sprite: 'workstation',
+    tags: ['triage', 'vulnerability-confirmed'],
     inspect: { label: 'Scan finding HR-01', detail: 'Scanner: vulnerable service present on payroll relay. Service banner and package version match the finding.', category: 'item', objectives: ['4.3'] },
   },
   {
-    id: 'vuln-db', kind: 'workstation', x: 23.5, y: 18.5, sprite: 'workstation-infected',
-    infected: true, tags: ['triage', 'vulnerability-confirmed'],
+    id: 'vuln-db', kind: 'workstation', x: 23.5, y: 18.5, sprite: 'workstation',
+    tags: ['triage', 'vulnerability-confirmed'],
     inspect: { label: 'Scan finding PAY-02', detail: 'Scanner: vulnerable service present on payroll database. Listener and package version match the finding.', category: 'item', objectives: ['4.3'] },
   },
   {
-    id: 'vuln-web', kind: 'workstation', x: 15.5, y: 12.5, sprite: 'workstation-infected',
-    infected: true, tags: ['triage', 'vulnerability-confirmed'],
+    id: 'vuln-web', kind: 'workstation', x: 15.5, y: 10.5, sprite: 'workstation',
+    tags: ['triage', 'vulnerability-confirmed'],
     inspect: { label: 'Scan finding HR-03', detail: 'Scanner: vulnerable service present on the HR export host. Listener and package version match the finding.', category: 'item', objectives: ['4.3'] },
   },
   {
-    id: 'vuln-api', kind: 'workstation', x: 23.5, y: 12.5, sprite: 'workstation-infected',
-    infected: true, tags: ['triage', 'vulnerability-confirmed'],
+    id: 'vuln-api', kind: 'workstation', x: 24.5, y: 10.5, sprite: 'workstation',
+    tags: ['triage', 'vulnerability-confirmed'],
     inspect: { label: 'Scan finding PAY-04', detail: 'Scanner: vulnerable service present on the payroll API host. Listener and package version match the finding.', category: 'item', objectives: ['4.3'] },
   },
   {
@@ -205,6 +205,12 @@ const pickups: EntityDef[] = [
     inspect: { label: 'Integrity kit', detail: 'Restores 25 integrity.', category: 'item' } },
   { id: 'medkit-change-b', kind: 'item', x: 33.5, y: 7.5, sprite: 'medkit', grants: { resource: 'integrity', amount: 25 },
     inspect: { label: 'Integrity kit', detail: 'Restores 25 integrity.', category: 'item' } },
+  { id: 'medkit-change-c', kind: 'item', x: 13.5, y: 11.5, sprite: 'medkit', grants: { resource: 'integrity', amount: 25 },
+    inspect: { label: 'Integrity kit', detail: 'Restores 25 integrity.', category: 'item' } },
+  { id: 'medkit-change-d', kind: 'item', x: 20.5, y: 12.5, sprite: 'medkit', grants: { resource: 'integrity', amount: 25 },
+    inspect: { label: 'Integrity kit', detail: 'Restores 25 integrity.', category: 'item' } },
+  { id: 'medkit-change-e', kind: 'item', x: 27.5, y: 20.5, sprite: 'medkit', grants: { resource: 'integrity', amount: 25 },
+    inspect: { label: 'Integrity kit', detail: 'Restores 25 integrity.', category: 'item' } },
   {
     id: 'find-edr-change', kind: 'item', x: 34.5, y: 18.5, sprite: 'tool-edr',
     tags: ['arsenal-pickup'], grants: { resource: 'tool:edr', amount: 1 },
@@ -238,7 +244,23 @@ const rootkitWave = stagedThreatWave(map, 'rootkit', 'rootkit', [...evidenceAndW
   [3, 10, 17, 15],
   [25, 10, 33, 15],
 ]);
-rootkitWave.push({ ...rootkitWave[0], id: 'rootkit-1-extra', x: 14.5, y: 19.5 });
+rootkitWave.push({ ...rootkitWave[0], id: 'rootkit-1-extra', x: 11.5, y: 19.5 });
+// Keep spawns/idle points >=3 tiles from the required triage hosts so players
+// can inspect and patch findings without being drained mid-task.
+const triageSafe: Record<string, [number, number]> = {
+  'rootkit-1-2': [8.5, 20.5],
+  'rootkit-2-1': [28.5, 19.5],
+  'rootkit-2-4': [30.5, 20.5],
+  'rootkit-3-3': [8.5, 12.5],
+  'rootkit-3-4': [12.5, 13.5],
+  'rootkit-3-5': [12.5, 15.5],
+  'rootkit-4-1': [30.5, 11.5],
+  'rootkit-4-4': [30.5, 14.5],
+};
+for (const e of rootkitWave) {
+  const move = triageSafe[e.id];
+  if (move) ({ x: e.x, y: e.y } = { x: move[0], y: move[1] });
+}
 rootkitWave.push({
   id: 'rootkit-payroll-final',
   kind: 'enemy',
@@ -276,7 +298,7 @@ export const m05: Mission = {
     { id: 'early-patch', text: 'Do not patch before the required change records', kind: 'avoid', tag: 'early-patch', strikes: 1 },
     { id: 'fix-gaps', text: 'Apply the correct control type to each gap', kind: 'interact', tag: 'fix-gaps', count: 4 },
     { id: 'wrong-control', text: 'Avoid incorrect control choices', kind: 'avoid', tag: 'wrong-control', strikes: 3 },
-    { id: 'confirmed-hosts', text: 'Patch the four confirmed vulnerable hosts', kind: 'clean', tag: 'vulnerability-confirmed', count: 4 },
+    { id: 'confirmed-hosts', text: 'Patch the four confirmed vulnerable hosts', kind: 'patch', tag: 'vulnerability-confirmed', count: 4 },
     { id: 'wrong-call', text: 'Do not patch scan findings without confirming the service', kind: 'avoid', tag: 'wrong-call', strikes: 3 },
     { id: 'exit', text: 'Reach the exit', kind: 'reach-exit' },
   ],
@@ -286,7 +308,8 @@ export const m05: Mission = {
       { id: 'change-ambush-west', area: [6, 17, 14, 22], spawn: waveIds(1), kind: 'bad', message: 'A rootkit persistence record reappeared in the HR service zone.' },
       { id: 'change-ambush-east', area: [25, 17, 33, 22], spawn: waveIds(2), kind: 'bad', message: 'Rootkit activity spread into payroll operations.' },
       { id: 'change-ambush-upper', area: [6, 10, 14, 15], spawn: waveIds(3), kind: 'bad', message: 'A hidden persistence task activated near the scan consoles.' },
-      { id: 'change-ambush-northeast', area: [25, 10, 33, 15], spawn: waveIds(4), kind: 'bad', message: 'A scan-wing persistence task activated.' },
+      { id: 'change-ambush-northeast', area: [25, 10, 33, 15], spawn: waveIds(4).filter((id) => id !== 'rootkit-4-4' && id !== 'rootkit-4-5'), kind: 'bad', message: 'A scan-wing persistence task activated.' },
+      { id: 'change-ambush-northeast-deep', area: [29, 10, 33, 15], spawn: ['rootkit-4-4', 'rootkit-4-5'], kind: 'bad', message: 'More persistence records lit up at the back of the scan wing.' },
       { id: 'change-ambush-final', after: ['payroll-patch'], spawn: ['rootkit-payroll-final'], kind: 'bad', message: 'Rootkit persistence attempted to survive the approved patch.' },
       { id: 'change-backtrack', after: ['fix-gaps'], openDoors: ['change-backtrack'], kind: 'good', message: 'The control gaps are covered: the return route is open.' },
       { id: 'change-queue', after: ['confirmed-hosts'], openDoors: ['change-queue'], kind: 'good', message: 'Confirmed vulnerable hosts are patched: the upper scan wing is open.' },
@@ -375,10 +398,10 @@ export const m05Walkthrough: WalkStep[] = [
   { interact: 'payroll-preventive' },
   { goto: [15, 18] },
   { inspect: 'vuln-hr' },
-  { clean: 'vuln-hr' },
+  { patch: 'vuln-hr' },
   { goto: [23, 18] },
   { inspect: 'vuln-db' },
-  { clean: 'vuln-db' },
+  { patch: 'vuln-db' },
   { goto: [20, 17] },
   { badge: [20, 16] },
   { goto: [7, 13] },
@@ -389,12 +412,12 @@ export const m05Walkthrough: WalkStep[] = [
   { interact: 'gap-restore' },
   { goto: [32, 12] },
   { interact: 'restore-corrective' },
-  { goto: [15, 12] },
+  { goto: [15, 11] },
   { inspect: 'vuln-web' },
-  { clean: 'vuln-web' },
-  { goto: [23, 12] },
+  { patch: 'vuln-web' },
+  { goto: [24, 11] },
   { inspect: 'vuln-api' },
-  { clean: 'vuln-api' },
+  { patch: 'vuln-api' },
   { wait: 0.1 },
   { goto: [20, 10] },
   { goto: [20, 8] },

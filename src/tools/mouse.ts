@@ -91,6 +91,10 @@ export const mouseTool: ToolDef = {
       return;
     }
     if (e.def.tags?.includes('triage')) {
+      if (e.def.tags.includes('vulnerability-confirmed') && !e.infected) {
+        ctx.bus.emit('message', { text: 'Confirmed finding: apply a PATCH disk [8] to remediate.', kind: 'info' });
+        return;
+      }
       ctx.bus.emit('message', { text: 'Decide from the raw evidence: SCANNER quarantines/patches, KEYBOARD releases.', kind: 'info' });
       return;
     }
