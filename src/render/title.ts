@@ -297,9 +297,14 @@ export function mountTitle(host: HTMLElement, onStart: () => void, about: string
   };
   const onKey = (e: KeyboardEvent) => {
     if (!c.isConnected) return;
+    if (showAbout) {
+      choose();
+      e.preventDefault();
+      return;
+    }
     if (['ArrowUp', 'KeyW'].includes(e.code)) sel = (sel + items.length - 1) % items.length;
     else if (['ArrowDown', 'KeyS'].includes(e.code)) sel = (sel + 1) % items.length;
-    else if (showAbout || ['Enter', 'Space', 'NumpadEnter'].includes(e.code)) choose();
+    else if (['Enter', 'Space', 'NumpadEnter'].includes(e.code)) choose();
     else return;
     e.preventDefault();
   };

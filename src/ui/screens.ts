@@ -4,6 +4,7 @@ import { playableCoverageLine } from '../content/curriculum';
 import { objectiveById } from '../content/objectives';
 import { missionRowStates } from '../missions/progress';
 import { mountTitle } from '../render/title';
+import { onKeysWhileMounted } from './briefing';
 
 /**
  * ARSENAL/LOOK: HTML overlay screens — title, character select, mission
@@ -83,7 +84,7 @@ export function characterSelect(onPick: (g: Gender) => void): HTMLElement {
   return s;
 }
 
-export function missionSelect(onPick: (id: string) => void): HTMLElement {
+export function missionSelect(onPick: (id: string) => void, onBack?: () => void): HTMLElement {
   const s = el('div', 'screen mission-select');
   s.appendChild(el('h2', '', 'SELECT MISSION'));
   s.appendChild(el('div', 'playable-coverage', playableCoverageLine()));
@@ -133,6 +134,17 @@ export function missionSelect(onPick: (id: string) => void): HTMLElement {
       s.scrollTop = Math.max(0, nextRow.offsetTop - 96);
     }
   });
+  if (onBack) {
+    const back = el('button', 'btn small', 'BACK  [ESC]');
+    back.addEventListener('click', onBack);
+    s.appendChild(back);
+    onKeysWhileMounted(s, (e) => {
+      if (e.key === 'Escape' || e.key === 'Backspace') {
+        e.preventDefault();
+        onBack();
+      }
+    });
+  }
   return s;
 }
 

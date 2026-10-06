@@ -28,6 +28,7 @@ import { toolForSlot } from './tools';
 import { Arsenal } from './tools/arsenal';
 import { USB_PLUG_RANGE } from './tools/usb';
 import { characterSelect } from './ui/characterSelect';
+import { pauseMenu } from './ui/pause';
 import { markCompleted } from './missions/progress';
 import { registerThreatSprites } from './missions/threatSprites';
 
@@ -62,6 +63,8 @@ class Game {
   private gender: Gender = 'male';
   private role = 'analyst';
   private overlay: HTMLElement | null = null;
+  private pauseNode: HTMLElement | null = null;
+  private paused = false;
 
   // play-state
   private map: WorldMap | null = null;
@@ -117,8 +120,19 @@ class Game {
     this.hud = new Hud(viewport);
     this.automap = new Automap(this.hud.canvas);
     window.addEventListener('keydown', (event) => {
-      if (event.code !== 'KeyM' || event.repeat || this.screen !== 'play' || this.dossier?.isOpen) return;
+      if (event.code !== 'KeyM' || event.repeat || this.screen !== 'play' || this.dossier?.isOpen || this.paused) return;
       this.automap.toggle();
+    });
+    window.addEventListener('keydown', (event) => {
+      if (event.repeat || this.screen !== 'play' || this.dossier?.isOpen) return;
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      if (this.automap.isOpen) {
+        this.automap.close();
+        return;
+      }
+      if (this.paused) this.resumeMission();
+      else this.openPause();
     });
     window.addEventListener('blur', () => this.automap.close());
     const cross = document.createElement('div');
@@ -209,9 +223,60 @@ class Game {
   private setScreen(s: Screen, node: HTMLElement | null): void {
     this.screen = s;
     this.dossier.enabled = s === 'play';
+    this.clearPauseOverlay();
+    this.paused = false;
     if (this.overlay) this.overlay.remove();
     this.overlay = node;
     if (node) document.getElementById('viewport')!.appendChild(node);
+  }
+
+  private clearPauseOverlay(): void {
+    this.pauseNode?.remove();
+    this.pauseNode = null;
+  }
+
+  private openPause(): void {
+    if (this.runtime?.finished !== null) return;
+    document.exitPointerLock?.();
+    this.paused = true;
+    this.clearPauseOverlay();
+    const node = pauseMenu({
+      onResume: () => this.resumeMission(),
+      onMissionSelect: () => {
+        this.leaveMission();
+        this.showMissionSelect();
+      },
+      onTitle: () => {
+        this.leaveMission();
+        this.showTitle();
+      },
+    });
+    this.pauseNode = node;
+    document.getElementById('viewport')!.appendChild(node);
+  }
+
+  private resumeMission(): void {
+    if (!this.paused) return;
+    this.clearPauseOverlay();
+    this.paused = false;
+    if (!DEBUG && this.screen === 'play') this.input.requestLock();
+  }
+
+  /** Drop play-state and audio without showing debrief (pause menu abort). */
+  private leaveMission(): void {
+    this.clearPauseOverlay();
+    this.paused = false;
+    this.automap.close();
+    this.dossier.close();
+    this.audio.stopAmbience();
+    document.exitPointerLock?.();
+    this.map = null;
+    this.runtime = null;
+    this.player = null;
+    this.projectiles = [];
+    this.prepared = null;
+    this.endTimer = null;
+    this.endCalled = false;
   }
 
   private showTitle(): void {
@@ -223,17 +288,20 @@ class Game {
       this.gender = g;
       this.audio.sfx('click');
       this.showMissionSelect();
-    }));
+    }, () => this.showTitle()));
   }
 
   private showMissionSelect(): void {
-    this.setScreen('mission-select', screens.missionSelect((id) => this.showBriefing(id)));
+    this.setScreen('mission-select', screens.missionSelect(
+      (id) => this.showBriefing(id),
+      () => this.showCharSelect(),
+    ));
   }
 
   private showBriefing(id: string): void {
     const m = missionRegistry.require(id);
     this.prepareMission(id);
-    this.setScreen('briefing', screens.briefing(m, () => this.deploy(id)));
+    this.setScreen('briefing', screens.briefing(m, () => this.deploy(id), () => this.showMissionSelect()));
   }
 
   // ---------- mission prep (background work while the briefing is up) ----------
@@ -541,6 +609,7 @@ class Game {
 
   private tick(dt: number): void {
     if (this.screen !== 'play' || !this.map || !this.player || !this.runtime) return;
+    if (this.paused) return;
     if (this.dossier.isOpen) {
       this.consumeDossierInput();
       return;

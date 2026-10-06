@@ -36,7 +36,7 @@ export function onKeysWhileMounted(node: HTMLElement, fn: (e: KeyboardEvent) => 
   setTimeout(() => window.addEventListener('keydown', handler), 250);
 }
 
-export function briefing(mission: Mission, onGo: () => void): HTMLElement {
+export function briefing(mission: Mission, onGo: () => void, onBack?: () => void): HTMLElement {
   const teach = teachingRegistry.get(mission.id);
   const idx = arcIndex(mission.id);
   const orders = teach?.orders ?? mission.missionObjectives.map((o) => ({ text: o.text, objective: '' }));
@@ -55,6 +55,9 @@ export function briefing(mission: Mission, onGo: () => void): HTMLElement {
       for (const order of orders.slice(0, 3)) ol.appendChild(h('li', '', order.text));
       page.appendChild(ol);
       const buttons = h('div', 'cd-brief-actions');
+      if (onBack) {
+        buttons.appendChild(bigButton('BACK  [ESC]', onBack, 'cd-btn alt'));
+      }
       buttons.appendChild(bigButton('DETAILS  [D]', () => {
         detailsOpen = true;
         render();
@@ -116,7 +119,13 @@ export function briefing(mission: Mission, onGo: () => void): HTMLElement {
     if (e.key === 'Enter') {
       e.preventDefault();
       onGo();
-    } else if (e.key.toLowerCase() === 'd' || (e.key === 'Escape' && detailsOpen)) {
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      if (detailsOpen) {
+        detailsOpen = false;
+        render();
+      } else if (onBack) onBack();
+    } else if (e.key.toLowerCase() === 'd') {
       e.preventDefault();
       detailsOpen = !detailsOpen;
       render();

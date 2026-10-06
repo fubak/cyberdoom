@@ -96,7 +96,7 @@ function frame(g: CanvasRenderingContext2D, x: number, y: number, w: number, h: 
   }
 }
 
-export function characterSelect(onPick: (g: Gender) => void): HTMLElement {
+export function characterSelect(onPick: (g: Gender) => void, onBack?: () => void): HTMLElement {
   const s = document.createElement('div');
   s.className = 'screen title';
   const c = document.createElement('canvas');
@@ -190,7 +190,9 @@ export function characterSelect(onPick: (g: Gender) => void): HTMLElement {
     g.fillStyle = '#500804';
     g.fillRect(dx + 1 / RES, dy + dh - 2 / RES, dw - 2 / RES, 1 / RES);
     drawChunky(g, 'DEPLOY', dx + Math.round((dw - measureChunky('DEPLOY')) / 2), dy + 4, ['#ffffff', '#fff0a0', '#ffd040']);
-    const hint = '< > CHOOSE  -  1-5 SKIN TONE  -  ENTER DEPLOY';
+    const hint = onBack
+      ? 'ESC BACK  -  < > CHOOSE  -  1-5 SKIN  -  ENTER DEPLOY'
+      : '< > CHOOSE  -  1-5 SKIN TONE  -  ENTER DEPLOY';
     drawText(g, hint, Math.round((W - measureText(hint, 'tiny')) / 2), H - 7, '#8a90a0', 'tiny');
   };
 
@@ -246,8 +248,21 @@ export function characterSelect(onPick: (g: Gender) => void): HTMLElement {
   }
   SKIN_TONES.forEach((tone, i) => hook(`skin-${i + 1}`, `Skin tone ${i + 1}`, SKIN_X + i * 18 - 2, SKIN_Y - 2, 16, 14, () => pickSkin(tone.id)));
   hook('deploy', 'Deploy', ...DEPLOY, deploy);
+  if (onBack) {
+    hook('back', 'Back to title', 4, H - 14, 52, 10, () => {
+      cleanup();
+      playTool('menu-back');
+      onBack();
+    });
+  }
 
   const onKey = (e: KeyboardEvent) => {
+    if ((e.key === 'Escape' || e.key === 'Backspace') && onBack) {
+      cleanup();
+      playTool('menu-back');
+      onBack();
+      return;
+    }
     if (e.code === 'ArrowLeft' || e.code === 'KeyA') choose('male');
     else if (e.code === 'ArrowRight' || e.code === 'KeyD') choose('female');
     else if (e.code === 'Enter') deploy();
