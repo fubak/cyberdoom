@@ -75,6 +75,7 @@ export const badgeTool: ToolDef = {
   ammo: null,
   cooldown: 0.55,
   windup: WINDUP,
+  blurb: 'BADGE READERS',
   control: {
     name: 'Access badge + role-based access control',
     category: 'physical',
@@ -147,5 +148,12 @@ export const badgeTool: ToolDef = {
       return;
     }
     swipeBadge(ctx, door);
+  },
+  hint(ctx) {
+    const door = ctx.isDoorAhead();
+    if (!door) return { text: 'NO BADGE READER IN REACH', ready: false };
+    // a readerless door opens with E; swiping the badge at it does nothing useful
+    if (door.accessRole === undefined) return { text: 'NO READER: PRESS E TO OPEN', ready: false };
+    return { text: 'SWIPE BADGE AT READER', ready: true };
   },
 };

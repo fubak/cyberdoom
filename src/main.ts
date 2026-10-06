@@ -1,17 +1,18 @@
 import './ui/style.css';
 import { EventBus } from './core/events';
-import type { Entity, Gender, Projectile, Screen } from './core/types';
+import type { Entity, Gender, Mission, Projectile, Screen } from './core/types';
 import { WorldMap } from './engine/map';
 import { Input } from './engine/input';
 import { EYE_HEIGHT, Player } from './engine/player';
 import { alertNear, damageEntity, hurtEntity, traceShot, updateEntities, updateProjectiles } from './engine/ai';
 import { enemyInTheWay, exitEdge } from './engine/interact';
+import { doorUseHint, resolveUse, type UseTargetContext } from './engine/useTarget';
 import { Audio } from './engine/audio';
 import { Feel } from './engine/feel';
 import { ParticleSystem } from './engine/fx';
 import { lookProbe, placeThreat } from './render/probe';
 import { Renderer } from './render/renderer';
-import { spriteSets } from './render/sprites';
+import { prewarmLazySpriteFrames, prioritizeLazySprites, spriteSets } from './render/sprites';
 import { textureRegistry } from './render/textures';
 import { Hud } from './ui/hud';
 import { Automap } from './ui/automap';
@@ -20,7 +21,9 @@ import { RES } from './render/res';
 import { Dossier } from './ui/dossier';
 import * as screens from './ui/screens';
 import { MissionRuntime } from './missions/runtime';
+import { mfaPending } from './tools/badge';
 import { missionRegistry } from './content/missions';
+import { objectiveById } from './content/objectives';
 import { toolForSlot } from './tools';
 import { Arsenal } from './tools/arsenal';
 import { USB_PLUG_RANGE } from './tools/usb';
@@ -80,6 +83,24 @@ class Game {
   private wasOnExit = false;
   private lastAimWarnT = -Infinity;
   private stepPan = 1;
+  // HUD action prompt: computed at ~15 Hz; banner on tool switch.
+  private prompt = {
+    lmb: null as { text: string; ready: boolean } | null,
+    use: null as string | null,
+    lmbHot: false,
+    banner: null as { title: string; blurb: string } | null,
+    footer: null as string | null,
+  };
+  private promptNextT = 0;
+  private lastFireT = -Infinity;
+  private bannerUntil = 0;
+  private lastToolId = '';
+  private switchedTool = false;
+  /** entityId -> simT until which a tool-specific impact FX replaced the generic burst. */
+  private toolFxUntil = new Map<string, number>();
+  /** EDR pulse window: lightning column per hurt target, capped at 96 particles. */
+  private edrPulseUntil = -Infinity;
+  private edrPulseCount = 0;
 
   constructor(app: HTMLElement) {
     const viewport = document.createElement('div');
@@ -88,6 +109,9 @@ class Game {
     setupPresentation(viewport);
     this.renderer = new Renderer(viewport);
     registerThreatSprites();
+    // warm lazy sprite frames in idle slices from boot — the player sits on
+    // title/menus for seconds before the first level render, plenty of idle
+    prewarmLazySpriteFrames();
     this.renderer.canvas.classList.add('gl');
     this.input = new Input(this.renderer.canvas, () => this.audio.unlock());
     this.hud = new Hud(viewport);
@@ -127,8 +151,25 @@ class Game {
       const e = this.runtime?.entities.find((entity) => entity.def.id === entityId);
       if (!e?.alive) return;
       if (!applied) hurtEntity(e, e.x - fromX, e.y - fromY);
-      this.particles.burst(e.x, e.y, 0.4, 'hit');
+      if (this.simT < this.edrPulseUntil && this.edrPulseCount < 96) {
+        this.particles.toolImpact('edr', e.x, e.y, 0.4);
+        this.edrPulseCount += 8;
+      } else if (!((this.toolFxUntil.get(entityId) ?? -Infinity) >= this.simT)) {
+        this.particles.burst(e.x, e.y, 0.4, 'hit');
+      }
       this.audio.sfx('enemy-pain', { x: e.x, y: e.y });
+    });
+    this.bus.on('tool-hit', ({ toolId, entityId, good }) => {
+      if (toolId === 'edr') {
+        this.edrPulseUntil = this.simT + 0.5;
+        this.edrPulseCount = 0;
+        return;
+      }
+      if (!entityId || !good || toolId === 'usb') return;
+      const e = this.runtime?.entities.find((entity) => entity.def.id === entityId);
+      if (!e?.alive) return;
+      this.particles.toolImpact(toolId, e.x, e.y, 0.4, this.player?.x, this.player?.y, good);
+      this.toolFxUntil.set(entityId, this.simT + 0.2);
     });
     this.bus.on('badge-door', ({ doorId, allowed }) => {
       if (allowed) {
@@ -191,7 +232,165 @@ class Game {
 
   private showBriefing(id: string): void {
     const m = missionRegistry.require(id);
-    this.setScreen('briefing', screens.briefing(m, () => this.startMission(id)));
+    this.prepareMission(id);
+    this.setScreen('briefing', screens.briefing(m, () => this.deploy(id)));
+  }
+
+  // ---------- mission prep (background work while the briefing is up) ----------
+
+  private prepared: {
+    id: string;
+    map: WorldMap | null;
+    built: boolean;
+    textures: Parameters<Renderer['initTexture']>[0][];
+    texIndex: number;
+    stage: number;
+    ready: boolean;
+  } | null = null;
+
+  private scheduleIdle(cb: () => void): void {
+    const w = window as Window & {
+      requestIdleCallback?: (c: () => void, opts?: { timeout: number }) => number;
+    };
+    if (w.requestIdleCallback) w.requestIdleCallback(cb, { timeout: 200 });
+    else window.setTimeout(cb, 0);
+  }
+
+  /** Idle-slice setup for a mission the player is about to deploy into. */
+  private prepareMission(id: string): void {
+    const p = { id, map: null as WorldMap | null, built: false, textures: [] as Parameters<Renderer['initTexture']>[0][], texIndex: 0, stage: 0, ready: false };
+    this.prepared = p;
+    const step = () => {
+      if (this.prepared !== p || p.ready) return; // superseded or finished
+      const t0 = performance.now();
+      while (performance.now() - t0 < 3 && !p.ready) this.prepStep(p);
+      if (!p.ready) this.scheduleIdle(step);
+    };
+    this.scheduleIdle(step);
+  }
+
+  private prepStep(p: NonNullable<Game['prepared']>): void {
+    const mission = missionRegistry.require(p.id);
+    switch (p.stage) {
+      case 0: // pure setup: parse the map
+        p.map = new WorldMap(mission.map);
+        p.stage++;
+        break;
+      case 1: { // level geometry + light
+        this.renderer.buildLevel(p.map!, mission.map);
+        p.built = true;
+        // texture warm list: every level texture + already-materialized sprite
+        // frames for the sets this mission uses (lazy getters are skipped so
+        // prep never forces a raster here)
+        const setIds = [...new Set(mission.entities.map((e) => e.sprite))];
+        const texs: Parameters<Renderer['initTexture']>[0][] = [...textureRegistry.all()];
+        for (const id of setIds) {
+          const set = spriteSets.get(id);
+          if (!set) continue;
+          for (const desc of Object.values(Object.getOwnPropertyDescriptors(set.frames))) {
+            if (!desc.get && desc.value) texs.push(desc.value);
+          }
+        }
+        p.textures = texs;
+        p.stage++;
+        break;
+      }
+      case 2: { // GPU texture uploads, a few per slice
+        const setIds = [...new Set(mission.entities.map((e) => e.sprite))];
+        prioritizeLazySprites(setIds);
+        for (let i = 0; i < 8 && p.texIndex < p.textures.length; i++) {
+          this.renderer.initTexture(p.textures[p.texIndex++]);
+        }
+        if (p.texIndex >= p.textures.length) p.stage++;
+        break;
+      }
+      case 3: { // throwaway runtime on a dead bus: builds initial entities so
+        // syncEntities can create their meshes/materials during prep; startMission
+        // still builds its own runtime on the real bus
+        const rt = new MissionRuntime(mission, new EventBus());
+        this.renderer.syncEntities(rt.entities, []);
+        p.stage++;
+        break;
+      }
+      case 4: // shader compile (scene now includes the sprite materials)
+        this.renderer.compileScene();
+        p.stage++;
+        break;
+      case 5: { // first-frame uploads/program links off the critical path
+        const sp = mission.map.spawn;
+        this.renderer.warmRender(sp.x, sp.y, sp.angle);
+        p.stage++;
+        break;
+      }
+      case 6: // HUD glyph/bar caches
+        this.warmHud(mission);
+        p.ready = true;
+        break;
+    }
+  }
+
+  /** One offscreen-style hud.draw so glyph/bar caches are hot before the first in-level frame. */
+  private warmHud(mission: Mission): void {
+    const ars = this.arsenal;
+    ars.reset(mission, this.gender);
+    this.hud.draw({
+      integrity: 100,
+      ammo: ars.ammoFor(),
+      ammoName: ars.current.ammo?.resource ?? '',
+      tool: ars.current,
+      bob: 0,
+      cooldownFrac: 0,
+      gender: this.gender,
+      anim: ars.anim(),
+      owned: [...ars.owned],
+      resources: ars.resources(),
+      face: (g, x, y) => ars.drawFace(g, x, y, 100),
+      credentials: this.role,
+      objectives: mission.objectives.map((id) => ({ text: objectiveById(id)?.title ?? id, done: false, failed: false })),
+      progress: { done: 0, total: mission.objectives.length, failed: false },
+      prompt: {
+        lmb: { text: 'INSPECT WORKSTATION', ready: true },
+        use: 'INSPECT FIRST (MOUSE 2)',
+        banner: { title: '2 MOUSE', blurb: 'INSPECT / FLAG' },
+        footer: '1-8 / WHEEL / Q: SWITCH TOOL',
+      },
+    });
+    // entry message glyphs + the forced objective strip
+    this.hud.pushMessage(`${mission.title} — good luck, analyst`, 'info');
+    this.hud.warmDraw({
+      integrity: 94,
+      ammo: ars.ammoFor(),
+      ammoName: ars.current.ammo?.resource ?? '',
+      tool: ars.current,
+      bob: 0,
+      cooldownFrac: 0.4,
+      gender: this.gender,
+      anim: ars.anim(),
+      owned: [...ars.owned],
+      resources: ars.resources(),
+      face: (g, x, y) => ars.drawFace(g, x, y, 94),
+      credentials: this.role,
+      objectives: mission.objectives.map((id) => ({ text: objectiveById(id)?.title ?? id, done: false, failed: false })),
+      progress: { done: 0, total: mission.objectives.length, failed: false },
+    });
+    this.hud.clearMessages();
+  }
+
+  /** DEPLOY: enter immediately if prep is done; otherwise plate up and finish it off-screen. */
+  private deploy(id: string): void {
+    const p = this.prepared;
+    if (p && p.id === id && !p.ready) {
+      this.setScreen('loading', screens.loadingScreen());
+      // two rAFs: let the plate paint, then finish remaining prep synchronously
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          while (!p.ready) this.prepStep(p);
+          this.startMission(id);
+        }),
+      );
+      return;
+    }
+    this.startMission(id);
   }
 
   private showDebrief(): void {
@@ -214,7 +413,9 @@ class Game {
 
   private startMission(id: string): void {
     const mission = missionRegistry.require(id);
-    this.map = new WorldMap(mission.map);
+    const prep = this.prepared && this.prepared.id === id ? this.prepared : null;
+    this.prepared = null; // prep is consumed; a retry re-runs the synchronous path
+    this.map = prep?.map ?? new WorldMap(mission.map);
     this.runtime = new MissionRuntime(mission, this.bus);
     this.dossier.reset();
     const sp = mission.map.spawn;
@@ -234,7 +435,16 @@ class Game {
     this.deathRoll = 0;
     this.wasOnExit = false;
     this.lastAimWarnT = -Infinity;
-    this.renderer.buildLevel(this.map, mission.map);
+    this.prompt = { lmb: null, use: null, lmbHot: false, banner: null, footer: null };
+    this.promptNextT = 0;
+    this.lastFireT = -Infinity;
+    this.bannerUntil = 0;
+    this.lastToolId = this.arsenal.current.id;
+    this.switchedTool = false;
+    this.toolFxUntil.clear();
+    this.edrPulseUntil = -Infinity;
+    this.edrPulseCount = 0;
+    if (!prep?.built) this.renderer.buildLevel(this.map, mission.map);
     this.audio.setVoice(this.gender);
     this.audio.setListener(this.player.x, this.player.y, this.player.angle);
     this.audio.startAmbience();
@@ -308,6 +518,7 @@ class Game {
         credentials: this.runtime.roles[this.runtime.roles.length - 1] ?? this.role,
         objectives: this.runtime.objectiveSummary(),
         progress: this.runtime.hudProgress(),
+        prompt: this.prompt,
       });
       this.automap.draw(
         this.map.def,
@@ -343,8 +554,17 @@ class Game {
     // Tool switching (lower → swap → raise) is owned by the arsenal.
     const ending = runtime.finished !== null;
     if (!ending && this.input.slotPressed) this.arsenal.select(this.input.slotPressed);
+    if (!ending && this.input.cyclePressed) this.arsenal.cycle(1);
     const wheel = this.input.consumeWheel();
     if (!ending && wheel !== 0) this.arsenal.cycle(wheel);
+
+    // Switch banner + first-switch tracking (title swaps when the raise begins).
+    if (this.arsenal.current.id !== this.lastToolId) {
+      this.lastToolId = this.arsenal.current.id;
+      this.bannerUntil = this.simT + 1.4;
+      this.switchedTool = true;
+    }
+    this.updatePrompt(ending);
 
     const solids = runtime.entities
       .filter((e) => e.alive && ['enemy', 'npc', 'workstation', 'console'].includes(e.def.kind))
@@ -378,6 +598,7 @@ class Game {
 
     // fire (windup → impact → recover, ammo, auto-repeat and input buffering live in the arsenal)
     const fired = !ending && (this.input.firePressed || this.debugFire);
+    if (fired) this.lastFireT = this.simT;
     if (fired && ['mouse', 'patch', 'usb'].includes(this.arsenal.current.id)) {
       const blocker = enemyInTheWay(runtime.entities, p.x, p.y, p.angle, map);
       if (blocker && this.simT - this.lastAimWarnT >= 1) {
@@ -392,20 +613,18 @@ class Game {
     this.arsenal.update(dt, !ending && this.input.fireHeld, fired, () => this.toolCtx());
 
     if (!ending && !this.arsenal.switching && this.input.usePressed && this.useCd <= 0) {
-      const ctx = this.toolCtx();
-      const door = ctx.isDoorAhead();
-      if (door && !map.isDoorOpen(door.doorId)) {
+      const r = resolveUse(this.useCtx());
+      if (r.kind === 'door') {
         // runtime.update() handled the door above (open / swipe / reader info).
         this.useCd = 0.3;
-        if (door.accessRole !== undefined && !runtime.roles.includes(door.accessRole)) {
+        if (r.door.accessRole !== undefined && !runtime.roles.includes(r.door.accessRole)) {
           this.audio.sfx('oof');
         }
-      } else if (!ctx.aimEntity(1.4, 0.5) && ctx.wallDistance < 1.2) {
+      } else if (r.kind === 'bump') {
         this.audio.sfx('oof');
       } else {
         this.useCd = 0.3;
-        const target = ctx.aimEntity(1.5, 0.5);
-        if (target) this.bus.emit('interact', { entityId: target.def.id });
+        if (r.kind === 'entity') this.bus.emit('interact', { entityId: r.entity.def.id });
       }
     }
 
@@ -458,7 +677,7 @@ class Game {
           if (result === 'killed') {
             this.bus.emit('cleaned', { entityId: hit.def.id });
           } else {
-            this.particles.burst(x, y, 0.4, 'hit');
+            this.particles.toolImpact('usb', x, y, 0.4);
             if (hit.def.kind === 'enemy') {
               this.audio.sfx('enemy-pain', { x: hit.x, y: hit.y });
             }
@@ -573,6 +792,60 @@ class Game {
         this.hud.pushMessage('Scan session wasted: that target is not infected.', 'warn');
       }
     }
+  }
+
+  /** E/Space target context: shared by the E action and the HUD prompt. */
+  private useCtx(): UseTargetContext {
+    const tool = this.toolCtx();
+    const map = this.map!;
+    const rt = this.runtime!;
+    return {
+      isDoorAhead: tool.isDoorAhead,
+      isDoorOpen: (doorId) => map.isDoorOpen(doorId),
+      aimEntity: tool.aimEntity,
+      wallDistance: tool.wallDistance,
+      roles: rt.roles,
+      hasBadge: this.arsenal.owns('badge'),
+      mfaPending: mfaPending(rt.entities),
+    };
+  }
+
+  /**
+   * Action prompt (~15 Hz): what LMB does (current tool's hint(), with the
+   * ammo-0 override) and what E does (resolveUse -> interactHint/doorUseHint).
+   * Hidden while switching tools, in dossier/automap, at mission end, and
+   * when the pointer isn't locked.
+   */
+  private updatePrompt(ending: boolean): void {
+    this.prompt.lmbHot = this.simT - this.lastFireT < 0.25;
+    this.prompt.banner = this.simT < this.bannerUntil
+      ? { title: `${this.arsenal.current.slot} ${this.arsenal.current.name}`, blurb: this.arsenal.current.blurb ?? '' }
+      : null;
+    this.prompt.footer = !this.switchedTool && this.simT < 25 ? '1-8 / WHEEL / Q: SWITCH TOOL' : null;
+    const hidden =
+      ending ||
+      this.arsenal.switching ||
+      this.dossier.isOpen ||
+      this.automap.isOpen ||
+      (!this.input.pointerLocked && !DEBUG);
+    if (this.simT < this.promptNextT || hidden) {
+      if (hidden) {
+        this.prompt.lmb = null;
+        this.prompt.use = null;
+      }
+      return;
+    }
+    this.promptNextT = this.simT + 1 / 15;
+    const tool = this.arsenal.current;
+    const ctx = this.toolCtx();
+    let lmb = tool.hint?.(ctx) ?? null;
+    const ammo = tool.ammo ? this.arsenal.ammoFor(tool) : null;
+    if (ammo === 0) lmb = { text: `OUT OF ${tool.ammo!.resource.toUpperCase()}`, ready: false };
+    this.prompt.lmb = lmb;
+    const r = resolveUse(this.useCtx());
+    if (r.kind === 'door') this.prompt.use = doorUseHint(this.useCtx(), r.door);
+    else if (r.kind === 'entity') this.prompt.use = this.runtime!.interactHint(r.entity);
+    else this.prompt.use = null;
   }
 
   // ---------- tool context ----------

@@ -27,7 +27,7 @@ export function titleScreen(onStart: () => void): HTMLElement {
     'CLEAN MALWARE. ENFORCE LEAST PRIVILEGE. CATCH THE INSIDER.',
     '',
     'WASD MOVE - MOUSE LOOK - ARROWS TURN - SHIFT RUN',
-    'LMB USE TOOL - E/SPACE INTERACT - 1-8 / WHEEL SELECT TOOL',
+    'LMB USE TOOL - E/SPACE INTERACT - 1-8 / WHEEL / Q SELECT TOOL',
     '',
     'PRESS ANY KEY OR CLICK TO GO BACK',
   ]);
@@ -133,6 +133,16 @@ export function missionSelect(onPick: (id: string) => void): HTMLElement {
       s.scrollTop = Math.max(0, nextRow.offsetTop - 96);
     }
   });
+  return s;
+}
+
+/** DEPLOY pressed before background prep finished: Doom-style plate while the last steps run. */
+export function loadingScreen(): HTMLElement {
+  const s = el('div', 'screen cd-inter');
+  const inner = el('div', 'cd-loading-plate');
+  inner.appendChild(el('h1', '', 'LOADING SECTOR…'));
+  inner.appendChild(el('p', '', 'STAND BY'));
+  s.appendChild(inner);
   return s;
 }
 

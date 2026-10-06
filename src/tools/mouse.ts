@@ -1,7 +1,9 @@
 import type { Entity, ToolDef, ToolUseContext } from '../core/types';
 import { impactBurst, usePhase, tipY } from './anim';
+import { targetNoun } from './hint';
 import { ellipse, pill, rect, shade } from './pixel';
 import { flatHand, handLook, sleeve } from './shared';
+import { patchTool } from './patch';
 
 const WINDUP = 0.03;
 
@@ -25,6 +27,7 @@ export const mouseTool: ToolDef = {
   ammo: null,
   cooldown: 0.3,
   windup: WINDUP,
+  blurb: 'INSPECT / FLAG',
   control: {
     name: 'Analysis & triage (indicator review)',
     category: 'operational',
@@ -66,7 +69,7 @@ export const mouseTool: ToolDef = {
     flatHand(g, cx - 2, cy - 30 + press * 2, 16, look, 1, Math.round(press * 3));
   },
   drawFx(g, w, _h, anim) {
-    impactBurst(g, w / 2, tipY(_h), anim.sinceConfirm, anim.confirmGood, 0.6);
+    impactBurst(g, w / 2, tipY(_h), anim.sinceConfirm, anim.confirmGood, 0.6, 'select');
   },
   use(ctx: ToolUseContext) {
     const e = ctx.aimEntity(8, 0.26);
@@ -92,7 +95,7 @@ export const mouseTool: ToolDef = {
     }
     if (e.def.tags?.includes('triage')) {
       if (e.def.tags.includes('vulnerability-confirmed') && !e.infected) {
-        ctx.bus.emit('message', { text: 'Confirmed finding: apply a PATCH disk [8] to remediate.', kind: 'info' });
+        ctx.bus.emit('message', { text: `Confirmed finding: apply a PATCH disk [${patchTool.slot}] to remediate.`, kind: 'info' });
         return;
       }
       ctx.bus.emit('message', { text: 'Decide from the raw evidence: SCANNER quarantines/patches, KEYBOARD releases.', kind: 'info' });
@@ -109,5 +112,14 @@ export const mouseTool: ToolDef = {
     ctx.bus.emit('message', verdictCorrect
       ? { text: `TRUE POSITIVE: ${e.def.inspect?.label ?? 'target'} flagged. Response tools hit it twice as hard.`, kind: 'good' }
       : { text: `FALSE POSITIVE: ${e.def.inspect?.label ?? 'target'} shows no malicious indicators. Re-read the evidence.`, kind: 'bad' });
+  },
+  hint(ctx) {
+    const e = ctx.aimEntity(8, 0.26);
+    if (!e) return { text: 'INSPECT: AIM AT A TARGET', ready: false };
+    if (!e.state.inspected) return { text: `INSPECT ${targetNoun(e)}`, ready: true };
+    if (e.state.flagged) return { text: 'ALREADY FLAGGED', ready: false };
+    if (e.def.tags?.includes('triage')) return { text: 'CHOOSE A RESPONSE TOOL', ready: false };
+    if (e.def.inspect?.category === 'person') return { text: 'REPORT VIA SECURITY CONSOLE', ready: false };
+    return { text: `FLAG ${targetNoun(e)} AS MALICIOUS`, ready: true };
   },
 };

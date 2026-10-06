@@ -81,6 +81,111 @@ export class ParticleSystem {
     this.add(x, y, z, 0, 0, 0, 0, 0.1, [1, 1, 0.72], 0.28, 7);
   }
 
+  /**
+   * Per-tool impact signature at a hit point (<=32 particles per call).
+   * `tx`,`ty` (optional) aim packets back toward the player for 'tap';
+   * `good` tints the badge/mfa reader sparkle.
+   */
+  toolImpact(tool: string, x: number, y: number, z: number, tx?: number, ty?: number, good = true): void {
+    const rng = this.rng;
+    switch (tool) {
+      case 'keyboard': {
+        // amber/white keycap shards flung outward, heavy gravity
+        // spray away from the player (tangentially at most) so shards
+        // never fly at the camera and smear across the view
+        const away = tx === undefined ? 0 : Math.atan2(y - ty!, x - tx);
+        const haveTarget = tx !== undefined && (x - tx !== 0 || y - ty! !== 0);
+        for (let i = 0; i < 14; i++) {
+          const a = haveTarget ? away + (rng() - 0.5) * 2.4 : rng() * Math.PI * 2;
+          const sp = 0.4 + rng() * 0.7;
+          this.add(x, y, z + rng() * 0.2,
+            Math.cos(a) * sp, Math.sin(a) * sp, 1.2 + rng() * 1.4, 4.5,
+            0.35 + rng() * 0.2,
+            i % 4 === 0 ? [1, 1, 1] : [1, 0.68 + rng() * 0.2, 0.1],
+            0.05 + rng() * 0.05, 3);
+        }
+        break;
+      }
+      case 'usb': {
+        // cyan expanding scan ring (radial, no gravity) + short rising column
+        for (let i = 0; i < 16; i++) {
+          const a = (i / 16) * Math.PI * 2;
+          this.add(x, y, z + 0.05,
+            Math.cos(a) * 2.4, Math.sin(a) * 2.4, 0.1, 0,
+            0.3, [0.3, 0.9, 1], 0.035, 3);
+        }
+        for (let i = 0; i < 6; i++) {
+          this.add(x + (rng() - 0.5) * 0.3, y + (rng() - 0.5) * 0.3, rng() * 0.2,
+            0, 0, 1.6 + rng(), 0, 0.35 + rng() * 0.2,
+            [0.6 + rng() * 0.3, 0.95, 1], 0.04, 4);
+        }
+        break;
+      }
+      case 'edr': {
+        // blue-white lightning column stacked floor to head height
+        for (let i = 0; i < 8; i++) {
+          const zz = (i / 7) * 1.2;
+          this.add(x + (rng() - 0.5) * 0.22, y + (rng() - 0.5) * 0.22, zz,
+            (rng() - 0.5) * 0.4, (rng() - 0.5) * 0.4, 0.3 + rng() * 0.6, 0,
+            0.28 + rng() * 0.15,
+            i % 3 === 0 ? [1, 1, 1] : [0.45 + rng() * 0.25, 0.75, 1],
+            0.05, 4);
+        }
+        break;
+      }
+      case 'tap': {
+        // violet packets streaming back toward the player
+        const dx = tx === undefined ? 0 : tx - x;
+        const dy = ty === undefined ? 0 : ty - y;
+        const d = Math.hypot(dx, dy) || 1;
+        for (let i = 0; i < 10; i++) {
+          const k = 1.6 + rng() * 1.4;
+          this.add(x + (rng() - 0.5) * 0.4, y + (rng() - 0.5) * 0.4, z + (rng() - 0.5) * 0.4,
+            (dx / d) * k + (rng() - 0.5) * 0.4, (dy / d) * k + (rng() - 0.5) * 0.4, (rng() - 0.5) * 0.5, 0,
+            0.45 + rng() * 0.2, [0.7 + rng() * 0.2, 0.4, 1], 0.04, 3);
+        }
+        break;
+      }
+      case 'mouse': {
+        // yellow descending scan-line column
+        for (let i = 0; i < 8; i++) {
+          this.add(x + (rng() - 0.5) * 0.3, y + (rng() - 0.5) * 0.3, z + 0.4 + rng() * 0.5,
+            0, 0, -(1.4 + rng()), 0, 0.4 + rng() * 0.2,
+            [1, 0.9, 0.3], 0.045, 4);
+        }
+        break;
+      }
+      case 'patch': {
+        // green rising cross (+) cluster
+        for (let i = 0; i < 10; i++) {
+          const arm = i % 4;
+          const r = i === 0 ? 0 : 0.06 + rng() * 0.1;
+          this.add(
+            x + (arm === 0 ? r : arm === 1 ? -r : 0),
+            y + (arm === 2 ? r : arm === 3 ? -r : 0),
+            z + rng() * 0.15,
+            0, 0, 0.8 + rng() * 0.8, 0, 0.5 + rng() * 0.2,
+            [0.35, 1, 0.45], 0.045, 4);
+        }
+        break;
+      }
+      case 'mfa':
+      case 'badge': {
+        // small reader sparkle; green on accept, red on refuse
+        const col: Color = good ? [0.4, 1, 0.5] : [1, 0.35, 0.25];
+        for (let i = 0; i < 6; i++) {
+          const a = rng() * Math.PI * 2;
+          this.add(x, y, z + rng() * 0.2,
+            Math.cos(a) * 0.5, Math.sin(a) * 0.5, 0.5 + rng() * 0.8, 1.5,
+            0.25 + rng() * 0.15, col, 0.04, 4);
+        }
+        break;
+      }
+      default:
+        break;
+    }
+  }
+
   /** Doom teleport-fog analogue: a pale column rising where a threat spawns. */
   spawn(x: number, y: number): void {
     for (let i = 0; i < 40; i++) {

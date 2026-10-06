@@ -3,6 +3,8 @@ import { impactBurst, usePhase, tipY } from './anim';
 import { bevel, rect } from './pixel';
 import { drawText } from './pixelfont';
 import { fist, handLook, sleeve } from './shared';
+import { mouseTool } from './mouse';
+import { usbTool } from './usb';
 
 const WINDUP = 0.12;
 
@@ -20,6 +22,7 @@ export const patchTool: ToolDef = {
   ammo: { resource: 'patch-disk', start: 3, max: 6 },
   cooldown: 0.55,
   windup: WINDUP,
+  blurb: 'PATCH DISK: CLOSE VULNS',
   unlock: { difficulty: 9 },
   control: {
     name: 'Patch management (vendor security update)',
@@ -49,7 +52,7 @@ export const patchTool: ToolDef = {
     fist(g, x0 + 14, y0 + 34, 26, look, 1);
   },
   drawFx(g, w, h, anim) {
-    impactBurst(g, w / 2, tipY(h), anim.sinceConfirm, anim.confirmGood);
+    impactBurst(g, w / 2, tipY(h), anim.sinceConfirm, anim.confirmGood, 1, 'patch');
   },
   use(ctx: ToolUseContext) {
     ctx.bus.emit('tool-used', { toolId: 'patch' });
@@ -62,7 +65,7 @@ export const patchTool: ToolDef = {
     if (e.def.tags?.includes('triage') && ctx.isInspected && !ctx.isInspected(e.def.id)) {
       ctx.bus.emit('tool-hit', { toolId: 'patch', entityId: e.def.id, good: false });
       ctx.bus.emit('message', {
-        text: `Confirm the finding first: inspect ${name} with MOUSE [2].`,
+        text: `Confirm the finding first: inspect ${name} with MOUSE [${mouseTool.slot}].`,
         kind: 'warn',
       });
       return false;
@@ -83,5 +86,15 @@ export const patchTool: ToolDef = {
     ctx.bus.emit('tool-hit', { toolId: 'patch', entityId: e.def.id, good: true });
     ctx.bus.emit('message', { text: `PATCHED ${name}: known vulnerability closed before anyone can exploit it.`, kind: 'good' });
     return true;
+  },
+  hint(ctx) {
+    const e = ctx.aimEntity(1.8, 0.45);
+    if (!e || e.def.kind !== 'workstation') return { text: 'NO WORKSTATION IN REACH', ready: false };
+    if (e.def.tags?.includes('triage') && ctx.isInspected && !ctx.isInspected(e.def.id)) {
+      return { text: `INSPECT FIRST (MOUSE ${mouseTool.slot})`, ready: false };
+    }
+    if (e.infected && e.state.revealed) return { text: `CLEAN IT FIRST (SCANNER ${usbTool.slot})`, ready: false };
+    if (e.state.patched) return { text: 'ALREADY PATCHED', ready: false };
+    return { text: 'APPLY PATCH: WORKSTATION', ready: true };
   },
 };

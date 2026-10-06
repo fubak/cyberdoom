@@ -9,6 +9,7 @@ import type {
 import { objectiveById } from '../content/objectives';
 import type { WorldMap } from '../engine/map';
 import { mfaPending, swipeBadge } from '../tools/badge';
+import { mouseTool } from '../tools/mouse';
 import { difficultyScale } from './difficulty';
 
 /**
@@ -602,6 +603,45 @@ export class MissionRuntime {
 
   wasInspected(id: string): boolean {
     return this.inspected.has(id);
+  }
+
+  /**
+   * What E would do on this entity, mirroring the interact handler's branch
+   * order without performing it. No verdicts: a 'wrong'/'decoy' console reads
+   * the same as any console and no hidden state is revealed.
+   */
+  interactHint(e: Entity): string | null {
+    if (!e.alive) return null;
+
+    if (e.def.kind === 'workstation' && e.def.tags?.includes('triage')) {
+      if (!this.inspected.has(e.def.id)) return `INSPECT FIRST (MOUSE ${mouseTool.slot})`;
+      return 'FILE TRIAGE CALL';
+    }
+
+    if (e.def.accepts) {
+      const item = this.entities.find(
+        (candidate) =>
+          this.inventory.has(candidate.def.id) &&
+          candidate.def.tags?.includes(e.def.accepts!),
+      );
+      return item ? 'HAND OVER ITEM' : 'NOTHING TO HAND OVER';
+    }
+
+    if (e.def.reportable) return 'MARK AS SUSPECT';
+
+    if (e.def.kind === 'console') {
+      if (this.pendingAccusation && e.def.tags?.includes('report-console')) return 'FILE REPORT';
+      return 'USE CONSOLE';
+    }
+
+    if (e.def.kind === 'workstation') {
+      // infected is only visible once the renderer reveals the infected sprite
+      if (!e.state.revealed) return `INSPECT FIRST (MOUSE ${mouseTool.slot})`;
+      if (e.infected) return 'MANUAL CLEANUP';
+      return null;
+    }
+
+    return null;
   }
 
   update(dt: number, w: UpdateWorld): void {

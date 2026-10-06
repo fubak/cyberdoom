@@ -95,6 +95,25 @@ describe('Input pointer-lock fire suppression', () => {
     expect(input.fireHeld).toBe(true);
   });
 
+  it('maps Numpad1-9 to slots and KeyQ to cyclePressed', () => {
+    const { input, fakeWindow } = fixture();
+    fakeWindow.dispatchEvent(keyboardEvent('keydown', 'Numpad3'));
+    input.poll();
+    expect(input.slotPressed).toBe(3);
+    input.poll();
+    expect(input.slotPressed).toBeNull();
+
+    fakeWindow.dispatchEvent(keyboardEvent('keydown', 'KeyQ'));
+    input.poll();
+    expect(input.cyclePressed).toBe(true);
+    input.poll();
+    expect(input.cyclePressed).toBe(false);
+
+    fakeWindow.dispatchEvent(keyboardEvent('keydown', 'Digit5'));
+    input.poll();
+    expect(input.slotPressed).toBe(5);
+  });
+
   it('keeps KeyF firing through pointer-lock changes', () => {
     const { input, fakeWindow, setLock } = fixture();
     fakeWindow.dispatchEvent(keyboardEvent('keydown', 'KeyF'));

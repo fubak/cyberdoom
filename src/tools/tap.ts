@@ -23,6 +23,7 @@ export const tapTool: ToolDef = {
   ammo: { resource: 'pcap', start: 6, max: 12 },
   cooldown: 0.7,
   windup: WINDUP,
+  blurb: 'CAPTURE TRAFFIC',
   unlock: { difficulty: 6 },
   control: {
     name: 'Network tap / passive sensor (packet capture)',
@@ -84,7 +85,7 @@ export const tapTool: ToolDef = {
       }
       glow(g, w / 2, 110, 40, '90,255,150', 0.3 * (1 - k));
     }
-    impactBurst(g, w / 2, tipY(_h), anim.sinceConfirm, anim.confirmGood, 1.3);
+    impactBurst(g, w / 2, tipY(_h), anim.sinceConfirm, anim.confirmGood, 1.3, 'packets');
   },
   use(ctx: ToolUseContext) {
     ctx.bus.emit('tool-used', { toolId: 'tap' });
@@ -112,6 +113,22 @@ export const tapTool: ToolDef = {
       text: `${seen.length} host(s) copied. No verdict: MOUSE (2) decides.`,
       kind: 'info',
     });
+  },
+  hint(ctx) {
+    let n = 0;
+    for (const e of ctx.entities) {
+      if (!e.alive || e.def.kind === 'item' || e.def.kind === 'npc' || e.def.kind === 'prop') continue;
+      const dx = e.x - ctx.playerX;
+      const dy = e.y - ctx.playerY;
+      if (Math.hypot(dx, dy) > RANGE) continue;
+      let da = Math.atan2(dy, dx) - ctx.playerAngle;
+      da = Math.atan2(Math.sin(da), Math.cos(da));
+      if (Math.abs(da) > CONE) continue;
+      if (ctx.lineOfSight && !ctx.lineOfSight(ctx.playerX, ctx.playerY, e.x, e.y)) continue;
+      n++;
+    }
+    if (n > 0) return { text: `CAPTURE TRAFFIC (${n} IN VIEW)`, ready: true };
+    return { text: 'CAPTURE TRAFFIC: NO HOSTS IN VIEW', ready: false };
   },
 };
 
