@@ -2,11 +2,14 @@ import type { Gender, ToolDef, ViewmodelAnim } from '../core/types';
 import { usePhase, vmLine } from '../tools/anim';
 import { currentSkin } from '../tools/look';
 import { shade } from '../tools/pixel';
+import { ANALYSTS } from '../tools/look';
+import { cylTone, outlineNative, painter, type Painter } from './hires';
+import { RES } from './res';
 
 /**
  * LOOK: Doom-style first-person tool viewmodels. Each tool is pixel-painted
- * once per (tool, gender, pose) into a small offscreen canvas with a dark
- * 1px outline, then blitted every frame with walk bob and use-recoil.
+ * once per (tool, gender, pose) into an offscreen canvas at native (RES x)
+ * resolution with a dark outline, then blitted every frame with walk bob and use-recoil.
  * The USB scanner gets a fullbright muzzle flash when it fires.
  */
 type Px = (c: string, x: number, y: number, w?: number, h?: number) => void;
@@ -35,71 +38,119 @@ const CUFF: Record<Gender, string[]> = {
   female: ['#2aa8a0', '#147a74', '#0a4440'],
 };
 
-function paint(w: number, h: number, ox: number, fn: (px: Px) => void): Art {
-  const c = document.createElement('canvas');
-  c.width = w;
-  c.height = h;
-  const g = c.getContext('2d')!;
-  const px: Px = (col, x, y, ww = 1, hh = 1) => {
-    g.fillStyle = col;
-    g.fillRect(x, y, ww, hh);
-  };
-  fn(px);
-  // 1px dark outline around every opaque region
-  const img = g.getImageData(0, 0, w, h);
-  const d = img.data;
-  const out = new Uint8ClampedArray(d);
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      const i = (y * w + x) * 4;
-      if (d[i + 3] > 0) continue;
-      const solid = (xx: number, yy: number) => xx >= 0 && yy >= 0 && xx < w && yy < h && d[(yy * w + xx) * 4 + 3] > 0;
-      if (solid(x - 1, y) || solid(x + 1, y) || solid(x, y - 1) || solid(x, y + 1)) {
-        out[i] = 8;
-        out[i + 1] = 6;
-        out[i + 2] = 10;
-        out[i + 3] = 255;
-      }
-    }
+function paint(w: number, h: number, ox: number, fn: (px: Px, P: Painter) => void): Art {
+  const P = painter(w, h);
+  const px: Px = (col, x, y, ww = 1, hh = 1) => P.rect(x, y, ww, hh, col);
+  fn(px, P);
+  const top = outlineNative(P.g, P.c.width, P.c.height, 2);
+  return { c: P.c, ox, top: top / RES };
+}
+
+/** Fabric weave: a sparse diagonal twill in the shadow tone, one native pixel wide. */
+function weave(P: Painter, x: number, y: number, w: number, h: number, col: string): void {
+  const k = P.k;
+  P.g.fillStyle = col;
+  for (let yy = Math.round(y * k); yy < Math.round((y + h) * k); yy++)
+    for (let xx = Math.round(x * k); xx < Math.round((x + w) * k); xx++) if ((xx + yy * 3) % 7 === 0) P.g.fillRect(xx, yy, 1, 1);
+}
+
+/**
+ * One finger seen from the back, tip up: rounded tip, lit-cylinder shading,
+ * nail, two knuckle creases, a little skin texture, shadow where it meets the palm.
+ */
+function finger(P: Painter, x: number, y: number, w: number, h: number, s: string[], nail: string | null, seed: number, flip = false): void {
+  const u = 1 / P.k;
+  const r = w / 2;
+  P.ell(x + r, y + r, r, r, s[1]);
+  P.rect(x, y + r, w, h - r, s[1]);
+  const cols = Math.round(w * P.k);
+  for (let i = 0; i < cols; i++) {
+    const tone = cylTone(s, (i + 0.5) / cols, flip);
+    if (tone === s[1]) continue;
+    const dx = ((i + 0.5) * u - r) / r;
+    const capTop = y + r - Math.sqrt(Math.max(0, 1 - dx * dx)) * r;
+    P.rect(x + i * u, capTop + u, u, y + h - capTop - u, tone);
   }
-  g.putImageData(new ImageData(out, w, h), 0, 0);
-  let top = 0;
-  while (top < h && !out.subarray(top * w * 4, (top + 1) * w * 4).some((v, i) => i % 4 === 3 && v > 0)) top++;
-  return { c, ox, top };
+  P.dots(x + u, y + r, w - 2 * u, h - r, shade(s[1], 0.92), 0.05, seed);
+  if (nail) {
+    const nw = w * 0.6;
+    const nx = x + (w - nw) / 2;
+    P.ell(nx + nw / 2, y + nw / 2 + u, nw / 2, nw / 2, nail);
+    P.rect(nx, y + nw / 2 + u, nw, Math.max(u * 2, w * 0.4), nail);
+    P.rect(nx, y + nw / 2 + u + Math.max(u * 2, w * 0.4), nw, u, shade(nail, 0.7));
+    P.rect(nx + u, y + 2 * u, u, nw * 0.6, shade(nail, 1.55));
+  }
+  for (const f of [0.46, 0.72]) {
+    const yc = y + h * f;
+    P.line([[x + w * 0.22, yc], [x + w * 0.5, yc + u], [x + w * 0.78, yc]], s[2]);
+    P.rect(x + w * 0.3, yc - 2 * u, w * 0.34, u, s[0]);
+  }
+  P.rect(x, y + h - 2 * u, w, 2 * u, s[3]);
+}
+
+/** Jacket cuff: weave, stitched hem, far-side shadow; Ray's hi-vis stripe. */
+function cuff(P: Painter, x: number, y: number, w: number, h: number, gender: Gender, mirror: boolean): void {
+  const cf = CUFF[gender];
+  const u = 1 / P.k;
+  P.rect(x, y, w, h, cf[1]);
+  weave(P, x, y, w, h, shade(cf[1], 0.82));
+  P.rect(x, y, w, 0.75, cf[0]);
+  P.rect(x, y + 0.75, w, u, shade(cf[0], 1.25));
+  for (let i = 0.5; i < w - 0.5; i += 1.25) P.rect(x + i, y + 1.75, 0.5, u, shade(cf[0], 1.15));
+  P.rect(mirror ? x : x + w - 3, y + 2, 3, h - 2, cf[2]);
+  P.rect(mirror ? x + 3 : x + w - 3 - u, y + 2, u, h - 2, shade(cf[2], 0.8));
+  P.rect(x, y + h - 1.5, w, 1.5, cf[2]);
+  if (gender === 'male') {
+    P.rect(x, y + 5, w, 1, ANALYSTS.male.accent);
+    P.rect(x, y + 5, w, u, shade(ANALYSTS.male.accent, 1.4));
+    P.dots(x, y + 5, w, 1, '#ffffff', 0.12, 3);
+  }
+}
+
+/** Lit forearm (cylinder across `w`), skin texture, Vega's smartwatch. */
+function forearm(P: Painter, x: number, y: number, w: number, h: number, gender: Gender, mirror: boolean, watchY?: number): void {
+  const s = SKIN[gender];
+  const u = 1 / P.k;
+  const cols = Math.round(w * P.k);
+  for (let i = 0; i < cols; i++) P.rect(x + i * u, y, u, h, cylTone(s, (i + 0.5) / cols, mirror));
+  P.dots(x, y, w, h, shade(s[1], 0.9), 0.05, 11);
+  if (gender === 'male') P.dots(x + w * 0.2, y + 2, w * 0.6, h - 4, shade(s[3], 0.8), 0.018, 5);
+  if (gender === 'female' && watchY !== undefined) {
+    P.rect(x, watchY, w, 2.5, '#14161c');
+    P.rect(x, watchY, w, u, '#3a3e48');
+    const wx = x + w / 2 - 4;
+    P.rect(wx, watchY - 1.5, 8, 5.5, '#20242c');
+    P.rect(wx + u, watchY - 1.5, 8 - 2 * u, u, '#5a6070');
+    P.rect(wx + 1, watchY - 0.5, 6, 3.5, '#0b2a2a');
+    P.rect(wx + 1.5, watchY, 2.25, 0.75, ANALYSTS.female.accent);
+    P.rect(wx + 1.5, watchY + 1.25, 4, u * 2, shade(ANALYSTS.female.accent, 0.7));
+    P.rect(wx + 4.5, watchY, 1, 0.75, '#ff5a7a');
+  }
 }
 
 /** A hand gripping from below: fingers wrap forward over an object edge. */
-function hand(px: Px, x: number, y: number, gender: Gender, mirror = false): void {
+function hand(P: Painter, x: number, y: number, gender: Gender, mirror = false): void {
   const s = SKIN[gender];
-  const cf = CUFF[gender];
-  const fw = gender === 'female' ? 4 : 5;
-  // forearm + cuff going off-screen bottom
-  px(s[1], x + 2, y + 10, 18, 30);
-  px(s[0], x + 4, y + 10, 8, 30);
-  px(s[2], mirror ? x + 2 : x + 17, y + 10, 3, 30);
-  px(cf[1], x, y + 26, 22, 14);
-  px(cf[0], x, y + 26, 22, 2);
-  px(cf[2], x, y + 38, 22, 2);
-  px(cf[2], mirror ? x : x + 19, y + 28, 3, 10);
-  // knuckles / fingers
+  const fem = gender === 'female';
+  const fw = fem ? 4 : 5;
+  const nail = fem ? '#c83a6a' : shade(s[0], 1.06);
+  forearm(P, x + 2, y + 10, 18, 30, gender, mirror, 21);
+  cuff(P, x, y + 26, 22, 14, gender, mirror);
+  // shadow between and under the fingers
+  P.rect(x + 1, y + 3, fw * 4, 9, s[3]);
+  const lift = [0.75, 0, 0.25, 1.25];
   for (let i = 0; i < 4; i++) {
-    const fx = x + 1 + i * (fw + 0);
-    px(s[1], fx, y, fw - 1, 12);
-    px(s[0], fx, y, fw - 2, 3);
-    px(s[2], fx + fw - 2, y + 2, 1, 9);
-    px(s[3], fx, y + 11, fw - 1, 1);
-    if (gender === 'female') px('#c83a6a', fx, y, fw - 1, 1);
+    const j = mirror ? 3 - i : i;
+    finger(P, x + 1 + i * fw, y + lift[j], fw - 0.5, 12 - lift[j], s, nail, i + 1, mirror);
   }
   // thumb
   const tx = mirror ? x + 18 : x - 3;
-  px(s[1], tx, y + 4, 6, 9);
-  px(s[0], tx + 1, y + 4, 3, 3);
-  px(s[2], tx, y + 12, 6, 1);
+  finger(P, tx, y + 4, 6, 9, s, nail, 9, mirror);
 }
 
 function keyboardArt(gender: Gender, fire: boolean): Art {
   // compact board (~25% of view width with hands), like Doom's pistol-sized footprint
-  return paint(80, 50, 40, (px) => {
+  return paint(80, 50, 40, (px, P) => {
     for (let r = 0; r < 22; r++) {
       const inset = Math.floor((22 - r) * 0.3);
       px(r < 2 ? '#8a92a8' : '#3a404c', 10 + inset, 2 + r, 60 - inset * 2, 1);
@@ -133,14 +184,14 @@ function keyboardArt(gender: Gender, fire: boolean): Art {
     }
     px(fire ? '#8aff9a' : '#2ad83a', 60, 3, 2, 1);
     px('#ffd040', 56, 3, 2, 1);
-    hand(px, 3, 12, gender, false);
-    hand(px, 55, 12, gender, true);
+    hand(P, 3, 12, gender, false);
+    hand(P, 55, 12, gender, true);
   });
 }
 
 function mouseArt(gender: Gender, fire: boolean): Art {
   const s = SKIN[gender];
-  return paint(72, 84, 36, (px) => {
+  return paint(72, 84, 36, (px, P) => {
     // cable going up/forward
     px('#3a404c', 34, 0, 2, 14);
     px('#5a6070', 34, 0, 1, 14);
@@ -159,29 +210,26 @@ function mouseArt(gender: Gender, fire: boolean): Art {
     px('#2458d8', 34, 17, 2, 6);
     px('#8ab4ff', 34, 17, 2, 1);
     // palm over the shell
-    px(s[1], 18, 40, 36, 22);
-    px(s[0], 22, 40, 18, 6);
-    px(s[2], 48, 42, 6, 20);
+    const fem = gender === 'female';
+    const nail = fem ? '#c83a6a' : shade(s[0], 1.06);
+    const pc = Math.round(36 * P.k);
+    for (let i = 0; i < pc; i++) P.rect(18 + i / P.k, 40, 1 / P.k, 22, cylTone(s, (i + 0.5) / pc));
+    P.dots(18, 40, 36, 22, shade(s[1], 0.9), 0.05, 21);
+    for (let i = 0; i < 3; i++) P.ell(24.5 + i * 9, 43, 2.4, 1.1, s[0]);
+    P.rect(19, 40, 34, 2, s[3]);
     for (let i = 0; i < 3; i++) {
-      const fx = 21 + i * 9 + (fire && i === 0 ? 0 : 0);
-      px(s[1], fx, 26 + (fire && i === 0 ? 2 : 0), 7, 16);
-      px(s[0], fx + 1, 26 + (fire && i === 0 ? 2 : 0), 4, 3);
-      px(s[2], fx + 6, 28, 1, 14);
-      if (gender === 'female') px('#c83a6a', fx + 1, 26 + (fire && i === 0 ? 2 : 0), 5, 1);
+      const fy = 26 + (fire && i === 0 ? 2 : 0);
+      finger(P, 21 + i * 9, fy, 7, 16, s, nail, i + 31);
     }
-    px(s[1], 12, 44, 8, 12); // thumb
-    px(s[0], 13, 44, 4, 3);
-    const cf = CUFF[gender];
-    px(s[1], 22, 60, 26, 10);
-    px(cf[1], 18, 68, 36, 16);
-    px(cf[0], 18, 68, 36, 2);
-    px(cf[2], 48, 70, 6, 14);
+    finger(P, 12, 44, 8, 12, s, nail, 39);
+    forearm(P, 22, 60, 26, 10, gender, false, 62);
+    cuff(P, 18, 68, 36, 16, gender, false);
   });
 }
 
 function usbArt(gender: Gender, fire: boolean): Art {
   // compact stick: connector + body ride low in the view, fist below
-  return paint(96, 94, 48, (px) => {
+  return paint(96, 94, 48, (px, P) => {
     if (fire) {
       // small hard-edged muzzle flash at the connector tip (drawn before outline pass)
       px('#5affff', 46, 8, 4, 8);
@@ -212,12 +260,12 @@ function usbArt(gender: Gender, fire: boolean): Art {
     // blue brand stripe
     px('#2458d8', 34, 50, 28, 3);
     px('#8ab4ff', 34, 50, 28, 1);
-    hand(px, 30, 46, gender, false);
+    hand(P, 30, 46, gender, false);
   });
 }
 
 function badgeArt(gender: Gender, fire: boolean): Art {
-  return paint(84, 80, 42, (px) => {
+  return paint(84, 80, 42, (px, P) => {
     // lanyard clip (the strap runs down behind the card)
     px('#c81e14', 38, 0, 6, 4);
     px('#ff7a5a', 38, 0, 2, 4);
@@ -240,7 +288,7 @@ function badgeArt(gender: Gender, fire: boolean): Art {
       px('#5aff6a', 40, 44, 22, 3);
       px('#c8ffb0', 40, 44, 22, 1);
     }
-    hand(px, 24, 44, gender, false);
+    hand(P, 24, 44, gender, false);
   });
 }
 
@@ -291,8 +339,8 @@ export function drawToolViewmodel(
     const drop = Math.round((anim?.lower ?? 0) * (a.c.height + 10));
     const side = SIDE[tool.id] ?? 0;
     const S = VIEWMODEL_SCALE;
-    const cw = Math.round(a.c.width * S);
-    const ch = Math.round(a.c.height * S);
+    const cw = (a.c.width / RES) * S;
+    const ch = (a.c.height / RES) * S;
     // sit low enough that the highest pixel of either frame, at the top of the strike, stays under the line
     const lift = Math.max(0, -Math.min(pose.wind[1], pose.strike[1]));
     const artTop = Math.min(a.top, art(tool, gender, !fire)!.top) * S;
