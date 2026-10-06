@@ -59,6 +59,14 @@ export const patchTool: ToolDef = {
       return false;
     }
     const name = e.def.inspect?.label ?? 'this host';
+    if (e.def.tags?.includes('triage') && ctx.isInspected && !ctx.isInspected(e.def.id)) {
+      ctx.bus.emit('tool-hit', { toolId: 'patch', entityId: e.def.id, good: false });
+      ctx.bus.emit('message', {
+        text: `Confirm the finding first: inspect ${name} with MOUSE [2].`,
+        kind: 'warn',
+      });
+      return false;
+    }
     if (e.infected) {
       ctx.bus.emit('tool-hit', { toolId: 'patch', entityId: e.def.id, good: false });
       ctx.bus.emit('message', {

@@ -143,3 +143,11 @@ export function statsSegments(stats: IntermissionStats): { text: string; overPar
 export function statsLine(stats: IntermissionStats): string {
   return statsSegments(stats).map((s) => s.text).join('   ');
 }
+
+/**
+ * An 'avoid' objective is upheld unless it was actually violated — on a loss
+ * for another reason (e.g. integrity depleted) it must not render as missed.
+ */
+export function avoidViolated(o: { failed: boolean; violations?: number }): boolean {
+  return o.failed || (o.violations ?? 0) > 0;
+}

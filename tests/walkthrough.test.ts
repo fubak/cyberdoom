@@ -91,6 +91,15 @@ function runStep(step: WalkStep, rt: MissionRuntime, map: WorldMap, player: Play
     bus.emit('cleaned', { entityId: step.clean });
     return;
   }
+  if ('patch' in step) {
+    const entity = rt.byId(step.patch);
+    expect(entity?.alive).toBe(true);
+    expect(entity?.def.kind).toBe('workstation');
+    expect(entity && Math.hypot(entity.x - player.x, entity.y - player.y)).toBeLessThanOrEqual(2.5);
+    entity!.state.patched = true;
+    bus.emit('tool-hit', { toolId: 'patch', entityId: step.patch, good: true });
+    return;
+  }
   for (let elapsed = 0; elapsed < step.wait; elapsed += 0.05) {
     updateThree(rt, map, player);
   }

@@ -20,6 +20,7 @@ import {
   DB_W,
   DB_X,
   STATS_Y,
+  avoidViolated,
   block,
   paginate,
   statsLine,
@@ -193,7 +194,7 @@ export function debrief(opts: {
   won: boolean;
   score: number;
   scoreLog: ScoreEvent[];
-  objectives: { text: string; done: boolean; failed: boolean }[];
+  objectives: { text: string; done: boolean; failed: boolean; violations?: number; kind?: string }[];
   evidence?: EvidenceEntry[];
   /** Intermission tallies from rt.stats() (Doom intermission parity). */
   stats?: { kills: number; killsTotal: number; secrets: number; secretsTotal: number; time: number; par: number };
@@ -219,10 +220,11 @@ export function debrief(opts: {
   let hits: Hit[] = [];
   const ev = { open: false, sel: 0, detail: false, page: 0 };
 
-  // Avoid objectives have no "done" event: obeyed through a won mission = done.
+  // Avoid objectives are upheld whenever they were not actually violated —
+  // on a lost mission an unviolated avoid shows done, never the missed text.
   const objRows = opts.objectives.map((o, i) => {
     const def = mission.missionObjectives.find((m) => m.text === o.text) ?? mission.missionObjectives[i];
-    const avoided = def?.kind === 'avoid' && !o.failed && opts.won;
+    const avoided = def?.kind === 'avoid' && !avoidViolated(o);
     return { ...o, def, done: o.done || avoided };
   });
   const fieldPct = objRows.length ? (objRows.filter((o) => o.done && !o.failed).length / objRows.length) * 100 : 100;

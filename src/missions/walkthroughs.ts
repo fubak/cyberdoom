@@ -15,6 +15,7 @@ export type WalkStep =
   | { interact: string }
   | { inspect: string }
   | { clean: string }
+  | { patch: string }
   | { wait: number };
 
 export const walkthroughs: Record<string, WalkStep[]> = {

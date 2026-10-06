@@ -5,6 +5,7 @@ import { WorldMap } from './engine/map';
 import { Input } from './engine/input';
 import { EYE_HEIGHT, Player } from './engine/player';
 import { alertNear, damageEntity, hurtEntity, traceShot, updateEntities, updateProjectiles } from './engine/ai';
+import { enemyInTheWay, exitEdge } from './engine/interact';
 import { Audio } from './engine/audio';
 import { Feel } from './engine/feel';
 import { ParticleSystem } from './engine/fx';
@@ -76,7 +77,8 @@ class Game {
   private endCalled = false;
   private deathDrop = 0;
   private deathRoll = 0;
-  private exitReached = false;
+  private wasOnExit = false;
+  private lastAimWarnT = -Infinity;
   private stepPan = 1;
 
   constructor(app: HTMLElement) {
@@ -230,7 +232,8 @@ class Game {
     this.endCalled = false;
     this.deathDrop = 0;
     this.deathRoll = 0;
-    this.exitReached = false;
+    this.wasOnExit = false;
+    this.lastAimWarnT = -Infinity;
     this.renderer.buildLevel(this.map, mission.map);
     this.audio.setVoice(this.gender);
     this.audio.setListener(this.player.x, this.player.y, this.player.angle);
@@ -375,6 +378,16 @@ class Game {
 
     // fire (windup → impact → recover, ammo, auto-repeat and input buffering live in the arsenal)
     const fired = !ending && (this.input.firePressed || this.debugFire);
+    if (fired && ['mouse', 'patch', 'usb'].includes(this.arsenal.current.id)) {
+      const blocker = enemyInTheWay(runtime.entities, p.x, p.y, p.angle, map);
+      if (blocker && this.simT - this.lastAimWarnT >= 1) {
+        this.lastAimWarnT = this.simT;
+        this.hud.pushMessage(
+          `${blocker.def.inspect?.label ?? 'Malware process'} is in the way — deal with the threat first`,
+          'warn',
+        );
+      }
+    }
     this.debugFire = false;
     this.arsenal.update(dt, !ending && this.input.fireHeld, fired, () => this.toolCtx());
 
@@ -477,11 +490,11 @@ class Game {
         this.hud.pushMessage(text, 'good');
       }
     }
-    const cell = map.cellAtF(p.x, p.y);
-    if (cell?.kind === 'exit' && !runtime.finished && !this.exitReached) {
-      this.exitReached = true;
+    const onExit = map.cellAtF(p.x, p.y)?.kind === 'exit';
+    if (exitEdge(this.wasOnExit, onExit, runtime.finished !== null)) {
       this.bus.emit('reach-exit', {});
     }
+    this.wasOnExit = onExit;
 
     map.updateDoors(dt);
 
@@ -624,6 +637,7 @@ class Game {
       },
       authorizedRoles: rt.roles,
       role: rt.roles[rt.roles.length - 1] ?? this.role,
+      isInspected: (entityId: string) => rt.wasInspected(entityId),
       lineOfSight: (x0: number, y0: number, x1: number, y1: number) => {
         const d = Math.hypot(x1 - x0, y1 - y0);
         return map.raycast(x0, y0, Math.atan2(y1 - y0, x1 - x0), d).dist >= d - 0.3;

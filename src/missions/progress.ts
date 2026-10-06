@@ -1,6 +1,6 @@
 const STORAGE_KEY = 'cyberdoom.progress';
 
-function completedIds(): string[] {
+export function completedIds(): string[] {
   try {
     const raw = globalThis.localStorage?.getItem(STORAGE_KEY);
     if (!raw) return [];
@@ -22,9 +22,40 @@ export function markCompleted(id: string): void {
   }
 }
 
+export function isCompleted(id: string): boolean {
+  return completedIds().includes(id);
+}
+
 export function isUnlocked(id: string, orderedIds: string[]): boolean {
   if (new URLSearchParams(globalThis.location?.search ?? '').get('debug') === '1') return true;
   const index = orderedIds.indexOf(id);
   if (index <= 0) return true;
   return completedIds().includes(orderedIds[index - 1]);
+}
+
+export type MissionRowState = 'cleared' | 'next' | 'open' | 'locked';
+
+/** Per-row state for the mission select screen: cleared first, then the first
+ *  unlocked-but-uncleared row is NEXT; anything locked is LOCKED. */
+export function missionRowStates(orderedIds: string[]): Map<string, MissionRowState> {
+  const completed = new Set(completedIds());
+  let nextAssigned = false;
+  const states = new Map<string, MissionRowState>();
+  for (const id of orderedIds) {
+    if (completed.has(id)) {
+      states.set(id, 'cleared');
+      continue;
+    }
+    if (!isUnlocked(id, orderedIds)) {
+      states.set(id, 'locked');
+      continue;
+    }
+    if (!nextAssigned) {
+      states.set(id, 'next');
+      nextAssigned = true;
+    } else {
+      states.set(id, 'open');
+    }
+  }
+  return states;
 }

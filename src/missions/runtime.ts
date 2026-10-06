@@ -510,6 +510,14 @@ export class MissionRuntime {
       if (e) this.resolveAccusation(e);
     });
 
+    this.bus.on('tool-hit', ({ toolId, entityId, good }) => {
+      if (toolId !== 'patch' || !good || !entityId) return;
+      const e = this.byId(entityId);
+      if (!e) return;
+      for (const objective of this.objectivesFor('patch', e)) this.countEntity(objective, entityId);
+      this.checkWin();
+    });
+
     this.bus.on('badge-door', ({ doorId, accessRole, allowed }) => {
       if (allowed) {
         if (accessRole !== undefined && !this.doorAccessScored.has(doorId)) {
@@ -590,6 +598,10 @@ export class MissionRuntime {
 
   byId(id: string): Entity | undefined {
     return this.entities.find((e) => e.def.id === id);
+  }
+
+  wasInspected(id: string): boolean {
+    return this.inspected.has(id);
   }
 
   update(dt: number, w: UpdateWorld): void {
@@ -808,13 +820,15 @@ export class MissionRuntime {
   }
 
   /** Debrief text mapping objective ids to titles for display. */
-  objectiveSummary(): { text: string; done: boolean; failed: boolean; progress: number; target: number }[] {
+  objectiveSummary(): { text: string; done: boolean; failed: boolean; progress: number; target: number; violations: number; kind: MissionObjective['kind'] }[] {
     return this.objectives.map((o) => ({
       text: o.target > 1 && !o.done ? `${o.def.text} (${Math.min(o.progress, o.target)}/${o.target})` : o.def.text,
       done: o.done,
       failed: o.failed,
       progress: o.progress,
       target: o.target,
+      violations: o.violations,
+      kind: o.def.kind,
     }));
   }
 
