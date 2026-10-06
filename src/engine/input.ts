@@ -1,7 +1,8 @@
 /**
  * Keyboard/mouse input with pointer lock.
  * WASD move, arrows turn, Shift run, E/Space use-interact,
- * 1-9 tool select, wheel cycles tools, LMB uses the tool.
+ * 1-9 (Digit or Numpad) tool select, Q cycles to the next tool,
+ * wheel cycles tools, LMB uses the tool.
  */
 export class Input {
   keys = new Set<string>();
@@ -15,8 +16,11 @@ export class Input {
   usePressed = false;
   /** Digit pressed this frame, 1-9 or null. */
   slotPressed: number | null = null;
+  /** Q pressed this frame (cycle to next owned tool). */
+  cyclePressed = false;
   pointerLocked = false;
   private pendingSlot: number | null = null;
+  private pendingCycle = false;
   private pendingFire = false;
   private pendingKeyFire = false;
   private pendingUse = false;
@@ -33,6 +37,8 @@ export class Input {
       if (e.code === 'Space' || e.code === 'KeyE') this.pendingUse = true;
       if (e.code === 'KeyF') this.pendingKeyFire = true;
       if (/^Digit[1-9]$/.test(e.code)) this.pendingSlot = Number(e.code[5]);
+      if (/^Numpad[1-9]$/.test(e.code)) this.pendingSlot = Number(e.code[6]);
+      if (e.code === 'KeyQ') this.pendingCycle = true;
       if (e.code === 'Space') e.preventDefault();
     });
     window.addEventListener('keyup', (e) => this.keys.delete(e.code));
@@ -95,10 +101,12 @@ export class Input {
     this.fireHeld = (this.pointerLocked && this.mouseDown) || this.keys.has('KeyF');
     this.usePressed = this.pendingUse;
     this.slotPressed = this.pendingSlot;
+    this.cyclePressed = this.pendingCycle;
     this.pendingFire = false;
     this.pendingKeyFire = false;
     this.pendingUse = false;
     this.pendingSlot = null;
+    this.pendingCycle = false;
   }
 
   /** Consume accumulated mouse dx (call after reading). */

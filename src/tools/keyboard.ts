@@ -1,6 +1,7 @@
 import type { ToolDef } from '../core/types';
 import { damageEntity } from '../engine/ai';
 import { hash, impactBurst, usePhase, tipY } from './anim';
+import { targetNoun } from './hint';
 import { bevel, glow, poly, rect, shade } from './pixel';
 import { flatHand, handLook, sleeve } from './shared';
 
@@ -25,6 +26,7 @@ export const keyboardTool: ToolDef = {
   cooldown: 0.6,
   windup: WINDUP,
   auto: true,
+  blurb: 'POINT-BLANK CONTAINMENT',
   control: {
     name: 'Incident response containment (kill process / isolate)',
     category: 'technical',
@@ -101,7 +103,7 @@ export const keyboardTool: ToolDef = {
   drawFx(g, w, _h, anim) {
     const ph = usePhase(anim.sinceUse, WINDUP);
     if (ph.phase === 'impact') glow(g, w / 2, tipY(_h), 20, '120,255,160', 0.35 * (1 - ph.u));
-    impactBurst(g, w / 2, tipY(_h), anim.sinceConfirm, anim.confirmGood, 0.8);
+    impactBurst(g, w / 2, tipY(_h), anim.sinceConfirm, anim.confirmGood, 0.8, 'keys');
   },
   use(ctx) {
     // point-blank targets fill more of the view, so the strike cone widens up close
@@ -138,5 +140,20 @@ export const keyboardTool: ToolDef = {
     }
     ctx.bus.emit('tool-hit', { toolId: 'keyboard', entityId: e.def.id, good: true });
     ctx.bus.emit('interact', { entityId: e.def.id });
+  },
+  hint(ctx) {
+    const e = ctx.aimEntity(KEYBOARD_RANGE, 0.5) ?? ctx.aimEntity(0.9, 1.0);
+    if (!e) {
+      const far = ctx.aimEntity(8, 0.26);
+      if (far?.def.kind === 'enemy') return { text: 'TOO FAR: KEYBOARD IS POINT-BLANK', ready: false };
+      return { text: 'STRIKE (POINT-BLANK)', ready: false };
+    }
+    if (e.def.kind === 'enemy') {
+      if (!e.infected) return { text: 'NO PROCESS TO KILL', ready: false };
+      return { text: 'KILL PROCESS: MALWARE', ready: true };
+    }
+    if (e.def.kind === 'npc') return { text: 'NOT USED ON PEOPLE', ready: false };
+    if (e.def.kind === 'workstation' && e.infected) return { text: "KILL PROCESS (WON'T CLEAN HOST)", ready: false };
+    return { text: `RUN COMMAND: ${targetNoun(e)}`, ready: true };
   },
 };

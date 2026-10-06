@@ -303,6 +303,14 @@ export interface ViewmodelAnim {
   lower?: number;
 }
 
+/** One-line "what LMB does right now" for the HUD prompt. */
+export interface ToolHint {
+  /** Uppercase, <= 34 chars; never leaks a verdict (see tools/hint.ts). */
+  text: string;
+  /** True when pressing LMB would do something useful in this situation. */
+  ready: boolean;
+}
+
 /** One tool the player can wield. Implemented under src/tools/. */
 export interface ToolDef {
   id: string;
@@ -324,6 +332,15 @@ export interface ToolDef {
   unlock?: { difficulty: number };
   /** Which SY0-701 security control the tool models (for the field manual). */
   control?: ToolControl;
+  /** One-line role shown in the switch banner (uppercase). */
+  blurb?: string;
+  /**
+   * What LMB does right now, computed with the same target rules and branch
+   * order as use(). Must never leak a verdict — no inspect label/detail/
+   * category, decoy/wrong/phish tags, isMalicious or other hidden state;
+   * only kind, distance, door/reader state and player-visible state.
+   */
+  hint?: (ctx: ToolUseContext) => ToolHint | null;
   /** Draw the first-person viewmodel onto a 2D canvas (x = center px). */
   drawViewmodel: (
     g: CanvasRenderingContext2D,

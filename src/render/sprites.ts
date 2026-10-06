@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { Registry } from '../core/registry';
 import { drawText } from './font';
-import { limb, rasterize, type Prim, type V3 } from './model';
+import { createRasterJob, limb, rasterizeRows, type Prim, type RasterJob, type V3 } from './model';
 import { packTexture, paintRaw, pxEllipse, type PaintCtx } from './pixel';
 import { RES, TEX } from './res';
 
@@ -228,9 +228,16 @@ const ransomModel: Model = (pose) => {
   return out;
 };
 
-const lazyFrames: (() => void)[] = [];
+interface LazyFrame {
+  /** Advance by at most `ms` milliseconds of raster work; true when installed. */
+  step: (deadline: number) => boolean;
+}
+const lazyFrames: LazyFrame[] = [];
 
-function scaleModel(prims: Prim[]): Prim[] {
+/** TESTING: exported so tests/model-raster.test.ts can pin rasterizer output on real models. */
+export const spriteModels = { worm: wormModel, trojan: trojanModel, ransom: ransomModel };
+
+export function scaleModel(prims: Prim[]): Prim[] {
   return prims.map((prim) => ({
     ...prim,
     c: [prim.c[0] * RES, prim.c[1] * RES, prim.c[2] * RES] as V3,
@@ -252,9 +259,7 @@ function makeMonster(id: string, worldH: number, model: Model): void {
     ['attack1', { kind: 'attack', k: 1 }],
     ['pain', { kind: 'pain' }],
   ];
-  const renderPose = (pose: Pose, rotation: number, mirror = false): THREE.Texture => {
-    const prims = scaleModel(model(pose));
-    const raw = rasterize(W, H, prims, { view: (rotation * Math.PI) / 4, ...(pose.kind === 'pain' ? { tint: [255, 120, 80] as V3, tintT: 0.2 } : {}) });
+  const finishPose = (raw: { rgba: Uint8ClampedArray; glow: Uint8ClampedArray }, pose: Pose, rotation: number, mirror: boolean): THREE.Texture => {
     const grain = raw.rgba;
     let seed = 2166136261;
     for (const ch of `${id}:${pose.kind}:${'k' in pose ? pose.k : 0}:${rotation}:${mirror ? 1 : 0}`) seed = Math.imul(seed ^ ch.charCodeAt(0), 16777619);
@@ -273,14 +278,52 @@ function makeMonster(id: string, worldH: number, model: Model): void {
     }
     return packTexture(W, H, raw, { sprite: true, mirror });
   };
-  const defineLazy = (key: string, build: () => THREE.Texture) => {
-    const getter = () => {
-      const tex = build();
+  const startPose = (pose: Pose, rotation: number, mirror: boolean) => {
+    const prims = scaleModel(model(pose));
+    const job = createRasterJob(W, H, prims, { view: (rotation * Math.PI) / 4, ...(pose.kind === 'pain' ? { tint: [255, 120, 80] as V3, tintT: 0.2 } : {}) });
+    return { job, finish: () => finishPose(job, pose, rotation, mirror) };
+  };
+  const renderPose = (pose: Pose, rotation: number, mirror = false): THREE.Texture => {
+    const { job, finish } = startPose(pose, rotation, mirror);
+    rasterizeRows(job, 0, H);
+    return finish();
+  };
+  /**
+   * Lazy frame backed by a resumable raster job: the getter finishes
+   * synchronously on demand; the prewarm steps it a row band at a time.
+   */
+  const defineLazy = (key: string, begin: () => { job: RasterJob | null; finish: () => THREE.Texture }) => {
+    let pending: { job: RasterJob | null; finish: () => THREE.Texture } | null = null;
+    const start = () => (pending ??= begin());
+    const install = (tex: THREE.Texture) => {
+      pending = null;
       Object.defineProperty(frames, key, { configurable: true, enumerable: true, value: tex });
       return tex;
     };
+    const getter = () => {
+      const p = start();
+      if (p.job) rasterizeRows(p.job, p.job.next, p.job.h);
+      return install(p.finish());
+    };
     Object.defineProperty(frames, key, { configurable: true, enumerable: true, get: getter });
-    lazyFrames.push(() => { void frames[key]; });
+    lazyFrames.push({
+      step: (deadline) => {
+        const p = start();
+        if (p.job && p.job.next < p.job.h) {
+          // advance a band, then re-check the clock each few rows
+          while (p.job.next < p.job.h && performance.now() < deadline) {
+            rasterizeRows(p.job, p.job.next, Math.min(p.job.h, p.job.next + 2));
+          }
+          if (p.job.next < p.job.h) return false;
+        }
+        install(p.finish());
+        return true;
+      },
+    });
+  };
+  /** Lazy alias for another (already-rasterized) frame. */
+  const defineAlias = (key: string, build: () => THREE.Texture) => {
+    defineLazy(key, () => ({ job: null, finish: build }));
   };
   // Keep all eight walk0 views ready so newly encountered threats face correctly immediately.
   for (let r = 0; r <= 4; r++) {
@@ -290,12 +333,12 @@ function makeMonster(id: string, worldH: number, model: Model): void {
   frames.walk0 = frames.walk0_0;
   for (const [key, pose] of poses.slice(1)) {
     for (let r = 0; r <= 4; r++) {
-      defineLazy(`${key}_${r}`, () => renderPose(pose, r));
-      if (r >= 1 && r <= 3) defineLazy(`${key}_${8 - r}`, () => renderPose(pose, r, true));
+      defineLazy(`${key}_${r}`, () => startPose(pose, r, false));
+      if (r >= 1 && r <= 3) defineLazy(`${key}_${8 - r}`, () => startPose(pose, r, true));
     }
-    defineLazy(key, () => frames[`${key}_0`]);
+    defineAlias(key, () => frames[`${key}_0`]);
   }
-  defineLazy('attack', () => frames.attack1);
+  defineAlias('attack', () => frames.attack1);
   const base = model({ kind: 'pain' });
   for (let k = 0; k < 5; k++) {
     const sq = 1 - k * 0.19;
@@ -305,8 +348,14 @@ function makeMonster(id: string, worldH: number, model: Model): void {
       r: [p.r[0], p.r[1] * (1 - k * 0.1), p.r[2]] as V3,
     })));
     defineLazy(`die${k}`, () => {
-      const raw = rasterize(W, H, prims, { view: 0, tint: [44, 255, 90], tintT: 0.12 + k * 0.14 });
-      return k === 0 ? packTexture(W, H, raw, { sprite: true }) : dissolveFrame(W, H, raw, k - 1, id);
+      const job = createRasterJob(W, H, prims, { view: 0, tint: [44, 255, 90], tintT: 0.12 + k * 0.14 });
+      return {
+        job,
+        finish: () => {
+          const raw = { rgba: job.rgba, glow: job.glow };
+          return k === 0 ? packTexture(W, H, raw, { sprite: true }) : dissolveFrame(W, H, raw, k - 1, id);
+        },
+      };
     });
   }
   spriteSets.register(id, { w: worldH, h: worldH, frames, anim: 'monster' });
@@ -318,21 +367,23 @@ export function prewarmLazySpriteFrames(onComplete?: (ms: number) => void): void
   const start = performance.now();
   const runSlice = (deadline?: { didTimeout?: boolean; timeRemaining: () => number }) => {
     const sliceStart = performance.now();
-    while (index < lazyFrames.length && performance.now() - sliceStart < 8 && (!deadline || deadline.didTimeout || deadline.timeRemaining() > 1)) {
-      lazyFrames[index++]();
+    // ~3 ms slices: each step() advances a frame by a small row band
+    while (index < lazyFrames.length && performance.now() - sliceStart < 3 && (!deadline || deadline.didTimeout || deadline.timeRemaining() > 1)) {
+      if (lazyFrames[index].step(sliceStart + 2.5)) index++;
+      else break;
     }
     if (index < lazyFrames.length) {
       const idleWindow = window as Window & {
         requestIdleCallback?: (cb: (d: { didTimeout?: boolean; timeRemaining: () => number }) => void, opts?: { timeout: number }) => number;
       };
-      if (idleWindow.requestIdleCallback) idleWindow.requestIdleCallback(runSlice, { timeout: 50 });
+      if (idleWindow.requestIdleCallback) idleWindow.requestIdleCallback(runSlice, { timeout: 250 });
       else window.setTimeout(() => runSlice(), 0);
     } else onComplete?.(performance.now() - start);
   };
   const idleWindow = window as Window & {
     requestIdleCallback?: (cb: (d: { didTimeout?: boolean; timeRemaining: () => number }) => void, opts?: { timeout: number }) => number;
   };
-  if (idleWindow.requestIdleCallback) idleWindow.requestIdleCallback(runSlice, { timeout: 50 });
+  if (idleWindow.requestIdleCallback) idleWindow.requestIdleCallback(runSlice, { timeout: 250 });
   else window.setTimeout(() => runSlice(), 0);
 }
 // ---------------------------------------------------------------- devices

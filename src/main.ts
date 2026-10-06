@@ -6,6 +6,7 @@ import { Input } from './engine/input';
 import { EYE_HEIGHT, Player } from './engine/player';
 import { alertNear, damageEntity, hurtEntity, traceShot, updateEntities, updateProjectiles } from './engine/ai';
 import { enemyInTheWay, exitEdge } from './engine/interact';
+import { doorUseHint, resolveUse, type UseTargetContext } from './engine/useTarget';
 import { Audio } from './engine/audio';
 import { Feel } from './engine/feel';
 import { ParticleSystem } from './engine/fx';
@@ -20,6 +21,7 @@ import { RES } from './render/res';
 import { Dossier } from './ui/dossier';
 import * as screens from './ui/screens';
 import { MissionRuntime } from './missions/runtime';
+import { mfaPending } from './tools/badge';
 import { missionRegistry } from './content/missions';
 import { toolForSlot } from './tools';
 import { Arsenal } from './tools/arsenal';
@@ -80,6 +82,24 @@ class Game {
   private wasOnExit = false;
   private lastAimWarnT = -Infinity;
   private stepPan = 1;
+  // HUD action prompt: computed at ~15 Hz; banner on tool switch.
+  private prompt = {
+    lmb: null as { text: string; ready: boolean } | null,
+    use: null as string | null,
+    lmbHot: false,
+    banner: null as { title: string; blurb: string } | null,
+    footer: null as string | null,
+  };
+  private promptNextT = 0;
+  private lastFireT = -Infinity;
+  private bannerUntil = 0;
+  private lastToolId = '';
+  private switchedTool = false;
+  /** entityId -> simT until which a tool-specific impact FX replaced the generic burst. */
+  private toolFxUntil = new Map<string, number>();
+  /** EDR pulse window: lightning column per hurt target, capped at 96 particles. */
+  private edrPulseUntil = -Infinity;
+  private edrPulseCount = 0;
 
   constructor(app: HTMLElement) {
     const viewport = document.createElement('div');
@@ -127,8 +147,25 @@ class Game {
       const e = this.runtime?.entities.find((entity) => entity.def.id === entityId);
       if (!e?.alive) return;
       if (!applied) hurtEntity(e, e.x - fromX, e.y - fromY);
-      this.particles.burst(e.x, e.y, 0.4, 'hit');
+      if (this.simT < this.edrPulseUntil && this.edrPulseCount < 96) {
+        this.particles.toolImpact('edr', e.x, e.y, 0.4);
+        this.edrPulseCount += 8;
+      } else if (!((this.toolFxUntil.get(entityId) ?? -Infinity) >= this.simT)) {
+        this.particles.burst(e.x, e.y, 0.4, 'hit');
+      }
       this.audio.sfx('enemy-pain', { x: e.x, y: e.y });
+    });
+    this.bus.on('tool-hit', ({ toolId, entityId, good }) => {
+      if (toolId === 'edr') {
+        this.edrPulseUntil = this.simT + 0.5;
+        this.edrPulseCount = 0;
+        return;
+      }
+      if (!entityId || !good || toolId === 'usb') return;
+      const e = this.runtime?.entities.find((entity) => entity.def.id === entityId);
+      if (!e?.alive) return;
+      this.particles.toolImpact(toolId, e.x, e.y, 0.4, this.player?.x, this.player?.y, good);
+      this.toolFxUntil.set(entityId, this.simT + 0.2);
     });
     this.bus.on('badge-door', ({ doorId, allowed }) => {
       if (allowed) {
@@ -234,6 +271,15 @@ class Game {
     this.deathRoll = 0;
     this.wasOnExit = false;
     this.lastAimWarnT = -Infinity;
+    this.prompt = { lmb: null, use: null, lmbHot: false, banner: null, footer: null };
+    this.promptNextT = 0;
+    this.lastFireT = -Infinity;
+    this.bannerUntil = 0;
+    this.lastToolId = this.arsenal.current.id;
+    this.switchedTool = false;
+    this.toolFxUntil.clear();
+    this.edrPulseUntil = -Infinity;
+    this.edrPulseCount = 0;
     this.renderer.buildLevel(this.map, mission.map);
     this.audio.setVoice(this.gender);
     this.audio.setListener(this.player.x, this.player.y, this.player.angle);
@@ -308,6 +354,7 @@ class Game {
         credentials: this.runtime.roles[this.runtime.roles.length - 1] ?? this.role,
         objectives: this.runtime.objectiveSummary(),
         progress: this.runtime.hudProgress(),
+        prompt: this.prompt,
       });
       this.automap.draw(
         this.map.def,
@@ -343,8 +390,17 @@ class Game {
     // Tool switching (lower → swap → raise) is owned by the arsenal.
     const ending = runtime.finished !== null;
     if (!ending && this.input.slotPressed) this.arsenal.select(this.input.slotPressed);
+    if (!ending && this.input.cyclePressed) this.arsenal.cycle(1);
     const wheel = this.input.consumeWheel();
     if (!ending && wheel !== 0) this.arsenal.cycle(wheel);
+
+    // Switch banner + first-switch tracking (title swaps when the raise begins).
+    if (this.arsenal.current.id !== this.lastToolId) {
+      this.lastToolId = this.arsenal.current.id;
+      this.bannerUntil = this.simT + 1.4;
+      this.switchedTool = true;
+    }
+    this.updatePrompt(ending);
 
     const solids = runtime.entities
       .filter((e) => e.alive && ['enemy', 'npc', 'workstation', 'console'].includes(e.def.kind))
@@ -378,6 +434,7 @@ class Game {
 
     // fire (windup → impact → recover, ammo, auto-repeat and input buffering live in the arsenal)
     const fired = !ending && (this.input.firePressed || this.debugFire);
+    if (fired) this.lastFireT = this.simT;
     if (fired && ['mouse', 'patch', 'usb'].includes(this.arsenal.current.id)) {
       const blocker = enemyInTheWay(runtime.entities, p.x, p.y, p.angle, map);
       if (blocker && this.simT - this.lastAimWarnT >= 1) {
@@ -392,20 +449,18 @@ class Game {
     this.arsenal.update(dt, !ending && this.input.fireHeld, fired, () => this.toolCtx());
 
     if (!ending && !this.arsenal.switching && this.input.usePressed && this.useCd <= 0) {
-      const ctx = this.toolCtx();
-      const door = ctx.isDoorAhead();
-      if (door && !map.isDoorOpen(door.doorId)) {
+      const r = resolveUse(this.useCtx());
+      if (r.kind === 'door') {
         // runtime.update() handled the door above (open / swipe / reader info).
         this.useCd = 0.3;
-        if (door.accessRole !== undefined && !runtime.roles.includes(door.accessRole)) {
+        if (r.door.accessRole !== undefined && !runtime.roles.includes(r.door.accessRole)) {
           this.audio.sfx('oof');
         }
-      } else if (!ctx.aimEntity(1.4, 0.5) && ctx.wallDistance < 1.2) {
+      } else if (r.kind === 'bump') {
         this.audio.sfx('oof');
       } else {
         this.useCd = 0.3;
-        const target = ctx.aimEntity(1.5, 0.5);
-        if (target) this.bus.emit('interact', { entityId: target.def.id });
+        if (r.kind === 'entity') this.bus.emit('interact', { entityId: r.entity.def.id });
       }
     }
 
@@ -458,7 +513,7 @@ class Game {
           if (result === 'killed') {
             this.bus.emit('cleaned', { entityId: hit.def.id });
           } else {
-            this.particles.burst(x, y, 0.4, 'hit');
+            this.particles.toolImpact('usb', x, y, 0.4);
             if (hit.def.kind === 'enemy') {
               this.audio.sfx('enemy-pain', { x: hit.x, y: hit.y });
             }
@@ -573,6 +628,60 @@ class Game {
         this.hud.pushMessage('Scan session wasted: that target is not infected.', 'warn');
       }
     }
+  }
+
+  /** E/Space target context: shared by the E action and the HUD prompt. */
+  private useCtx(): UseTargetContext {
+    const tool = this.toolCtx();
+    const map = this.map!;
+    const rt = this.runtime!;
+    return {
+      isDoorAhead: tool.isDoorAhead,
+      isDoorOpen: (doorId) => map.isDoorOpen(doorId),
+      aimEntity: tool.aimEntity,
+      wallDistance: tool.wallDistance,
+      roles: rt.roles,
+      hasBadge: this.arsenal.owns('badge'),
+      mfaPending: mfaPending(rt.entities),
+    };
+  }
+
+  /**
+   * Action prompt (~15 Hz): what LMB does (current tool's hint(), with the
+   * ammo-0 override) and what E does (resolveUse -> interactHint/doorUseHint).
+   * Hidden while switching tools, in dossier/automap, at mission end, and
+   * when the pointer isn't locked.
+   */
+  private updatePrompt(ending: boolean): void {
+    this.prompt.lmbHot = this.simT - this.lastFireT < 0.25;
+    this.prompt.banner = this.simT < this.bannerUntil
+      ? { title: `${this.arsenal.current.slot} ${this.arsenal.current.name}`, blurb: this.arsenal.current.blurb ?? '' }
+      : null;
+    this.prompt.footer = !this.switchedTool && this.simT < 25 ? '1-8 / WHEEL / Q: SWITCH TOOL' : null;
+    const hidden =
+      ending ||
+      this.arsenal.switching ||
+      this.dossier.isOpen ||
+      this.automap.isOpen ||
+      (!this.input.pointerLocked && !DEBUG);
+    if (this.simT < this.promptNextT || hidden) {
+      if (hidden) {
+        this.prompt.lmb = null;
+        this.prompt.use = null;
+      }
+      return;
+    }
+    this.promptNextT = this.simT + 1 / 15;
+    const tool = this.arsenal.current;
+    const ctx = this.toolCtx();
+    let lmb = tool.hint?.(ctx) ?? null;
+    const ammo = tool.ammo ? this.arsenal.ammoFor(tool) : null;
+    if (ammo === 0) lmb = { text: `OUT OF ${tool.ammo!.resource.toUpperCase()}`, ready: false };
+    this.prompt.lmb = lmb;
+    const r = resolveUse(this.useCtx());
+    if (r.kind === 'door') this.prompt.use = doorUseHint(this.useCtx(), r.door);
+    else if (r.kind === 'entity') this.prompt.use = this.runtime!.interactHint(r.entity);
+    else this.prompt.use = null;
   }
 
   // ---------- tool context ----------

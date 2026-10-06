@@ -1,9 +1,10 @@
-import type { Gender, ToolDef, ViewmodelAnim } from '../core/types';
+import type { Gender, ToolDef, ToolHint, ViewmodelAnim } from '../core/types';
 import { drawBigText, drawChunky, drawText, measureBig, measureChunky, measureText, wrapText } from '../render/font';
 import { VIEW_H, VIEW_W } from '../render/renderer';
 import { roleColor } from '../render/textures';
 import { drawToolViewmodel } from '../render/viewmodels';
 import { sortedTools } from '../tools';
+import { vmLine } from '../tools/anim';
 import { BASE_H, BASE_STATUS, BASE_W, RES } from '../render/res';
 
 /**
@@ -147,6 +148,19 @@ export class Hud {
     resources?: ResRow[];
     /** ARSENAL: new-tool pickup moment (gold flash, ARMS slot blink). */
     got?: GotFx;
+    /**
+     * FEEL: action prompt under the viewmodel clearance line. `lmbHot`
+     * brightens the LMB line briefly after a fire press; `banner` overrides
+     * the lines while a tool switch banner is showing; `footer` is the
+     * early-mission switch reminder (only when there is no LMB/E line).
+     */
+    prompt?: {
+      lmb: ToolHint | null;
+      use: string | null;
+      lmbHot?: boolean;
+      banner?: { title: string; blurb: string } | null;
+      footer?: string | null;
+    };
   }): void {
     const g = this.g;
     g.setTransform(1, 0, 0, 1, 0, 0);
@@ -195,6 +209,7 @@ export class Hud {
     if (this.tabHeld) this.drawObjectiveStrip(opts.objectives, -1);
     else if (this.objShowT > 0 && opts.objectives[this.objIdx]) this.drawObjectiveStrip(opts.objectives, this.objIdx);
     else this.drawTicker();
+    if (opts.prompt) this.drawPrompt(opts.prompt);
     this.drawBar(opts);
   }
 
@@ -205,6 +220,52 @@ export class Hud {
     if (m.t < 0.4 && Math.floor(m.t * 20) % 2 === 0) return;
     const ramp = MSG_RAMP[m.kind] ?? MSG_RAMP.info;
     wrapText(m.text.toUpperCase(), 45, 2).forEach((line, i) => drawChunky(this.g, line, 2, 2 + i * 9, ramp));
+  }
+
+  /**
+   * Action prompt centred under the viewmodel clearance line (top =
+   * vmLine(view height)+2), never inside the centre 20% aim box. At most two
+   * lines, `[LMB]…` then `[E]…`, on a dark plate.
+   */
+  private drawPrompt(p: {
+    lmb: ToolHint | null;
+    use: string | null;
+    lmbHot?: boolean;
+    banner?: { title: string; blurb: string } | null;
+    footer?: string | null;
+  }): void {
+    const g = this.g;
+    const lines: { key: string; text: string; ready: boolean; hot: boolean }[] = [];
+    if (p.banner) {
+      lines.push({ key: 'TOOL', text: p.banner.title, ready: true, hot: false });
+      lines.push({ key: '', text: p.banner.blurb, ready: true, hot: false });
+    } else {
+      if (p.lmb) lines.push({ key: 'LMB', text: p.lmb.text, ready: p.lmb.ready, hot: !!p.lmbHot });
+      if (p.use) lines.push({ key: 'E', text: p.use, ready: true, hot: false });
+      if (lines.length === 0 && p.footer) lines.push({ key: '', text: p.footer, ready: false, hot: false });
+    }
+    if (!lines.length) return;
+    const viewH = BASE_H - BASE_STATUS;
+    let y = vmLine(viewH) + 2;
+    for (const line of lines.slice(0, 2)) {
+      const keyW = line.key ? 4 + measureText(line.key, 'small') + 4 : 0;
+      const textW = measureText(line.text, 'small');
+      const w = keyW + (keyW ? 4 : 0) + textW;
+      const x = Math.round(BASE_W / 2 - w / 2);
+      g.fillStyle = 'rgba(6,8,12,0.72)';
+      g.fillRect(x - 3, y - 1, w + 6, 9);
+      let tx = x;
+      if (line.key) {
+        const kw = measureText(line.key, 'small');
+        g.fillStyle = line.ready ? '#ffb428' : '#4a4e58';
+        g.fillRect(tx, y, kw + 4, 7);
+        drawText(g, line.key, tx + 2, y + 1, line.ready ? '#1a1408' : '#9aa0ac', 'small');
+        tx += kw + 8;
+      }
+      const col = line.hot ? '#ffffff' : line.ready ? '#e8ecf2' : '#9aa0ac';
+      drawText(g, line.text, tx, y, col, 'small', '#000');
+      y += 10;
+    }
   }
 
   /**

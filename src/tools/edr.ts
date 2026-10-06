@@ -21,6 +21,7 @@ export const edrTool: ToolDef = {
   ammo: { resource: 'edr-cell', start: 1, max: 3 },
   cooldown: 1.2,
   windup: WINDUP,
+  blurb: 'CONTAINMENT PULSE',
   unlock: { difficulty: 9 },
   control: {
     name: 'EDR/XDR (automated detection and containment)',
@@ -100,5 +101,8 @@ export const edrTool: ToolDef = {
     ctx.bus.emit('message', contained + weakened > 0
       ? { text: `EDR: ${contained} endpoint(s) isolated${weakened ? `, ${weakened} still resisting` : ''}. Containment logged.`, kind: 'good' }
       : { text: 'EDR: no infected endpoints within range. Cell wasted; triage before you respond.', kind: 'warn' });
+  },
+  hint() {
+    return { text: 'HOLD: CHARGE CONTAINMENT PULSE', ready: true };
   },
 };

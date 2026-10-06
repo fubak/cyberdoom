@@ -4,6 +4,7 @@ import { hash, impactBurst, screenFlash, usePhase, tipY } from './anim';
 import { bevel, poly, rect, shade } from './pixel';
 import { drawText, textWidth } from './pixelfont';
 import { fist, handLook, sleeve } from './shared';
+import { targetNoun } from './hint';
 
 /** Max distance (tiles) at which the scanner stick can be plugged into a workstation. */
 export const USB_PLUG_RANGE = 2;
@@ -28,6 +29,7 @@ export const usbTool: ToolDef = {
   cooldown: 0.42,
   windup: WINDUP,
   auto: true,
+  blurb: 'SCAN & QUARANTINE',
   control: {
     name: 'Antimalware / endpoint protection (trusted scanner media)',
     category: 'technical',
@@ -89,7 +91,7 @@ export const usbTool: ToolDef = {
     const ph = usePhase(anim.sinceUse, WINDUP);
     // the hard-edged muzzle flash is part of the held art (viewmodels.ts usbArt), at the stick tip
     if (ph.phase === 'impact' && ph.u < 0.34) screenFlash(g, w, h, '160,240,255', 0.05);
-    impactBurst(g, w / 2, tipY(h), anim.sinceConfirm, anim.confirmGood);
+    impactBurst(g, w / 2, tipY(h), anim.sinceConfirm, anim.confirmGood, 1, 'scan');
   },
   use(ctx) {
     const aim = ctx.aimEntity(12, 0.12);
@@ -110,5 +112,16 @@ export const usbTool: ToolDef = {
       source: 'usb-scanner',
     });
     ctx.bus.emit('tool-used', { toolId: 'usb' });
+  },
+  hint(ctx) {
+    const aim = ctx.aimEntity(12, 0.12);
+    if (aim?.def.kind === 'workstation') {
+      if (Math.hypot(aim.x - ctx.playerX, aim.y - ctx.playerY) > USB_PLUG_RANGE) {
+        return { text: 'TOO FAR: WALK UP TO PLUG IN', ready: false };
+      }
+      return { text: 'PLUG IN: SCAN & QUARANTINE', ready: true };
+    }
+    if (aim?.def.kind === 'enemy') return { text: `SCAN SHOT: ${targetNoun(aim)}`, ready: true };
+    return { text: 'SCAN SHOT', ready: true };
   },
 };

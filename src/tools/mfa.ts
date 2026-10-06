@@ -2,6 +2,7 @@ import type { ToolDef, ToolUseContext } from '../core/types';
 import { impactBurst, usePhase, tipY } from './anim';
 import { bevel, rect } from './pixel';
 import { mfaPending } from './badge';
+import { targetNoun } from './hint';
 import { fist, handLook, sleeve } from './shared';
 
 const WINDUP = 0.08;
@@ -21,6 +22,7 @@ export const mfaTool: ToolDef = {
   ammo: null,
   cooldown: 0.5,
   windup: WINDUP,
+  blurb: 'SECOND FACTOR',
   unlock: { difficulty: 3 },
   control: {
     name: 'Multifactor authentication (FIDO2 security key + biometric)',
@@ -119,5 +121,16 @@ export const mfaTool: ToolDef = {
       return;
     }
     ctx.bus.emit('message', { text: `${e.def.inspect?.label ?? 'That'} does not take a security key.`, kind: 'info' });
+  },
+  hint(ctx) {
+    const door = ctx.isDoorAhead();
+    if (door) {
+      if (!door.mfa) return { text: 'BADGE-ONLY READER', ready: false };
+      if (!mfaPending(ctx.entities).has(door.doorId)) return { text: 'SWIPE BADGE FIRST', ready: false };
+      return { text: 'CONFIRM MFA AT READER', ready: true };
+    }
+    const e = ctx.aimEntity(2.5, 0.4);
+    if (!e) return null;
+    return { text: `TOUCH TOKEN: ${targetNoun(e)}`, ready: true };
   },
 };

@@ -41,4 +41,33 @@ describe('particle system', () => {
     charge.update(1 / 60);
     expect(charge.view().count).toBe(0);
   });
+
+  it('toolImpact stays under 32 particles per call and gives tools distinct colours', () => {
+    const signature = (tool: string) => {
+      const p = new ParticleSystem(() => 0.5);
+      p.toolImpact(tool, 5, 5, 0.4, 0, 0);
+      expect(p.view().count).toBeLessThanOrEqual(32);
+      expect(p.view().count).toBeGreaterThan(0);
+      // mean colour signature over all spawned particles
+      const c = p.color;
+      let r = 0, g = 0, b = 0;
+      for (let i = 0; i < p.view().count; i++) { r += c[i * 3]; g += c[i * 3 + 1]; b += c[i * 3 + 2]; }
+      return `${Math.round(r * 2)}.${Math.round(g * 2)}.${Math.round(b * 2)}`;
+    };
+    const sigs = ['keyboard', 'usb', 'edr', 'tap', 'mouse', 'patch'].map(signature);
+    expect(new Set(sigs).size).toBe(sigs.length);
+    // keyboard = amber (warm), usb = cyan (cool), patch = green
+    const kb = new ParticleSystem(() => 0.5);
+    kb.toolImpact('keyboard', 5, 5, 0.4);
+    expect(kb.color[3]).toBeGreaterThan(kb.color[5]); // 2nd shard: amber, not white
+    const usb = new ParticleSystem(() => 0.5);
+    usb.toolImpact('usb', 5, 5, 0.4);
+    expect(usb.color[2]).toBeGreaterThan(usb.color[0]);
+    const badgeBad = new ParticleSystem(() => 0.5);
+    badgeBad.toolImpact('badge', 5, 5, 0.4, undefined, undefined, false);
+    expect(badgeBad.color[0]).toBe(1); // red reader sparkle
+    const badgeOk = new ParticleSystem(() => 0.5);
+    badgeOk.toolImpact('badge', 5, 5, 0.4, undefined, undefined, true);
+    expect(badgeOk.color[1]).toBe(1); // green reader sparkle
+  });
 });
