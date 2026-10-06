@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { EventBus } from '../src/core/events';
-import type { Mission, ToolUseContext } from '../src/core/types';
+import type { Entity, Mission, ToolUseContext } from '../src/core/types';
+import { toolForSlot } from '../src/tools';
 import { WorldMap } from '../src/engine/map';
 import { enemyInTheWay, exitEdge } from '../src/engine/interact';
 import { MissionRuntime } from '../src/missions/runtime';
@@ -175,6 +176,34 @@ describe('enemy in the way warning', () => {
       x: 0.5, y: 2.5, hp: 1, alive: true, infected: false, state: {},
     });
     expect(enemyInTheWay(s.rt.entities, 1.5, 2.5, 0, s.map)).toBeNull();
+  });
+});
+
+describe('mouse re-inspect hint', () => {
+  const mouseUse = (e: Entity) => {
+    const bus = new EventBus();
+    const messages: string[] = [];
+    bus.on('message', ({ text }) => messages.push(text));
+    const mouse = toolForSlot(2)!;
+    const ctx = { bus, entities: [e], authorizedRoles: [], aimEntity: () => e } as unknown as ToolUseContext;
+    mouse.use(ctx); // first click: inspect
+    mouse.use(ctx); // second click: hint
+    return messages;
+  };
+  const host = (tags: string[], infected: boolean): Entity => ({
+    def: { id: 'h', kind: 'workstation', x: 2, y: 2, sprite: 'workstation', tags,
+      inspect: { label: 'Host', detail: '', category: 'legit' } },
+    x: 2, y: 2, hp: 1, alive: true, infected, state: {},
+  });
+
+  it('points to the patch slot for non-infected confirmed vulnerabilities', () => {
+    const messages = mouseUse(host(['triage', 'vulnerability-confirmed'], false));
+    expect(messages.at(-1)).toBe('Confirmed finding: apply a PATCH disk [8] to remediate.');
+  });
+
+  it('keeps the triage hint for real malware triage hosts', () => {
+    const messages = mouseUse(host(['triage'], true));
+    expect(messages.at(-1)).toBe('Decide from the raw evidence: SCANNER quarantines/patches, KEYBOARD releases.');
   });
 });
 

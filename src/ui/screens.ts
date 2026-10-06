@@ -118,10 +118,20 @@ export function missionSelect(onPick: (id: string) => void): HTMLElement {
     if (state === 'next') nextRow = row;
     s.appendChild(row);
   }
-  // Keep the heading visible and scroll the NEXT row into view on open.
-  queueMicrotask(() => {
-    (nextRow ?? s.lastElementChild)?.scrollIntoView({ block: 'nearest' });
-    s.scrollTop = Math.max(0, (nextRow?.offsetTop ?? 0) - 96);
+  // Keep the heading visible and scroll the NEXT row into view on open:
+  // if NEXT fits on the first screen, stay at scrollTop 0 (heading visible);
+  // otherwise scroll so NEXT is visible with a couple of rows of context.
+  requestAnimationFrame(() => {
+    if (!nextRow) {
+      s.scrollTop = 0;
+      return;
+    }
+    const viewH = s.clientHeight || globalThis.innerHeight || 0;
+    if (nextRow.offsetTop + nextRow.offsetHeight <= viewH) {
+      s.scrollTop = 0;
+    } else {
+      s.scrollTop = Math.max(0, nextRow.offsetTop - 96);
+    }
   });
   return s;
 }

@@ -119,7 +119,7 @@ export const m08: Mission = {
     {
       id: 'file02',
       kind: 'console',
-      x: 24.5,
+      x: 23.5,
       y: 5.5,
       sprite: 'workstation',
       priority: 2,
