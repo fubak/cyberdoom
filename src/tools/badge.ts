@@ -150,7 +150,10 @@ export const badgeTool: ToolDef = {
     swipeBadge(ctx, door);
   },
   hint(ctx) {
-    if (!ctx.isDoorAhead()) return { text: 'NO BADGE READER IN REACH', ready: false };
+    const door = ctx.isDoorAhead();
+    if (!door) return { text: 'NO BADGE READER IN REACH', ready: false };
+    // a readerless door opens with E; swiping the badge at it does nothing useful
+    if (door.accessRole === undefined) return { text: 'NO READER: PRESS E TO OPEN', ready: false };
     return { text: 'SWIPE BADGE AT READER', ready: true };
   },
 };

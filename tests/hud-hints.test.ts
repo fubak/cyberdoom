@@ -124,8 +124,9 @@ describe('tool hints agree with use() and never leak verdicts', () => {
     expect(affected(fired, keyboardTool, undefined)).toBe(false);
   });
 
-  it('keyboard: infected workstation -> not ready; enemy out of reach -> too far', () => {
+  it('keyboard: revealed infected workstation -> not ready; enemy out of reach -> too far', () => {
     const ws = ent({ id: 'ws', kind: 'workstation' }, 1, true);
+    ws.state.revealed = true;
     const { ctx: c } = ctx({ entities: [ws] });
     const h = keyboardTool.hint!(c);
     expect(h?.ready).toBe(false);
@@ -182,6 +183,7 @@ describe('tool hints agree with use() and never leak verdicts', () => {
     expect(patchTool.hint!(c1)?.text).toBe('INSPECT FIRST (MOUSE 2)');
     triageHost.state.inspected = true;
     triageHost.infected = true;
+    triageHost.state.revealed = true;
     const { ctx: c2 } = ctx({ entities: [triageHost] });
     expect(patchTool.hint!(c2)?.text).toBe('CLEAN IT FIRST (SCANNER 3)');
     triageHost.infected = false;
@@ -196,8 +198,12 @@ describe('tool hints agree with use() and never leak verdicts', () => {
   it('badge and mfa door hints', () => {
     const door = { doorId: 'd1', dist: 1 };
     const { ctx: c } = ctx({ door });
-    expect(badgeTool.hint!(c)?.text).toBe('SWIPE BADGE AT READER');
-    expect(badgeTool.hint!(c)?.ready).toBe(true);
+    // no accessRole -> a readerless door opens with E, not the badge
+    expect(badgeTool.hint!(c)?.text).toBe('NO READER: PRESS E TO OPEN');
+    expect(badgeTool.hint!(c)?.ready).toBe(false);
+    const { ctx: cr } = ctx({ door: { doorId: 'd1', dist: 1, accessRole: 'analyst' } });
+    expect(badgeTool.hint!(cr)?.text).toBe('SWIPE BADGE AT READER');
+    expect(badgeTool.hint!(cr)?.ready).toBe(true);
     expect(mfaTool.hint!(c)?.text).toBe('BADGE-ONLY READER');
     const mfaDoor = { doorId: 'd2', dist: 1, mfa: true };
     const entities: Entity[] = [];
@@ -308,11 +314,12 @@ describe('MissionRuntime.interactHint', () => {
     expect(a).not.toContain('RIGHT CONSOLE');
   });
 
-  it('reportable -> MARK AS SUSPECT; infected workstation -> MANUAL CLEANUP; others null', () => {
+  it('reportable -> MARK AS SUSPECT; revealed infected workstation -> MANUAL CLEANUP; others null', () => {
     const npc: EntityDef = { id: 'npc', kind: 'npc', x: 1, y: 1, sprite: 's', reportable: true };
     const ws: EntityDef = { id: 'ws', kind: 'workstation', x: 1, y: 2, sprite: 's', infected: true };
     const prop: EntityDef = { id: 'p', kind: 'prop', x: 1, y: 3, sprite: 's' };
     const rt = new MissionRuntime(hintMission([npc, ws, prop]), new EventBus());
+    rt.byId('ws')!.state.revealed = true;
     expect(rt.interactHint(rt.byId('npc')!)).toBe('MARK AS SUSPECT');
     expect(rt.interactHint(rt.byId('ws')!)).toBe('MANUAL CLEANUP');
     expect(rt.interactHint(rt.byId('p')!)).toBeNull();
@@ -322,6 +329,58 @@ describe('MissionRuntime.interactHint', () => {
     const host: EntityDef = { id: 'h', kind: 'workstation', x: 1, y: 1, sprite: 's', tags: ['triage'] };
     const rt = new MissionRuntime(hintMission([host]), new EventBus());
     expect(rt.interactHint(rt.byId('h')!)).toBe('INSPECT FIRST (MOUSE 2)');
+  });
+
+  it('M04: malicious vs legit inspected triage host gives identical E and mouse hints', () => {
+    const bad: EntityDef = { id: 'b', kind: 'workstation', x: 1, y: 1, sprite: 's', tags: ['triage'], infected: true, inspect: { label: 'Mail Relay', detail: '', category: 'malware' } };
+    const ok: EntityDef = { id: 'o', kind: 'workstation', x: 1, y: 2, sprite: 's', tags: ['triage'], inspect: { label: 'Print Server', detail: '', category: 'legit' } };
+    const bus = new EventBus();
+    const rt = new MissionRuntime(hintMission([bad, ok]), bus);
+    bus.emit('inspect', { entityId: 'b' });
+    bus.emit('inspect', { entityId: 'o' });
+    const be = rt.byId('b')!;
+    const oe = rt.byId('o')!;
+    be.state.inspected = oe.state.inspected = true;
+    expect(rt.interactHint(be)).toBe(rt.interactHint(oe));
+    expect(rt.interactHint(be)).toBe('FILE TRIAGE CALL');
+    // aim straight ahead for the mouse hint (defs sit at x=1, y=1/2)
+    be.y = oe.y = 0;
+    const mouseHint = (e: Entity) => mouseTool.hint!(ctx({ entities: [e] }).ctx);
+    expect(mouseHint(be)).toEqual(mouseHint(oe));
+    expect(mouseHint(be)?.text).toBe('CHOOSE A RESPONSE TOOL');
+  });
+
+  it('M05: vuln-confirmed vs plain inspected triage host gives identical mouse hint', () => {
+    const vuln = ent({ id: 'v', kind: 'workstation', tags: ['triage', 'vulnerability-confirmed'] }, 1);
+    const plain = ent({ id: 'p', kind: 'workstation', tags: ['triage'] }, 1);
+    vuln.state.inspected = plain.state.inspected = true;
+    const hv = mouseTool.hint!(ctx({ entities: [vuln] }).ctx);
+    const hp = mouseTool.hint!(ctx({ entities: [plain] }).ctx);
+    expect(hv).toEqual(hp);
+    expect(hv?.text).toBe('CHOOSE A RESPONSE TOOL');
+  });
+
+  it('unrevealed infected workstation hints identically to a clean one', () => {
+    const infected = ent({ id: 'i', kind: 'workstation' }, 1, true);
+    const clean = ent({ id: 'c', kind: 'workstation' }, 1);
+    for (const tool of [keyboardTool, patchTool]) {
+      const hi = tool.hint!(ctx({ entities: [infected] }).ctx);
+      const hc = tool.hint!(ctx({ entities: [clean] }).ctx);
+      expect(hi).toEqual(hc);
+    }
+    expect(keyboardTool.hint!(ctx({ entities: [infected] }).ctx)?.text).toBe('RUN COMMAND: WORKSTATION');
+    expect(patchTool.hint!(ctx({ entities: [infected] }).ctx)?.text).toBe('APPLY PATCH: WORKSTATION');
+    const rt = new MissionRuntime(hintMission([
+      { id: 'i', kind: 'workstation', x: 1, y: 1, sprite: 's', infected: true },
+      { id: 'c', kind: 'workstation', x: 1, y: 2, sprite: 's' },
+    ]), new EventBus());
+    expect(rt.interactHint(rt.byId('i')!)).toBe(rt.interactHint(rt.byId('c')!));
+    expect(rt.interactHint(rt.byId('i')!)).toBe('INSPECT FIRST (MOUSE 2)');
+    // once revealed, the infected host is visibly different
+    rt.byId('i')!.state.revealed = true;
+    rt.byId('c')!.state.revealed = true;
+    expect(rt.interactHint(rt.byId('i')!)).toBe('MANUAL CLEANUP');
+    expect(rt.interactHint(rt.byId('c')!)).toBeNull();
   });
 
   it('interact handler still runs the real action after the hint (same branch)', () => {

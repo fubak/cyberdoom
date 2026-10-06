@@ -9,6 +9,7 @@ import type {
 import { objectiveById } from '../content/objectives';
 import type { WorldMap } from '../engine/map';
 import { mfaPending, swipeBadge } from '../tools/badge';
+import { mouseTool } from '../tools/mouse';
 import { difficultyScale } from './difficulty';
 
 /**
@@ -613,8 +614,7 @@ export class MissionRuntime {
     if (!e.alive) return null;
 
     if (e.def.kind === 'workstation' && e.def.tags?.includes('triage')) {
-      if (!this.inspected.has(e.def.id)) return 'INSPECT FIRST (MOUSE 2)';
-      if (e.infected) return 'TRIAGE CALL ALREADY MADE';
+      if (!this.inspected.has(e.def.id)) return `INSPECT FIRST (MOUSE ${mouseTool.slot})`;
       return 'FILE TRIAGE CALL';
     }
 
@@ -634,7 +634,12 @@ export class MissionRuntime {
       return 'USE CONSOLE';
     }
 
-    if (e.def.kind === 'workstation' && e.infected) return 'MANUAL CLEANUP';
+    if (e.def.kind === 'workstation') {
+      // infected is only visible once the renderer reveals the infected sprite
+      if (!e.state.revealed) return `INSPECT FIRST (MOUSE ${mouseTool.slot})`;
+      if (e.infected) return 'MANUAL CLEANUP';
+      return null;
+    }
 
     return null;
   }

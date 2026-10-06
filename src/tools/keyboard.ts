@@ -153,7 +153,9 @@ export const keyboardTool: ToolDef = {
       return { text: 'KILL PROCESS: MALWARE', ready: true };
     }
     if (e.def.kind === 'npc') return { text: 'NOT USED ON PEOPLE', ready: false };
-    if (e.def.kind === 'workstation' && e.infected) return { text: "KILL PROCESS (WON'T CLEAN HOST)", ready: false };
+    if (e.def.kind === 'workstation' && e.infected && e.state.revealed) {
+      return { text: "KILL PROCESS (WON'T CLEAN HOST)", ready: false };
+    }
     return { text: `RUN COMMAND: ${targetNoun(e)}`, ready: true };
   },
 };

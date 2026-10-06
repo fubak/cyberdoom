@@ -3,6 +3,7 @@ import { impactBurst, usePhase, tipY } from './anim';
 import { targetNoun } from './hint';
 import { ellipse, pill, rect, shade } from './pixel';
 import { flatHand, handLook, sleeve } from './shared';
+import { patchTool } from './patch';
 
 const WINDUP = 0.03;
 
@@ -94,7 +95,7 @@ export const mouseTool: ToolDef = {
     }
     if (e.def.tags?.includes('triage')) {
       if (e.def.tags.includes('vulnerability-confirmed') && !e.infected) {
-        ctx.bus.emit('message', { text: 'Confirmed finding: apply a PATCH disk [8] to remediate.', kind: 'info' });
+        ctx.bus.emit('message', { text: `Confirmed finding: apply a PATCH disk [${patchTool.slot}] to remediate.`, kind: 'info' });
         return;
       }
       ctx.bus.emit('message', { text: 'Decide from the raw evidence: SCANNER quarantines/patches, KEYBOARD releases.', kind: 'info' });
@@ -117,12 +118,7 @@ export const mouseTool: ToolDef = {
     if (!e) return { text: 'INSPECT: AIM AT A TARGET', ready: false };
     if (!e.state.inspected) return { text: `INSPECT ${targetNoun(e)}`, ready: true };
     if (e.state.flagged) return { text: 'ALREADY FLAGGED', ready: false };
-    if (e.def.tags?.includes('triage')) {
-      if (e.def.tags.includes('vulnerability-confirmed') && !e.infected) {
-        return { text: 'REMEDIATE: PATCH DISK [8]', ready: false };
-      }
-      return { text: 'TRIAGE: SCANNER OR KEYBOARD', ready: false };
-    }
+    if (e.def.tags?.includes('triage')) return { text: 'CHOOSE A RESPONSE TOOL', ready: false };
     if (e.def.inspect?.category === 'person') return { text: 'REPORT VIA SECURITY CONSOLE', ready: false };
     return { text: `FLAG ${targetNoun(e)} AS MALICIOUS`, ready: true };
   },

@@ -1,4 +1,6 @@
 import type { Entity } from '../core/types';
+import { badgeTool } from '../tools/badge';
+import { mfaTool } from '../tools/mfa';
 
 /**
  * The single source of truth for what E/Space does: both the actual E action
@@ -46,8 +48,8 @@ export function resolveUse(ctx: UseTargetContext): UseTarget {
  */
 export function doorUseHint(ctx: UseTargetContext, door: { doorId: string; accessRole?: string; mfa?: boolean }): string {
   if (door.accessRole === undefined) return 'OPEN DOOR';
-  if (door.mfa && ctx.mfaPending.has(door.doorId)) return 'SECOND FACTOR: TOKEN [7]';
+  if (door.mfa && ctx.mfaPending.has(door.doorId)) return `SECOND FACTOR: TOKEN [${mfaTool.slot}]`;
   if (!ctx.roles.includes(door.accessRole)) return `READER: ${door.accessRole.toUpperCase()} ONLY`;
-  if (!ctx.hasBadge) return 'READER: SELECT BADGE [4]';
+  if (!ctx.hasBadge) return `READER: SELECT BADGE [${badgeTool.slot}]`;
   return 'SWIPE BADGE AT READER';
 }
