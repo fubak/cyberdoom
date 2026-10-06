@@ -564,7 +564,7 @@ export function debrief(opts: {
         ramp: RAMP.gold,
         pages: questionPages(),
         nextLabel: i + 1 < items.length ? 'NEXT QUESTION' : 'RESULTS',
-        canNext: () => picked >= 0,
+        canNext: () => picked >= 0 || order.length === 0,
         next: () => {
           i++;
           if (i < items.length) ask();

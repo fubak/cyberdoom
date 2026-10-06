@@ -4,6 +4,7 @@ import { playableCoverageLine } from '../content/curriculum';
 import { objectiveById } from '../content/objectives';
 import { missionRowStates } from '../missions/progress';
 import { mountTitle } from '../render/title';
+import { bigButton, onKeysWhileMounted } from './briefing';
 
 /**
  * ARSENAL/LOOK: HTML overlay screens — title, character select, mission
@@ -83,18 +84,31 @@ export function characterSelect(onPick: (g: Gender) => void): HTMLElement {
   return s;
 }
 
-export function missionSelect(onPick: (id: string) => void): HTMLElement {
+export function missionSelect(onPick: (id: string) => void, onBack: () => void): HTMLElement {
   const s = el('div', 'screen mission-select');
-  s.appendChild(el('h2', '', 'SELECT MISSION'));
+  const bar = el('div', 'menu-bar');
+  const back = document.createElement('button');
+  back.type = 'button';
+  back.className = 'btn small';
+  back.dataset.menuItem = 'back';
+  back.textContent = 'BACK [ESC]';
+  back.addEventListener('click', onBack);
+  bar.appendChild(back);
+  bar.appendChild(el('h2', '', 'SELECT MISSION'));
+  s.appendChild(bar);
   s.appendChild(el('div', 'playable-coverage', playableCoverageLine()));
   const missions = missionRegistry.all();
   const orderedIds = missions.map((m) => m.id);
   const states = missionRowStates(orderedIds);
-  let nextRow: HTMLElement | null = null;
+  let nextRow: HTMLButtonElement | null = null;
   for (const m of missions) {
     const state = states.get(m.id) ?? 'locked';
     const unlocked = state !== 'locked';
-    const row = el('div', `mission-row ${state}`);
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.className = `mission-row ${state}`;
+    row.disabled = !unlocked;
+    row.dataset.missionId = m.id;
     row.appendChild(el('span', 'diff', '☣'.repeat(Math.min(3, Math.ceil(m.difficulty / 3)))));
     const body = el('div');
     const badge =
@@ -113,11 +127,27 @@ export function missionSelect(onPick: (id: string) => void): HTMLElement {
       ),
     );
     row.appendChild(body);
-    row.setAttribute('aria-disabled', String(!unlocked));
     if (unlocked) row.addEventListener('click', () => onPick(m.id));
     if (state === 'next') nextRow = row;
     s.appendChild(row);
   }
+  onKeysWhileMounted(s, (e) => {
+    if (e.key === 'Escape' || e.key === 'Backspace') {
+      e.preventDefault();
+      onBack();
+      return;
+    }
+    const list = [...s.querySelectorAll<HTMLButtonElement>('button.mission-row:not(:disabled)')];
+    if (!list.length) return;
+    const current = list.findIndex((row) => row === document.activeElement);
+    const down = e.key === 'ArrowDown' || e.key === 's' || e.key === 'S';
+    const up = e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W';
+    if (down || up) {
+      e.preventDefault();
+      const index = current < 0 ? 0 : (current + (down ? 1 : list.length - 1)) % list.length;
+      list[index]?.focus();
+    }
+  });
   // Keep the heading visible and scroll the NEXT row into view on open:
   // if NEXT fits on the first screen, stay at scrollTop 0 (heading visible);
   // otherwise scroll so NEXT is visible with a couple of rows of context.
@@ -132,17 +162,29 @@ export function missionSelect(onPick: (id: string) => void): HTMLElement {
     } else {
       s.scrollTop = Math.max(0, nextRow.offsetTop - 96);
     }
+    const focusRow = nextRow ?? s.querySelector<HTMLButtonElement>('button.mission-row:not(:disabled)');
+    focusRow?.focus({ preventScroll: true });
   });
   return s;
 }
 
 /** DEPLOY pressed before background prep finished: Doom-style plate while the last steps run. */
-export function loadingScreen(): HTMLElement {
+export function loadingScreen(onAbort: () => void): HTMLElement {
   const s = el('div', 'screen cd-inter');
   const inner = el('div', 'cd-loading-plate');
   inner.appendChild(el('h1', '', 'LOADING SECTOR…'));
   inner.appendChild(el('p', '', 'STAND BY'));
+  const abort = bigButton('ABORT  [ESC]', onAbort, 'cd-btn alt');
+  abort.type = 'button';
+  abort.dataset.menuItem = 'abort';
+  inner.appendChild(abort);
   s.appendChild(inner);
+  onKeysWhileMounted(s, (e) => {
+    if (e.key === 'Escape' || e.key === 'Backspace') {
+      e.preventDefault();
+      onAbort();
+    }
+  });
   return s;
 }
 

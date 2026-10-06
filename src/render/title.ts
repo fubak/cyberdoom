@@ -297,9 +297,15 @@ export function mountTitle(host: HTMLElement, onStart: () => void, about: string
   };
   const onKey = (e: KeyboardEvent) => {
     if (!c.isConnected) return;
+    // Read This promises any key (including arrows) returns to the menu.
+    if (showAbout) {
+      showAbout = false;
+      e.preventDefault();
+      return;
+    }
     if (['ArrowUp', 'KeyW'].includes(e.code)) sel = (sel + items.length - 1) % items.length;
     else if (['ArrowDown', 'KeyS'].includes(e.code)) sel = (sel + 1) % items.length;
-    else if (showAbout || ['Enter', 'Space', 'NumpadEnter'].includes(e.code)) choose();
+    else if (['Enter', 'Space', 'NumpadEnter'].includes(e.code)) choose();
     else return;
     e.preventDefault();
   };
@@ -311,6 +317,7 @@ export function mountTitle(host: HTMLElement, onStart: () => void, about: string
   items.forEach((it, i) => {
     const b = document.createElement('button');
     b.type = 'button';
+    b.className = 'menu-hit';
     b.dataset.menuItem = it.id;
     b.textContent = it.label;
     b.setAttribute('aria-label', it.label);
@@ -320,11 +327,11 @@ export function mountTitle(host: HTMLElement, onStart: () => void, about: string
       top: `${((menuY - 3 + i * rowH) / H) * 100}%`,
       width: `${(96 / W) * 100}%`,
       height: `${(rowH / H) * 100}%`,
-      opacity: '0',
       border: '0',
       padding: '0',
       margin: '0',
       background: 'transparent',
+      color: 'transparent',
       cursor: 'pointer',
       zIndex: '2',
     });

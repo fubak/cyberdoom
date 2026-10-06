@@ -1,7 +1,9 @@
 import type { MapDef } from '../core/types';
+import { drawText } from '../render/font';
 import { roleColor } from '../render/textures';
 import { VIEW3D_H, VIEW_W } from '../render/renderer';
 import { RES } from '../render/res';
+import { MAP_HINT } from './nav';
 
 export class Automap {
   private readonly context: CanvasRenderingContext2D;
@@ -112,6 +114,9 @@ export class Automap {
     g.lineTo(backX - sideX, backY - sideY);
     g.closePath();
     g.fill();
+    g.fillStyle = 'rgba(0,0,0,0.8)';
+    g.fillRect(0, H - 12, W, 12);
+    drawText(g, MAP_HINT, 4, H - 10, '#ffd040', 'small', '#000');
     g.restore();
   }
 }

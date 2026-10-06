@@ -25,7 +25,9 @@ const CARD_Y = 26;
 const CARD_X: Record<Gender, number> = { male: 10, female: 164 };
 const SKIN_Y = 156;
 const SKIN_X = 118;
-const DEPLOY: [number, number, number, number] = [116, 174, 88, 15];
+export const CHAR_HINT = 'ARROWS CHOOSE - 1-5 SKIN - ENTER GO - ESC BACK';
+const BACK: [number, number, number, number] = [12, 174, 78, 15];
+const DEPLOY: [number, number, number, number] = [188, 174, 88, 15];
 const AMBER = ['#fff0a0', '#ffd040', '#ffa818', '#d07808', '#8a4804'];
 
 function paintBackdrop(): HTMLCanvasElement {
@@ -96,7 +98,7 @@ function frame(g: CanvasRenderingContext2D, x: number, y: number, w: number, h: 
   }
 }
 
-export function characterSelect(onPick: (g: Gender) => void): HTMLElement {
+export function characterSelect(onPick: (g: Gender) => void, onBack: () => void, initial: Gender = 'male'): HTMLElement {
   const s = document.createElement('div');
   s.className = 'screen title';
   const c = document.createElement('canvas');
@@ -117,7 +119,7 @@ export function characterSelect(onPick: (g: Gender) => void): HTMLElement {
     hg.setTransform(RES, 0, 0, RES, 0, 0);
   }
 
-  let sel: Gender = 'male';
+  let sel: Gender = initial;
   const faces: Record<Gender, Face> = { male: new Face(), female: new Face() };
   let t = 0;
 
@@ -179,18 +181,24 @@ export function characterSelect(onPick: (g: Gender) => void): HTMLElement {
       g.fillRect(x + u, SKIN_Y + 10 - 2 * u, 12 - 2 * u, u);
       drawText(g, `${i + 1}`, x + 5, SKIN_Y + 3, on ? '#ffffff' : '#d8dce4', 'tiny', '#000');
     });
-    // deploy
+    // back + deploy
+    const paintPlate = (x: number, y: number, w: number, h: number, label: string, hot: boolean) => {
+      g.fillStyle = '#000';
+      g.fillRect(x - 1, y - 1, w + 2, h + 2);
+      g.fillStyle = hot ? '#c02010' : '#3a2418';
+      g.fillRect(x, y, w, h);
+      g.fillStyle = hot ? '#ff6a40' : '#8a7060';
+      g.fillRect(x + 1 / RES, y + 1 / RES, w - 2 / RES, 1 / RES);
+      g.fillStyle = hot ? '#500804' : '#1a100c';
+      g.fillRect(x + 1 / RES, y + h - 2 / RES, w - 2 / RES, 1 / RES);
+      const ramp = hot ? ['#ffffff', '#fff0a0', '#ffd040'] : ['#f0ece4', '#c8c0b0', '#8a90a0'];
+      drawChunky(g, label, x + Math.round((w - measureChunky(label)) / 2), y + 4, ramp);
+    };
+    const [bx, by, bw, bh] = BACK;
+    paintPlate(bx, by, bw, bh, 'BACK', false);
     const [dx, dy, dw, dh] = DEPLOY;
-    g.fillStyle = '#000';
-    g.fillRect(dx - 1, dy - 1, dw + 2, dh + 2);
-    g.fillStyle = pulse ? '#c02010' : '#a01808';
-    g.fillRect(dx, dy, dw, dh);
-    g.fillStyle = '#ff6a40';
-    g.fillRect(dx + 1 / RES, dy + 1 / RES, dw - 2 / RES, 1 / RES);
-    g.fillStyle = '#500804';
-    g.fillRect(dx + 1 / RES, dy + dh - 2 / RES, dw - 2 / RES, 1 / RES);
-    drawChunky(g, 'DEPLOY', dx + Math.round((dw - measureChunky('DEPLOY')) / 2), dy + 4, ['#ffffff', '#fff0a0', '#ffd040']);
-    const hint = '< > CHOOSE  -  1-5 SKIN TONE  -  ENTER DEPLOY';
+    paintPlate(dx, dy, dw, dh, 'DEPLOY', true);
+    const hint = CHAR_HINT;
     drawText(g, hint, Math.round((W - measureText(hint, 'tiny')) / 2), H - 7, '#8a90a0', 'tiny');
   };
 
@@ -211,11 +219,17 @@ export function characterSelect(onPick: (g: Gender) => void): HTMLElement {
     playTool('menu-pick');
     onPick(sel);
   };
+  const leave = () => {
+    cleanup();
+    playTool('menu-move');
+    onBack();
+  };
 
   // transparent buttons over every clickable region: mouse + automation hooks
   const hook = (id: string, label: string, x: number, y: number, w: number, h: number, onClick: () => void, onDouble?: () => void) => {
     const b = document.createElement('button');
     b.type = 'button';
+    b.className = 'menu-hit';
     b.dataset.menuItem = id;
     b.textContent = label;
     b.setAttribute('aria-label', label);
@@ -225,11 +239,11 @@ export function characterSelect(onPick: (g: Gender) => void): HTMLElement {
       top: `${(y / H) * 100}%`,
       width: `${(w / W) * 100}%`,
       height: `${(h / H) * 100}%`,
-      opacity: '0',
       border: '0',
       padding: '0',
       margin: '0',
       background: 'transparent',
+      color: 'transparent',
       cursor: 'pointer',
       zIndex: '2',
     });
@@ -245,13 +259,20 @@ export function characterSelect(onPick: (g: Gender) => void): HTMLElement {
     hook(`analyst-${gd}`, ANALYSTS[gd].name, CARD_X[gd] - 2, CARD_Y - 4, CARD_W + 4, CARD_H + 6, () => choose(gd), deploy);
   }
   SKIN_TONES.forEach((tone, i) => hook(`skin-${i + 1}`, `Skin tone ${i + 1}`, SKIN_X + i * 18 - 2, SKIN_Y - 2, 16, 14, () => pickSkin(tone.id)));
+  hook('back', 'Back', ...BACK, leave);
   hook('deploy', 'Deploy', ...DEPLOY, deploy);
 
   const onKey = (e: KeyboardEvent) => {
     if (e.code === 'ArrowLeft' || e.code === 'KeyA') choose('male');
     else if (e.code === 'ArrowRight' || e.code === 'KeyD') choose('female');
-    else if (e.code === 'Enter') deploy();
-    else if (/^Digit[1-5]$/.test(e.code)) {
+    else if (e.code === 'Enter') {
+      e.preventDefault();
+      deploy();
+    }
+    else if (e.code === 'Escape' || e.code === 'Backspace') {
+      e.preventDefault();
+      leave();
+    } else if (/^Digit[1-5]$/.test(e.code)) {
       const tone = SKIN_TONES[Number(e.code[5]) - 1];
       if (tone) pickSkin(tone.id);
     }
