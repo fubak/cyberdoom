@@ -48,6 +48,11 @@ export const patchTool: ToolDef = {
     rect(g, x0 + 5, y0 + 20, 34, 4, '#ff8a1a');
     drawText(g, 'KB', x0 + 15, y0 + 27, '#1e3a8a');
     rect(g, x0 + 2, y0 + 38, 3, 3, '#0a0c12');
+    if (ph.phase === 'impact') {
+      // lit fire pose: label and shutter flare amber through the impact window
+      rect(g, x0 + 5, y0 + 20, 34, 20, 'rgba(255,220,150,0.5)');
+      rect(g, x0 + 12, y0, 22, 2, '#ffe8b0');
+    }
     // hand pinching the bottom edge
     sleeve(g, x0 + 18, y0 + 62, 22, 1, look, h);
     fist(g, x0 + 14, y0 + 32, 26, look, 1);

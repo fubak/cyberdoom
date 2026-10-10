@@ -359,8 +359,9 @@ export function drawToolViewmodel(
   const line = vmLine(h);
   const ph = anim ? usePhase(anim.sinceUse, tool.windup ?? 0) : null;
   // fire cycle: rest art in windup, lit art at the impact flash, fire art
-  // through the rest of the strike and early recover — the 2-3 frame pose
-  const lit = !!ph && ph.phase === 'impact' && ph.u < 0.6;
+  // through the rest of the strike and early recover — the lit pose holds for
+  // ~77 ms of the 90 ms impact window, so >=4 rendered frames at 60 Hz
+  const lit = !!ph && ph.phase === 'impact' && ph.u < 0.85;
   const fire = lit || (!!ph && (ph.phase === 'impact' || (ph.phase === 'recover' && ph.u < 0.25))) || (!ph && cooldownFrac > 0.55);
   const a = art(tool, gender, lit ? 2 : fire ? 1 : 0);
   if (a) {
@@ -476,5 +477,5 @@ const POSE: Record<string, { wind: [number, number]; strike: [number, number] }>
   keyboard: { wind: [-3, 3], strike: [0, -14] }, // pull back a touch, slam up-forward
   mouse: { wind: [0, 2], strike: [0, -5] }, // press, then pop up
   usb: { wind: [-2, -2], strike: [4, -12] }, // anticipation lift, recoil kick up-back
-  badge: { wind: [6, 3], strike: [-16, -9] }, // pull back, thrust up-left at the reader
+  badge: { wind: [7, 3], strike: [-24, -11] }, // pull back, swipe across the reader left
 };

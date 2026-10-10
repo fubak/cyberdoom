@@ -114,7 +114,9 @@ function paintPortrait(P: Painter, gender: Gender, st: FaceState, base: string):
       ? shade(mix(base, '#98908a', 0.42), 0.82)
       : tier >= 3
         ? shade(mix(base, '#a99d92', 0.22), 0.9)
-        : base;
+        : tier >= 2
+          ? mix(base, '#b8ac9c', 0.14)
+          : base;
   const skD = shade(sk, 0.78);
   const skDD = shade(sk, 0.62);
   const skL = shade(sk, 1.07);
@@ -223,7 +225,7 @@ function paintPortrait(P: Painter, gender: Gender, st: FaceState, base: string):
   for (const side of [-1, 1]) {
     const inner = 12 + side * 1.2;
     const outer = 12 + side * 4.2;
-    const iy = by + (hurt ? 0.7 : 0);
+    const iy = by + (hurt ? 0.7 : tier >= 2 ? 0.35 : 0);
     const arch = female ? -0.45 : -0.15;
     P.poly([[inner, iy], [12 + side * 2.7, by + arch], [outer, by + 0.5], [outer, by + 0.5 + bt * 0.6], [12 + side * 2.7, by + arch + bt], [inner, iy + bt]], browC);
   }
@@ -310,6 +312,12 @@ function paintPortrait(P: Painter, gender: Gender, st: FaceState, base: string):
     P.rect(10.2, 15.55, 3.6, 0.4, '#d8d0c0');
     for (let x = 10.7; x < 13.6; x += 0.75) P.rect(x, 15.55, u, 0.4, '#8a8478');
     P.line([[9.4, 15.3], [10.2, 16.1], [13.8, 16.1], [14.6, 15.3]], lip, lw(0.4));
+  } else if (tier >= 2) {
+    // strained: pressed lips with the corners pulled down (Doom's hurt frown)
+    P.line([[9.7, 16.3], [10.9, 15.8], [12, 15.9], [13.1, 15.8], [14.3, 16.3]], lip, lw(0.45));
+    P.line([[9.7, 16.3], [10.2, 16.9]], lip, lw(0.3));
+    P.line([[14.3, 16.3], [13.8, 16.9]], lip, lw(0.3));
+    P.rect(10.6, 16.9, 2.8, u, skDD);
   } else if (female) {
     P.poly([[10.1, 15.9], [11.3, 15.4], [12, 15.6], [12.7, 15.4], [13.9, 15.9]], lip);
     P.ell(12, 16.3, 1.6, 0.5, shade(lip, 1.1));
@@ -332,20 +340,31 @@ function paintPortrait(P: Painter, gender: Gender, st: FaceState, base: string):
   };
   if (!st.dead) {
     if (tier >= 1) {
-      // nicked brow + a small bruise on the cheekbone
+      // nicked brow, a puffed cut on the cheekbone, first sweat bead
       P.line([[7.1, 7.1], [8.9, 7.6]], '#c84a3a', lw(0.35));
       P.line([[7.3, 6.9], [8.9, 7.4]], blood, lw(0.25));
       P.dots(7, 6.8, 2.2, 1.4, '#e07060', 0.35, 2);
-      P.ell(15.9, 13.2, 1.3, 0.8, mix(sk, '#7a5a78', 0.45));
+      P.ell(15.9, 13.2, 1.6, 1, mix(sk, '#6a4a68', 0.5));
+      P.line([[14.9, 12.4], [16.6, 13.2]], mix(sk, '#4a3450', 0.4), lw(0.25));
+      streak([[8.6, 12.6], [9.6, 13.2]], 0.3);
+      P.rect(6.8, 9.4, u, 0.8, '#9ad0ff');
     }
     if (tier >= 2) {
       // blood from the hairline runs down past the brow into the eye
-      streak([[14.4, 4.2], [14.6, 6.4], [15.2, 8.6]], 0.5);
-      soak(14.2, 4.4, 1.4, 2.2, 0.5, 11);
+      streak([[14.4, 4.2], [14.6, 6.4], [15.2, 8.6], [15.5, 10.4]], 0.55);
+      soak(14.2, 4.4, 1.4, 2.6, 0.55, 11);
       P.dots(13.4, 3.6, 3, 1.2, blood, 0.35, 12);
-      // sweat on the temple + a swollen bruise under the eye
+      // sweat beads on both temples + a swollen bruise under the eye
       P.dots(6.6, 8.4, 0.9, 1.8, '#9ad0ff', 0.5, 13);
       P.rect(6.9, 9.6, u, 0.8, '#9ad0ff');
+      P.dots(16.9, 8.2, 0.9, 1.6, '#9ad0ff', 0.5, 14);
+      P.rect(17, 9.4, u, 0.8, '#9ad0ff');
+      P.ell(9.6, 10.6, 1.8, 0.7, mix(sk, '#4a3450', 0.4));
+      // nosebleed: a thin runnel from the left nostril to the lip
+      P.line([[11.5, 14.3], [11.2, 15.6]], blood, lw(0.4));
+      P.dots(11.1, 14.4, 0.9, 1.8, blood, 0.45, 15);
+      // a second thin runnel on the right cheek
+      streak([[16.6, 11.4], [16.8, 13.8]], 0.35);
     }
     if (tier >= 3) {
       // second runnel down the left cheek to the jaw + blood at the nose and lip

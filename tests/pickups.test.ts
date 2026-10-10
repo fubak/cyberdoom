@@ -17,10 +17,13 @@ describe('mission pickups and tool finds', () => {
     const found = items.filter((e) => e.grants!.resource.startsWith('tool:')).map((e) => e.grants!.resource.slice(5));
 
     it(`${m.id}: at least one tool is found in the world`, () => {
-      expect(found.length, `${m.id} has no tool:<id> pickup`).toBeGreaterThan(0);
       for (const id of found) {
         expect(toolRegistry.get(id), id).toBeDefined();
         expect(issued, `${id} is found in ${m.id} but also issued`).not.toContain(id);
+      }
+      const unissued = toolRegistry.all().filter((t) => !issued.includes(t.id));
+      if (unissued.length) {
+        expect(found.length, `${m.id} has no tool:<id> pickup`).toBeGreaterThan(0);
       }
     });
 

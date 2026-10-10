@@ -31,7 +31,7 @@ export const m12: Mission = {
     'Your kit: MOUSE (2) inspects, KEYBOARD (1) operates consoles, USB SCANNER (3) cleans hostiles, ' +
     'BADGE (4) opens doors your roles cover, MFA (7) opens the crypto vault.',
   authorizedRoles: ['analyst'],
-  loadout: ['keyboard', 'mouse', 'usb', 'badge', 'mfa', 'tap', 'patch'],
+  loadout: ['keyboard', 'mouse', 'usb', 'badge', 'mfa', 'tap', 'patch', 'edr'],
   map: {
     grid: [
     '################################################',
@@ -417,11 +417,11 @@ export const m12: Mission = {
       grants: { resource: 'integrity', amount: 25 },
       inspect: { label: 'Integrity kit', detail: 'Restores 25 integrity.', category: 'item' },
     },
-    // EDR console sits on the main path in the spawn lobby — the finale's key tool.
+    // EDR is issued in the finale; its console spot becomes a spare-cell cache.
     {
-      id: 'find-edr', kind: 'item', x: 20.5, y: 23.5, sprite: 'tool-edr', tags: ['arsenal-pickup'],
-      grants: { resource: 'tool:edr', amount: 1 },
-      inspect: { label: 'EDR console (found)', detail: 'Endpoint detection and response console with containment.', category: 'item', objectives: ['4.5'] },
+      id: 'edr-cache-lobby', kind: 'item', x: 20.5, y: 23.5, sprite: 'edr-cell', tags: ['arsenal-pickup'],
+      grants: { resource: 'edr-cell', amount: 2 },
+      inspect: { label: 'EDR cells', detail: 'Licence and compute for EDR containment pulses.', category: 'item', objectives: ['4.5'] },
     },
     // Secret enclave contents (behind brick doors).
     {

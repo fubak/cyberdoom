@@ -45,6 +45,13 @@ const RES_NAME: Record<string, string> = {
   'edr-cell': 'EDR CELLS',
   'patch-disk': 'PATCH DISKS',
 };
+/** Doom-style pickup lines: [singular, plural] per ammo resource. */
+const PICKUP_NAME: Record<string, [string, string]> = {
+  'usb-charge': ['SCAN SESSION', 'SCAN SESSIONS'],
+  pcap: ['CAPTURE BUFFER', 'CAPTURE BUFFERS'],
+  'edr-cell': ['EDR CELL', 'EDR CELLS'],
+  'patch-disk': ['PATCH DISK', 'PATCH DISKS'],
+};
 /** Columns of the HUD ticker (hud.ts drawTicker wraps at 45, 2 lines). */
 const TICKER_COLS = 45;
 const RES_LABEL: Record<string, string> = { 'usb-charge': 'SCAN', pcap: 'PCAP', 'edr-cell': 'CELL', 'patch-disk': 'DISK' };
@@ -153,6 +160,17 @@ export class Arsenal {
     if (resource.startsWith('tool:')) {
       const t = toolRegistry.get(resource.slice(5));
       if (t) {
+        if (this.owned.has(t.id)) {
+          // already carrying it: a duplicate tool converts to its ammo
+          if (t.ammo) {
+            const before = this.ammo.get(t.ammo.resource) ?? 0;
+            this.ammo.set(t.ammo.resource, Math.min(this.maxFor(t.ammo.resource), before + t.ammo.start));
+            playTool('ammo');
+            this.face.grin();
+            return this.pickupLine(t.ammo.resource, t.ammo.start);
+          }
+          return `ALREADY CARRYING THE ${t.name}.`;
+        }
         this.own(t, true);
         return `YOU GOT THE ${t.name}!`;
       }
@@ -162,8 +180,19 @@ export class Arsenal {
     this.ammo.set(resource, Math.min(this.maxFor(resource), before + amount));
     playTool('ammo');
     this.face.grin();
-    const t = sorted().find((x) => x.ammo?.resource === resource);
-    return `+${amount} ${RES_NAME[resource] ?? resource.toUpperCase()}${t ? ` for ${t.name}` : ''}`;
+    return this.pickupLine(resource, amount);
+  }
+
+  /** Short Doom-style pickup line: "PICKED UP 2 PATCH DISKS." */
+  private pickupLine(resource: string, amount: number): string {
+    const names = PICKUP_NAME[resource];
+    const plural = names?.[1] ?? (RES_NAME[resource] ?? `${resource.toUpperCase()}S`);
+    const single = names?.[0] ?? plural;
+    if (amount === 1) {
+      const article = /^[AEIOU]/.test(single) ? 'AN' : 'A';
+      return `PICKED UP ${article} ${single}.`;
+    }
+    return `PICKED UP ${amount} ${plural}.`;
   }
 
   ammoFor(t: ToolDef = this.current): number | null {

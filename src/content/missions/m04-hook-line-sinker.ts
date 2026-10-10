@@ -224,7 +224,9 @@ const pickups: EntityDef[] = [
   { id: 'medkit-mail-b', kind: 'item', x: 33.5, y: 18.5, sprite: 'medkit', grants: { resource: 'integrity', amount: 25 },
     inspect: { label: 'Integrity kit', detail: 'Restores 25 integrity.', category: 'item' } },
   {
-    id: 'found-edr-mail', kind: 'item', x: 7.5, y: 12.5, sprite: 'tool-edr',
+    // EDR console plugs the gap right above the mailroom door — the only way
+    // north off the spawn corridor, at full light: unmissable.
+    id: 'found-edr-mail', kind: 'item', x: 21.5, y: 25.5, sprite: 'tool-edr',
     tags: ['arsenal-pickup'], grants: { resource: 'tool:edr', amount: 1 },
     inspect: { label: 'EDR console (found)', detail: 'Endpoint detection and response console with containment.', category: 'item', objectives: ['4.5'] },
   },
