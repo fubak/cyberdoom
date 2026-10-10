@@ -117,7 +117,7 @@ export const usbTool: ToolDef = {
     const aim = ctx.aimEntity(12, 0.12);
     if (aim?.def.kind === 'workstation') {
       if (Math.hypot(aim.x - ctx.playerX, aim.y - ctx.playerY) > USB_PLUG_RANGE) {
-        return { text: 'TOO FAR: WALK UP TO PLUG IN', ready: false };
+        return { text: 'TOO FAR: WALK UP TO PLUG IN', ready: false, fleeting: true };
       }
       return { text: 'PLUG IN: SCAN & QUARANTINE', ready: true };
     }

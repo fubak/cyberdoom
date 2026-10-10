@@ -23,11 +23,11 @@ import { Dossier } from './ui/dossier';
 import * as screens from './ui/screens';
 import { MissionRuntime } from './missions/runtime';
 import { mfaPending } from './tools/badge';
-import { aimIsHostile, HintFader } from './tools/hint';
+import { Arsenal, ammoUnit } from './tools/arsenal';
 import { missionRegistry } from './content/missions';
 import { objectiveById } from './content/objectives';
 import { toolForSlot } from './tools';
-import { Arsenal } from './tools/arsenal';
+
 import { USB_PLUG_RANGE } from './tools/usb';
 import { characterSelect } from './ui/characterSelect';
 import { applyBack, LOOK_HINT, MENU_HINT } from './ui/nav';
@@ -120,7 +120,7 @@ class Game {
   private stepPan = 1;
   // HUD action prompt: computed at ~15 Hz; banner on tool switch.
   private prompt = {
-    lmb: null as { text: string; ready: boolean } | null,
+    lmb: null as { text: string; ready: boolean; fleeting?: boolean; cost?: string | null } | null,
     use: null as string | null,
     lmbHot: false,
     banner: null as { title: string; blurb: string } | null,
@@ -128,7 +128,6 @@ class Game {
   };
   private promptNextT = 0;
   private lastFireT = -Infinity;
-  private lmbHintFader = new HintFader();
   private bannerUntil = 0;
   private lastToolId = '';
   private switchedTool = false;
@@ -141,6 +140,8 @@ class Game {
   private sealedDoors = new Set<string>();
   /** threat types whose mechanic explainer was already tickered this mission. */
   private noticedThreats = new Set<string>();
+  /** attacker id -> {label, simT until it counts as actively draining}. */
+  private drainers = new Map<string, { label: string; until: number }>();
 
   constructor(app: HTMLElement) {
     const viewport = document.createElement('div');
@@ -603,7 +604,6 @@ class Game {
     this.prompt = { lmb: null, use: null, lmbHot: false, banner: null, footer: null };
     this.promptNextT = 0;
     this.lastFireT = -Infinity;
-    this.lmbHintFader = new HintFader();
     this.bannerUntil = 0;
     this.lastToolId = this.arsenal.current.id;
     this.switchedTool = false;
@@ -612,6 +612,7 @@ class Game {
     this.edrPulseCount = 0;
     this.sealedDoors.clear();
     this.noticedThreats.clear();
+    this.drainers.clear();
     if (!prep?.built) this.renderer.buildLevel(this.map, mission.map, mission.id);
     this.audio.setVoice(this.gender);
     this.audio.setListener(this.player.x, this.player.y, this.player.angle);
@@ -962,9 +963,20 @@ class Game {
     this.arsenal.hurt(Math.abs(da) < 0.35 ? 0 : Math.sign(da));
     p.knockback(awayX, awayY, Math.min(0.35, 0.1 + dmg * 0.01));
     const by = source?.def.inspect?.label ?? runtime.entities.find((e) => e.x === sourceX && e.y === sourceY)?.def.inspect?.label;
+    this.drainers.set(source?.def.id ?? `?${sourceX},${sourceY}`, { label: (by ?? 'Malware').toUpperCase(), until: this.simT + 3 });
     if (this.simT - this.lastHurtMessageT >= 1.5) {
       this.lastHurtMessageT = this.simT;
-      this.hud.pushMessage(`${by ?? 'Malware'} is draining your integrity!`, 'bad');
+      for (const [id, d] of this.drainers) if (d.until <= this.simT) this.drainers.delete(id);
+      const counts = new Map<string, number>();
+      for (const d of this.drainers.values()) counts.set(d.label, (counts.get(d.label) ?? 0) + 1);
+      const total = [...counts.values()].reduce((a, b) => a + b, 0);
+      if (total <= 1) {
+        this.hud.pushMessage(`${by ?? 'Malware'} is draining your integrity!`, 'bad');
+      } else {
+        // one merged line when several attackers stack (e.g. '2 WORMS DRAINING INTEGRITY')
+        const parts = [...counts.entries()].map(([name, n]) => `${n} ${name}${n > 1 ? 'S' : ''}`).join(' + ');
+        this.hud.pushMessage(`${parts} DRAINING INTEGRITY`, 'bad');
+      }
     }
     if (!p.alive) {
       this.audio.sfx('death');
@@ -1050,12 +1062,14 @@ class Game {
     const tool = this.arsenal.current;
     const ctx = this.toolCtx();
     let lmb = tool.hint?.(ctx) ?? null;
-    // fade an unchanged COMBAT hint after a few seconds so it stops crowding
-    // combat; interactable hints (workstation/door/console/pickup) stay up
-    lmb = this.lmbHintFader.apply(lmb, aimIsHostile(ctx), this.simT);
+    // range-failure hints only show for ~1.5 s after the failed action
+    if (lmb?.fleeting && this.simT - this.lastFireT > 1.5) lmb = null;
     const ammo = tool.ammo ? this.arsenal.ammoFor(tool) : null;
     if (ammo === 0) lmb = { text: `OUT OF ${tool.ammo!.resource.toUpperCase()}`, ready: false };
-    this.prompt.lmb = lmb;
+    // ammo cost in tool-native units (-1 SCAN / -1 PCAP / ...) so the
+    // trigger badge can't be misread as a file size ('1 MB')
+    const cost = lmb?.ready && tool.ammo ? `-1 ${ammoUnit(tool.ammo.resource)}` : null;
+    this.prompt.lmb = lmb ? { ...lmb, cost } : lmb;
     const r = resolveUse(this.useCtx());
     if (r.kind === 'door') this.prompt.use = doorUseHint(this.useCtx(), r.door);
     else if (r.kind === 'entity') this.prompt.use = this.runtime!.interactHint(r.entity);

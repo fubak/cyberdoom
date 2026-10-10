@@ -1,4 +1,4 @@
-import type { Entity, ToolHint, ToolUseContext } from '../core/types';
+import type { Entity } from '../core/types';
 
 /**
  * Generic noun for the HUD action prompt. Deliberately never returns the
@@ -23,30 +23,7 @@ export function targetNoun(e: Entity): string {
 }
 
 /**
- * True when the nearest entity in the aim cone is a live enemy. Only hostile
- * hints may repeat-fade: the HUD must always say what a click does on a
- * workstation, door, console, pickup or other interactable.
+ * Repeat suppression lives in main.ts's prompt driver: action prompts stay
+ * up as long as they are aimed at (owner constraint), and only range-failure
+ * hints (ToolHint.fleeting) expire, ~1.5 s after the failed action.
  */
-export function aimIsHostile(ctx: ToolUseContext): boolean {
-  return ctx.aimEntity(9, 0.6)?.def.kind === 'enemy';
-}
-
-/**
- * Repeat suppression for the LMB prompt: an unchanged hint aimed at a hostile
- * is dropped after `after` seconds of repetition (combat noise), while the same
- * hint on any interactable stays up as long as it is aimed at.
- */
-export class HintFader {
-  private text: string | null = null;
-  private since = 0;
-
-  apply(hint: ToolHint | null, hostile: boolean, now: number, after = 4): ToolHint | null {
-    if (!hint || hint.text !== this.text) {
-      this.text = hint?.text ?? null;
-      this.since = now;
-      return hint;
-    }
-    if (hostile && now - this.since > after) return null;
-    return hint;
-  }
-}

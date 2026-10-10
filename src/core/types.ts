@@ -357,6 +357,13 @@ export interface ToolHint {
   text: string;
   /** True when pressing LMB would do something useful in this situation. */
   ready: boolean;
+  /**
+   * Range-failure hints only: show for ~1.5 s after the failed action
+   * instead of lingering while the target stays aimed at.
+   */
+  fleeting?: boolean;
+  /** Ammo cost annotation (e.g. '-1 SCAN'), filled in by the prompt driver. */
+  cost?: string | null;
 }
 
 /** One tool the player can wield. Implemented under src/tools/. */

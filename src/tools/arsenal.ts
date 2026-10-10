@@ -49,6 +49,11 @@ const RES_NAME: Record<string, string> = {
 const TICKER_COLS = 45;
 const RES_LABEL: Record<string, string> = { 'usb-charge': 'SCAN', pcap: 'PCAP', 'edr-cell': 'CELL', 'patch-disk': 'DISK' };
 
+/** Tool-native unit name for an ammo resource ('-1 SCAN', '-1 PCAP', ...). */
+export function ammoUnit(resource: string): string {
+  return RES_LABEL[resource] ?? resource.slice(0, 4).toUpperCase();
+}
+
 export class Arsenal {
   readonly owned = new Set<string>();
   readonly ammo = new Map<string, number>();

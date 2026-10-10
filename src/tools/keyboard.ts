@@ -145,7 +145,7 @@ export const keyboardTool: ToolDef = {
     const e = ctx.aimEntity(KEYBOARD_RANGE, 0.5) ?? ctx.aimEntity(0.9, 1.0);
     if (!e) {
       const far = ctx.aimEntity(8, 0.26);
-      if (far?.def.kind === 'enemy') return { text: 'TOO FAR: KEYBOARD IS POINT-BLANK', ready: false };
+      if (far?.def.kind === 'enemy') return { text: 'TOO FAR: KEYBOARD IS POINT-BLANK', ready: false, fleeting: true };
       return null;
     }
     if (e.def.kind === 'enemy') {
