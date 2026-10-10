@@ -7,7 +7,8 @@ import type { ViewPose } from '../engine/feel';
 import { buildPaletteLut } from './palette';
 import { genWorkerCount } from './genpool';
 import { buildSprites, prewarmLazySpriteFrames, spriteSets, type SpriteSet } from './sprites';
-import { LOOM_CAP_FRAC, LOOM_MAX_SCALE, RISE_MAX_DIST, loomTargetH, riseBase } from './melee';
+import { LOOM_CAP_FRAC, LOOM_MAX_SCALE, loomK, loomTargetH, loomT, riseBase } from './melee';
+import { ENEMY_PROFILES } from '../engine/ai';
 import { WALL_H, buildTextures, decalTexture, doorTextureFor, hashStr, lookTheme, textureOr, textureRegistry, variantCount } from './textures';
 import { RES, STATUS_H, VIEW3D_H, VIEW_H, VIEW_W } from './res';
 
@@ -64,6 +65,9 @@ uniform vec2 uUvScale;
 uniform vec2 uUvOffset;
 uniform float uTime;
 uniform float uProbeStrobe;
+uniform float uGhost;
+uniform float uWound;
+uniform vec3 uWoundCol;
 varying vec2 vWorld;
 varying vec2 vUv;
 varying float vShade;
@@ -74,6 +78,18 @@ void main() {
   vec4 t = texture2D(map, vUv * uUvScale + uUvOffset);
   if (t.a < 0.25) discard;
   float L = 1.0;
+  // uGhost (ENEMIES rootkit shimmer): a stealth attacker in motion keeps only
+  // a fast-dissolving shimmer of itself — mostly its silhouette's edge — so it
+  // reads as a Spectre-style refraction trace, not a body.
+  float ghostEdge = 0.0;
+  if (uGhost > 0.0) {
+    vec2 gpx = vUv * uUvScale + uUvOffset;
+    vec2 gfc = floor(gl_FragCoord.xy);
+    float gh = fract(sin(dot(gfc + floor(uTime * 14.0) * vec2(7.0, 13.0), vec2(12.9898, 78.233))) * 43758.5453);
+    float na = max(texture2D(map, gpx + vec2(0.02, 0.0)).a, texture2D(map, gpx + vec2(0.0, 0.02)).a);
+    ghostEdge = step(na, 0.25);
+    if (gh > uGhost * (1.0 + ghostEdge * 1.6)) discard;
+  }
   // sector strobe: every texel of a strobing sector shares one clock (the
   // vertex 'strobe' attribute is its phase id) — Doom's blinking sector. It
   // also pulls fullbright texels (lamp diffusers, glow strips) down with the
@@ -125,6 +141,15 @@ void main() {
   vec3 c = mix(min(t.rgb * uTint * vTint * L * uGain, vec3(1.0)), vec3(1.0), uFlash);
   c = min(c + uFire.rgb * reach * 0.4, vec3(1.0));
   c *= sfl;
+  if (uWound > 0.0) {
+    // wound char (ENEMIES): burnt-out blotches rimmed with corruption embers
+    // grow as the threat's hp drops — visible damage state under 50% hp
+    vec2 wc = floor((vUv * uUvScale + uUvOffset) * vec2(40.0));
+    float wh = fract(sin(dot(wc, vec2(12.9898, 78.233))) * 43758.5453);
+    if (wh < uWound) c = mix(c, c * 0.12 + uWoundCol * 0.08, 0.85);
+    else if (wh < uWound + 0.06) c = mix(c, uWoundCol * 1.25 + vec3(0.2), 0.7);
+  }
+  c = mix(c, vec3(0.36, 0.24, 0.95) * (0.3 + 0.5 * L + 0.3 * ghostEdge), step(0.01, uGhost));
   gl_FragColor = vec4(c, 1.0);
 }`;
 
@@ -203,6 +228,9 @@ function worldMaterial(map: THREE.Texture, light = 1, floor = 0.16, tint?: THREE
       uUvOffset: { value: new THREE.Vector2(0, 0) },
       uTime: timeUniform,
       uProbeStrobe: probeStrobeUniform,
+      uGhost: { value: 0 },
+      uWound: { value: 0 },
+      uWoundCol: { value: new THREE.Vector3(0.2, 0.9, 0.35) },
     },
     side: THREE.DoubleSide,
   });
@@ -310,6 +338,12 @@ interface Fx {
   frames: string[];
   t: number;
   dur: number;
+  /** Gib debris motion: velocity (vx/vz on the map plane, vy = height) + gravity. */
+  vx?: number;
+  vy?: number;
+  vz?: number;
+  /** Stops flying and holds the last frame once the chunk lands. */
+  landed?: boolean;
 }
 
 export class Renderer {
@@ -361,6 +395,16 @@ export class Renderer {
     return st ? { x: st.mesh.position.x, y: st.mesh.position.y, z: st.mesh.position.z, visible: st.mesh.visible, set: st.setId } : null;
   }
   debugNoFlash = false;
+
+  /** LOOK probes: drop in-flight fx (spawn columns, gib debris) so the
+   *  with/without-sprite captures diff only the staged sprite. */
+  debugClearFx(): void {
+    for (const fx of this.fx) {
+      this.spriteGroup.remove(fx.mesh);
+      fx.mat.dispose();
+    }
+    this.fx = [];
+  }
   private hurt = 0;
   private prewarmStarted = false;
   private gen: { texturesMs: number; spritesMs: number; lazyPrewarmMs?: number; workers?: number } = { texturesMs: 0, spritesMs: 0 };
@@ -692,17 +736,21 @@ export class Renderer {
     });
   }
 
-  private spawnFx(setId: string, frames: string[], x: number, z: number, y: number, dur: number, light = 1): void {
+  private spawnFx(setId: string, frames: string[], x: number, z: number, y: number, dur: number, light = 1, vel?: { vx: number; vy: number; vz: number }): Fx | null {
     const set = spriteSets.get(setId);
-    if (!set) return;
+    if (!set) return null;
     const { mesh, mat } = this.makeSpriteMesh(set, light);
     mesh.position.set(x, y, z);
-    this.fx.push({ mesh, mat, set, frames, t: 0, dur });
+    const fx: Fx = { mesh, mat, set, frames, t: 0, dur, ...vel };
+    this.fx.push(fx);
+    return fx;
   }
 
-  /** Bright Doom teleport-fog flash where a threat materialises. */
+  /** Bright Doom teleport-fog column where a threat materialises. The column is
+   *  taller than any threat (fx-spawn draws 2.1 world units, >=1.5x the biggest
+   *  monster) and burns ~1 s so an ambush can't be missed (ENEMIES). */
   spawnTeleport(x: number, y: number): void {
-    this.spawnFx('fx-spawn', ['f0', 'f1', 'f2', 'f3'], x, y, 0, 0.6);
+    this.spawnFx('fx-spawn', ['f0', 'f1', 'f2', 'f3'], x, y, 0, 1.05);
   }
 
   /** Red padlock overlay on a door or console a ransomware has sealed. */
@@ -1006,11 +1054,18 @@ export class Renderer {
         ((tint >> 8) & 255) / 255,
         (tint & 255) / 255,
       );
-      // rootkit: invisible beyond ~2 tiles until tap/EDR/damage/close reveals it
+      // rootkit: invisible beyond ~2 tiles until tap/EDR/damage/close reveals
+      // it — but a MOVING rootkit within ~6 tiles leaves a faint Spectre-style
+      // shimmer (uGhost stipple), so attentive players can spot the trace
       const stealthy = enemy && threatKind === 'rootkit' && !e.state.revealedRootkit;
-      st.mesh.visible =
-        !this.debugHidden.has(id) &&
-        !(stealthy && Math.hypot(e.x - this.lastPX, e.y - this.lastPY) > 2);
+      const pd = Math.hypot(e.x - this.lastPX, e.y - this.lastPY);
+      const shimmer = stealthy && pd <= 6 && pd > 2 && st.moveT > 0;
+      st.mat.uniforms.uGhost.value = shimmer ? 0.2 : 0;
+      st.mesh.visible = !this.debugHidden.has(id) && !(stealthy && pd > 2 && !shimmer);
+      // wound char: corruption blotches ramp in once a threat drops under 50% hp
+      const maxHp = typeof e.state.maxHp === 'number' && e.state.maxHp > 0 ? e.state.maxHp : (e.def.hp ?? 1);
+      st.mat.uniforms.uWound.value =
+        enemy && e.hp < maxHp * 0.5 ? Math.min(0.55, (0.5 - e.hp / maxHp) * 1.4) : 0;
     }
     for (const [id, st] of [...this.sprites]) {
       if (!seen.has(id) && st.entity && st.entity.alive === false) continue;
@@ -1091,7 +1146,19 @@ export class Renderer {
     if (e.def.kind === 'enemy') {
       if (st.set.frames.die0) {
         this.spawnFx(st.setId, ['die0', 'die1', 'die2', 'die3', 'die4'], e.x, e.y, 0, 0.55, this.lightAt(e.x, e.y));
-        // persistent, non-blocking corpse: the fallen 'dead' heap stays on the floor
+        // ENEMIES data-gib: threat-coloured debris chunks arc out and hold as
+        // floor litter over the tip-over — the kill reads messy like Doom's.
+        const gb = st.set.gib ?? [0.2, 0.9, 0.4];
+        const seed = hashStr(st.setId) / 4294967296;
+        for (let i = 0; i < 6; i++) {
+          const a = seed * 6.283 + i * 2.4;
+          const sp = 0.7 + ((seed * 7 + i * 0.37) % 1) * 1.5;
+          const g = this.spawnFx('fx-gib', [`g${i % 3}`], e.x, e.y, 0.42, 1.7, this.lightAt(e.x, e.y), {
+            vx: Math.cos(a) * sp, vz: Math.sin(a) * sp, vy: 1.7 + ((seed * 11 + i * 0.53) % 1) * 1.8,
+          });
+          if (g) (g.mat.uniforms.uTint.value as THREE.Vector3).set(gb[0], gb[1], gb[2]);
+        }
+        // persistent, non-blocking corpse: the slumped 'dead' heap stays on the floor
         if (st.set.frames.dead) {
           this.addStatic(st.setId, e.x, e.y, 0, this.lightAt(e.x, e.y), 'dead', { floor: 0.9, gain: 1.3 });
         }
@@ -1119,8 +1186,9 @@ export class Renderer {
       const rel = (toCam - facing) / (Math.PI / 4);
       const rot = ((Math.round(rel) % 8) + 8) % 8;
       const pick = (k: string) => f[`${k}_${rot}`] ?? f[k];
-      if (st.flash > 0.45 && f.pain) return { tex: pick('pain') };
-      const walk = pick(`walk${Math.floor(t * 6) % 4}`);
+      // two authored flinch poses flicker while the hit flash is up (ENEMIES)
+      if (st.flash > 0.45 && f.pain) return { tex: pick(f.pain2 && Math.floor(t * 12) % 2 === 1 ? 'pain2' : 'pain') };
+      const walk = pick(`walk${Math.floor(t * 6) % (st.set.walkN ?? 4)}`);
       const stateMode = st.entity?.state.mode;
       if (typeof stateMode === 'string') {
         if (stateMode === 'windup') return { tex: pick('attack0') };
@@ -1236,21 +1304,29 @@ export class Renderer {
         // (Doom pinky): it may fill up to LOOM_CAP_FRAC of the view — past
         // the usual 65% cap — so ~47% of view height reads over the tool.
         const mode = st.entity.state.mode;
-        const lunging =
-          st.entity.def.kind === 'enemy' && (mode === 'windup' || mode === 'recover') && d < RISE_MAX_DIST;
+        const enemy = st.entity.def.kind === 'enemy';
+        const threatKind = st.entity.def.threat ?? st.entity.def.sprite;
+        const attacking = mode === 'windup' || mode === 'recover';
+        const melee = !!enemy && !!threatKind && !ENEMY_PROFILES[threatKind]?.ranged;
+        // ENEMIES graded loom: melee threats swell and lift as they close — a
+        // chase gets CHASE_BOOST of the full loom so the windup strike ramps
+        // in over ~1.5-2.4 tiles instead of popping at the old 1.35 boundary.
+        const loom = enemy ? loomK(d, attacking, melee) : 0;
         const span = 2 * d * Math.tan((this.camera.fov * Math.PI) / 360);
-        const maxH = (lunging ? LOOM_CAP_FRAC : 0.65) * span;
-        const want = lunging
-          ? Math.max(st.scale, Math.min(loomTargetH(d, this.camera.fov) / st.set.h, LOOM_MAX_SCALE))
-          : st.scale;
+        const maxH = (0.65 + (LOOM_CAP_FRAC - 0.65) * loom) * span;
+        const swell = melee && !attacking ? 0.5 * loomT(d) : 0;
+        const want = Math.max(
+          st.scale * (1 + swell),
+          attacking ? Math.min(loomTargetH(d, this.camera.fov) / st.set.h, LOOM_MAX_SCALE) : 0,
+        );
         const sc = Math.min(want, maxH / st.set.h);
         st.mesh.scale.set(st.set.w * sc, st.set.h * sc, 1);
-        // ENEMIES melee lunge: a floor-height attacker at contact range would
-        // project entirely behind the tool viewmodel; lift its anchor so at
-        // least 60% of its silhouette clears the viewmodel top line.
+        // a floor-height attacker at contact range projects entirely behind
+        // the tool viewmodel; lift its anchor so ~60% of the silhouette clears
+        // the viewmodel top line, faded in with the same loom ramp
         const baseY = st.mesh.position.y;
-        const lunge = lunging
-          ? Math.max(0, riseBase(st.set.h * sc, d, EYE_H, this.camera.fov) - baseY)
+        const lunge = loom > 0
+          ? Math.max(0, riseBase(st.set.h * sc, d, EYE_H, this.camera.fov) - baseY) * Math.min(1, loom * 4)
           : 0;
         st.rise = (st.rise ?? 0) + (lunge - (st.rise ?? 0)) * Math.min(1, dt * 14);
         st.mesh.position.y = baseY + st.rise;
@@ -1271,6 +1347,14 @@ export class Renderer {
       const i = Math.min(fx.frames.length - 1, Math.floor((fx.t / fx.dur) * fx.frames.length));
       fx.mesh.rotation.set(0, yaw, 0);
       fx.mat.uniforms.map.value = fx.set.frames[fx.frames[i]];
+      // gib debris arcs out under gravity and holds as floor litter (ENEMIES)
+      if (!fx.landed && (fx.vx || fx.vy || fx.vz)) {
+        fx.mesh.position.x += (fx.vx ?? 0) * dt;
+        fx.mesh.position.z += (fx.vz ?? 0) * dt;
+        fx.vy = (fx.vy ?? 0) - 6.5 * dt;
+        fx.mesh.position.y = Math.max(0.03, fx.mesh.position.y + (fx.vy ?? 0) * dt);
+        if (fx.mesh.position.y <= 0.031 && (fx.vy ?? 0) < 0) fx.landed = true;
+      }
       if (fx.t >= fx.dur) {
         this.spriteGroup.remove(fx.mesh);
         fx.mat.dispose();

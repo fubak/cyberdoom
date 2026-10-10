@@ -25,6 +25,10 @@ export interface SpriteSet {
   /** Enemy lighting overrides: brightness floor and gain (contrast tuning). */
   floor?: number;
   gain?: number;
+  /** Walk frames per rotation for monsters (default 4; 8 for the stiffest types). */
+  walkN?: number;
+  /** Data-gib debris tint thrown on death (threat colour). */
+  gib?: [number, number, number];
 }
 
 export const spriteRegistry = new Registry<THREE.Texture>();
@@ -141,20 +145,32 @@ function lit(p: PaintCtx, color: string, x: number, y: number, w: number, h: num
 
 // ---------------------------------------------------------------- malware (3D-modelled)
 
-type Pose = { kind: 'walk'; k: number } | { kind: 'attack'; k: 0 | 1 } | { kind: 'pain' };
+type Pose =
+  | { kind: 'walk'; k: number; n?: number }
+  | { kind: 'attack'; k: 0 | 1 }
+  | { kind: 'pain'; k?: 0 | 1 };
 type Model = (pose: Pose) => Prim[];
 
 const ell = (c: V3, r: V3, col: string, extra: Partial<Prim> = {}): Prim => ({ shape: 'ell', c, r, col, ...extra });
 const box = (c: V3, r: V3, col: string, extra: Partial<Prim> = {}): Prim => ({ shape: 'box', c, r, col, ...extra });
-const walkPhase = (p: Pose) => (p.kind === 'walk' ? (p.k * Math.PI) / 2 : 0);
+const walkPhase = (p: Pose) => (p.kind === 'walk' ? (p.k * Math.PI * 2) / (p.n ?? 4) : 0);
+
+const pk = (p: Pose) => (p.kind === 'pain' ? (p.k ?? 0) : 0);
+
+/** Deterministic 0..1 hash for pose variation and death scatter. */
+const hash01 = (s: string): number => {
+  let h = 2166136261;
+  for (const ch of s) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+  return (h >>> 0) / 4294967296;
+};
 
 /** Worm: a rearing, segmented red centipede; tail trails behind on the floor. */
 const wormModel: Model = (pose) => {
   const out: Prim[] = [];
   const ph = walkPhase(pose);
   const atk = pose.kind === 'attack' ? pose.k : -1;
-  const lean = atk === 0 ? -7 : atk === 1 ? 8 : pose.kind === 'pain' ? -9 : 0;
-  const lift = atk === 0 ? 3 : pose.kind === 'pain' ? -3 : Math.sin(ph * 2) * 1;
+  const lean = atk === 0 ? -7 : atk === 1 ? 8 : pose.kind === 'pain' ? (pk(pose) === 1 ? 6 : -9) : 0;
+  const lift = atk === 0 ? 3 : pose.kind === 'pain' ? (pk(pose) === 1 ? -5 : -3) : Math.sin(ph * 2) * 1;
   const segs = 8;
   let last: V3 = [0, 0, 0];
   for (let i = 0; i < segs; i++) {
@@ -199,7 +215,7 @@ const trojanModel: Model = (pose) => {
   const ph = walkPhase(pose);
   const bob = pose.kind === 'walk' ? Math.abs(Math.sin(ph)) * 2 : 0;
   const atk = pose.kind === 'attack' ? pose.k : -1;
-  const lid = atk === 0 ? 7 : atk === 1 ? 13 : pose.kind === 'pain' ? 9 : 2.5;
+  const lid = atk === 0 ? 7 : atk === 1 ? 13 : pose.kind === 'pain' ? (pk(pose) === 1 ? 3.5 : 9) : 2.5;
   const by = 36 + bob;
   const ribbon = (l: V3) => (Math.abs(l[0]) < 2.6 || Math.abs(l[2]) < 2.6 ? (Math.abs(l[0]) < 0.9 || Math.abs(l[2]) < 0.9 ? '#fff0a0' : '#e8c020') : null);
   for (let k = 0; k < 3; k++) {
@@ -216,7 +232,7 @@ const trojanModel: Model = (pose) => {
       out.push(ell(foot, [2.2, 1.4, 2.4], '#2a2036'));
     }
   }
-  out.push(box([0, by, 0], [12.5, 9.5, 10.5], '#c070ff', { decal: ribbon }));
+  out.push(box([0, by, 0], [12.5, 9.5, 10.5], '#c070ff', { decal: ribbon, roll: pose.kind === 'pain' && pk(pose) === 1 ? -0.16 : 0 }));
   for (const sx of [-1, 1]) for (const sy of [-1, 1]) {
     out.push(ell([sx * 9.2, by + sy * 6.5, 9.55], [0.75, 0.75, 0.35], '#ffe9a0'));
   }
@@ -248,6 +264,7 @@ const ransomModel: Model = (pose) => {
   const atk = pose.kind === 'attack' ? pose.k : -1;
   const pain = pose.kind === 'pain';
   const bob = pose.kind === 'walk' ? Math.abs(Math.sin(ph)) * 1.5 : 0;
+  const painRoll = pain ? (pk(pose) === 1 ? -0.14 : 0.14) : 0;
   for (const sx of [-1, 1]) {
     const sw = pose.kind === 'walk' ? Math.sin(ph) * 5 * sx : 0;
     out.push(box([sx * 7, 10 + Math.max(0, -sw) * 0.4, sw], [4.5, 9.5, 5], '#7a5024'));
@@ -255,7 +272,7 @@ const ransomModel: Model = (pose) => {
   }
   const body = 33 + bob;
   out.push(box([0, body, 0], [15, 13, 10], '#d8740c', {
-    roll: pain ? 0.14 : 0,
+    roll: painRoll,
     decal: (l) => (Math.abs(((l[1] + 13) % 6) - 0) < 0.8 ? '#a05408' : l[1] > 11.6 ? '#ffb040' : null),
   }));
   const mouth = atk >= 0 ? '#ff3010' : '#140600';
@@ -275,7 +292,7 @@ const ransomModel: Model = (pose) => {
     out.push(ell([x, y, 0], [3, 3, 3.6], a % 4 === 0 ? '#d8e0ec' : '#9aa2b0'));
   }
   for (const sx of [-1, 1]) {
-    const hand: V3 = atk === 0 ? [sx * 14, body + 24, 4] : atk === 1 ? [sx * 12, body + 6, 11] : pain ? [sx * 21, body + 14, -2] : [sx * 18, body - 10 + Math.sin(ph + (sx > 0 ? Math.PI : 0)) * 2, 3];
+    const hand: V3 = atk === 0 ? [sx * 14, body + 24, 4] : atk === 1 ? [sx * 12, body + 6, 11] : pain ? (pk(pose) === 1 ? [sx * 15, body + 24, 8] : [sx * 21, body + 14, -2]) : [sx * 18, body - 10 + Math.sin(ph + (sx > 0 ? Math.PI : 0)) * 2, 3];
     limb(out, [sx * 15, body + 8, 0], hand, 3.4, '#8a5218');
     out.push(ell(hand, [4.6, 4.6, 4.6], '#6a3e10'));
     for (let k = 1; k <= 3; k++) out.push(ell([hand[0], hand[1] - 3 - k * 3.2, hand[2]], [1.4, 2, 1], '#b8c0cc', { roll: k % 2 ? 0 : 0.6 }));
@@ -293,6 +310,7 @@ const rootkitModel: Model = (pose) => {
   const pain = pose.kind === 'pain';
   const bob = pose.kind === 'walk' ? Math.sin(ph * 2) * 0.8 : 0;
   const body = 13 + bob; // hugs the ground
+  const painRoll = pain ? (pk(pose) === 1 ? -0.18 : 0.2) : 0;
   for (let k = 0; k < 3; k++) {
     const z = (k - 1) * 8;
     for (const sx of [-1, 1]) {
@@ -308,13 +326,13 @@ const rootkitModel: Model = (pose) => {
   }
   // flat armored shell with dorsal plates
   out.push(ell([0, body + 4, 0], [14, 6.5, 11], '#6a54b8', {
-    roll: pain ? 0.2 : 0,
+    roll: painRoll,
     decal: (l) => (Math.abs(((l[0] + 14) % 6)) < 0.9 ? '#4d3790' : null),
   }));
   out.push(ell([0, body + 7.5, -2], [9, 3.4, 7], '#453383'));
   // head low at the front: beady eye cluster + hooked mandibles
   const hy = body + 1;
-  const open = atk === 1 ? 7 : atk === 0 ? 4 : 2;
+  const open = atk === 1 ? 7 : atk === 0 ? 4 : pain ? (pk(pose) === 1 ? 6 : 2) : 2;
   out.push(ell([0, hy, 11], [7.5, 4.5, 4.5], '#5a45a8'));
   for (const sx of [-1, 1]) {
     out.push(ell([sx * 3.4, hy + 1.4, 14.6], [1.7, 1.5, 1], pain ? '#ffffff' : '#8a5cff', { glow: true }));
@@ -354,7 +372,7 @@ const logicbombModel: Model = (pose) => {
   }));
   // main charge casing
   out.push(ell([0, 10.5, 0], [12, 8, 10.5], '#8a2414', {
-    roll: pain ? 0.16 : 0,
+    roll: pain ? (pk(pose) === 1 ? -0.16 : 0.16) : 0,
     decal: (l) => (Math.abs(((l[0] + 12) % 6)) < 0.9 ? '#5a1408' : null),
   }));
   out.push(ell([0, 14, 0], [8.5, 4.5, 7], '#66180c'));
@@ -370,7 +388,7 @@ const logicbombModel: Model = (pose) => {
   if (led || atk >= 0) out.push(ell([8, 15.5 + mastH, -6], [1.7, 1.7, 1.7], atk === 1 ? '#ffe040' : '#ff3020', { glow: true }));
   // arming glow while it counts down
   if (atk >= 0) out.push(ell([0, 12, 0], [13.5, 2.2, 11.5], atk === 1 ? '#ff8030' : '#ff4020', { glow: true }));
-  if (pain) out.push(ell([0, 10.5, 10], [4, 2.6, 1], '#ffb040', { glow: true }));
+  if (pain) out.push(ell([0, pk(pose) === 1 ? 8 : 10.5, 10], [pk(pose) === 1 ? 6 : 4, 3.2, 1], pk(pose) === 1 ? '#ff3020' : '#ffb040', { glow: true }));
   return out;
 };
 
@@ -384,14 +402,14 @@ const ratModel: Model = (pose) => {
   const ph = walkPhase(pose);
   const atk = pose.kind === 'attack' ? pose.k : -1;
   const pain = pose.kind === 'pain';
-  const rear = atk === 0 ? 6 : atk === 1 ? 11 : pain ? -4 : 0; // rears up to strike
+  const rear = atk === 0 ? 6 : atk === 1 ? 11 : pain ? (pk(pose) === 1 ? -8 : -4) : 0; // rears up to strike
   const bob = pose.kind === 'walk' ? Math.abs(Math.sin(ph * 2)) * 1.8 : 0;
   // hindquarters low, shoulders hunched high — the classic rodent arch
   const hq: V3 = [0, 15 + bob * 0.4 + rear * 0.3, -8];
   const sh: V3 = [0, 27 + bob + rear, 3];
   out.push(ell(hq, [9.5, 7.5, 8.5], '#426a4d'));
   out.push(ell([0, 20 + bob * 0.6 + rear * 0.6, -1.5], [8.5, 8, 8], '#3a5c46'));
-  out.push(ell(sh, [7.5, 7, 7], '#3a5c44', { roll: pain ? 0.18 : 0 }));
+  out.push(ell(sh, [7.5, 7, 7], '#3a5c44', { roll: pain ? (pk(pose) === 1 ? -0.18 : 0.18) : 0 }));
   // dorsal ridge: hackle spikes along the arch
   for (let i = 0; i < 5; i++) {
     const t = i / 4;
@@ -488,20 +506,38 @@ function tipOver(p: Prim, a: number, lift = 0): Prim {
   return { ...p, c: [x, cy, cz] as V3, pitch: (p.pitch ?? 0) + a };
 }
 
-function makeMonster(id: string, worldH: number, model: Model, opts: { floor?: number; gain?: number; grow?: number } = {}): void {
+/**
+ * Corpse slump: collapses the creature into a standing heap — parts sink
+ * toward the floor but keep ~40% height and splay sideways, so the remains
+ * read as a chunky dead-enemy silhouette (never a floor-flat decal) at 5+
+ * tiles in lit or dark sectors.
+ */
+function slump(p: Prim, seed: string): Prim {
+  const s = hash01(`slump:${seed}:${p.shape}:${p.c.map(Math.round).join(',')}`);
+  const [x, y, z] = p.c;
+  return {
+    ...p,
+    c: [x * 1.12 + (s - 0.5) * 5, Math.max(1.4, y * 0.4 + Math.min(2.5, y * 0.06)), z * 0.55 + ((s * 7) % 1 - 0.5) * 6] as V3,
+    pitch: (p.pitch ?? 0) - 0.35 - s * 0.45,
+    roll: (p.roll ?? 0) + (s - 0.5) * 0.7,
+  };
+}
+
+function makeMonster(id: string, worldH: number, model: Model, opts: { floor?: number; gain?: number; grow?: number; walkN?: number; gib?: [number, number, number] } = {}): void {
   const grow = opts.grow ?? 1;
+  const walkN = opts.walkN ?? 4;
   lazyOwner = id;
   const W = TEX.monster;
   const H = TEX.monster;
   const frames: Record<string, THREE.Texture> = {};
+  // ENEMIES: two authored flinch poses (pain/pain2) flicker while the hit
+  // flash is up; stiffest types register 8 walk frames instead of 4.
   const poses: [string, Pose][] = [
-    ['walk0', { kind: 'walk', k: 0 }],
-    ['walk1', { kind: 'walk', k: 1 }],
-    ['walk2', { kind: 'walk', k: 2 }],
-    ['walk3', { kind: 'walk', k: 3 }],
+    ...Array.from({ length: walkN }, (_, k): [string, Pose] => [`walk${k}`, { kind: 'walk', k, n: walkN }]),
     ['attack0', { kind: 'attack', k: 0 }],
     ['attack1', { kind: 'attack', k: 1 }],
-    ['pain', { kind: 'pain' }],
+    ['pain', { kind: 'pain', k: 0 }],
+    ['pain2', { kind: 'pain', k: 1 }],
   ];
   // grain + pack, shared by every thread: seeded -> byte-identical output
   const finishPixels = (raw: { rgba: Uint8ClampedArray; glow: Uint8ClampedArray }, pose: Pose, rotation: number, mirror: boolean): GenResult => {
@@ -551,7 +587,19 @@ function makeMonster(id: string, worldH: number, model: Model, opts: { floor?: n
   // recognisable heap, never a flat smear.
   for (let k = 0; k < 5; k++) {
     const tip = k <= 2 ? -0.15 - k * 0.5 : -1.15 - (k - 2) * 0.12;
-    diePrims.push(scaleModel(dieBase.map((p) => tipOver(p, tip, k * 0.4))));
+    diePrims.push(scaleModel(dieBase.map((p, pi) => {
+      const q = tipOver(p, tip, k * 0.4);
+      if (k < 3) return q;
+      // data-gib burst: the last frames tear the body into chunks that scatter
+      // outward — the dissolve reads as thrown debris, not just fading pixels
+      const s = hash01(`${id}:die:${pi}`);
+      const burst = (k - 2) * 13;
+      return {
+        ...q,
+        c: [q.c[0] + (s - 0.5) * burst * 2, Math.max(2, q.c[1] + (0.6 - s) * burst), q.c[2] + ((s * 7) % 1 - 0.5) * burst * 2] as V3,
+        pitch: (q.pitch ?? 0) + (s - 0.5) * 1.6,
+      };
+    })));
     const prims = diePrims[k];
     registerGenJob(`sprite:${id}:die${k}`, { setId: id, first: false }, () => {
       const job = createRasterJob(W, H, prims, { view: 0, tint: [44, 255, 90], tintT: k < 3 ? 0.04 + k * 0.05 : 0.2 + k * 0.1 });
@@ -560,11 +608,12 @@ function makeMonster(id: string, worldH: number, model: Model, opts: { floor?: n
       return k < 3 ? packPixels(W, H, raw, { sprite: true }) : dissolvePixels(W, H, raw, k - 3, id);
     });
   }
-  // persistent corpse: the fallen heap stays — a dark remains pool under a
-  // chunky, still-readable body that keeps the type's colours and glow tells
+  // persistent corpse: a slumped heap with real height — body parts collapse
+  // into a chunky mound over a dark remains pool so the kill site reads as a
+  // dead enemy at 5+ tiles in lit or dark sectors, never a floor-flat decal
   const deadPrims = scaleModel([
     ell([0, 1.3, 1.5] as V3, [24, 1.2, 18], '#140a12'),
-    ...dieBase.map((p) => tipOver(p, -1.42, 0.9)),
+    ...dieBase.map((p, pi) => slump(p, `${id}:${pi}`)),
   ]);
   const deadRaster = (job: RasterJob) => {
     rasterizeRows(job, 0, job.h);
@@ -937,12 +986,12 @@ export function buildSprites(jobs = false): void {
   // ENEMIES F3 range targets: every type projects >=10% of view height at
   // 10 tiles (world h ~1.25-1.35 with a model that fills the canvas) and
   // keeps Doom-monster contrast in dead-black sectors (uFloor ~1.3 = lit).
-  makeMonster('worm', 1.3, wormModel, { floor: 1.2, gain: 2.4 });
-  makeMonster('trojan', 1.3, trojanModel, { floor: 1.3, gain: 2.6 });
-  makeMonster('ransomware', 1.35, ransomModel, { floor: 1.35, gain: 2.6 });
-  makeMonster('rootkit', 1.35, rootkitModel, { floor: 1.5, gain: 2.7 });
-  makeMonster('logicbomb', 1.25, logicbombModel, { floor: 1.3, gain: 2.6, grow: 1.8 });
-  makeMonster('rat', 1.35, ratModel, { floor: 1.55, gain: 2.7 });
+  makeMonster('worm', 1.3, wormModel, { floor: 1.45, gain: 2.7, gib: [0.95, 0.25, 0.15] });
+  makeMonster('trojan', 1.3, trojanModel, { floor: 1.3, gain: 2.6, gib: [0.75, 0.35, 1.0] });
+  makeMonster('ransomware', 1.35, ransomModel, { floor: 1.35, gain: 2.6, walkN: 8, gib: [1.0, 0.55, 0.1] });
+  makeMonster('rootkit', 1.35, rootkitModel, { floor: 1.5, gain: 2.7, walkN: 8, gib: [0.5, 0.35, 0.95] });
+  makeMonster('logicbomb', 1.25, logicbombModel, { floor: 1.3, gain: 2.6, grow: 1.8, gib: [1.0, 0.85, 0.2] });
+  makeMonster('rat', 1.35, ratModel, { floor: 1.55, gain: 2.7, gib: [0.7, 0.9, 0.3] });
 
   makeSet('workstation', 64, 64, 0.82, 'static', [{ key: 'idle', draw: workstation('clean', 0) }]);
   makeSet('workstation-infected', 64, 64, 0.82, 'flicker', [
@@ -1174,29 +1223,48 @@ export function buildSprites(jobs = false): void {
   // Doom teleport-fog flash where a threat materialises (ambushes, worm
   // copies): a tall searing column that collapses inward, a ground-flash
   // ring, and thrown sparks — big and fullbright enough to read at range.
-  makeSet('fx-spawn', 32, 64, 1.3, 'static', [0, 1, 2, 3].map((f) => ({
+  // a tall searing column that collapses inward — 2.1 world units (>=1.5x the
+  // biggest threat) so an ambush can't be missed — a ground-flash ring, and
+  // thrown sparks — big and fullbright enough to read at range.
+  makeSet('fx-spawn', 24, 84, 2.1, 'static', [0, 1, 2, 3].map((f) => ({
     key: `f${f}`,
     draw: (p: PaintCtx) => {
       const { g } = p;
-      const top = 2 + f * 6;
-      const bot = 62 - f * 2;
-      const half = 15 - f * 3;
+      const top = 3 + f * 8;
+      const bot = 82 - f * 3;
+      const half = 11 - f * 2;
       // outer fog column
       g.fillStyle = f < 2 ? '#4fd4ff' : '#2a88c0';
-      g.fillRect(16 - half, top + 3, half * 2, bot - top - 3);
+      g.fillRect(12 - half, top + 4, half * 2, bot - top - 4);
       // searing core — nearly the whole column is fullbright
-      lit(p, f === 0 ? '#ffffff' : '#d8f8ff', 16 - half * 0.55, top, half * 1.1, bot - top);
+      lit(p, f === 0 ? '#ffffff' : '#d8f8ff', 12 - half * 0.55, top, half * 1.1, bot - top);
       p.glow.fillStyle = '#fff';
-      p.glow.fillRect(16 - half * 0.8, top + 1, half * 1.6, (bot - top) * (0.8 - f * 0.12));
+      p.glow.fillRect(12 - half * 0.8, top + 1, half * 1.6, (bot - top) * (0.8 - f * 0.12));
       // ground-flash ring
-      lit(p, f < 2 ? '#b8f4ff' : '#5ac8f0', 16 - 14 + f * 3, 60 + f, 28 - f * 6, 2);
+      lit(p, f < 2 ? '#b8f4ff' : '#5ac8f0', 12 - 11 + f * 3, 80 + f, 22 - f * 6, 2);
       // thrown sparks
-      for (let i = 0; i < 12; i++) {
-        const sx = ((i * 7 + f * 11) % 30) + 1;
-        const sy = 3 + ((i * 13 + f * 9) % 56);
+      for (let i = 0; i < 14; i++) {
+        const sx = ((i * 7 + f * 11) % 22) + 1;
+        const sy = 4 + ((i * 13 + f * 9) % 76);
         const s = i % 3 === 0 ? 2 : 1;
         lit(p, i % 2 ? '#ffffff' : '#7fe8ff', sx, sy, s, s);
       }
+    },
+  })));
+
+  // Data-gib debris: chunky shards thrown by kills and tinted per threat
+  // (set.gib) — three chunk shapes, readable pixels even at close range.
+  makeSet('fx-gib', 16, 16, 0.26, 'static', [0, 1, 2].map((f) => ({
+    key: `g${f}`,
+    draw: (p: PaintCtx) => {
+      const shapes = [
+        [[2, 2, 8, 6], [6, 8, 5, 4], [4, 4, 3, 3]],
+        [[4, 1, 6, 9], [1, 5, 5, 4], [9, 6, 3, 3]],
+        [[3, 3, 9, 4], [5, 7, 4, 6], [2, 10, 5, 3]],
+      ][f];
+      for (const [x, y, w, h] of shapes) lit(p, '#f0fff4', x, y, w, h);
+      p.glow.fillStyle = '#888';
+      p.glow.fillRect(shapes[0][0], shapes[0][1], shapes[0][2], shapes[0][3]);
     },
   })));
   // Red padlock overlay: marks a door/console a ransomware has encrypted

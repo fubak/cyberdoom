@@ -307,6 +307,10 @@ async function probeOnLine(
   };
   r.debugSprite.set(id, kind);
   r.debugNoFlash = true;
+  // in-flight spawn columns / gib debris burn in the render loop on wall
+  // clock — they would diff between the with/without captures and poison the
+  // contrast mask, so probes drop them first
+  r.debugClearFx();
   r.debugHidden.clear();
   for (const e of entities) if (e.def.id !== id) r.debugHidden.add(e.def.id);
   // freeze the probed enemy's AI motion: when the sim catches up several

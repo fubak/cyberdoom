@@ -100,7 +100,9 @@ const TOOL_KICK: Record<string, number> = {
 };
 
 function muzzleHeight(e: Entity): number {
-  const scale = e.def.sprite === 'worm' ? 0.6 : e.def.sprite === 'trojan' ? 0.75 : 0.85;
+  // ENEMIES: melee threats carry ~1.0x close-range presence now — particle
+  // origin heights match the bigger drawn sprites
+  const scale = e.def.sprite === 'worm' ? 0.95 : e.def.sprite === 'trojan' ? 0.9 : 1.0;
   const height =
     e.def.sprite === 'worm' ? 0.95
     : e.def.sprite === 'trojan' ? 1.05
@@ -333,6 +335,7 @@ class Game {
       this.particles.spawn(e.x, e.y);
       this.renderer.spawnTeleport(e.x, e.y);
       this.audio.sfx('spawn', { x: e.x, y: e.y });
+      this.spawnCue(e);
     });
     // deep link: ?mission=m01&gender=female
     const dm = params.get('mission');
@@ -349,6 +352,21 @@ class Game {
   }
 
   // ---------- screens ----------
+
+  /** ENEMIES: when a threat materialises off-screen, the teleport column can't
+   *  be seen — ticker a one-line bearing cue so the ambush still telegraphs. */
+  private spawnCue(e: Entity): void {
+    const p = this.player;
+    if (!p) return;
+    let rel = Math.atan2(e.y - p.y, e.x - p.x) - p.angle;
+    while (rel > Math.PI) rel -= Math.PI * 2;
+    while (rel < -Math.PI) rel += Math.PI * 2;
+    // inside the ~58° fov (with margin) the column itself is the cue
+    if (Math.abs(rel) < 0.85) return;
+    const dir = Math.abs(rel) > 2.2 ? 'BEHIND YOU' : rel > 0 ? 'TO YOUR RIGHT' : 'TO YOUR LEFT';
+    const label = (e.def.threat ?? e.def.sprite ?? 'threat').toUpperCase();
+    this.hud.pushMessage(`AMBUSH — ${label} MATERIALISED ${dir}`, 'warn');
+  }
 
   private setScreen(s: Screen, node: HTMLElement | null): void {
     this.screen = s;
@@ -911,6 +929,7 @@ class Game {
         this.particles.spawn(e.x, e.y);
         this.renderer.spawnTeleport(e.x, e.y);
         this.audio.sfx('spawn', { x: e.x, y: e.y });
+        this.spawnCue(e);
       },
       onSeal: (_e, seal) => {
         if (seal.kind === 'door') this.sealedDoors.add(seal.id);
