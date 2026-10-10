@@ -140,7 +140,7 @@ export const ARC: ArcMission[] = [
     ],
   },
   {
-    id: 'm11', title: 'AUDIT NIGHT', difficulty: 9, built: false,
+    id: 'm11', title: 'AUDIT NIGHT', difficulty: 9, built: true,
     briefing: 'External auditors arrive at 08:00. The asset inventory is a spreadsheet nobody has opened since 2021.',
     objectives: [
       w('4.2', 'Reconcile the asset inventory, then sanitize or destroy decommissioned drives and collect certificates of destruction.'),
