@@ -340,7 +340,7 @@ export const m05: Mission = {
       ['Compensating', 'Nothing is being substituted for an unavailable control.'],
       ['Deterrent', 'The sign works by discouraging intruders with the threat of being seen. That is deterrence.'],
     ]),
-    q('q4', ['4.3', '1.3'], 'A scan flags a critical CVE on 40 servers. You confirm that 12 of them do not run the vulnerable service at all. What are those 12, and what is next?', 1, [
+    q('q4', ['4.3'], 'A scan flags a critical CVE on 40 servers. You confirm that 12 of them do not run the vulnerable service at all. What are those 12, and what is next?', 1, [
       ['False negatives; rescan with stronger settings', 'A false negative is a real vulnerability the scanner MISSED. These are the opposite.'],
       ['False positives; document them, remediate the other 28 by CVSS and exposure, then rescan to validate', 'Reported but not real = false positive. Confirmed findings get prioritized and fixed, and a rescan validates the remediation.'],
       ['True positives; patch all 40 tonight', 'Patching hosts that are not affected wastes the change window and adds risk for no benefit.'],

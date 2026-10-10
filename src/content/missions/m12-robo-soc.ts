@@ -450,13 +450,13 @@ export const m12: Mission = {
       ['Send an email alert only', 'Too slow for an account takeover in progress.'],
       ['Auto-contain standard accounts, require human approval for privileged/VIP accounts, and auto-create and escalate a ticket', 'Guard rails keep automation fast where it is safe and put a human in the loop where the impact is high.'],
     ]),
-    q('q2', ['4.7', '3.2'], 'The single SOAR server that runs every playbook goes down mid-incident, and nobody remembers the manual steps. Which automation consideration was ignored?', 1, [
+    q('q2', ['4.7'], 'The single SOAR server that runs every playbook goes down mid-incident, and nobody remembers the manual steps. Which automation consideration was ignored?', 1, [
       ['Workforce multiplier', 'That is a benefit of automation, not the risk that bit the team.'],
       ['Single point of failure / ongoing supportability', 'Automation that everything depends on needs redundancy and maintained manual runbooks.'],
       ['Enforcing baselines', 'Another benefit, unrelated to the outage.'],
       ['Employee retention', 'A benefit (less toil), not the failure here.'],
     ]),
-    q('q3', ['4.4', '3.2'], 'You need one console that aggregates logs from firewalls, servers and endpoints, correlates them, and raises alerts. Which tool is it?', 2, [
+    q('q3', ['4.4'], 'You need one console that aggregates logs from firewalls, servers and endpoints, correlates them, and raises alerts. Which tool is it?', 2, [
       ['NetFlow collector', 'NetFlow gives network flow metadata only, not server or endpoint logs.'],
       ['SNMP traps', 'SNMP traps are device status notifications, not log correlation.'],
       ['SIEM', 'A SIEM aggregates logs across sources, correlates events, and alerts and reports on them.'],

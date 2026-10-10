@@ -322,7 +322,7 @@ export const m04: Mission = {
       ['Watering hole', 'A watering-hole attack compromises a website the targets visit. Nothing here involves a website.'],
       ['Typosquatting', 'A look-alike domain might be used, but the defining feature here is executive impersonation to authorize a payment, which is BEC.'],
     ]),
-    q('q3', ['4.5', '2.4'], 'Attackers are sending mail that spoofs your exact domain in the From header. Which control lets receiving servers authenticate your mail AND tells them to reject what fails?', 3, [
+    q('q3', ['4.5', '2.2'], 'Attackers are sending mail that spoofs your exact domain in the From header. Which control lets receiving servers authenticate your mail AND tells them to reject what fails?', 3, [
       ['SPF', 'SPF lists the IPs allowed to send for the domain, but it checks the envelope sender, not the visible From, and has no policy telling receivers to reject.'],
       ['DKIM', 'DKIM signs messages so tampering can be detected, but on its own it gives receivers no instruction on what to do with failures.'],
       ['A web filter with URL reputation', 'Web filtering blocks malicious sites. It does nothing to authenticate who sent an email.'],

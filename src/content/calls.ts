@@ -59,7 +59,7 @@ export function callFeedback(def: EntityDef, picked: CallAction, right: boolean)
   };
   if (right) return `Right call: ${WHAT[need]}.`;
   const ACTED: Record<CallAction, string> = {
-    quarantine: 'You quarantined something that call did not cover',
+    quarantine: 'You quarantined it',
     release: 'You left it in place',
     escalate: 'You escalated instead of acting on it',
     patch: 'You patched instead of addressing the finding',

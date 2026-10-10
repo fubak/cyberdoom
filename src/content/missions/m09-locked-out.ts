@@ -303,13 +303,13 @@ briefing:
     ],
   },
 debriefQuestions: [
-    q('q1', ['4.8', '3.4'], 'Ransomware is actively spreading across the finance VLAN. You have confirmed it. What is the NEXT incident-response activity?', 1, [
+    q('q1', ['4.8'], 'Ransomware is actively spreading across the finance VLAN. You have confirmed it. What is the NEXT incident-response activity?', 1, [
       ['Eradication: re-image the infected hosts', 'While it is still spreading, newly re-imaged hosts get reinfected. Contain first.'],
       ['Containment: isolate the finance VLAN', 'Containment stops the spread so eradication and recovery can succeed. Order: preparation, detection, analysis, containment, eradication, recovery, lessons learned.'],
       ['Recovery: restore from backups now', 'Restored systems on a live infected network will be encrypted again.'],
       ['Lessons learned: hold the post-incident review', 'Lessons learned comes after recovery, not while the attack is live.'],
     ]),
-    q('q2', ['4.8', '3.4'], 'An infected laptop may become evidence in court. What must you document from the moment you collect it?', 2, [
+    q('q2', ['4.8'], 'An infected laptop may become evidence in court. What must you document from the moment you collect it?', 2, [
       ['Root cause analysis', 'RCA explains why the incident happened. It is not an evidence-handling record.'],
       ['E-discovery', 'E-discovery is identifying and producing electronic information for legal proceedings, not proving how the item was handled.'],
       ['Chain of custody', 'A record of who handled the evidence, when and how. Without it, the defense can argue tampering and the evidence may be excluded.'],
@@ -321,7 +321,7 @@ debriefQuestions: [
       ['Restoring onsite backups at the destroyed data center', 'Onsite backups are lost with the site. That is why geographic dispersion matters.'],
       ['Hot site', 'A hot site is fully equipped with near-current data and can take over in minutes to an hour.'],
     ]),
-    q('q4', ['4.9', '3.4'], 'Which data source BEST shows which internal host first connected to the ransomware\u2019s command-and-control IP, and when?', 0, [
+    q('q4', ['4.9'], 'Which data source BEST shows which internal host first connected to the ransomware\u2019s command-and-control IP, and when?', 0, [
       ['Firewall logs / NetFlow records', 'Flow logs record source, destination and time for the connections they capture (coverage and sampling matter), so filtering on the C2 IP gives the earliest beaconing host — the leading patient-zero candidate, confirmed with host evidence.'],
       ['Vulnerability scan results', 'Scans show weaknesses, not who talked to whom.'],
       ['Badge access logs', 'Badge logs show people entering doors, not hosts making connections.'],
