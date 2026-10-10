@@ -2,6 +2,7 @@ import type * as THREE from 'three';
 import { sortedTools } from '../tools';
 import { skinTriple } from '../tools/look';
 import { drawChunky, drawText, glyphRows, measureChunky, measureText } from './font';
+import { genPoolActive, whenGenJobs } from './genpool';
 import { spriteSets } from './sprites';
 import { drawToolViewmodel } from './viewmodels';
 import { BASE_H, BASE_W, RES, VIEW_H, VIEW_W } from './res';
@@ -105,7 +106,12 @@ export function drawSkull(g: CanvasRenderingContext2D, x: number, y: number, lit
 
 /** Sprite texture (DataTexture, Y-flipped, glow alpha 128) → opaque-pixel canvas. */
 export function spriteCanvas(setId: string, frame: string): HTMLCanvasElement | null {
-  const t: THREE.Texture | undefined = spriteSets.get(setId)?.frames[frame];
+  const set = spriteSets.get(setId);
+  if (!set) return null;
+  const desc = Object.getOwnPropertyDescriptor(set.frames, frame);
+  // pending worker-generated frames must not be forced by the title screen
+  if (!desc || (desc.get && genPoolActive())) return null;
+  const t: THREE.Texture | undefined = desc.value ?? set.frames[frame];
   const im = t?.image as { data?: Uint8Array; width: number; height: number } | undefined;
   if (!im?.data) return null;
   const c = document.createElement('canvas');
@@ -253,6 +259,14 @@ export function mountTitle(host: HTMLElement, onStart: () => void, about: string
   g.imageSmoothingEnabled = false;
   g.setTransform(RES, 0, 0, RES, 0, 0);
   const pic = paintTitlePic();
+  // threats blit in once the worker pool delivers their frames — boot never waits on it
+  whenGenJobs(['sprite:ransomware:attack1_0', 'sprite:trojan:walk1_1', 'sprite:worm:attack1_7'], () => {
+    if (!pic.isConnected && !c.isConnected) return;
+    const pg = pic.getContext('2d')!;
+    blitSprite(pg, spriteCanvas('ransomware', 'attack1_0') ?? spriteCanvas('ransomware', 'walk0'), 160, 128, 1);
+    blitSprite(pg, spriteCanvas('trojan', 'walk1_1') ?? spriteCanvas('trojan', 'walk0'), 250, 188, 2);
+    blitSprite(pg, spriteCanvas('worm', 'attack1_7') ?? spriteCanvas('worm', 'walk0'), 70, 178, 2);
+  });
   const keyboard = sortedTools().find((t) => t.slot === 1);
 
   // classic spreading-fire automaton along the bottom edge, 0..36 heat
