@@ -3,7 +3,7 @@ import { lightRects } from '../../missions/levelkit';
 import type { WalkStep } from '../../missions/walkthroughs';
 import type { MissionTeaching } from '../curriculum';
 import { q } from '../arc-questions';
-import { addThreatEncounter, floorSpot, liveThreats } from './campaign-map';
+import { addThreatEncounter, floorSpot, liveThreats, retex } from './campaign-map';
 
 // M07 SEGMENT FAULT (SY0-701 3.2 placement, 3.1 ICS isolation, 4.5 ruleset order, 2.3 device audit)
 // The plant is one flat subnet. Survey it, audit every device, then rebuild it
@@ -602,9 +602,9 @@ export const m07: Mission = {
       },
     ],
     secrets: [
-      { id: 'switch-cache', area: [14, 9, 16, 10], label: 'Switch cache' },
-      { id: 'dmz-cage', area: [34, 3, 36, 5], label: 'DMZ supply cage' },
-      { id: 'admin-store', area: [2, 23, 4, 25], label: 'Admin storeroom' },
+      { id: 'switch-cache', area: [14, 9, 16, 10], label: 'Switch cache', grant: { resource: 'usb-charge', amount: 16 } },
+      { id: 'dmz-cage', area: [34, 3, 36, 5], label: 'DMZ supply cage', grant: { resource: 'integrity', amount: 40 } },
+      { id: 'admin-store', area: [2, 23, 4, 25], label: 'Admin storeroom', grant: { resource: 'usb-charge', amount: 16 } },
     ],
     outbreak: {
       tag: 'flat-host',
@@ -879,4 +879,17 @@ m07.entities.push(
     grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
   { id: 'med-sw', kind: 'item', ...floorSpot(m07, [11, 22, 19, 26]), sprite: 'medkit',
     grants: { resource: 'integrity', amount: 25 }, inspect: { label: 'Integrity kit', detail: 'Restores 25 integrity.', category: 'item' } },
+);
+
+// — rF2 landmarks: central firewall hall = grid floor; the plant annex (east
+// cage) + admin stores = dim rust service floors.
+m07.map.legend[','] = { kind: 'floor', tex: 'floor-grid' };
+m07.map.legend[';'] = { kind: 'floor', tex: 'floor-rust' };
+retex(m07, [2, 13, 37, 20], 'floor', ',');
+retex(m07, [26, 15, 33, 20], 'floor', ';');
+retex(m07, [2, 21, 6, 26], 'floor', ';');
+m07.map.lights = { ...m07.map.lights, ...lightRects([[26, 15, 33, 19, 0.5], [2, 21, 6, 25, 0.5], [10, 13, 30, 19, 0.85]]) };
+m07.entities.push(
+  { id: 'fw-board-a', kind: 'prop', x: 9.5, y: 16.5, sprite: 'console' },
+  { id: 'fw-board-b', kind: 'prop', x: 22.5, y: 16.5, sprite: 'workstation' },
 );

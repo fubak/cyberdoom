@@ -443,7 +443,7 @@ export function updateEntities(
             hooks.onWindup(e, profile.windup);
             currentMode = 'windup';
           }
-        } else if (!disguisedActive && ((los && dist < aggro && inFront) || dist < 2.5)) {
+        } else if (!disguisedActive && spawnGrace <= 0 && ((los && dist < aggro && inFront) || dist < 2.5)) {
           e.state.mode = 'chase';
           e.state.reaction = 0.25;
           e.state.attackCooldown = 0.25;
@@ -531,7 +531,7 @@ export function updateEntities(
               range: 16,
               source: `enemy:${e.def.id}`,
               hostile: true,
-              damage: profile.damage,
+              damage: Math.round(profile.damage * ((e.state.dmgMul as number | undefined) ?? 1)),
             });
           } else if (dist < (profile.range ?? 0.95) + 0.25) {
             hooks.onMelee(e, profile.damage);

@@ -8,6 +8,12 @@ import { MAP_HINT } from './nav';
 export class Automap {
   private readonly context: CanvasRenderingContext2D;
   private open = false;
+  /** 1 = fit most of the level on screen; wheel and +/- zoom around the centre. */
+  private zoom = 1;
+  /** Doom-style follow mode: recentre on the player every frame. Off = free pan. */
+  private follow = true;
+  private panX = 0;
+  private panY = 0;
 
   constructor(canvas: HTMLCanvasElement) {
     this.context = canvas.getContext('2d')!;
@@ -17,12 +23,38 @@ export class Automap {
     return this.open;
   }
 
+  get following(): boolean {
+    return this.follow;
+  }
+
   toggle(): void {
     this.open = !this.open;
+    if (this.open) this.follow = true;
   }
 
   close(): void {
     this.open = false;
+  }
+
+  zoomBy(dir: number): void {
+    this.zoom = Math.min(4, Math.max(0.4, this.zoom * (dir > 0 ? 1.25 : 0.8)));
+  }
+
+  /** Doom 'F': follow the player or leave the camera where it is. Returns the new mode. */
+  toggleFollow(player: { x: number; y: number }): boolean {
+    this.follow = !this.follow;
+    if (!this.follow) {
+      this.panX = player.x;
+      this.panY = player.y;
+    }
+    return this.follow;
+  }
+
+  /** Free-pan step in map tiles (no-op while following). */
+  pan(dx: number, dy: number): void {
+    if (this.follow) return;
+    this.panX += dx;
+    this.panY += dy;
   }
 
   draw(
@@ -41,13 +73,15 @@ export class Automap {
     const W = VIEW_W / RES;
     const H = VIEW3D_H / RES;
 
-    // Fill ~80% of the view; player-centred panning clamps so the map
-    // covers the screen rather than floating in a black void.
-    const cellSize = Math.max((W * 0.8) / mapWidth, (H * 0.8) / mapHeight);
+    // Fill ~80% of the view at zoom 1; the centre is the player in follow
+    // mode or the free-pan point otherwise, clamped so the map covers the
+    // screen rather than floating in a black void.
+    const cellSize = Math.max((W * 0.8) / mapWidth, (H * 0.8) / mapHeight) * this.zoom;
     const mapPixW = mapWidth * cellSize;
     const mapPixH = mapHeight * cellSize;
-    let left = W / 2 - player.x * cellSize;
-    let top = H / 2 - player.y * cellSize;
+    const center = this.follow ? player : { x: this.panX, y: this.panY };
+    let left = W / 2 - center.x * cellSize;
+    let top = H / 2 - center.y * cellSize;
     if (mapPixW <= W) left = (W - mapPixW) / 2;
     else left = Math.min(0, Math.max(W - mapPixW, left));
     if (mapPixH <= H) top = (H - mapPixH) / 2;
@@ -134,7 +168,7 @@ export class Automap {
     }
     g.fillStyle = 'rgba(0,0,0,0.8)';
     g.fillRect(0, H - 16, W, 14);
-    drawText(g, MAP_HINT, 4, H - 14, '#ffd040', 'small', '#000');
+    drawText(g, `${MAP_HINT} · ${this.follow ? 'FOLLOW' : 'FREE'}`, 4, H - 14, '#ffd040', 'small', '#000');
     g.restore();
   }
 }

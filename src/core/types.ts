@@ -270,8 +270,9 @@ export interface MissionScript {
   /** Par time in seconds for the end-of-level tally. */
   par: number;
   triggers?: MissionTrigger[];
-  /** Secret areas; entering one counts it once ("A secret is revealed!"). */
-  secrets?: { id: string; area: TileRect; label: string }[];
+  /** Secret areas; entering one counts it once ("A secret is revealed!").
+   *  `grant` is the guaranteed payoff awarded on reveal (same resources as item pickups). */
+  secrets?: { id: string; area: TileRect; label: string; grant?: { resource: string; amount: number } }[];
   /** Reinfection: while objective `until` is not done, every `every`
    *  seconds one cleaned entity tagged `tag` is re-infected. */
   outbreak?: { tag: string; every: number; until: string; message: string };

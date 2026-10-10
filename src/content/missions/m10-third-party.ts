@@ -3,12 +3,12 @@ import type { MissionTeaching } from '../curriculum';
 import { q } from '../arc-questions';
 import type { WalkStep } from '../../missions/walkthroughs';
 import { lightRects } from '../../missions/levelkit';
-import { addThreatEncounter, floorSpot, liveThreats } from './campaign-map';
+import { addThreatEncounter, floorSpot, liveThreats, retex } from './campaign-map';
 
 /**
  * M10 "Third Party": a SaaS vendor wants production access next week; the rep applies
  * social-engineering pressure (urgency + authority + verification resistance).
- * Difficulty 9. Three desks, each gated on evidence:
+ * Difficulty 10. Three desks, each gated on evidence:
  *   1. VENDOR SUITE (analyst badge): demand questionnaire / right-to-audit /
  *      independent assessment, read what comes back, then match each requirement
  *      to the correct agreement (SLA, NDA, SOW, MSA). Wrong picks are scored
@@ -29,7 +29,7 @@ import { addThreatEncounter, floorSpot, liveThreats } from './campaign-map';
 export const m10: Mission = {
   id: 'm10',
   title: 'THIRD PARTY',
-  difficulty: 9,
+  difficulty: 10,
   objectives: ['5.3', '5.2', '2.2', '3.1'],
   briefing:
     'A new SaaS vendor wants remote access to production next week — and their rep is already ' +
@@ -357,7 +357,7 @@ export const m10: Mission = {
       },
     })),
     // --- ambient pressure ---
-    { id: 'worm-a', kind: 'enemy', x: 16.5, y: 18.5, sprite: 'worm', ai: 'chase', hp: 2, infected: true, tags: ['malware'],
+    { id: 'worm-a', kind: 'enemy', x: 16.5, y: 13.5, sprite: 'worm', ai: 'chase', hp: 2, infected: true, tags: ['malware'],
       inspect: { label: 'Worm', detail: 'Came in on the vendor\u2019s unmanaged demo laptop and is scanning the meeting floor.', category: 'malware', objectives: ['2.4'] } },
     { id: 'worm-b', kind: 'enemy', x: 34.5, y: 14.5, sprite: 'worm', ai: 'wander', hp: 2, infected: true, tags: ['malware'],
       inspect: { label: 'Worm', detail: 'Self-propagating process scanning reachable hosts.', category: 'malware', objectives: ['2.4'] } },
@@ -423,9 +423,9 @@ export const m10: Mission = {
       },
     ],
     secrets: [
-      { id: 'suite-closet', area: [2, 5, 4, 9], label: 'Vendor suite supply closet' },
-      { id: 'server-closet', area: [35, 5, 37, 9], label: 'Server room supply closet' },
-      { id: 'risk-cache', area: [2, 21, 4, 26], label: 'Risk desk cache' },
+      { id: 'suite-closet', area: [2, 5, 4, 9], label: 'Vendor suite supply closet', grant: { resource: 'integrity', amount: 40 } },
+      { id: 'server-closet', area: [35, 5, 37, 9], label: 'Server room supply closet', grant: { resource: 'usb-charge', amount: 16 } },
+      { id: 'risk-cache', area: [2, 21, 4, 26], label: 'Risk desk cache', grant: { resource: 'usb-charge', amount: 16 } },
     ],
   },
   debriefQuestions: [
@@ -698,4 +698,18 @@ m10.entities.push(
     grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
   { id: 'chg-x2', kind: 'item', ...floorSpot(m10, [22, 2, 37, 11]), sprite: 'charge', tags: ['arsenal-pickup'],
     grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
+);
+
+// — rF2 landmarks: east server hall = bright grid floor + console wall; west
+// vendor suite + south risk-desk corridor = dim rust floors.
+m10.map.legend[','] = { kind: 'floor', tex: 'floor-grid' };
+m10.map.legend[';'] = { kind: 'floor', tex: 'floor-rust' };
+retex(m10, [28, 4, 38, 11], 'floor', ',');
+retex(m10, [2, 4, 10, 11], 'floor', ';');
+retex(m10, [2, 20, 18, 26], 'floor', ';');
+m10.map.lights = { ...m10.map.lights, ...lightRects([[28, 4, 38, 10, 0.85], [2, 20, 18, 26, 0.5]]) };
+m10.entities.push(
+  { id: 'noc-wall-a', kind: 'prop', x: 31.5, y: 7.5, sprite: 'console' },
+  { id: 'noc-wall-b', kind: 'prop', x: 36.5, y: 7.5, sprite: 'console' },
+  { id: 'vendor-desk', kind: 'prop', x: 7.5, y: 7.5, sprite: 'workstation' },
 );

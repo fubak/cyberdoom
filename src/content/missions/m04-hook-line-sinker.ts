@@ -3,7 +3,7 @@ import type { MissionTeaching } from '../curriculum';
 import { q } from '../arc-questions';
 import type { WalkStep } from '../../missions/walkthroughs';
 import { lightRects } from '../../missions/levelkit';
-import { addThreatEncounter, floorSpot, liveThreats, stagedThreatWave } from './campaign-map';
+import { addThreatEncounter, floorSpot, liveThreats, retex, stagedThreatWave } from './campaign-map';
 
 const map: MapDef = {
   grid: [
@@ -257,7 +257,7 @@ const waveIds = (start: number, end: number) => ratWave.slice(start, end).map((e
 export const m04: Mission = {
   id: 'm04',
   title: 'HOOK, LINE & SINKER',
-  difficulty: 6,
+  difficulty: 4,
   objectives: ['5.6', '2.2', '4.5', '2.4'],
   briefing: 'The reported-phishing queue is overflowing and finance just got an "urgent" wire request from the CEO.',
   authorizedRoles: ['analyst'],
@@ -305,9 +305,9 @@ export const m04: Mission = {
       { id: 'mail-exit', after: ['gateway', 'report'], openDoors: ['mail-exit'], kind: 'good', message: 'The mailbox is locked and gateway policy is enforced. Exit open.' },
     ],
     secrets: [
-      { id: 'mail-secret-1', area: [2, 4, 4, 8], label: 'Archive alcove' },
-      { id: 'mail-secret-2', area: [35, 10, 37, 15], label: 'Gateway service nook' },
-      { id: 'mail-secret-3', area: [2, 17, 4, 22], label: 'Quiet mailroom store' },
+      { id: 'mail-secret-1', area: [2, 4, 4, 8], label: 'Archive alcove', grant: { resource: 'usb-charge', amount: 16 } },
+      { id: 'mail-secret-2', area: [35, 10, 37, 15], label: 'Gateway service nook', grant: { resource: 'usb-charge', amount: 16 } },
+      { id: 'mail-secret-3', area: [2, 17, 4, 22], label: 'Quiet mailroom store', grant: { resource: 'integrity', amount: 40 } },
     ],
   },
   debriefQuestions: [
@@ -438,4 +438,23 @@ m04.entities.push(
     grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
   { id: 'chg-se2', kind: 'item', ...floorSpot(m04, [18, 17, 36, 26]), sprite: 'charge', tags: ['arsenal-pickup'],
     grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
+);
+
+// — rF2 landmarks: mail-ops hall = bright grid floor with sorting displays;
+// gateway wing (east) + back stores = dim rust service corridors.
+m04.map.legend[','] = { kind: 'floor', tex: 'floor-grid' };
+m04.map.legend[';'] = { kind: 'floor', tex: 'floor-rust' };
+retex(m04, [4, 10, 34, 16], 'floor', ',');
+retex(m04, [30, 4, 39, 26], 'floor', ';');
+retex(m04, [2, 17, 6, 26], 'floor', ';');
+m04.map.lights = { ...m04.map.lights, ...lightRects([[30, 4, 39, 26, 0.5], [2, 17, 6, 26, 0.55]]) };
+m04.entities.push(
+  { id: 'ops-board-a', kind: 'prop', x: 15.5, y: 11.5, sprite: 'console' },
+  { id: 'ops-board-b', kind: 'prop', x: 18.5, y: 11.5, sprite: 'console' },
+  { id: 'arch-cache', kind: 'item', x: 3.5, y: 6.5, sprite: 'charge', tags: ['arsenal-pickup'],
+    grants: { resource: 'usb-charge', amount: 8 } },
+  { id: 'gw-cache', kind: 'item', x: 37.5, y: 12.5, sprite: 'pcap', tags: ['arsenal-pickup'],
+    grants: { resource: 'pcap', amount: 6 } },
+  { id: 'store-med', kind: 'item', x: 3.5, y: 19.5, sprite: 'medkit',
+    grants: { resource: 'integrity', amount: 40 } },
 );

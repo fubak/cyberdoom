@@ -102,8 +102,12 @@ export class MissionRuntime {
         state: def.kind === 'enemy'
           ? {
               speedMul: scaling.speedMul,
+              dmgMul: scaling.dmgMul,
               aggro: scaling.aggro,
               maxHp: hp,
+              // Opening grace: mission-start enemies cannot aggro for ~3 s
+              // (dormant/triggered spawns get their own grace when they wake).
+              ...(def.dormant ? {} : { spawnGrace: 3 }),
             }
           : {},
       };
@@ -865,6 +869,12 @@ export class MissionRuntime {
       this.revealNearestSecretDoor(secret.area);
       this.message(`A secret is revealed! ${secret.label}`, 'good');
       this.log(`Secret revealed: ${secret.label}`, 25);
+      // Every secret pays off: award its named grant like a pickup would.
+      const grant = secret.grant;
+      if (grant) {
+        if (grant.resource.startsWith('role:')) this.grantRole(grant.resource.slice(5));
+        else this.bus.emit('grant-item', { resource: grant.resource, amount: grant.amount });
+      }
     }
   }
 

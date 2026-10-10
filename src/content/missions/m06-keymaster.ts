@@ -3,12 +3,12 @@ import { lightRects } from '../../missions/levelkit';
 import type { WalkStep } from '../../missions/walkthroughs';
 import type { MissionTeaching } from '../curriculum';
 import { q } from '../arc-questions';
-import { addThreatEncounter, floorSpot, liveThreats } from './campaign-map';
+import { addThreatEncounter, floorSpot, liveThreats, retex } from './campaign-map';
 
 export const m06: Mission = {
   id: 'm06',
   title: 'KEYMASTER',
-  difficulty: 7,
+  difficulty: 6,
   objectives: ['1.2', '1.4', '3.3', '4.6'],
   briefing:
     'KEYMASTER security audit, 2026-10-05. An expired certificate, a leaked VPN key and exposed card data are blocking release. ' +
@@ -425,8 +425,8 @@ export const m06: Mission = {
     {
       id: 'hall-worm',
       kind: 'enemy',
-      x: 18.5,
-      y: 18.5,
+      x: 33.5,
+      y: 14.5,
       sprite: 'worm',
       ai: 'wander',
       hp: 2,
@@ -515,8 +515,8 @@ export const m06: Mission = {
       },
     ],
     secrets: [
-      { id: 'cert-store', area: [2, 22, 4, 24], label: 'Certificate storage closet' },
-      { id: 'key-store', area: [35, 22, 37, 24], label: 'Key recovery closet' },
+      { id: 'cert-store', area: [2, 22, 4, 24], label: 'Certificate storage closet', grant: { resource: 'usb-charge', amount: 16 } },
+      { id: 'key-store', area: [35, 22, 37, 24], label: 'Key recovery closet', grant: { resource: 'integrity', amount: 40 } },
     ],
   },
 };
@@ -680,4 +680,17 @@ m06.entities.push(
     grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
   { id: 'chg-x2', kind: 'item', ...floorSpot(m06, [26, 6, 37, 16]), sprite: 'charge', tags: ['arsenal-pickup'],
     grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
+);
+
+// — rF2 landmarks: central audit hall = bright grid floor with a PKI status
+// board; west cert room + east key room = dim rust vault floors.
+m06.map.legend[','] = { kind: 'floor', tex: 'floor-grid' };
+m06.map.legend[';'] = { kind: 'floor', tex: 'floor-rust' };
+retex(m06, [2, 17, 37, 26], 'floor', ',');
+retex(m06, [2, 3, 13, 16], 'floor', ';');
+retex(m06, [26, 3, 37, 16], 'floor', ';');
+m06.map.lights = { ...m06.map.lights, ...lightRects([[15, 2, 24, 16, 0.75]]) };
+m06.entities.push(
+  { id: 'pki-board-a', kind: 'prop', x: 12.5, y: 18.5, sprite: 'console' },
+  { id: 'pki-board-b', kind: 'prop', x: 27.5, y: 18.5, sprite: 'console' },
 );

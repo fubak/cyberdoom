@@ -3,7 +3,7 @@ import type { MissionTeaching } from '../curriculum';
 import { q } from '../arc-questions';
 import type { WalkStep } from '../../missions/walkthroughs';
 import { lightRects } from '../../missions/levelkit';
-import { addThreatEncounter, setMapCell } from './campaign-map';
+import { addThreatEncounter, retex, setMapCell } from './campaign-map';
 
 /**
  * M9 "Locked Out": ransomware incident response, run in the right order.
@@ -21,7 +21,7 @@ import { addThreatEncounter, setMapCell } from './campaign-map';
 export const m09: Mission = {
   id: 'm09',
   title: 'LOCKED OUT',
-  difficulty: 8,
+  difficulty: 9,
   objectives: ['4.8', '3.4', '4.9'],
 briefing:
     'Ransomware is encrypting the finance VLAN right now. The CFO wants payroll back by morning. ' +
@@ -297,9 +297,9 @@ briefing:
         message: 'Finance restored from backup. Exit open. File lessons learned on the way out.' },
     ],
     secrets: [
-      { id: 'store', area: [11, 24, 13, 27], label: 'IR storeroom' },
-      { id: 'closet', area: [35, 16, 38, 20], label: 'Finance closet' },
-      { id: 'warroom-cache', area: [18, 15, 18, 15], label: 'War-room cache' },
+      { id: 'store', area: [11, 24, 13, 27], label: 'IR storeroom', grant: { resource: 'usb-charge', amount: 16 } },
+      { id: 'closet', area: [35, 16, 38, 20], label: 'Finance closet', grant: { resource: 'integrity', amount: 40 } },
+      { id: 'warroom-cache', area: [18, 15, 18, 15], label: 'War-room cache', grant: { resource: 'patch-disk', amount: 3 } },
     ],
   },
 debriefQuestions: [
@@ -448,3 +448,22 @@ addThreatEncounter(m09, 'ransomware-recovery', 'ransomware', 9, {
   kind: 'bad',
   message: 'The recovery operation triggered a final ransomware wave.',
 }, [1, 1, 38, 9]);
+
+// — rF2 landmarks: the three quarantine pods (north) = grid floor; finance
+// den (east) + IR storeroom = dim rust floors; war-room gets a status board.
+m09.map.legend[','] = { kind: 'floor', tex: 'floor-grid' };
+m09.map.legend[';'] = { kind: 'floor', tex: 'floor-rust' };
+retex(m09, [0, 0, 36, 8], 'floor', ',');
+retex(m09, [30, 15, 38, 21], 'floor', ';');
+retex(m09, [10, 23, 15, 27], 'floor', ';');
+m09.map.lights = { ...m09.map.lights, ...lightRects([[30, 15, 38, 20, 0.5], [10, 23, 15, 27, 0.55]]) };
+m09.entities.push(
+  { id: 'war-board', kind: 'prop', x: 18.5, y: 17.5, sprite: 'console' },
+  { id: 'war-cache', kind: 'item', x: 18.5, y: 15.5, sprite: 'patch-disk', tags: ['arsenal-pickup'],
+    grants: { resource: 'patch-disk', amount: 5 } },
+  { id: 'den-chg-a', kind: 'item', x: 35.5, y: 16.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 8 } },
+  { id: 'den-chg-b', kind: 'item', x: 36.5, y: 18.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 8 } },
+  { id: 'den-chg-c', kind: 'item', x: 35.5, y: 19.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 8 } },
+  { id: 'store-chg-a', kind: 'item', x: 12.5, y: 25.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 8 } },
+  { id: 'store-chg-b', kind: 'item', x: 11.5, y: 26.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 8 } },
+);

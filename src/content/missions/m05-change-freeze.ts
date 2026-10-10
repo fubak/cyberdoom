@@ -3,7 +3,7 @@ import type { MissionTeaching } from '../curriculum';
 import { q } from '../arc-questions';
 import type { WalkStep } from '../../missions/walkthroughs';
 import { lightRects } from '../../missions/levelkit';
-import { addThreatEncounter, floorSpot, liveThreats, stagedThreatWave } from './campaign-map';
+import { addThreatEncounter, floorSpot, liveThreats, retex, stagedThreatWave } from './campaign-map';
 
 const map: MapDef = {
   grid: [
@@ -285,7 +285,7 @@ const waveIds = (wave: number) => rootkitWave
 export const m05: Mission = {
   id: 'm05',
   title: 'CHANGE FREEZE',
-  difficulty: 6,
+  difficulty: 5,
   objectives: ['1.3', '1.1', '4.3', '5.1'],
   briefing: 'A critical patch has to land on the payroll server tonight, and the change board meets in ten minutes.',
   authorizedRoles: ['analyst'],
@@ -316,9 +316,9 @@ export const m05: Mission = {
       { id: 'change-exit', after: ['docs', 'payroll-patch', 'fix-gaps', 'confirmed-hosts'], openDoors: ['change-exit'], kind: 'good', message: 'The change is complete and validated. Exit open.' },
     ],
     secrets: [
-      { id: 'change-secret-1', area: [2, 4, 4, 8], label: 'Change archive alcove' },
-      { id: 'change-secret-2', area: [35, 10, 37, 15], label: 'Audit storage nook' },
-      { id: 'change-secret-3', area: [2, 17, 4, 22], label: 'Payroll maintenance store' },
+      { id: 'change-secret-1', area: [2, 4, 4, 8], label: 'Change archive alcove', grant: { resource: 'patch-disk', amount: 3 } },
+      { id: 'change-secret-2', area: [35, 10, 37, 15], label: 'Audit storage nook', grant: { resource: 'usb-charge', amount: 16 } },
+      { id: 'change-secret-3', area: [2, 17, 4, 22], label: 'Payroll maintenance store', grant: { resource: 'integrity', amount: 40 } },
     ],
   },
   debriefQuestions: [
@@ -445,4 +445,23 @@ m05.entities.push(
     grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
   { id: 'med-north', kind: 'item', ...floorSpot(m05, [2, 4, 37, 8]), sprite: 'medkit',
     grants: { resource: 'integrity', amount: 25 }, inspect: { label: 'Integrity kit', detail: 'Restores 25 integrity.', category: 'item' } },
+);
+
+// — rF2 landmarks: change-ops hall (centre) = bright grid floor; upper scan
+// wing + side stores = dim rust maintenance corridors; payroll vault (south
+// centre SSS) keeps its rack walls and gets a board.
+m05.map.legend[','] = { kind: 'floor', tex: 'floor-grid' };
+m05.map.legend[';'] = { kind: 'floor', tex: 'floor-rust' };
+retex(m05, [6, 9, 35, 22], 'floor', ',');
+retex(m05, [30, 4, 39, 23], 'floor', ';');
+retex(m05, [2, 4, 6, 23], 'floor', ';');
+m05.map.lights = { ...m05.map.lights, ...lightRects([[30, 4, 39, 22, 0.5], [2, 4, 6, 22, 0.55], [14, 24, 18, 26, 0.9]]) };
+m05.entities.push(
+  { id: 'vault-board', kind: 'prop', x: 19.5, y: 25.5, sprite: 'console' },
+  { id: 'arch-disk', kind: 'item', x: 3.5, y: 6.5, sprite: 'patch-disk', tags: ['arsenal-pickup'],
+    grants: { resource: 'patch-disk', amount: 5 } },
+  { id: 'audit-cache', kind: 'item', x: 36.5, y: 12.5, sprite: 'charge', tags: ['arsenal-pickup'],
+    grants: { resource: 'usb-charge', amount: 8 } },
+  { id: 'store-med', kind: 'item', x: 3.5, y: 19.5, sprite: 'medkit',
+    grants: { resource: 'integrity', amount: 25 } },
 );
