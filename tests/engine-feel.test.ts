@@ -347,7 +347,7 @@ describe('Doom enemy AI', () => {
     expect(projectile.dy).toBeCloseTo(0);
   });
 
-  it('keeps hostile projectiles off entities and friendly projectiles off players', () => {
+  it('hostile projectiles hit other enemies (infighting) and friendly projectiles stay off players', () => {
     const map = new WorldMap(mapDef);
     const target = enemy('target', 'worm', 2.6, 2.5);
     const player = new Player(6, 2.5, 0);
@@ -355,7 +355,15 @@ describe('Doom enemy AI', () => {
       x: 2.5, y: 2.5, dx: 1, dy: 0, speed: 1, range: 10, traveled: 0,
       source: 'enemy:test', alive: true, hostile: true, damage: 10,
     };
-    expect(updateProjectiles([hostile], [target], map, 0.1, player)).toEqual([]);
+    // shooter is a different enemy than the target → the projectile connects
+    const hostileEvents = updateProjectiles([hostile], [target], map, 0.1, player);
+    expect(hostileEvents[0]?.hit).toBe(target);
+    // ...but never its own shooter
+    const selfShot: Projectile = {
+      x: 2.5, y: 2.5, dx: 1, dy: 0, speed: 1, range: 10, traveled: 0,
+      source: 'enemy:target', alive: true, hostile: true, damage: 10,
+    };
+    expect(updateProjectiles([selfShot], [target], map, 0.1, player)).toEqual([]);
     const friendly: Projectile = {
       ...hostile, x: 2.5, source: 'usb:test', hostile: false, alive: true,
     };

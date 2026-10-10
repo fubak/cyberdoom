@@ -73,7 +73,12 @@ const TOOL_KICK: Record<string, number> = {
 
 function muzzleHeight(e: Entity): number {
   const scale = e.def.sprite === 'worm' ? 0.6 : e.def.sprite === 'trojan' ? 0.75 : 0.85;
-  const height = e.def.sprite === 'worm' ? 0.95 : e.def.sprite === 'trojan' ? 1.05 : 1.15;
+  const height =
+    e.def.sprite === 'worm' ? 0.95
+    : e.def.sprite === 'trojan' ? 1.05
+    : e.def.sprite === 'logicbomb' ? 0.62
+    : e.def.sprite === 'rat' ? 0.78
+    : 1.15;
   return height * scale;
 }
 
@@ -205,7 +210,7 @@ class Game {
         const e = this.runtime?.entities.find((entity) => entity.def.id === entityId);
         if (!e || e.alive) return;
         if (e.def.kind === 'enemy') {
-          this.audio.sfx('enemy-death', { x: e.x, y: e.y });
+          this.audio.sfx(`death-${e.def.threat ?? e.def.sprite}`, { x: e.x, y: e.y });
           this.particles.burst(e.x, e.y, 0.4, 'kill');
         } else {
           this.audio.sfx('clean');
@@ -224,7 +229,7 @@ class Game {
       }
       // small light burst at the impact point, so a connected hit reads instantly
       this.particles.flash(e.x, e.y, 0.45);
-      this.audio.sfx('enemy-pain', { x: e.x, y: e.y });
+      this.audio.sfx(`pain-${e.def.threat ?? e.def.sprite}`, { x: e.x, y: e.y });
     });
     this.bus.on('tool-hit', ({ toolId, entityId, good }) => {
       if (toolId === 'edr') {
@@ -778,15 +783,32 @@ class Game {
       onWindup: (e, dur) => this.audio.sfx('windup', { x: e.x, y: e.y, dur }),
       onMelee: (e, dmg) => {
         this.particles.pop(e.x, e.y, muzzleHeight(e));
-        this.audio.sfx('bite', { x: e.x, y: e.y });
+        this.audio.sfx(`attack-${e.def.threat ?? e.def.sprite}`, { x: e.x, y: e.y });
         this.hurtPlayer(dmg, e.x, e.y, e);
       },
       onFire: (e, projectile) => {
         this.projectiles.push({ ...projectile, alive: true, traveled: 0 });
         this.particles.pop(e.x, e.y, muzzleHeight(e));
-        this.audio.sfx('enemy-fire', { x: e.x, y: e.y });
+        this.audio.sfx(`fire-${e.def.threat ?? e.def.sprite}`, { x: e.x, y: e.y });
       },
-      onGrowl: (e) => this.audio.sfx('growl', { x: e.x, y: e.y, gain: 0.6 }),
+      onGrowl: (e) => this.audio.sfx(`growl-${e.def.threat ?? e.def.sprite}`, { x: e.x, y: e.y, gain: 0.6 }),
+      onEnemyMelee: (e, target, dmg) => {
+        // infighting: the attacker's melee lands on its grudge target
+        this.particles.pop(e.x, e.y, muzzleHeight(e));
+        this.audio.sfx(`attack-${e.def.threat ?? e.def.sprite}`, { x: e.x, y: e.y });
+        const result = damageEntity(target, dmg, target.x - e.x, target.y - e.y);
+        if (result === 'killed') {
+          this.bus.emit('cleaned', { entityId: target.def.id });
+        } else {
+          this.particles.burst(target.x, target.y, 0.4, 'hit');
+          this.audio.sfx(`pain-${target.def.threat ?? target.def.sprite}`, { x: target.x, y: target.y });
+          target.state.grudgeId = e.def.id;
+          target.state.grudgeT = 8;
+          target.state.aggroed = true;
+          target.state.sighted = true;
+          if (!target.state.mode || target.state.mode === 'idle') target.state.mode = 'chase';
+        }
+      },
       onSpawn: (e) => {
         this.particles.spawn(e.x, e.y);
         this.renderer.spawnTeleport(e.x, e.y);
@@ -836,6 +858,25 @@ class Game {
         const src = srcId ? runtime.entities.find((ent) => ent.def.id === srcId) : undefined;
         this.hurtPlayer(projectile.damage ?? 10, x - projectile.dx, y - projectile.dy, src);
       }
+      if (hit && projectile.hostile && hit.def.kind === 'enemy') {
+        // hostile fire struck another enemy — damage it and turn it on the shooter
+        const srcId = projectile.source?.startsWith('enemy:') ? projectile.source.slice(6) : null;
+        const result = damageEntity(hit, projectile.damage ?? 8, projectile.dx, projectile.dy);
+        this.particles.burst(x, y, 0.4, 'hit');
+        if (result === 'killed') {
+          this.bus.emit('cleaned', { entityId: hit.def.id });
+        } else {
+          this.audio.sfx(`pain-${hit.def.threat ?? hit.def.sprite}`, { x: hit.x, y: hit.y });
+          if (srcId && srcId !== hit.def.id) {
+            hit.state.grudgeId = srcId;
+            hit.state.grudgeT = 8;
+            hit.state.aggroed = true;
+            hit.state.sighted = true;
+            if (!hit.state.mode || hit.state.mode === 'idle') hit.state.mode = 'chase';
+          }
+        }
+        continue;
+      }
       if (hit && hit.def.kind === 'workstation' && projectile.traveled > USB_PLUG_RANGE) {
         this.bus.emit('tool-hit', { toolId: 'usb', entityId: hit.def.id, good: false });
         this.hud.pushMessage('Workstations are cleaned at arm\'s length: walk up and plug the scanner stick in.', 'warn');
@@ -849,7 +890,7 @@ class Game {
           } else {
             this.particles.toolImpact('usb', x, y, 0.4);
             if (hit.def.kind === 'enemy') {
-              this.audio.sfx('enemy-pain', { x: hit.x, y: hit.y });
+              this.audio.sfx(`pain-${hit.def.threat ?? hit.def.sprite}`, { x: hit.x, y: hit.y });
             }
           }
         } else {
@@ -956,7 +997,7 @@ class Game {
           this.bus.emit('cleaned', { entityId: hit.def.id });
         } else {
           this.particles.burst(x, y, 0.4, 'hit');
-          if (hit.def.kind === 'enemy') this.audio.sfx('enemy-pain', { x: hit.x, y: hit.y });
+          if (hit.def.kind === 'enemy') this.audio.sfx(`pain-${hit.def.threat ?? hit.def.sprite}`, { x: hit.x, y: hit.y });
         }
       } else {
         this.bus.emit('tool-hit', { toolId: 'usb', entityId: hit.def.id, good: false });

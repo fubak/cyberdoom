@@ -7,6 +7,7 @@ import type { ViewPose } from '../engine/feel';
 import { buildPaletteLut } from './palette';
 import { genWorkerCount } from './genpool';
 import { buildSprites, prewarmLazySpriteFrames, spriteSets, type SpriteSet } from './sprites';
+import { RISE_MAX_DIST, riseBase } from './melee';
 import { WALL_H, buildTextures, decalTexture, doorTextureFor, hashStr, lookTheme, textureOr, textureRegistry } from './textures';
 import { RES, STATUS_H, VIEW3D_H, VIEW_H, VIEW_W } from './res';
 
@@ -212,6 +213,8 @@ interface SpriteState {
   entity: Entity | null;
   /** Forced frame key (persistent corpses, seal marks). */
   frame?: string;
+  /** Smoothed melee-lunge lift applied to the sprite's base (world units). */
+  rise?: number;
 }
 
 interface Fx {
@@ -951,6 +954,17 @@ export class Renderer {
         const maxH = 0.65 * 2 * d * Math.tan((this.camera.fov * Math.PI) / 360);
         const sc = Math.min(st.scale, maxH / st.set.h);
         st.mesh.scale.set(st.set.w * sc, st.set.h * sc, 1);
+        // ENEMIES melee lunge: a floor-height attacker at contact range would
+        // project entirely behind the tool viewmodel; lift its anchor so at
+        // least 60% of its silhouette clears the viewmodel top line.
+        const mode = st.entity.state.mode;
+        const baseY = st.mesh.position.y;
+        const lunge =
+          st.entity.def.kind === 'enemy' && (mode === 'windup' || mode === 'recover') && d < RISE_MAX_DIST
+            ? Math.max(0, riseBase(st.set.h * sc, d, EYE_H, this.camera.fov) - baseY)
+            : 0;
+        st.rise = (st.rise ?? 0) + (lunge - (st.rise ?? 0)) * Math.min(1, dt * 14);
+        st.mesh.position.y = baseY + st.rise;
       }
       // monsters get an unmistakable ~150 ms white pain flash (flash decays
       // 3/s from 1.0) before the pain-frame swap / dissolve, like Doom's
