@@ -54,23 +54,23 @@ Data-driven, thin typed coupling between areas via `src/core/` contracts
 
 ## Missions
 
-Twelve-mission campaign arc (`src/content/curriculum.ts`). `built: false`
-missions are in progress and not playable yet.
+Twelve-mission campaign arc (`src/content/curriculum.ts`); all twelve are
+built and playable.
 
-| #   | Title               | Difficulty | Objectives              | Status      |
-| --- | ------------------- | ---------- | ----------------------- | ----------- |
-| M01 | PATCH TUESDAY       | 1          | 2.4, 2.2, 2.5, 3.4, 5.6 | built       |
-| M02 | NEED TO KNOW        | 3          | 4.6, 1.2, 5.6           | built       |
-| M03 | THE QUIET ONE       | 6          | 4.9, 2.1, 2.4, 3.3, 4.8 | built       |
-| M04 | HOOK, LINE & SINKER | 6          | 5.6, 2.2, 4.5, 2.4      | built       |
-| M05 | CHANGE FREEZE       | 6          | 1.3, 1.1, 4.3, 5.1      | built       |
-| M06 | KEYMASTER           | 7          | 1.4, 3.3, 4.6           | built       |
-| M07 | SEGMENT FAULT       | 7          | 3.2, 3.1, 4.5, 2.3      | in progress |
-| M08 | ZERO DAY            | 8          | 2.3, 4.3, 4.1           | built       |
-| M09 | LOCKED OUT          | 8          | 4.8, 3.4, 4.9           | built       |
-| M10 | THIRD PARTY         | 9          | 5.3, 5.2, 2.2, 3.1      | built       |
-| M11 | AUDIT NIGHT         | 9          | 4.2, 5.4, 5.5, 5.1      | built       |
-| M12 | ROBO SOC            | 10         | 4.7, 4.4, 3.2, 2.5      | built       |
+| #   | Title               | Difficulty | Objectives              | Status |
+| --- | ------------------- | ---------- | ----------------------- | ------ |
+| M01 | PATCH TUESDAY       | 1          | 2.4, 2.2, 2.5, 3.4, 5.6 | built  |
+| M02 | NEED TO KNOW        | 3          | 4.6, 1.2, 5.6           | built  |
+| M03 | THE QUIET ONE       | 6          | 4.9, 2.1, 2.4, 3.3, 4.8 | built  |
+| M04 | HOOK, LINE & SINKER | 6          | 5.6, 2.2, 4.5, 2.4      | built  |
+| M05 | CHANGE FREEZE       | 6          | 1.3, 1.1, 4.3, 5.1      | built  |
+| M06 | KEYMASTER           | 7          | 1.4, 3.3, 4.6           | built  |
+| M07 | SEGMENT FAULT       | 7          | 3.2, 3.1, 4.5, 2.3      | built  |
+| M08 | ZERO DAY            | 8          | 2.3, 4.3, 4.1           | built  |
+| M09 | LOCKED OUT          | 8          | 4.8, 3.4, 4.9           | built  |
+| M10 | THIRD PARTY         | 9          | 5.3, 5.2, 2.2, 3.1      | built  |
+| M11 | AUDIT NIGHT         | 9          | 4.2, 5.4, 5.5, 5.1      | built  |
+| M12 | ROBO SOC            | 10         | 4.7, 4.4, 3.2, 2.5      | built  |
 
 ## Controls
 
