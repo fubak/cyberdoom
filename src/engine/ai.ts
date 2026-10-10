@@ -8,6 +8,24 @@ export interface AiHooks {
   onMelee(e: Entity, dmg: number): void;
   onFire(e: Entity, proj: Omit<Projectile, 'alive' | 'traveled'>): void;
   onStep?(e: Entity): void;
+  /** Occasional positional growl while actively hunting. */
+  onGrowl?(e: Entity): void;
+  /** A new enemy materialised (worm self-propagation). */
+  onSpawn?(e: Entity): void;
+  /** Ransomware sealed a door or console. */
+  onSeal?(e: Entity, seal: SealTarget): void;
+  /** Ransomware died — its seal is released. */
+  onUnseal?(e: Entity, seal: SealTarget): void;
+  /** One-line mechanic explainer the first time the player meets it. */
+  onNotice?(e: Entity, text: string): void;
+}
+
+/** Something ransomware encrypted: a map door, or an entity (e.g. a console). */
+export interface SealTarget {
+  kind: 'door' | 'entity';
+  id: string;
+  x: number;
+  y: number;
 }
 
 interface EnemyProfile {
@@ -23,15 +41,23 @@ interface EnemyProfile {
   retreatAfterShot?: number;
   regenerate?: boolean;
   hidesWhenIdle?: boolean;
+  /** worm: self-propagates once sighted (spawns copies on a timer). */
+  propagates?: boolean;
+  /** trojan: reads as a harmless pickup until close range, an inspect, or damage. */
+  disguised?: boolean;
+  /** ransomware: seals the nearest door/console in its zone while alive. */
+  seals?: boolean;
+  /** rootkit: invisible beyond ~2 tiles until tap/EDR/damage/close contact. */
+  stealthy?: boolean;
 }
 
 export const ENEMY_PROFILES: Record<string, EnemyProfile> = {
-  worm: { speed: 2.6, ranged: false, damage: 6, painChance: 0.8, range: 0.95, windup: 0.3 },
-  trojan: { speed: 1.8, ranged: true, damage: 10, painChance: 0.6, projectileSpeed: 5.5, windup: 0.5 },
-  ransomware: { speed: 1.3, ranged: true, damage: 18, painChance: 0.4, projectileSpeed: 4, windup: 0.7 },
+  worm: { speed: 2.6, ranged: false, damage: 6, painChance: 0.8, range: 0.95, windup: 0.3, propagates: true },
+  trojan: { speed: 1.8, ranged: true, damage: 10, painChance: 0.6, projectileSpeed: 5.5, windup: 0.5, disguised: true },
+  ransomware: { speed: 1.3, ranged: true, damage: 18, painChance: 0.4, projectileSpeed: 4, windup: 0.7, seals: true },
   logicbomb: { speed: 0, ranged: false, damage: 22, painChance: 0, range: 2.2, windup: 1.4, aggroRange: 4, logicBomb: true },
   rat: { speed: 3.2, ranged: true, damage: 8, painChance: 0.6, projectileSpeed: 7, windup: 0.35, retreatAfterShot: 0.7 },
-  rootkit: { speed: 1.6, ranged: false, damage: 12, painChance: 0.4, range: 0.95, windup: 0.5, regenerate: true, hidesWhenIdle: true },
+  rootkit: { speed: 1.6, ranged: false, damage: 12, painChance: 0.4, range: 0.95, windup: 0.5, regenerate: true, hidesWhenIdle: true, stealthy: true },
 };
 
 export const ENEMY_RADIUS = 0.3;
@@ -40,7 +66,15 @@ const DIRECTIONS = Array.from({ length: 8 }, (_, i) => [
   Math.cos((i * Math.PI) / 4),
   Math.sin((i * Math.PI) / 4),
 ]);
-const randomCooldown = () => 1.2 + Math.random() * 0.8;
+// Doom-ish melee cadence: cooldown + windup + recover lands a ~1.0-1.3 s cycle.
+const randomCooldown = () => 0.45 + Math.random() * 0.3;
+
+// Malware-type mechanics (SY0-701 2.4): timers, caps and reveal distances.
+export const WORM_PROPAGATE_DELAY = 8;
+export const WORM_PROPAGATE_MAX = 2;
+export const TROJAN_REVEAL_DIST = 3;
+export const ROOTKIT_SPOT_DIST = 2.5;
+export const SEAL_RADIUS = 7;
 
 function mode(e: Entity): string {
   return (e.state.mode as string | undefined) ?? 'idle';
@@ -49,6 +83,214 @@ function mode(e: Entity): string {
 function lineOfSight(e: Entity, player: Player, map: WorldMap, dist: number): boolean {
   const angle = Math.atan2(player.y - e.y, player.x - e.x);
   return map.raycast(e.x, e.y, angle, dist + 0.2).dist >= dist - 0.2;
+}
+
+/** Wake an enemy into chase mode (shared by sight, sound and damage paths). */
+function aggroChase(e: Entity, hooks: AiHooks): void {
+  e.state.aggroed = true;
+  e.state.mode = 'chase';
+  e.state.reaction = 0.25;
+  e.state.attackCooldown = 0.25;
+  e.state.sighted = true;
+  hooks.onSight(e);
+}
+
+/**
+ * True when `goal` is reachable from `start` treating `doorId` as a wall.
+ * All other doors count as passable (the player can open them); only the
+ * candidate seal would be truly impassable.
+ */
+export function reachableWithoutDoor(
+  map: WorldMap,
+  start: [number, number],
+  goal: [number, number],
+  doorId: string,
+): boolean {
+  const key = (x: number, y: number) => `${x},${y}`;
+  const sx = Math.floor(start[0]);
+  const sy = Math.floor(start[1]);
+  const gx = Math.floor(goal[0]);
+  const gy = Math.floor(goal[1]);
+  const seen = new Set<string>([key(sx, sy)]);
+  const q: [number, number][] = [[sx, sy]];
+  while (q.length) {
+    const [cx, cy] = q.shift()!;
+    if (cx === gx && cy === gy) return true;
+    for (const [nx, ny] of [[cx + 1, cy], [cx - 1, cy], [cx, cy + 1], [cx, cy - 1]]) {
+      if (nx < 0 || ny < 0 || nx >= map.w || ny >= map.h || seen.has(key(nx, ny))) continue;
+      const cell = map.cellAt(nx, ny);
+      if (!cell || cell.kind === 'wall') continue;
+      if (cell.kind === 'door' && cell.doorId === doorId) continue;
+      seen.add(key(nx, ny));
+      q.push([nx, ny]);
+    }
+  }
+  return false;
+}
+
+/**
+ * Pick what a ransomware seals: the nearest closed player-openable door in its
+ * zone that the ransomware does not itself sit behind, else the nearest
+ * console. Returns null when the zone has nothing worth sealing.
+ */
+export function pickSealTarget(
+  e: Entity,
+  entities: Entity[],
+  map: WorldMap,
+  player: Player,
+): SealTarget | null {
+  const taken = new Set<string>();
+  for (const o of entities) {
+    if (o === e) continue;
+    const s = o.state.seal as SealTarget | undefined;
+    if (s) taken.add(`${s.kind}:${s.id}`);
+  }
+  let best: SealTarget | null = null;
+  let bestD = SEAL_RADIUS;
+  for (let ty = 0; ty < map.h; ty++) {
+    for (let tx = 0; tx < map.w; tx++) {
+      const cell = map.cellAt(tx, ty);
+      if (!cell || cell.kind !== 'door' || !cell.doorId || cell.locked || cell.secret) continue;
+      if (map.doorFrac(cell.doorId) > 0.05 || taken.has(`door:${cell.doorId}`)) continue;
+      const d = Math.hypot(tx + 0.5 - e.x, ty + 0.5 - e.y);
+      if (d >= bestD) continue;
+      if (!reachableWithoutDoor(map, [player.x, player.y], [e.x, e.y], cell.doorId)) continue;
+      best = { kind: 'door', id: cell.doorId, x: tx + 0.5, y: ty + 0.5 };
+      bestD = d;
+    }
+  }
+  if (best) return best;
+  let bestE: SealTarget | null = null;
+  let bestEd = SEAL_RADIUS;
+  for (const t of entities) {
+    if (!t.alive || t === e || t.def.kind !== 'console') continue;
+    if (t.state.sealedBy || taken.has(`entity:${t.def.id}`)) continue;
+    const d = Math.hypot(t.x - e.x, t.y - e.y);
+    if (d < bestEd) {
+      bestE = { kind: 'entity', id: t.def.id, x: t.x, y: t.y };
+      bestEd = d;
+    }
+  }
+  return bestE;
+}
+
+/** A free spot near `e` to materialise a worm copy, or null if boxed in. */
+export function findSpawnSpot(e: Entity, map: WorldMap, player: Player): { x: number; y: number } | null {
+  const dirs = [...DIRECTIONS].sort(() => Math.random() - 0.5);
+  for (const r of [0.8, 1.2]) {
+    for (const [vx, vy] of dirs) {
+      const nx = e.x + vx * r;
+      const ny = e.y + vy * r;
+      if (Math.hypot(nx - player.x, ny - player.y) < 0.9) continue;
+      const res = map.resolve(nx, ny, ENEMY_RADIUS);
+      if (Math.hypot(res.x - nx, res.y - ny) < 0.01) return { x: res.x, y: res.y };
+    }
+  }
+  return null;
+}
+
+/**
+ * One-mechanic-per-malware-type behaviours (SY0-701 2.4). Each fires a
+ * one-line ticker explanation the first time it triggers.
+ */
+function runMalwareMechanics(
+  e: Entity,
+  entities: Entity[],
+  map: WorldMap,
+  player: Player,
+  dt: number,
+  hooks: AiHooks,
+): void {
+  const profile = ENEMY_PROFILES[e.def.threat ?? e.def.sprite] ?? ENEMY_PROFILES.worm;
+  const distP = Math.hypot(player.x - e.x, player.y - e.y);
+  // TROJAN: disguised payload — looks like a harmless pickup until the player
+  // closes in, inspects it, or damages it; then it reveals and attacks.
+  if (profile.disguised && !e.state.revealedTrojan) {
+    const exposed =
+      (distP <= TROJAN_REVEAL_DIST && lineOfSight(e, player, map, distP)) ||
+      e.state.revealed === true ||
+      e.state.lastHurtAt !== undefined;
+    if (exposed) {
+      e.state.revealedTrojan = true;
+      aggroChase(e, hooks);
+      hooks.onNotice?.(e, 'TROJAN: disguised payload — it posed as a harmless pickup until you got close.');
+    }
+  }
+  // WORM: self-propagating — once sighted it keeps copying itself (capped).
+  if (profile.propagates && e.state.sighted === true) {
+    if (e.state.propT === undefined) {
+      e.state.propT = WORM_PROPAGATE_DELAY;
+      hooks.onNotice?.(e, 'WORM: self-propagating — clean it before it copies itself.');
+    } else if (((e.state.propN as number | undefined) ?? 0) < WORM_PROPAGATE_MAX) {
+      e.state.propT = (e.state.propT as number) - dt;
+      if ((e.state.propT as number) <= 0) {
+        const spot = findSpawnSpot(e, map, player);
+        if (spot) {
+          const n = (e.state.propN as number | undefined) ?? 0;
+          const copy: Entity = {
+            def: { ...e.def, id: `${e.def.id}-c${n + 1}`, tags: [] },
+            x: spot.x,
+            y: spot.y,
+            hp: (e.state.maxHp as number | undefined) ?? e.def.hp ?? e.hp,
+            alive: true,
+            infected: e.infected,
+            state: {
+              aggroed: true,
+              mode: 'chase',
+              spawnGrace: 0.75,
+              sighted: true,
+              propT: 1e9,
+              propN: WORM_PROPAGATE_MAX,
+            },
+          };
+          entities.push(copy);
+          e.state.propN = n + 1;
+          e.state.propT = WORM_PROPAGATE_DELAY;
+          hooks.onSpawn?.(copy);
+        } else {
+          e.state.propT = 1;
+        }
+      }
+    }
+  }
+  // RANSOMWARE: encryption-as-denial — seals the nearest door/console in its
+  // zone until killed. Never a door required to reach the ransomware itself.
+  if (profile.seals && e.state.sighted === true && e.state.sealChecked !== true) {
+    e.state.sealChecked = true;
+    const seal = pickSealTarget(e, entities, map, player);
+    if (seal) {
+      e.state.seal = seal;
+      if (seal.kind === 'entity') {
+        const t = entities.find((t) => t.def.id === seal.id);
+        if (t) t.state.sealedBy = e.def.id;
+      }
+      hooks.onSeal?.(e, seal);
+      hooks.onNotice?.(e, seal.kind === 'door'
+        ? 'RANSOMWARE: it encrypted a nearby door — kill it to release the lock.'
+        : 'RANSOMWARE: it encrypted a nearby console — kill it to release the lock.');
+    }
+  }
+  // ROOTKIT: hides from plain sight — telemetry (tap), an inspect, damage, or
+  // a point-blank encounter exposes it for good.
+  if (profile.stealthy && !e.state.revealedRootkit) {
+    const spotted =
+      e.state.captured === true ||
+      e.state.revealed === true ||
+      e.state.lastHurtAt !== undefined ||
+      (distP <= ROOTKIT_SPOT_DIST && lineOfSight(e, player, map, distP));
+    if (spotted) {
+      e.state.revealedRootkit = true;
+      hooks.onNotice?.(e, 'ROOTKIT: it hides from plain sight — telemetry, damage, or getting close exposes it.');
+    }
+  }
+  // Occasional positional growl while actively hunting.
+  if (e.state.sighted === true) {
+    e.state.growlT = ((e.state.growlT as number | undefined) ?? (2 + Math.random() * 4)) - dt;
+    if ((e.state.growlT as number) <= 0) {
+      e.state.growlT = 4 + Math.random() * 5;
+      hooks.onGrowl?.(e);
+    }
+  }
 }
 
 function turnToward(e: Entity, angle: number, dt: number, rate: number): void {
@@ -115,7 +357,19 @@ export function updateEntities(
     e.hurtT = Math.max(0, (e.hurtT ?? 0) - dt);
   }
   for (const e of entities) {
-    if (!e.alive) continue;
+    if (!e.alive) {
+      // A dead ransomware releases whatever it sealed.
+      const seal = e.state.seal as SealTarget | undefined;
+      if (seal) {
+        delete e.state.seal;
+        if (seal.kind === 'entity') {
+          const t = entities.find((t) => t.def.id === seal.id);
+          if (t) delete t.state.sealedBy;
+        }
+        hooks.onUnseal?.(e, seal);
+      }
+      continue;
+    }
     if (e.def.kind === 'enemy') {
       const knockX = (e.state.knockVx as number | undefined) ?? 0;
       const knockY = (e.state.knockVy as number | undefined) ?? 0;
@@ -124,8 +378,9 @@ export function updateEntities(
         e.state.knockVx = knockX * Math.exp(-5 * dt);
         e.state.knockVy = knockY * Math.exp(-5 * dt);
       }
+      runMalwareMechanics(e, entities, map, player, dt, hooks);
     }
-    const ai = e.def.ai ?? 'stand';
+    const ai = e.def.kind === 'enemy' && e.state.aggroed === true ? 'chase' : (e.def.ai ?? 'stand');
     if (ai === 'chase') {
       const profile = ENEMY_PROFILES[e.def.threat ?? e.def.sprite] ?? ENEMY_PROFILES.worm;
       const speed = profile.speed * ((e.state.speedMul as number | undefined) ?? 1);
@@ -303,6 +558,29 @@ export function updateEntities(
         if (painT <= 0) delete e.state.mode;
         continue;
       }
+      if (e.def.kind === 'enemy') {
+        // Wanderers aggro on sight/sound like a chaser once the player is
+        // close, in front of them, and visible (or point-blank).
+        const wdx = player.x - e.x;
+        const wdy = player.y - e.y;
+        const wdist = Math.hypot(wdx, wdy);
+        const wProfile = ENEMY_PROFILES[e.def.threat ?? e.def.sprite] ?? ENEMY_PROFILES.worm;
+        const wFacing = (e.state.facing as number | undefined) ?? Math.atan2(wdy, wdx);
+        const toPlayer = Math.atan2(wdy, wdx);
+        const inFront =
+          Math.abs(Math.atan2(Math.sin(toPlayer - wFacing), Math.cos(toPlayer - wFacing))) <= Math.PI / 2;
+        const baseAggro = (e.state.aggro as number | undefined) ?? 10;
+        const aggro = Math.min(
+          wProfile.hidesWhenIdle ? baseAggro / 2 : baseAggro,
+          wProfile.aggroRange ?? Infinity,
+        );
+        const spawnGrace = Math.max(0, ((e.state.spawnGrace as number | undefined) ?? 0) - dt);
+        e.state.spawnGrace = spawnGrace;
+        if (spawnGrace <= 0 && ((lineOfSight(e, player, map, wdist) && wdist < aggro && inFront) || wdist < 2.5)) {
+          aggroChase(e, hooks);
+          continue;
+        }
+      }
       const t = (e.state.wanderT = ((e.state.wanderT as number) ?? 0) + dt);
       if (t > 2) {
         e.state.wanderT = 0;
@@ -352,7 +630,8 @@ export function hurtEntity(e: Entity, fromDx: number, fromDy: number, rng = Math
   e.hurtT = 0.25;
   e.state.knockVx = (fromDx / length) * 1.5;
   e.state.knockVy = (fromDy / length) * 1.5;
-  if (e.def.ai === 'chase' && mode(e) === 'idle') {
+  if ((e.def.ai === 'chase' || e.def.ai === 'wander') && mode(e) === 'idle') {
+    e.state.aggroed = true;
     e.state.mode = 'chase';
     e.state.reaction = 0.25;
     e.state.sighted = true;
@@ -367,8 +646,9 @@ export function hurtEntity(e: Entity, fromDx: number, fromDy: number, rng = Math
 
 export function alertNear(entities: Entity[], x: number, y: number, radius: number): void {
   for (const e of entities) {
-    if (!e.alive || e.def.ai !== 'chase' || mode(e) !== 'idle') continue;
+    if (!e.alive || (e.def.ai !== 'chase' && e.def.ai !== 'wander') || mode(e) !== 'idle') continue;
     if (Math.hypot(e.x - x, e.y - y) > radius) continue;
+    e.state.aggroed = true;
     e.state.mode = 'chase';
     e.state.reaction = 0.25;
     e.state.attackCooldown = 0.25;

@@ -393,6 +393,16 @@ export class MissionRuntime {
       const e = this.byId(entityId);
       if (!e || !e.alive) return;
 
+      // ENEMIES-owned (ransomware seal): an encrypted console is unusable until
+      // the ransomware that sealed it is killed (ai.ts clears state.sealedBy).
+      if (e.state.sealedBy) {
+        this.bus.emit('message', {
+          text: `ENCRYPTED: ${e.def.inspect?.label ?? 'this system'} is sealed by ransomware — neutralize it to release the lock.`,
+          kind: 'warn',
+        });
+        return;
+      }
+
       if (e.def.kind === 'workstation' && e.def.tags?.includes('triage')) {
         if (this.guardUninspectedTriage(e)) return;
         if (e.infected) {
