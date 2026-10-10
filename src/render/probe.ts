@@ -175,6 +175,8 @@ export async function lightProbe(
   withImages = false,
 ): Promise<LightProbeResult> {
   r.debugNoFlash = true;
+  r.debugClearFx();
+  r.debugSuppressFx = true;
   r.debugHidden.clear();
   for (const e of entities) r.debugHidden.add(e.def.id);
   const images: string[] = [];
@@ -225,6 +227,7 @@ export async function lightProbe(
     };
   } finally {
     r.debugHidden.clear();
+    r.debugSuppressFx = false;
     r.debugNoFlash = false;
   }
 }
@@ -309,8 +312,11 @@ async function probeOnLine(
   r.debugNoFlash = true;
   // in-flight spawn columns / gib debris burn in the render loop on wall
   // clock — they would diff between the with/without captures and poison the
-  // contrast mask, so probes drop them first
+  // contrast mask, so probes drop them first and suppress new ones (an ambush
+  // trigger can still fire a column mid-probe when placeThreat teleports the
+  // player through its area)
   r.debugClearFx();
+  r.debugSuppressFx = true;
   r.debugHidden.clear();
   for (const e of entities) if (e.def.id !== id) r.debugHidden.add(e.def.id);
   // freeze the probed enemy's AI motion: when the sim catches up several
@@ -374,6 +380,7 @@ async function probeOnLine(
     target.hurtT = savedHurtT;
     r.debugHidden.clear();
     r.debugSprite.delete(id);
+    r.debugSuppressFx = false;
     r.debugNoFlash = false;
   }
 }

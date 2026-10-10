@@ -396,6 +396,12 @@ export class Renderer {
   }
   debugNoFlash = false;
 
+  /** LOOK probes: block NEW fx (spawn columns, gib debris, tool trails) and
+   *  hide projectile sprites while a probe is mid-capture — a hostile bolt or
+   *  a trigger-spawned column can pop between the with/without-sprite frames
+   *  and poison the contrast diff. */
+  debugSuppressFx = false;
+
   /** LOOK probes: drop in-flight fx (spawn columns, gib debris) so the
    *  with/without-sprite captures diff only the staged sprite. */
   debugClearFx(): void {
@@ -737,6 +743,7 @@ export class Renderer {
   }
 
   private spawnFx(setId: string, frames: string[], x: number, z: number, y: number, dur: number, light = 1, vel?: { vx: number; vy: number; vz: number }): Fx | null {
+    if (this.debugSuppressFx) return null;
     const set = spriteSets.get(setId);
     if (!set) return null;
     const { mesh, mat } = this.makeSpriteMesh(set, light);
@@ -1103,7 +1110,7 @@ export class Renderer {
       st.lastY = p.y;
       st.mesh.position.set(p.x, EYE_H - 0.2, p.y);
       // the player's own shot only appears once clear of the camera, so it never fills the aim area
-      st.mesh.visible = p.hostile || p.traveled > SHOT_NEAR;
+      st.mesh.visible = !this.debugSuppressFx && (p.hostile || p.traveled > SHOT_NEAR);
     }
     for (const [p, st] of [...this.projSprites]) {
       if (live.has(p)) continue;
@@ -1349,8 +1356,15 @@ export class Renderer {
       fx.mat.uniforms.map.value = fx.set.frames[fx.frames[i]];
       // gib debris arcs out under gravity and holds as floor litter (ENEMIES)
       if (!fx.landed && (fx.vx || fx.vy || fx.vz)) {
-        fx.mesh.position.x += (fx.vx ?? 0) * dt;
-        fx.mesh.position.z += (fx.vz ?? 0) * dt;
+        const nx = fx.mesh.position.x + (fx.vx ?? 0) * dt;
+        const nz = fx.mesh.position.z + (fx.vz ?? 0) * dt;
+        if (this.map?.blocked(Math.floor(nx), Math.floor(nz))) {
+          fx.vx = 0;
+          fx.vz = 0;
+        } else {
+          fx.mesh.position.x = nx;
+          fx.mesh.position.z = nz;
+        }
         fx.vy = (fx.vy ?? 0) - 6.5 * dt;
         fx.mesh.position.y = Math.max(0.03, fx.mesh.position.y + (fx.vy ?? 0) * dt);
         if (fx.mesh.position.y <= 0.031 && (fx.vy ?? 0) < 0) fx.landed = true;

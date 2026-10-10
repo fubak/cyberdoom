@@ -9,6 +9,7 @@ import { enemyInTheWay, exitEdge } from './engine/interact';
 import { doorUseHint, resolveUse, type UseTargetContext } from './engine/useTarget';
 import { Audio, type MusicTier } from './engine/audio';
 import { Feel } from './engine/feel';
+import { CueGate, spawnCueText } from './engine/spawnCue';
 import { ParticleSystem } from './engine/fx';
 import { lightProbe, lookProbe, placeThreat } from './render/probe';
 import { Renderer } from './render/renderer';
@@ -335,7 +336,7 @@ class Game {
       this.particles.spawn(e.x, e.y);
       this.renderer.spawnTeleport(e.x, e.y);
       this.audio.sfx('spawn', { x: e.x, y: e.y });
-      this.spawnCue(e);
+      this.spawnCue(e, 'ambush');
     });
     // deep link: ?mission=m01&gender=female
     const dm = params.get('mission');
@@ -354,18 +355,20 @@ class Game {
   // ---------- screens ----------
 
   /** ENEMIES: when a threat materialises off-screen, the teleport column can't
-   *  be seen — ticker a one-line bearing cue so the ambush still telegraphs. */
-  private spawnCue(e: Entity): void {
+   *  be seen — ticker a one-line bearing cue so the ambush still telegraphs.
+   *  `ambush` is a level-scripted spawn; `replica` is worm self-propagation —
+   *  differently worded and throttled so burst copies don't spam the ticker. */
+  private replicaGate = new CueGate(4);
+
+  private spawnCue(e: Entity, kind: 'ambush' | 'replica'): void {
     const p = this.player;
     if (!p) return;
-    let rel = Math.atan2(e.y - p.y, e.x - p.x) - p.angle;
-    while (rel > Math.PI) rel -= Math.PI * 2;
-    while (rel < -Math.PI) rel += Math.PI * 2;
-    // inside the ~58° fov (with margin) the column itself is the cue
-    if (Math.abs(rel) < 0.85) return;
-    const dir = Math.abs(rel) > 2.2 ? 'BEHIND YOU' : rel > 0 ? 'TO YOUR RIGHT' : 'TO YOUR LEFT';
+    const rel = Math.atan2(e.y - p.y, e.x - p.x) - p.angle;
     const label = (e.def.threat ?? e.def.sprite ?? 'threat').toUpperCase();
-    this.hud.pushMessage(`AMBUSH — ${label} MATERIALISED ${dir}`, 'warn');
+    const text = spawnCueText(kind, label, rel);
+    if (!text) return;
+    if (kind === 'replica' && !this.replicaGate.allow(this.runtime?.elapsed ?? 0)) return;
+    this.hud.pushMessage(text, 'warn');
   }
 
   private setScreen(s: Screen, node: HTMLElement | null): void {
@@ -666,6 +669,7 @@ class Game {
     this.arsenal.reset(mission, this.gender);
     this.useCd = 0;
     this.simT = 0;
+    this.replicaGate.reset();
     this.lastHurtMessageT = -Infinity;
     this.lastHurtT = -Infinity;
     this.endTimer = null;
@@ -929,7 +933,7 @@ class Game {
         this.particles.spawn(e.x, e.y);
         this.renderer.spawnTeleport(e.x, e.y);
         this.audio.sfx('spawn', { x: e.x, y: e.y });
-        this.spawnCue(e);
+        this.spawnCue(e, 'replica');
       },
       onSeal: (_e, seal) => {
         if (seal.kind === 'door') this.sealedDoors.add(seal.id);
