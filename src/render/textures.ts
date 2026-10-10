@@ -141,6 +141,21 @@ function hazard(g: CanvasRenderingContext2D, x: number, y: number, w: number, h:
   g.fillRect(x, y + h - 2 * u, w, 2 * u);
 }
 
+/** Scuffed kick plate along the bottom of a wall, with a coloured trim line. */
+function kickPlate(g: CanvasRenderingContext2D, trim: string): void {
+  const u = 1 / RES;
+  g.fillStyle = '#1a1c22';
+  g.fillRect(0, 66, 64, 14);
+  g.fillStyle = '#343a46';
+  g.fillRect(0, 66, 64, u);
+  g.fillStyle = trim;
+  g.fillRect(0, 68, 64, 2);
+  g.fillStyle = 'rgba(0,0,0,0.45)';
+  g.fillRect(0, 70, 64, u);
+  g.fillStyle = '#0c0d10';
+  g.fillRect(0, 78, 64, 2);
+}
+
 /** Pass jobs=true to register gen jobs only (generation-worker startup). */
 export function buildTextures(jobs = false): void {
   if (jobs ? textureJobsDone : textureRegistry.ids().length > 0) return;
@@ -267,6 +282,19 @@ export function buildTextures(jobs = false): void {
         }
       }
     }
+    // baseboard kick plate: scuffed dark strip along the floor line
+    g.fillStyle = '#1c1814';
+    g.fillRect(0, 73, 64, 7);
+    g.fillStyle = '#3c3228';
+    g.fillRect(0, 73, 64, 1);
+    for (let x = 0; x < 64; x += 3) {
+      if (p.rnd() < 0.4) {
+        g.fillStyle = 'rgba(0,0,0,0.5)';
+        g.fillRect(x + Math.floor(p.rnd() * 2), 76 + Math.floor(p.rnd() * 3), 1, 1);
+      }
+    }
+    g.fillStyle = '#0a0908';
+    g.fillRect(0, 79, 64, 1);
     grime(p, 'rgba(0,0,0,0.5)', 120);
   });
 
@@ -282,6 +310,106 @@ export function buildTextures(jobs = false): void {
     g.fillRect(2, 0, 1 / p.s, 80);
     g.fillStyle = 'rgba(0,0,0,0.55)';
     g.fillRect(61, 0, 2 / p.s, 80);
+  });
+
+  // Second office family: long horizontal deck plates, cable raceway, kick.
+  wall('wall-tech', (p) => {
+    const { g, glow } = p;
+    const u = 1 / p.s;
+    noiseFill(p, [44, 48, 56], 10);
+    steelPanel(p, 1, 2, 62, 17, [88, 94, 106]);
+    steelPanel(p, 1, 21, 62, 15, [80, 86, 98]);
+    steelPanel(p, 1, 38, 62, 14, [72, 78, 90]);
+    // recessed raceway with bundled cables and junction boxes
+    g.fillStyle = '#121419';
+    g.fillRect(0, 54, 64, 9);
+    g.fillStyle = '#3a4048';
+    g.fillRect(0, 54, 64, u);
+    const cols = ['#c84830', '#30a0d8', '#d8b018', '#40a050'];
+    for (let k = 0; k < 4; k++) {
+      g.fillStyle = cols[k];
+      g.fillRect(2, 56 + k, 60, u);
+    }
+    for (const x of [13, 45]) {
+      bevel(g, x, 55, 8, 7, '#3a4048', '#6a7280', '#101218');
+      g.fillStyle = '#ffb010';
+      g.fillRect(x + 2, 57, 3, 2);
+      glow.fillStyle = '#fff';
+      glow.fillRect(x + 2, 57, 3, 2);
+    }
+    kickPlate(g, '#4a5470');
+    grime(p, 'rgba(0,0,0,0.4)', 80);
+  });
+
+  // Industrial family: vertical ribbed plating, conduit run, hazard kick.
+  wall('wall-ribs', (p) => {
+    const { g } = p;
+    const u = 1 / p.s;
+    noiseFill(p, [38, 34, 28], 10);
+    for (let x = 0; x < 64; x += 8) {
+      noiseFill(p, [74, 66, 54], 12, 1, x + 1, 2, 6, 52);
+      g.fillStyle = 'rgba(255,255,255,0.22)';
+      g.fillRect(x + 1, 2, 1, 52);
+      g.fillStyle = 'rgba(0,0,0,0.5)';
+      g.fillRect(x + 6, 2, 1, 52);
+      for (const y of [6, 28, 50]) rivet(g, x + 3, y);
+    }
+    // horizontal steel pipe with brackets
+    g.fillStyle = '#3a3228';
+    g.fillRect(0, 12, 64, 5);
+    g.fillStyle = '#5e5040';
+    g.fillRect(0, 12, 64, u);
+    for (let x = 6; x < 64; x += 16) {
+      g.fillStyle = '#221c14';
+      g.fillRect(x, 11, 3, 7);
+      g.fillStyle = '#6a5a44';
+      g.fillRect(x, 11, 3, u);
+    }
+    // green conduit below the ribs
+    g.fillStyle = '#1e3a26';
+    g.fillRect(0, 58, 64, 4);
+    g.fillStyle = '#46e07a';
+    g.fillRect(0, 58, 64, u);
+    g.fillRect(0, 61, 64, u);
+    hazard(g, 0, 66, 64, 8);
+    g.fillStyle = '#0c0d10';
+    g.fillRect(0, 78, 64, 2);
+    grime(p, 'rgba(30,16,6,0.5)', 100, 0, 60, 64, 20);
+  });
+
+  // Olive utility-brick variant with a painted wayfinding stripe.
+  wall('wall-brick2', (p) => {
+    const { g } = p;
+    noiseFill(p, [30, 32, 26], 8);
+    for (let row = 0; row < 8; row++) {
+      const y = row * 10;
+      const off = row % 2 === 0 ? 0 : 16;
+      for (let x = -off; x < 64; x += 32) {
+        const tint = (p.rnd() - 0.5) * 14;
+        const base: [number, number, number] = [78 + tint, 82 + tint, 62 + tint];
+        noiseFill(p, base, 16, 1, Math.max(0, x + 1), y + 1, Math.min(30, 64 - Math.max(0, x + 1)), 8);
+        g.fillStyle = 'rgba(255,255,255,0.16)';
+        g.fillRect(Math.max(0, x + 1), y + 1, 30, 1);
+        g.fillStyle = 'rgba(0,0,0,0.4)';
+        g.fillRect(Math.max(0, x + 1), y + 8, 30, 1);
+      }
+    }
+    // painted stripe: age it with speckle so it reads as worn paint
+    g.fillStyle = '#b0901c';
+    g.fillRect(0, 40, 64, 4);
+    g.fillStyle = '#6a5410';
+    g.fillRect(0, 43, 64, 1);
+    for (let i = 0; i < 26; i++) {
+      g.fillStyle = 'rgba(40,42,32,0.7)';
+      g.fillRect(Math.floor(p.rnd() * 64), 40 + Math.floor(p.rnd() * 4), 1, 1);
+    }
+    g.fillStyle = '#1c1814';
+    g.fillRect(0, 73, 64, 7);
+    g.fillStyle = '#3c3228';
+    g.fillRect(0, 73, 64, 1);
+    g.fillStyle = '#0a0908';
+    g.fillRect(0, 79, 64, 1);
+    grime(p, 'rgba(0,0,0,0.5)', 120);
   });
 
   // Generic security door + role-coded variants.
@@ -320,6 +448,66 @@ export function buildTextures(jobs = false): void {
     g.fillRect(31, 0, 2, 64);
     g.fillRect(0, 31, 64, 2);
     grime(p, 'rgba(10,6,2,0.45)', 140);
+  });
+
+  // Cold machine-room deck: dark steel plates, perforation rows, cable cuts.
+  flat('floor-grid', (p) => {
+    const { g } = p;
+    noiseFill(p, [26, 30, 38], 8);
+    for (const [x, y] of [[0, 0], [32, 0], [0, 32], [32, 32]]) {
+      noiseFill(p, [58, 66, 80], 10, 1, x + 1, y + 1, 30, 30);
+      g.fillStyle = 'rgba(255,255,255,0.14)';
+      g.fillRect(x + 1, y + 1, 30, 1);
+      g.fillStyle = 'rgba(0,0,0,0.5)';
+      g.fillRect(x + 1, y + 30, 30, 1);
+      g.fillRect(x + 30, y + 1, 1, 30);
+      for (let yy = y + 4; yy < y + 28; yy += 5)
+        for (let xx = x + 4; xx < x + 28; xx += 5) {
+          g.fillStyle = '#14161d';
+          g.fillRect(xx, yy, 2, 2);
+        }
+      // cable cutout corner on alternating plates
+      if ((x + y) % 64 === 0) {
+        g.fillStyle = '#0c0e13';
+        g.fillRect(x + 22, y + 22, 8, 8);
+        g.fillStyle = '#4a5464';
+        g.fillRect(x + 22, y + 22, 8, 1);
+        g.fillStyle = '#30a0d8';
+        g.fillRect(x + 24, y + 25, 4, 1);
+        g.fillStyle = '#c84830';
+        g.fillRect(x + 24, y + 27, 4, 1);
+      }
+    }
+    g.fillStyle = '#101218';
+    g.fillRect(0, 0, 64, 1);
+    g.fillRect(0, 0, 1, 64);
+    g.fillRect(31, 0, 2, 64);
+    g.fillRect(0, 31, 64, 2);
+    grime(p, 'rgba(6,8,14,0.5)', 130);
+  });
+
+  // Worn industrial concrete: warm brown, expansion joints, oil stains.
+  flat('floor-rust', (p) => {
+    const { g } = p;
+    noiseFill(p, [72, 54, 36], 14);
+    for (let i = 0; i < 60; i++) {
+      const x = 2 + p.rnd() * 60, y = 2 + p.rnd() * 60;
+      g.fillStyle = p.rnd() < 0.5 ? 'rgba(60,40,20,0.5)' : 'rgba(120,96,60,0.35)';
+      g.fillRect(x, y, 1 + Math.floor(p.rnd() * 3), 1);
+    }
+    // expansion joints at tile edges
+    g.fillStyle = '#241a10';
+    g.fillRect(0, 0, 64, 1);
+    g.fillRect(0, 0, 1, 64);
+    g.fillRect(31, 0, 2, 64);
+    g.fillRect(0, 31, 64, 2);
+    // oil stain blot
+    g.fillStyle = 'rgba(16,12,8,0.5)';
+    for (let i = 0; i < 18; i++) {
+      const a = p.rnd() * Math.PI * 2, r = p.rnd() * 7;
+      g.fillRect(46 + Math.cos(a) * r, 20 + Math.sin(a) * r * 0.6, 2, 1);
+    }
+    grime(p, 'rgba(20,10,4,0.5)', 140);
   });
 
   // Acoustic ceiling tile + fluorescent light panel variant.
@@ -394,6 +582,58 @@ export function buildTextures(jobs = false): void {
       g.fillRect(x, y, 1 / p.s, 1 / p.s);
     }
   });
+
+  // Wall decals: transparent-background overlays drawn on a quad just off the
+  // wall face. Painters only touch the decal region; the rest stays alpha 0
+  // and the world shader discards it.
+  const decal = (id: string, painter: Painter) => makeTexture(id, TEX.wallW / RES, TEX.wallH / RES, painter, false);
+
+  // Vent grille with frame screws, mid-wall.
+  decal('decal-vent', (p) => {
+    const { g } = p;
+    bevel(g, 14, 22, 36, 20, '#2e323c', '#6a7280', '#0e1014');
+    for (let y = 25; y < 40; y += 2) {
+      g.fillStyle = '#0a0c10';
+      g.fillRect(17, y, 30, 1);
+      g.fillStyle = '#8a94a6';
+      g.fillRect(17, y + 1, 30, 1);
+    }
+    for (const [x, y] of [[15, 24], [47, 24], [15, 40], [47, 40]]) rivet(g, x, y);
+  });
+
+  // Surface raceway: bundled coloured cables with clips.
+  decal('decal-cable', (p) => {
+    const { g } = p;
+    g.fillStyle = '#22262e';
+    g.fillRect(0, 34, 64, 6);
+    g.fillStyle = '#4a5260';
+    g.fillRect(0, 34, 64, 1);
+    const cols = ['#c84830', '#30a0d8', '#d8b018', '#40a050'];
+    for (let k = 0; k < 4; k++) {
+      g.fillStyle = cols[k];
+      g.fillRect(0, 35 + k, 64, 1);
+    }
+    for (let x = 7; x < 64; x += 16) {
+      g.fillStyle = '#10131a';
+      g.fillRect(x, 33, 2, 8);
+    }
+    // drop to a wall jack on the right
+    bevel(g, 52, 40, 8, 8, '#2c3038', '#5a6272', '#101218');
+    g.fillStyle = '#10131a';
+    g.fillRect(55, 43, 2, 2);
+  });
+
+  // Warning placard: hazard chevrons + CAUTION word plate.
+  decal('decal-haz', (p) => {
+    const { g } = p;
+    hazard(g, 10, 38, 44, 14);
+    g.fillStyle = '#181410';
+    g.fillRect(10, 41, 44, 8);
+    const w = measureText('CAUTION', 'tiny');
+    drawText(g, 'CAUTION', 32 - Math.floor(w / 2), 42, '#ffd040', 'tiny', null);
+    bevel(g, 10, 38, 44, 14, 'rgba(0,0,0,0)', '#fff0a0', '#201404');
+    for (const [x, y] of [[11, 39], [51, 39], [11, 51], [51, 51]]) rivet(g, x, y);
+  });
   jobsOnly = false;
 }
 
@@ -458,4 +698,115 @@ export function doorTextureFor(tex: string, accessRole: string | undefined): THR
     return ensureTexture(textureRegistry.get(accessRole ? `door:${accessRole}` : 'door')!);
   }
   return textureOr(tex, 'door');
+}
+
+/** Zone wayfinding placard decal: plate + word, painted lazily per word. */
+function signDecal(word: string): void {
+  makeTexture(`decal-sign:${word}`, TEX.wallW / RES, TEX.wallH / RES, (p) => {
+    const { g } = p;
+    bevel(g, 8, 15, 48, 17, '#16202c', '#4a6a90', '#080c12');
+    g.fillStyle = '#24507e';
+    g.fillRect(10, 17, 44, 13);
+    g.fillStyle = '#0e2236';
+    g.fillRect(10, 28, 44, 2);
+    const w = measureText(word, 'small');
+    if (w <= 42) drawText(g, word, 32 - Math.floor(w / 2), 19, '#d8ecff', 'small', null);
+    else drawText(g, word, 32 - Math.floor(measureText(word, 'tiny') / 2), 21, '#d8ecff', 'tiny', null);
+    for (const [x, y] of [[10, 17], [53, 17], [10, 30], [53, 30]]) rivet(g, x, y);
+  }, false);
+}
+
+/** Security-awareness poster decal: banner word + badge icon + slogan. */
+function posterDecal(word: string): void {
+  makeTexture(`decal-poster:${word}`, TEX.wallW / RES, TEX.wallH / RES, (p) => {
+    const { g } = p;
+    bevel(g, 18, 10, 28, 46, '#e4dfd2', '#ffffff', '#847c6c');
+    g.fillStyle = '#1c2c48';
+    g.fillRect(20, 12, 24, 11);
+    const w = measureText(word, 'small');
+    if (w <= 22) drawText(g, word, 32 - Math.floor(w / 2), 14, '#ffd040', 'small', null);
+    else drawText(g, word, 32 - Math.floor(measureText(word, 'tiny') / 2), 15, '#ffd040', 'tiny', null);
+    g.fillStyle = '#c82e20';
+    g.fillRect(29, 27, 6, 8);
+    g.fillStyle = '#ff6a50';
+    g.fillRect(29, 27, 6, 1);
+    g.fillStyle = '#ffffff';
+    g.fillRect(30, 30, 4, 1);
+    g.fillStyle = '#3a4050';
+    g.fillRect(20, 42, 24, 10);
+    drawText(g, 'REPORT', 32 - Math.floor(measureText('REPORT', 'tiny') / 2), 44, '#9ab0c8', 'tiny', null);
+    drawText(g, 'IT', 32 - Math.floor(measureText('IT', 'tiny') / 2), 48, '#9ab0c8', 'tiny', null);
+  }, false);
+}
+
+/**
+ * Lazily materialise a decal overlay texture (themed word decals are painted
+ * on first use, like door role variants). Returns null for unknown ids so the
+ * caller can just skip the decal quad.
+ */
+export function decalTexture(id: string): THREE.Texture | null {
+  let t = textureRegistry.get(id);
+  if (!t) {
+    if (id.startsWith('decal-sign:')) signDecal(id.slice(11));
+    else if (id.startsWith('decal-poster:')) posterDecal(id.slice(13));
+    t = textureRegistry.get(id);
+  }
+  return t ? ensureTexture(t) : null;
+}
+
+/** Wall/flat/decal identity kit for one mission. */
+export interface WallTheme {
+  /** Alt wall families mixed into the 'wall-panel' variant pool. */
+  alts: string[];
+  /** Decal overlay ids pooled per wall face (themed sign/poster included). */
+  decals: string[];
+  /** Hue multiply on world geometry; subtle, keeps the palette read. */
+  tint: [number, number, number];
+  /** Flat id used wherever a floor cell uses the plain 'floor' texture. */
+  floor: string;
+}
+
+const THEMES: Record<string, WallTheme> = {
+  // warm office: beige wainscot walls, PHISH posters, OPS placards
+  office: { alts: ['wall-tech'], decals: ['decal-vent', 'decal-cable', 'decal-poster:PHISH', 'decal-sign:OPS'], tint: [1.03, 0.98, 0.9], floor: 'floor' },
+  // cool bullpen: bluer light, SEC placards, 2FA posters
+  bullpen: { alts: ['wall-tech'], decals: ['decal-cable', 'decal-vent', 'decal-sign:SEC', 'decal-poster:2FA'], tint: [0.93, 0.99, 1.07], floor: 'floor' },
+  // cold machine room: ribbed walls, IDC placards, raised deck floor
+  datacenter: { alts: ['wall-ribs'], decals: ['decal-cable', 'decal-vent', 'decal-sign:IDC', 'decal-poster:SIEM'], tint: [0.9, 0.97, 1.08], floor: 'floor-grid' },
+  // green-tinted SOC/NOC: SOC placards, SIEM posters, deck floor
+  noc: { alts: ['wall-tech'], decals: ['decal-cable', 'decal-sign:SOC', 'decal-poster:SIEM', 'decal-vent'], tint: [0.9, 1.03, 0.94], floor: 'floor-grid' },
+  // rusty plant: ribbed + utility brick walls, CAUTION placards, worn concrete
+  industrial: { alts: ['wall-ribs', 'wall-brick2'], decals: ['decal-haz', 'decal-vent', 'decal-sign:SUB', 'decal-poster:LOCK'], tint: [1.07, 0.95, 0.84], floor: 'floor-rust' },
+  // red-lit secure enclave: AUTH placards, hazard warnings
+  vault: { alts: ['wall-ribs'], decals: ['decal-haz', 'decal-sign:AUTH', 'decal-poster:LOCK', 'decal-vent'], tint: [1.07, 0.92, 0.92], floor: 'floor-grid' },
+};
+
+const THEME_NAMES = Object.keys(THEMES);
+
+const MISSION_THEMES: Record<string, string> = {
+  m01: 'office', m02: 'office', m03: 'bullpen', m04: 'bullpen',
+  m05: 'datacenter', m06: 'vault', m07: 'industrial', m08: 'datacenter',
+  m09: 'vault', m10: 'industrial', m11: 'noc', m12: 'noc',
+};
+
+/** Small deterministic string hash (FNV-1a) for seeds. */
+export function hashStr(s: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
+  return h >>> 0;
+}
+
+/**
+ * Resolve the look theme for a mission: an explicit MapDef.look.theme wins,
+ * then the mission-id table, then a deterministic pick so unknown ids still
+ * get a distinct identity. Mission files need no edits either way.
+ */
+export function lookTheme(missionId: string | undefined, themeName?: string): WallTheme {
+  const name =
+    themeName && THEMES[themeName]
+      ? themeName
+      : missionId && MISSION_THEMES[missionId]
+        ? MISSION_THEMES[missionId]
+        : THEME_NAMES[hashStr(missionId ?? 'office') % THEME_NAMES.length];
+  return THEMES[name];
 }

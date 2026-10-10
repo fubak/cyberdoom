@@ -59,6 +59,12 @@ export interface MapDef {
   /** Per-tile light level override (0..1). Tiles not listed use `defaultLight`. */
   lights?: Record<string, number>;
   defaultLight?: number;
+  /**
+   * Optional look override. `theme` names a wall/texture identity
+   * (see render/textures.ts THEMES); when absent the renderer picks one from
+   * the mission id, so mission files need no edits.
+   */
+  look?: { theme?: string };
 }
 
 export type EntityKind =

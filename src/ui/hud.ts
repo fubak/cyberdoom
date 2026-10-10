@@ -30,12 +30,12 @@ const MSG_RAMP: Record<string, string[]> = {
 const OBJ_STRIP_MAX = 20;
 
 type Panel = [x: number, w: number];
-const P_INT: Panel = [0, 64];
-const P_AMMO: Panel = [64, 46];
-const P_TOOLS: Panel = [110, 52];
-const P_FACE: Panel = [162, 34];
-const P_CRED: Panel = [196, 36];
-const P_RES: Panel = [232, 48];
+const P_INT: Panel = [0, 58];
+const P_AMMO: Panel = [58, 42];
+const P_TOOLS: Panel = [100, 50];
+const P_FACE: Panel = [150, 32];
+const P_CRED: Panel = [182, 34];
+const P_RES: Panel = [216, 64];
 const P_OBJ: Panel = [280, 40];
 let tickerPattern: CanvasPattern | null = null;
 
@@ -404,7 +404,7 @@ export class Hud {
       const slot = i + 1;
       const t = tools.find((tt) => tt.slot === slot);
       const owned = !!t && (o.owned ? o.owned.includes(t.id) : true);
-      const x = P_TOOLS[0] + 3 + (i % 4) * 12;
+      const x = P_TOOLS[0] + 3 + (i % 4) * 11;
       const y = by + 6 + Math.floor(i / 4) * 10;
       const active = !!t && t.slot === o.tool.slot;
       const fresh = !!o.got && o.got.slot === slot && o.got.blink;
@@ -445,14 +445,18 @@ export class Hud {
     g.fillRect(cx + 9, cy + 9, 4, 1);
     label(g, o.credentials.toUpperCase().slice(0, 7), P_CRED, by + 20, rc.light);
 
-    // RESOURCES: every ammo type as current/max, like Doom's BULL/SHEL/RCKT/CELL
+    // RESOURCES: every ammo type as current/max in a 2x2 grid, like Doom's
+    // BULL/SHEL/RCKT/CELL table — label over a punchier small-font value so
+    // the longest possible value ('30/30') fits inside the well
     (o.resources ?? []).slice(0, 4).forEach((r, i) => {
-      const y = by + 5 + i * 6;
+      const cx = P_RES[0] + 2 + (i % 2) * 30;
+      const cy = by + 3 + Math.floor(i / 2) * 12;
       const col = !r.owned ? '#3a3e48' : r.cur === 0 ? '#ff4a2a' : r.active ? '#fff0a0' : '#ffa818';
       const lab = r.active ? '#ffd040' : r.owned ? '#8a90a0' : '#3a3e48';
-      drawText(g, r.label, P_RES[0] + 3, y, lab, 'tiny', '#000');
+      drawText(g, r.label, cx, cy, lab, 'tiny', '#000');
       const v = `${r.cur}/${r.max}`;
-      drawText(g, v, P_RES[0] + P_RES[1] - 3 - measureText(v, 'tiny'), y, col, 'tiny', '#000');
+      const font = measureText(v, 'small') <= 29 ? 'small' : 'tiny';
+      drawText(g, v, cx + 29 - measureText(v, font), cy + 5, col, font, '#000');
     });
 
     // OBJECTIVES n/m
