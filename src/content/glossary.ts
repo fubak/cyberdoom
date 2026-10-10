@@ -121,6 +121,40 @@ export const GLOSSARY: Record<string, string> = {
     'Linking events from several data sources (badge, endpoint, network, DLP) into one timeline, so a conclusion rests on more than one signal. [4.4, 4.9]',
   'chain of custody':
     'Documented record of who handled evidence, when, and how. It keeps evidence admissible. [4.8]',
+
+  // --- asset management, compliance & privacy (4.2, 5.1, 5.4, 5.5) ---
+  'asset inventory':
+    'The authoritative register of hardware, software and data assets: what you own, where it is and who owns it. Auditing starts by proving the register matches the floor. [4.2]',
+  'shadow IT':
+    'Assets in use that nobody registered or approved, like a rogue access point or an unmanaged test box. Unmanaged assets cannot be secured or audited. [4.2]',
+  'sanitization':
+    'Rendering data unrecoverable before media is reused or leaves control: cryptographic or secure erase for flash/SSD, degaussing or destruction for magnetic media. Formatting or deleting files is NOT sanitization. [4.2]',
+  'degaussing':
+    'Erasing magnetic media (HDD, tape) with a strong magnetic field. It does nothing to flash media like SSDs and USB sticks — match the method to the media. [4.2]',
+  'certificate of destruction':
+    'Formal record that an asset was sanitized or destroyed: serial, method, date, witness. Auditors treat a missing certificate as a missing control. [4.2]',
+  'data retention':
+    'Keeping data for the period laws and policy require, then disposing of it. Retain too little and you break the law; too long and you grow the breach surface. [5.4]',
+  'legal hold':
+    'A preservation order that suspends normal retention and deletion once litigation is expected. Deleting held data is spoliation, even when a data subject requests erasure. [5.4]',
+  'right to be forgotten':
+    'A data subject\u2019s right to request erasure of their personal data, bounded by legal retention obligations and legal holds. [5.4]',
+  'attestation':
+    'A formal, signed statement that controls or obligations were met, backed by evidence — not a verbal assurance. [5.4, 5.5]',
+  'internal audit':
+    'Self-assessment by the organization\u2019s own audit function: checks control design, gathers evidence and prepares for external exams. [5.5]',
+  'external audit':
+    'Independent assessment by outside auditors who attest only to what they verify; their signature carries regulatory weight. [5.5]',
+  'penetration test':
+    'An authorized, scoped attempt to breach your environment like an attacker — a known, partially known, or unknown environment depending on how much inside information the testers receive. [5.5]',
+  'data owner':
+    'The senior business role accountable for a data set: its classification, access decisions and acceptable use. [5.1]',
+  'data custodian':
+    'The hands-on role that implements and operates the controls the owner sets: permissions, backups, media handling. [5.1]',
+  'data controller':
+    'The party that determines why and how personal data is processed — the role privacy law holds accountable. [5.4]',
+  'data processor':
+    'A party that processes personal data on behalf of, and under instruction from, a controller — such as a payroll provider or cloud host. [5.4]',
 };
 
 /** Case-insensitive glossary lookup. */

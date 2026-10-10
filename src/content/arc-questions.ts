@@ -93,38 +93,6 @@ export const ARC_QUESTIONS: Record<string, Question[]> = {
       ['Removable device', 'No physical media was involved.'],
     ]),
   ],
-  m11: [
-    q('q1', ['4.2'], 'Decommissioned SSDs held customer PII. What must happen before they leave the building?', 3, [
-      ['A quick format', 'A quick format leaves the data recoverable.'],
-      ['Delete the files and empty the recycle bin', 'Deletion removes pointers, not data. Forensic tools recover it easily.'],
-      ['Donate them as-is to a school', 'Shipping recoverable PII off-site is a breach waiting to happen.'],
-      ['Sanitize (crypto-erase / secure erase) or physically destroy them, and keep a certificate of destruction', 'Sanitization or destruction makes the data unrecoverable, and the certificate proves it for auditors.'],
-    ]),
-    q('q2', ['5.4'], 'An EU customer asks you to erase all of their personal data. Which privacy concept applies, and what limits it?', 0, [
-      ['Right to be forgotten, limited by legal retention obligations', 'Data subjects can request erasure, but data you are legally required to keep, such as tax records, may be retained.'],
-      ['Data sovereignty, limited by geolocation', 'Sovereignty is about which country\u2019s laws govern data where it is stored, not erasure requests.'],
-      ['Attestation, limited by audit scope', 'Attestation is formally affirming compliance, which has nothing to do with deleting a person\u2019s data.'],
-      ['Due care, limited by budget', 'Due care is acting responsibly, but the specific right in play is erasure.'],
-    ]),
-    q('q3', ['5.5'], 'A penetration-test team is handed network diagrams, source code and test credentials before they start. What kind of test environment is this?', 1, [
-      ['Unknown environment', 'Unknown-environment (black-box) testers start with no inside information.'],
-      ['Known environment', 'Full disclosure up front (white-box) lets testers go deep quickly.'],
-      ['Partially known environment', 'Partially known (gray-box) testers get only limited information, not full diagrams and code.'],
-      ['Passive reconnaissance', 'Passive recon is gathering public information without touching the target. It is a technique, not an environment type.'],
-    ]),
-    q('q4', ['5.4'], 'Your company processes patient data strictly on a hospital\u2019s instructions. Under privacy law, your company is the:', 2, [
-      ['Data controller', 'The hospital is the controller: it decides why and how the data is processed.'],
-      ['Data subject', 'The patients are the data subjects.'],
-      ['Data processor', 'A processor handles personal data on behalf of, and as instructed by, the controller.'],
-      ['Data owner', 'The owner is a senior internal role accountable for a data set. It is not the privacy-law term for a service provider.'],
-    ]),
-    q('q5', ['5.1'], 'Who is ACCOUNTABLE for deciding how the sales data set is classified and who may access it?', 0, [
-      ['The data owner', 'The owner, usually a senior business leader, is accountable for classification and access decisions.'],
-      ['The data custodian', 'Custodians implement and operate the controls day to day, such as backups and permissions, as the owner directs.'],
-      ['The data processor', 'Processors handle data for a controller. They do not set its classification.'],
-      ['The help desk', 'The help desk carries out access requests. It does not decide them.'],
-    ]),
-  ],
   m12: [
     q('q1', ['4.7'], 'A SOAR playbook disables any account that shows impossible travel. A false positive could lock the CEO out mid-deal. What design is BEST?', 3, [
       ['Turn the automation off and handle everything manually', 'This throws away the reaction-time benefit, and attackers act in minutes.'],
