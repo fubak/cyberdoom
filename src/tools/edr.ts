@@ -18,7 +18,7 @@ export const edrTool: ToolDef = {
   id: 'edr',
   name: 'EDR CONSOLE',
   slot: 6,
-  ammo: { resource: 'edr-cell', start: 1, max: 3 },
+  ammo: { resource: 'edr-cell', start: 2, max: 4 },
   cooldown: 1.2,
   windup: WINDUP,
   blurb: 'CONTAINMENT PULSE',
@@ -36,9 +36,10 @@ export const edrTool: ToolDef = {
     const ph = usePhase(anim?.sinceUse ?? 9, WINDUP);
     const t = anim?.time ?? 0;
     const shake = ph.phase === 'wind' ? Math.round((hash(Math.floor(t * 60)) - 0.5) * 3 * ph.u) : 0;
+    // recoil rides UP toward the camera, Doom-style — never down under the bar
     const kick = ph.phase === 'impact' ? 1 : ph.phase === 'recover' ? 1 - ph.u : 0;
     const x0 = Math.round(w / 2 - 28 + shake);
-    const y0 = Math.round(_h - 48 + kick * 10);
+    const y0 = Math.round(_h - 50 - kick * 9);
     // tablet
     bevel(g, x0, y0, 56, 40, '#2a2e3a', 2);
     rect(g, x0 + 3, y0 + 3, 50, 28, '#071018');
@@ -53,10 +54,10 @@ export const edrTool: ToolDef = {
     rect(g, x0 + 5, y0 + 25, 46, 4, '#0f2230');
     rect(g, x0 + 5, y0 + 25, Math.round(46 * charge), 4, charge >= 1 ? '#ffffff' : '#5df2ff');
     // cells
-    for (let i = 0; i < 3; i++) rect(g, x0 + 6 + i * 8, y0 + 34, 6, 3, (anim?.ammo ?? 0) > i ? '#5df2ff' : '#203040');
+    for (let i = 0; i < 4; i++) rect(g, x0 + 5 + i * 7, y0 + 34, 6, 3, (anim?.ammo ?? 0) > i ? '#5df2ff' : '#203040');
     drawText(g, 'EDR', x0 + 34, y0 + 33, '#7a8aa0');
-    sleeve(g, x0 - 3, y0 + 54, 12, -1, look);
-    sleeve(g, x0 + 59, y0 + 54, 12, 1, look);
+    sleeve(g, x0 - 3, y0 + 54, 12, -1, look, _h);
+    sleeve(g, x0 + 59, y0 + 54, 12, 1, look, _h);
     fist(g, x0 - 8, y0 + 14, 11, look, -1);
     fist(g, x0 + 53, y0 + 14, 11, look, 1);
   },

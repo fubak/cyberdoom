@@ -195,3 +195,21 @@ export function fireFlash(g: Ctx, w: number, h: number, sinceUse: number, rgb: s
   edgeFlash(g, w, h, rgb, strength * k * k);
   return true;
 }
+
+/**
+ * The muzzle-flash lighting the HELD TOOL itself: a small additive radial
+ * bloom centred on the tool's business end, in the tool's TOOL_FLASH colour.
+ * Additive over the painted art, so the sprite brightens exactly like a
+ * Doom weapon catching its own flash. `a` decays over the impact window.
+ */
+export function toolLamp(g: Ctx, x: number, y: number, r: number, rgb: string, a: number): void {
+  glow(g, x, y, r, rgb, Math.min(0.6, a));
+}
+
+/** Tool lamp timed to a use animation: hot at the impact instant, gone by recover. */
+export function fireLamp(g: Ctx, x: number, y: number, r: number, sinceUse: number, rgb: string, strength = 0.5): boolean {
+  if (sinceUse < 0 || sinceUse >= IMPACT) return false;
+  const k = 1 - sinceUse / IMPACT;
+  toolLamp(g, x, y, r, rgb, strength * k * k);
+  return true;
+}

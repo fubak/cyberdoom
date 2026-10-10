@@ -6,6 +6,7 @@ import {
   BAR_RIGHT,
   BAR_TOP,
   barTextBox,
+  resRowPlate,
   statusBarText,
   type BarLayoutInput,
 } from '../src/ui/barLayout';
@@ -67,6 +68,22 @@ describe('statusBarText layout', () => {
       }
     });
   }
+
+  it('all four RES rows — plate and text — fit inside the bar (DISK must not clip)', () => {
+    const texts = statusBarText(worstCase(), false).map((t) => ({ ...barTextBox(t), t: t.text }));
+    for (let i = 0; i < 4; i++) {
+      const p = resRowPlate(i);
+      expect(p.y).toBeGreaterThanOrEqual(BAR_TOP);
+      expect(p.y + p.h).toBeLessThanOrEqual(BAR_BOTTOM);
+      expect(p.x).toBeGreaterThanOrEqual(BAR_LEFT);
+      expect(p.x + p.w).toBeLessThanOrEqual(BAR_RIGHT);
+      // and the row's text run sits inside its plate, not under the bottom bevel
+      const label = ['SCAN', 'PCAP', 'CELL', 'DISK'][i];
+      const row = texts.find((t) => t.t === label && t.x === 220)!; // RES label column
+      expect(row.y).toBeGreaterThanOrEqual(p.y);
+      expect(row.y + row.h).toBeLessThanOrEqual(p.y + p.h);
+    }
+  });
 
   it('resources render as one labelled row each: label left, cur/max right-aligned', () => {
     const texts = statusBarText(worstCase(), false);

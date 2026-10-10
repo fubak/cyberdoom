@@ -692,13 +692,18 @@ export const m11: Mission = {
       [
         ['edr-cell-cage', 36.5, 10.5],
         ['edr-cell-cage-2', 37.5, 9.5],
-        ['edr-cell-vault', 3.5, 5.5],
+        ['edr-cell-vault', 3.5, 5.5, 2],
       ] as const
-    ).map(([id, x, y]) => ({
+    ).map(([id, x, y, n = 1]) => ({
       id, kind: 'item' as const, x, y, sprite: 'edr-cell',
       tags: ['arsenal-pickup'],
-      grants: { resource: 'edr-cell', amount: 1 },
-      inspect: { label: 'EDR cell', detail: 'Licence and compute for one EDR containment pulse.', category: 'item' as const, objectives: ['4.5'] },
+      grants: { resource: 'edr-cell', amount: n },
+      inspect: {
+        label: n === 1 ? 'EDR cell' : 'EDR cells',
+        detail: `Licence and compute for ${n === 1 ? 'one' : 'two'} EDR containment pulse${n === 1 ? '' : 's'}.`,
+        category: 'item' as const,
+        objectives: ['4.5'],
+      },
     })),
   ],
   missionObjectives: [

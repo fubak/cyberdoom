@@ -514,7 +514,7 @@ export const m07: Mission = {
         objectives: ['4.4'],
       },
     },
-    { id: 'edr-cell-1', kind: 'item', x: 18, y: 20, sprite: 'edr-cell', grants: { resource: 'edr-cell', amount: 1 }, inspect: { label: 'EDR cell', detail: 'One EDR scan charge.', category: 'item' } },
+    { id: 'edr-cell-1', kind: 'item', x: 18, y: 20, sprite: 'edr-cell', grants: { resource: 'edr-cell', amount: 2 }, inspect: { label: 'EDR cell', detail: 'Two EDR scan charges.', category: 'item' } },
     { id: 'edr-cell-2', kind: 'item', x: 35, y: 3, sprite: 'edr-cell', grants: { resource: 'edr-cell', amount: 1 }, inspect: { label: 'EDR cell', detail: 'One EDR scan charge.', category: 'item' } },
     { id: 'edr-cell-3', kind: 'item', x: 33, y: 24, sprite: 'edr-cell', grants: { resource: 'edr-cell', amount: 1 }, inspect: { label: 'EDR cell', detail: 'One EDR scan charge.', category: 'item' } },
     { id: 'charge-1', kind: 'item', x: 15, y: 9, sprite: 'charge', grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scanner charge', detail: 'USB scanner ammunition.', category: 'item' } },

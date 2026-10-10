@@ -1,5 +1,5 @@
 import type { Gender, ToolDef, ViewmodelAnim } from '../core/types';
-import { fireFlash, usePhase, vmLine } from '../tools/anim';
+import { fireFlash, fireLamp, usePhase, vmLine } from '../tools/anim';
 import { currentSkin } from '../tools/look';
 import { shade } from '../tools/pixel';
 import { ANALYSTS } from '../tools/look';
@@ -17,8 +17,10 @@ interface Art {
   c: HTMLCanvasElement;
   /** anchor: x is centre, y is the canvas bottom */
   ox: number;
-  /** first opaque row (after the outline pass) */
+  /** first opaque row (after the outline pass), base units */
   top: number;
+  /** last opaque row + 1 (after the outline pass), base units */
+  bot: number;
 }
 
 const cache = new Map<string, Art>();
@@ -43,7 +45,39 @@ function paint(w: number, h: number, ox: number, fn: (px: Px, P: Painter) => voi
   const px: Px = (col, x, y, ww = 1, hh = 1) => P.rect(x, y, ww, hh, col);
   fn(px, P);
   const top = outlineNative(P.g, P.c.width, P.c.height, 2);
-  return { c: P.c, ox, top: top / RES };
+  return { c: P.c, ox, top: top / RES, bot: opaqueBottom(P.g, P.c.width, P.c.height) / RES };
+}
+
+/** One past the lowest opaque row (native px). */
+function opaqueBottom(g: CanvasRenderingContext2D, w: number, h: number): number {
+  const d = g.getImageData(0, 0, w, h).data;
+  for (let y = h - 1; y >= 0; y--)
+    for (let x = 0; x < w; x++) if (d[(y * w + x) * 4 + 3] > 0) return y + 1;
+  return h;
+}
+
+/**
+ * Fire-frame lighting on the ART: clone the painted canvas and push every
+ * opaque pixel toward the tool's TOOL_FLASH colour, the way Doom's weapon
+ * sprite catches its own muzzle flash. Outline pixels light up too.
+ */
+function tintFlash(a: Art, rgb: string): Art {
+  const c = document.createElement('canvas');
+  c.width = a.c.width;
+  c.height = a.c.height;
+  const g = c.getContext('2d')!;
+  g.drawImage(a.c, 0, 0);
+  const [r, gg, b] = rgb.split(',').map(Number);
+  const img = g.getImageData(0, 0, c.width, c.height);
+  const d = img.data;
+  for (let i = 0; i < d.length; i += 4) {
+    if (d[i + 3] === 0) continue;
+    d[i] = Math.min(255, d[i] * 0.45 + r * 0.55 + 24);
+    d[i + 1] = Math.min(255, d[i + 1] * 0.45 + gg * 0.55 + 24);
+    d[i + 2] = Math.min(255, d[i + 2] * 0.45 + b * 0.55 + 24);
+  }
+  g.putImageData(img, 0, 0);
+  return { c, ox: a.ox, top: a.top, bot: a.bot };
 }
 
 /** Fabric weave: a sparse diagonal twill in the shadow tone, one native pixel wide. */
@@ -228,39 +262,40 @@ function mouseArt(gender: Gender, fire: boolean): Art {
 }
 
 function usbArt(gender: Gender, fire: boolean): Art {
-  // compact stick: connector + body ride low in the view, fist below
-  return paint(96, 94, 48, (px, P) => {
+  // the scanner is the shotgun-equivalent: a big chunky stick ~17% of view
+  // width, connector up, hard-edged flash blooming off the tip on the fire frame
+  return paint(92, 58, 46, (px, P) => {
+    const cx = 46;
     if (fire) {
-      // small hard-edged muzzle flash at the connector tip (drawn before outline pass)
-      px('#5affff', 46, 8, 4, 8);
-      px('#5affff', 42, 11, 12, 3);
-      px('#ffffff', 47, 9, 2, 7);
-      px('#ffffff', 44, 12, 8, 1);
-      px('#bff8ff', 42, 8, 2, 2);
-      px('#bff8ff', 52, 8, 2, 2);
+      px('#5affff', cx - 6, 2, 12, 9);
+      px('#5affff', cx - 10, 5, 20, 4);
+      px('#ffffff', cx - 3, 3, 6, 8);
+      px('#ffffff', cx - 8, 6, 16, 2);
+      px('#bff8ff', cx - 12, 4, 3, 3);
+      px('#bff8ff', cx + 10, 4, 3, 3);
     }
     // metal connector
-    px('#c8ccd8', 40, 16, 16, 12);
-    px('#eef0f6', 40, 16, 16, 2);
-    px('#6a7288', 52, 18, 4, 10);
-    px('#2a2e38', 43, 19, 4, 4);
-    px('#2a2e38', 49, 19, 4, 4);
+    px('#c8ccd8', cx - 9, 11, 18, 11);
+    px('#eef0f6', cx - 9, 11, 18, 2);
+    px('#6a7288', cx + 5, 13, 4, 9);
+    px('#2a2e38', cx - 6, 14, 4, 4);
+    px('#2a2e38', cx + 1, 14, 4, 4);
     // scanner body (dark polymer, chunky)
-    px('#2a2e38', 34, 28, 28, 36);
-    px('#4a5060', 34, 28, 28, 3);
-    px('#4a5060', 34, 28, 3, 36);
-    px('#14161c', 58, 30, 4, 34);
-    for (let y = 56; y < 64; y += 3) px('#1a1c22', 36, y, 22, 1);
+    px('#2a2e38', cx - 22, 22, 44, 30);
+    px('#4a5060', cx - 22, 22, 44, 3);
+    px('#4a5060', cx - 22, 22, 3, 30);
+    px('#14161c', cx + 15, 24, 7, 28);
+    for (let y = 45; y < 52; y += 3) px('#1a1c22', cx - 19, y, 34, 1);
     // little screen + LED
-    px('#0a1a14', 38, 32, 20, 11);
-    px(fire ? '#8affff' : '#2ad83a', 40, 34, 16, 2);
-    px(fire ? '#5affff' : '#14a024', 40, 37, 10, 1);
-    px(fire ? '#5affff' : '#14a024', 40, 39, 13, 1);
-    px(fire ? '#ffffff' : '#ff4a2a', 45, 45, 6, 3);
+    px('#0a1a14', cx - 17, 26, 30, 12);
+    px(fire ? '#8affff' : '#2ad83a', cx - 14, 28, 24, 2);
+    px(fire ? '#5affff' : '#14a024', cx - 14, 31, 15, 1);
+    px(fire ? '#5affff' : '#14a024', cx - 14, 33, 20, 1);
+    px(fire ? '#ffffff' : '#ff4a2a', cx - 5, 40, 9, 3);
     // blue brand stripe
-    px('#2458d8', 34, 50, 28, 3);
-    px('#8ab4ff', 34, 50, 28, 1);
-    hand(P, 30, 46, gender, false);
+    px('#2458d8', cx - 22, 46, 44, 3);
+    px('#8ab4ff', cx - 22, 46, 44, 1);
+    hand(P, cx - 24, 38, gender, false);
   });
 }
 
@@ -292,13 +327,15 @@ function badgeArt(gender: Gender, fire: boolean): Art {
   });
 }
 
-function art(tool: ToolDef, gender: Gender, fire: boolean): Art | null {
-  const key = `${tool.id}:${gender}:${fire ? 1 : 0}:${currentSkin().id}`;
+/** Art variant: 0 rest, 1 fire pose, 2 fire pose lit in the tool's flash colour. */
+function art(tool: ToolDef, gender: Gender, mode: 0 | 1 | 2): Art | null {
+  const key = `${tool.id}:${gender}:${mode}:${currentSkin().id}`;
   let a = cache.get(key);
   if (!a) {
     const maker = { keyboard: keyboardArt, mouse: mouseArt, usb: usbArt, badge: badgeArt }[tool.id];
     if (!maker) return null;
-    a = maker(gender, fire);
+    a = maker(gender, mode > 0);
+    if (mode === 2) a = tintFlash(a, TOOL_FLASH[tool.id] ?? '255,255,255');
     cache.set(key, a);
   }
   return a;
@@ -321,34 +358,75 @@ export function drawToolViewmodel(
 ): boolean {
   const line = vmLine(h);
   const ph = anim ? usePhase(anim.sinceUse, tool.windup ?? 0) : null;
-  const fire = ph ? ph.phase === 'impact' || (ph.phase === 'recover' && ph.u < 0.25) : cooldownFrac > 0.55;
-  const a = art(tool, gender, fire);
+  // fire cycle: rest art in windup, lit art at the impact flash, fire art
+  // through the rest of the strike and early recover — the 2-3 frame pose
+  const lit = !!ph && ph.phase === 'impact' && ph.u < 0.6;
+  const fire = lit || (!!ph && (ph.phase === 'impact' || (ph.phase === 'recover' && ph.u < 0.25))) || (!ph && cooldownFrac > 0.55);
+  const a = art(tool, gender, lit ? 2 : fire ? 1 : 0);
   if (a) {
-    const bx = Math.round(Math.sin(bob) * 7);
-    const byy = Math.round(Math.abs(Math.cos(bob)) * 5);
+    const bx = Math.round(Math.sin(bob) * 6);
+    const byy = Math.round(Math.abs(Math.cos(bob)) * 3);
     const pose = POSE[tool.id] ?? POSE.usb;
     let dx = 0;
     let dy: number;
     if (ph) {
-      // windup (k<0) pulls back/down; impact (k=1) drives the tool's strike; recover eases home
+      // windup (k<0) pulls back a touch; impact drives the strike UP and back
+      // toward the camera, Doom-style — never down under the status bar
       const k = ph.k;
       const s = k >= 0 ? pose.strike : pose.wind;
       dx = Math.round(s[0] * Math.abs(k));
       dy = Math.round(s[1] * Math.abs(k));
-    } else dy = Math.round(cooldownFrac * (tool.id === 'usb' ? 10 : 6));
+    } else dy = -Math.round(cooldownFrac * 5); // recoil settle rides up, not down
     const drop = Math.round((anim?.lower ?? 0) * (a.c.height + 10));
     const side = SIDE[tool.id] ?? 0;
     const S = VIEWMODEL_SCALE * (SIZE[tool.id] ?? 1);
-    const cw = (a.c.width / RES) * S;
-    const ch = (a.c.height / RES) * S;
-    // sit low enough that the highest pixel of either frame, at the top of the strike, stays under the line
-    const lift = Math.max(0, -Math.min(pose.wind[1], pose.strike[1]));
-    const artTop = Math.min(a.top, art(tool, gender, !fire)!.top) * S;
-    const y0 = Math.max(h - ch + Math.round(8 * S), line - Math.floor(artTop) + lift);
+    // the lit frame swells ~5% toward the camera for one frame of punch
+    const swell = lit ? 1.05 : 1;
+    const cw = (a.c.width / RES) * S * swell;
+    const ch = (a.c.height / RES) * S * swell;
+    const top = a.top * S;
+    const bot = a.bot * S;
+    // up travel the anchor has to absorb (strike lift + lit swell growth)
+    const lift = Math.max(0, -Math.min(pose.wind[1], pose.strike[1])) + (LIT_SWELL - 1) * (bot - top);
+    // rest: the art's lowest painted row sits BLEED px under the bar line;
+    // never raise so far that the peak clears the viewmodel line
+    let y0 = h + BLEED - bot;
+    y0 = Math.max(y0, line - top + Math.ceil(lift));
+    // downward motion (bob + pose dips) is capped so the art can never sink
+    // more than SINK px under the bar — the tool rests on the bar, not in it
+    const roomDown = h + SINK - (y0 + bot);
+    const dyDown = Math.min(byy + dy, roomDown);
     g.imageSmoothingEnabled = false;
-    g.drawImage(a.c, Math.round(w / 2 - (a.ox - side) * S + bx + dx), y0 + byy + dy + drop, cw, ch);
+    const y = y0 + dyDown + drop - (ch - (a.c.height / RES) * S);
+    g.drawImage(a.c, Math.round(w / 2 - (a.ox - side) * S + bx + dx), y, cw, ch);
+    if (lit) {
+      const rgb = TOOL_FLASH[tool.id];
+      if (rgb) {
+        // bloom is additive haze, not art: clip it below the clearance line so
+        // it can never wash into the aim area
+        g.save();
+        g.beginPath();
+        g.rect(0, line, w, h - line);
+        g.clip();
+        fireLamp(g, w / 2 + bx + dx, y + top + (bot - top) * 0.25, (bot - top) * 0.9, anim!.sinceUse - (tool.windup ?? 0), rgb, 0.4);
+        g.restore();
+      }
+    }
   } else {
     tool.drawViewmodel(g, w, h, Math.sin(bob) * 2, gender, cooldownFrac, anim);
+    // tools that paint their own viewmodel still get the lit fire frame: an
+    // additive lamp over the tool's business end in its flash colour
+    if (ph && ph.phase === 'impact') {
+      const rgb = TOOL_FLASH[tool.id];
+      if (rgb) {
+        g.save();
+        g.beginPath();
+        g.rect(0, line, w, h - line);
+        g.clip();
+        fireLamp(g, w / 2, line + (h - line) * 0.35, (h - line) * 0.55, anim!.sinceUse - (tool.windup ?? 0), rgb, 0.45);
+        g.restore();
+      }
+    }
   }
   if (anim && !anim.lower && tool.drawFx) {
     // tool fx live in the band under the line, so flashes and pulses never cover the aim area
@@ -368,8 +446,15 @@ export function drawToolViewmodel(
   return true;
 }
 
+/** Opaque art may rest this far under the bar line (the Doom bottom-crop look). */
+const BLEED = 1;
+/** Hard limit: art never sinks more than this below the bar at any phase. */
+const SINK = 4;
+/** Lit-frame scale punch (art swells toward the camera at the impact flash). */
+const LIT_SWELL = 1.05;
+
 /** Per-tool viewmodel size multiplier (keyboard art runs ~25% of view width at 1). */
-const SIZE: Record<string, number> = { keyboard: 0.8 };
+const SIZE: Record<string, number> = { keyboard: 1.0, mouse: 0.68, badge: 0.66, usb: 1.0 };
 
 /** Muzzle-flash tint per tool (rgb for edgeFlash); also feeds the world light flood. */
 export const TOOL_FLASH: Record<string, string> = {
@@ -388,8 +473,8 @@ export const TOOL_FLASH: Record<string, string> = {
 const SIDE: Record<string, number> = { mouse: 0, badge: 0, usb: 0 };
 
 const POSE: Record<string, { wind: [number, number]; strike: [number, number] }> = {
-  keyboard: { wind: [0, 16], strike: [0, -30] }, // big lift and slam forward
-  mouse: { wind: [0, 0], strike: [0, 5] }, // click press
-  usb: { wind: [0, -3], strike: [3, 16] }, // recoil kick
-  badge: { wind: [8, 8], strike: [-20, -10] }, // thrust at the reader
+  keyboard: { wind: [-3, 3], strike: [0, -14] }, // pull back a touch, slam up-forward
+  mouse: { wind: [0, 2], strike: [0, -5] }, // press, then pop up
+  usb: { wind: [-2, -2], strike: [4, -12] }, // anticipation lift, recoil kick up-back
+  badge: { wind: [6, 3], strike: [-16, -9] }, // pull back, thrust up-left at the reader
 };

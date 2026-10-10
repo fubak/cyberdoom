@@ -50,10 +50,15 @@ export function barTextBox(t: BarText): { x: number; y: number; w: number; h: nu
 }
 
 /** RESOURCES column: one labelled row per ammo type, Doom RES table style. */
-export const RES_ROW_TOP = 3;
+export const RES_ROW_TOP = 2;
 export const RES_ROW_PITCH = 7;
 export function resRowY(i: number): number {
   return BASE_H - BASE_STATUS + RES_ROW_TOP + i * RES_ROW_PITCH;
+}
+
+/** Gold plate rect behind the active RES row — every one of the four fits inside the bar. */
+export function resRowPlate(i: number): { x: number; y: number; w: number; h: number } {
+  return { x: P_RES[0] + 3, y: resRowY(i) - 1, w: P_RES[1] - 6, h: 9 };
 }
 
 export interface BarLayoutInput {
