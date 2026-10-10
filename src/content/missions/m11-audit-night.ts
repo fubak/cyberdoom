@@ -698,7 +698,12 @@ export const m11: Mission = {
       id, kind: 'item' as const, x, y, sprite: 'edr-cell',
       tags: ['arsenal-pickup'],
       grants: { resource: 'edr-cell', amount: n },
-      inspect: { label: 'EDR cell', detail: 'Licence and compute for one EDR containment pulse.', category: 'item' as const, objectives: ['4.5'] },
+      inspect: {
+        label: n === 1 ? 'EDR cell' : 'EDR cells',
+        detail: `Licence and compute for ${n === 1 ? 'one' : 'two'} EDR containment pulse${n === 1 ? '' : 's'}.`,
+        category: 'item' as const,
+        objectives: ['4.5'],
+      },
     })),
   ],
   missionObjectives: [
