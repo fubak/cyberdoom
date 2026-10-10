@@ -109,10 +109,7 @@ export const keyboardTool: ToolDef = {
     // point-blank targets fill more of the view, so the strike cone widens up close
     const e = ctx.aimEntity(KEYBOARD_RANGE, 0.5) ?? ctx.aimEntity(0.9, 1.0);
     ctx.bus.emit('tool-used', { toolId: 'keyboard' });
-    if (!e) {
-      ctx.bus.emit('message', { text: 'Nothing in reach — aim at it and get closer.', kind: 'info' });
-      return;
-    }
+    if (!e) return;
     const name = e.def.inspect?.label ?? e.def.id;
     if (e.def.kind === 'enemy') {
       if (!e.infected) return;
