@@ -1,5 +1,5 @@
 import type { Gender, ToolDef, ViewmodelAnim } from '../core/types';
-import { usePhase, vmLine } from '../tools/anim';
+import { fireFlash, usePhase, vmLine } from '../tools/anim';
 import { currentSkin } from '../tools/look';
 import { shade } from '../tools/pixel';
 import { ANALYSTS } from '../tools/look';
@@ -338,7 +338,7 @@ export function drawToolViewmodel(
     } else dy = Math.round(cooldownFrac * (tool.id === 'usb' ? 10 : 6));
     const drop = Math.round((anim?.lower ?? 0) * (a.c.height + 10));
     const side = SIDE[tool.id] ?? 0;
-    const S = VIEWMODEL_SCALE;
+    const S = VIEWMODEL_SCALE * (SIZE[tool.id] ?? 1);
     const cw = (a.c.width / RES) * S;
     const ch = (a.c.height / RES) * S;
     // sit low enough that the highest pixel of either frame, at the top of the strike, stays under the line
@@ -359,16 +359,37 @@ export function drawToolViewmodel(
     tool.drawFx(g, w, h, anim);
     g.restore();
   }
+  if (anim && !anim.lower) {
+    // muzzle-flash equivalent: a 2-3 frame light burst bleeding in from the screen
+    // edges, tinted per tool, timed to the impact window
+    const rgb = TOOL_FLASH[tool.id];
+    if (rgb) fireFlash(g, w, h, anim.sinceUse - (tool.windup ?? 0), rgb);
+  }
   return true;
 }
+
+/** Per-tool viewmodel size multiplier (keyboard art runs ~25% of view width at 1). */
+const SIZE: Record<string, number> = { keyboard: 0.8 };
+
+/** Muzzle-flash tint per tool (rgb for edgeFlash). */
+const TOOL_FLASH: Record<string, string> = {
+  keyboard: '255,200,90',
+  mouse: '255,230,120',
+  usb: '120,240,255',
+  badge: '140,255,160',
+  tap: '180,110,255',
+  edr: '120,220,255',
+  mfa: '255,220,140',
+  patch: '120,255,140',
+};
 
 /** Per-tool [dx, dy] at full windup and at the impact frame. */
 /** Horizontal nudge so each tool's visible mass sits bottom-centre. */
 const SIDE: Record<string, number> = { mouse: 0, badge: 0, usb: 0 };
 
 const POSE: Record<string, { wind: [number, number]; strike: [number, number] }> = {
-  keyboard: { wind: [0, 12], strike: [0, -22] }, // big lift and slam forward
-  mouse: { wind: [0, 0], strike: [0, 3] }, // click press
-  usb: { wind: [0, -3], strike: [2, 12] }, // recoil kick
-  badge: { wind: [6, 6], strike: [-16, -8] }, // thrust at the reader
+  keyboard: { wind: [0, 16], strike: [0, -30] }, // big lift and slam forward
+  mouse: { wind: [0, 0], strike: [0, 5] }, // click press
+  usb: { wind: [0, -3], strike: [3, 16] }, // recoil kick
+  badge: { wind: [8, 8], strike: [-20, -10] }, // thrust at the reader
 };

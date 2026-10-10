@@ -149,9 +149,9 @@ describe('tool hints agree with use() and never leak verdicts', () => {
     expect(mouseTool.hint!(c)?.ready).toBe(false);
   });
 
-  it('mouse: nothing -> AIM AT A TARGET; nothing in view of a malicious item still flags via plain branch', () => {
+  it('mouse: nothing -> no hint; nothing in view of a malicious item still flags via plain branch', () => {
     const { ctx: c } = ctx();
-    expect(mouseTool.hint!(c)?.text).toBe('INSPECT: AIM AT A TARGET');
+    expect(mouseTool.hint!(c)).toBeNull();
     const bad = ent({ id: 'm1', kind: 'item', inspect: { label: 'Totally Safe Drive', detail: '', category: 'phishing' } }, 2);
     bad.state.inspected = true;
     const { ctx: c2, fired } = ctx({ entities: [bad] });
@@ -177,7 +177,7 @@ describe('tool hints agree with use() and never leak verdicts', () => {
 
   it('patch: reachability, inspect guard, infected guard, patched, ready', () => {
     const { ctx: c0 } = ctx();
-    expect(patchTool.hint!(c0)?.text).toBe('NO WORKSTATION IN REACH');
+    expect(patchTool.hint!(c0)).toBeNull();
     const triageHost = ent({ id: 't', kind: 'workstation', tags: ['triage'] }, 1);
     const { ctx: c1 } = ctx({ entities: [triageHost] });
     expect(patchTool.hint!(c1)?.text).toBe('INSPECT FIRST (MOUSE 2)');
@@ -214,16 +214,18 @@ describe('tool hints agree with use() and never leak verdicts', () => {
     expect(mfaTool.hint!(c2)?.ready).toBe(true);
   });
 
-  it('tap: counts hosts in cone; edr: always ready', () => {
+  it('tap: counts hosts in cone, no hint with none; edr: ready only with a hostile near', () => {
     const host = ent({ id: 'h', kind: 'workstation' }, 3);
     const { ctx: c } = ctx({ entities: [host] });
     const h = tapTool.hint!(c);
     expect(h?.text).toBe('CAPTURE TRAFFIC (1 IN VIEW)');
     expect(h?.ready).toBe(true);
     const { ctx: c2 } = ctx();
-    expect(tapTool.hint!(c2)?.ready).toBe(false);
-    expect(tapTool.hint!(c2)?.text).toBe('CAPTURE TRAFFIC: NO HOSTS IN VIEW');
-    expect(edrTool.hint!(c2)).toEqual({ text: 'HOLD: CHARGE CONTAINMENT PULSE', ready: true });
+    expect(tapTool.hint!(c2)).toBeNull();
+    expect(edrTool.hint!(c2)).toBeNull();
+    const bug = ent({ id: 'e', kind: 'enemy' }, 5);
+    const { ctx: c3 } = ctx({ entities: [bug] });
+    expect(edrTool.hint!(c3)).toEqual({ text: 'HOLD: CHARGE CONTAINMENT PULSE', ready: true });
   });
 
   it('no hint text leaks an entity label for decoy/wrong/malicious entities', () => {

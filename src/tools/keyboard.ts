@@ -146,7 +146,7 @@ export const keyboardTool: ToolDef = {
     if (!e) {
       const far = ctx.aimEntity(8, 0.26);
       if (far?.def.kind === 'enemy') return { text: 'TOO FAR: KEYBOARD IS POINT-BLANK', ready: false };
-      return { text: 'STRIKE (POINT-BLANK)', ready: false };
+      return null;
     }
     if (e.def.kind === 'enemy') {
       if (!e.infected) return { text: 'NO PROCESS TO KILL', ready: false };

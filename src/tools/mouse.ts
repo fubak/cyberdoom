@@ -115,7 +115,7 @@ export const mouseTool: ToolDef = {
   },
   hint(ctx) {
     const e = ctx.aimEntity(8, 0.26);
-    if (!e) return { text: 'INSPECT: AIM AT A TARGET', ready: false };
+    if (!e) return null;
     if (!e.state.inspected) return { text: `INSPECT ${targetNoun(e)}`, ready: true };
     if (e.state.flagged) return { text: 'ALREADY FLAGGED', ready: false };
     if (e.def.tags?.includes('triage')) return { text: 'CHOOSE A RESPONSE TOOL', ready: false };

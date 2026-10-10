@@ -100,6 +100,8 @@ class Game {
   };
   private promptNextT = 0;
   private lastFireT = -Infinity;
+  private lmbHintText: string | null = null;
+  private lmbHintSince = 0;
   private bannerUntil = 0;
   private lastToolId = '';
   private switchedTool = false;
@@ -530,6 +532,8 @@ class Game {
     this.prompt = { lmb: null, use: null, lmbHot: false, banner: null, footer: null };
     this.promptNextT = 0;
     this.lastFireT = -Infinity;
+    this.lmbHintText = null;
+    this.lmbHintSince = 0;
     this.bannerUntil = 0;
     this.lastToolId = this.arsenal.current.id;
     this.switchedTool = false;
@@ -973,6 +977,14 @@ class Game {
     const tool = this.arsenal.current;
     const ctx = this.toolCtx();
     let lmb = tool.hint?.(ctx) ?? null;
+    // fade an unchanged hint after a few seconds so it stops crowding combat;
+    // a new hint (different text) shows immediately
+    if (lmb && lmb.text === this.lmbHintText) {
+      if (this.simT - this.lmbHintSince > 4) lmb = null;
+    } else {
+      this.lmbHintText = lmb?.text ?? null;
+      this.lmbHintSince = this.simT;
+    }
     const ammo = tool.ammo ? this.arsenal.ammoFor(tool) : null;
     if (ammo === 0) lmb = { text: `OUT OF ${tool.ammo!.resource.toUpperCase()}`, ready: false };
     this.prompt.lmb = lmb;
@@ -1141,6 +1153,10 @@ class Game {
       /** LOOK: set integrity (HUD / low-HP portrait / hurt-tint captures). */
       setIntegrity(v: number) {
         if (g.player) g.player.integrity = Math.max(1, Math.min(100, v));
+      },
+      /** Trigger the portrait's hurt reaction (dir -1/0/1 = glance left/center/right). */
+      hurt(dir: number) {
+        g.arsenal.hurt(dir);
       },
       /** LOOK: threat-readability probe (see tools/look-contrast.mjs). */
       probe(kind: string, dist: number, withImages = false) {

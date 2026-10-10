@@ -73,7 +73,7 @@ export const patchTool: ToolDef = {
     if (e.infected) {
       ctx.bus.emit('tool-hit', { toolId: 'patch', entityId: e.def.id, good: false });
       ctx.bus.emit('message', {
-        text: `${name} is still infected. A patch closes the hole but will not evict running malware: clean it with the SCANNER (3) first.`,
+        text: `${name}: INFECTED. A patch won't remove malware. SCANNER (3) first.`,
         kind: 'warn',
       });
       return false;
@@ -89,7 +89,7 @@ export const patchTool: ToolDef = {
   },
   hint(ctx) {
     const e = ctx.aimEntity(1.8, 0.45);
-    if (!e || e.def.kind !== 'workstation') return { text: 'NO WORKSTATION IN REACH', ready: false };
+    if (!e || e.def.kind !== 'workstation') return null;
     if (e.def.tags?.includes('triage') && ctx.isInspected && !ctx.isInspected(e.def.id)) {
       return { text: `INSPECT FIRST (MOUSE ${mouseTool.slot})`, ready: false };
     }

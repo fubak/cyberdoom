@@ -9,7 +9,9 @@ import { FakeCanvas, FakeCtx, installFakeCanvas } from './fakecanvas';
  * Renders every held tool (rest, bob, and each windup/impact/recover frame, with its
  * fx) into a tiny software 2D canvas and checks that nothing covers the aim area:
  * no opaque pixel above the clearance line (62% of the 3D view) and none in the
- * centre 20%x20% aim box.
+ * centre 20%x20% aim box. One exception: during the ~90 ms impact window a tool's
+ * muzzle-flash equivalent may bleed in from the screen edges (top/bottom 28%,
+ * outer 24% left/right) — the central view and aim box must stay clear even then.
  */
 installFakeCanvas();
 
@@ -63,13 +65,15 @@ describe('held tools never hide the target', () => {
         for (const s of samples(tool)) {
           for (const good of [true, false]) {
             const img = render(tool, gender, s, good).getImageData(0, 0, W, H).data;
+            const flashLive = s.sinceUse >= (tool.windup ?? 0) && s.sinceUse - (tool.windup ?? 0) < 0.09;
             let worst: string | null = null;
             for (let y = 0; y < H && !worst; y++) {
               const inBoxY = y >= H * 0.4 && y < H * 0.6;
               if (y >= LINE && !inBoxY) continue;
               for (let x = 0; x < W; x++) {
                 const inBox = inBoxY && x >= W * 0.4 && x < W * 0.6;
-                if ((y < LINE || inBox) && img[(y * W + x) * 4 + 3] / 255 > MAX_A) {
+                const edgeFlash = flashLive && (y < H * 0.29 || y >= H * 0.71 || x < W * 0.24 || x >= W * 0.76);
+                if ((y < LINE || inBox) && !edgeFlash && img[(y * W + x) * 4 + 3] / 255 > MAX_A) {
                   worst = `${gender} ${s.label} good=${good}: pixel (${x},${y}) a=${img[(y * W + x) * 4 + 3]}`;
                   break;
                 }

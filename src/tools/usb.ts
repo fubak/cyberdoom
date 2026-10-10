@@ -122,6 +122,6 @@ export const usbTool: ToolDef = {
       return { text: 'PLUG IN: SCAN & QUARANTINE', ready: true };
     }
     if (aim?.def.kind === 'enemy') return { text: `SCAN SHOT: ${targetNoun(aim)}`, ready: true };
-    return { text: 'SCAN SHOT', ready: true };
+    return null;
   },
 };
