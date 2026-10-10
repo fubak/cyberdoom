@@ -2,12 +2,35 @@ import type { Mission } from '../core/types';
 import { ARC, arcIndex } from '../content/curriculum';
 import { define } from '../content/glossary';
 import { teachingRegistry } from '../content/missions';
-import { domainById, objectiveById } from '../content/objectives';
+import { objectiveById } from '../content/objectives';
+import { drawChunky, drawText, measureChunky } from '../render/font';
+import { RES } from '../render/res';
+import {
+  bevel,
+  bigScaled,
+  brickBackdrop,
+  C,
+  DOMAIN_COLOR,
+  RAMP,
+} from './debrief';
+import {
+  block,
+  DB_BODY_TOP,
+  DB_H,
+  DB_LINE,
+  DB_W,
+  DB_X,
+  paginate,
+  pixelSafe,
+  type PLine,
+} from './debrief-layout';
 import './curriculum.css';
 
 /**
- * CURRICULUM: mission briefing, styled as a Doom-like intermission. It sets up
- * the situation and the tools but never tells the player the answer.
+ * CURRICULUM: mission briefing, drawn on the same Doom-intermission canvas
+ * as the debrief (pixel font, palette, frame) instead of plain DOM text. The
+ * details page paginates so nothing scrolls or clips; real DOM buttons keep
+ * the screen keyboard- and click-navigable.
  */
 
 export function h(tag: string, cls = '', text = ''): HTMLElement {
@@ -36,80 +59,139 @@ export function onKeysWhileMounted(node: HTMLElement, fn: (e: KeyboardEvent) => 
   setTimeout(() => window.addEventListener('keydown', handler), 250);
 }
 
+const makeCanvas = () => {
+  const canvas = document.createElement('canvas');
+  canvas.width = DB_W * RES;
+  canvas.height = DB_H * RES;
+  canvas.className = 'cd-pixel-canvas';
+  canvas.setAttribute('role', 'img');
+  const g = canvas.getContext('2d')!;
+  g.setTransform(RES, 0, 0, RES, 0, 0);
+  return { canvas, g };
+};
+
 export function briefing(mission: Mission, onGo: () => void, onBack: () => void): HTMLElement {
   const teach = teachingRegistry.get(mission.id);
   const idx = arcIndex(mission.id);
   const orders = teach?.orders ?? mission.missionObjectives.map((o) => ({ text: o.text, objective: '' }));
-  const s = h('div', 'screen cd-inter cd-briefing');
-  let detailsOpen = false;
-  const kicker = `MISSION ${idx + 1}/${ARC.length} · THREAT LEVEL ${'☣'.repeat(Math.max(1, Math.ceil(mission.difficulty / 3)))}`;
+  const s = h('div', 'screen cd-inter cd-pixel cd-briefing');
+  const kicker = `MISSION ${idx + 1}/${ARC.length} - THREAT LEVEL ${'!'.repeat(Math.max(1, Math.ceil(mission.difficulty / 3)))}`;
+  let mode: 'overview' | 'details' = 'overview';
+  let page = 0;
+  const backdrop = brickBackdrop();
+
+  const frame = (g: CanvasRenderingContext2D) => {
+    g.drawImage(backdrop, 0, 0, DB_W, DB_H);
+    bevel(g, 10, 10, DB_W - 20, DB_H - 20, 'rgba(30,14,10,0.82)');
+  };
+
+  const drawLine = (g: CanvasRenderingContext2D, l: PLine, y: number) => {
+    if (l.font === 'chunky') {
+      if (l.prefix) drawChunky(g, l.prefix, DB_X, y, l.prefixColor ?? l.color);
+      if (l.text) drawChunky(g, l.text, DB_X + (l.indent ?? 0), y, l.color);
+    } else {
+      if (l.prefix) drawText(g, l.prefix, DB_X, y, l.prefixColor ?? l.color);
+      if (l.text) drawText(g, l.text, DB_X + (l.indent ?? 0), y, l.color);
+    }
+  };
+
+  const overview = () => {
+    const { canvas, g } = makeCanvas();
+    frame(g);
+    drawText(g, kicker, 22, 22, C.dim);
+    const title = pixelSafe(mission.title);
+    bigScaled(g, title, 22, 34, RAMP.gold, 1);
+    const taglines = wrapChunky(teach?.tagline ?? '', 352);
+    taglines.slice(0, 2).forEach((t, i) => drawChunky(g, t, 22, 58 + i * 10, C.gold));
+    let y = 86;
+    for (const [i, order] of orders.slice(0, 3).entries()) {
+      let first = true;
+      for (const t of wrapChunky(order.text, 330)) {
+        if (first) drawChunky(g, String(i + 1), 22, y, C.gold);
+        drawChunky(g, t, 34, y, C.text);
+        first = false;
+        y += 10;
+      }
+      if (y < 160) y += 4;
+    }
+    drawText(g, 'D DETAILS   ENTER DEPLOY   ESC BACK', 22, DB_H - 34, C.orange);
+    return canvas;
+  };
+
+  const wrapChunky = (text: string, maxW: number): string[] => {
+    const out: string[] = [];
+    let line = '';
+    for (const word of pixelSafe(text).split(/\s+/).filter(Boolean)) {
+      const cand = line ? `${line} ${word}` : word;
+      if (measureChunky(cand) <= maxW) { line = cand; continue; }
+      if (line) out.push(line);
+      line = word;
+    }
+    if (line) out.push(line);
+    return out;
+  };
+
+  const detailBlocks = (): PLine[][] => {
+    const blocks: PLine[][] = [];
+    blocks.push(block('SITUATION', C.gold));
+    blocks.push(block(teach?.situation ?? mission.briefing, C.text, { font: 'chunky' }));
+    blocks.push(block('ALL ORDERS', C.gold));
+    for (const [i, order] of orders.entries()) {
+      blocks.push(block(order.text, C.text, { prefix: String(i + 1), prefixColor: C.gold, font: 'chunky' }));
+    }
+    const objRows: PLine[] = [];
+    for (const id of mission.objectives) {
+      const objective = objectiveById(id);
+      if (!objective) continue;
+      objRows.push(...block(`${id} ${objective.title}`, DOMAIN_COLOR[objective.domain] ?? C.text, { font: 'chunky' }));
+    }
+    if (objRows.length) {
+      blocks.push(block('SY0-701 OBJECTIVES', C.gold));
+      blocks.push(objRows);
+    }
+    if (teach?.keyTerms.length) {
+      const terms: PLine[] = [];
+      for (const term of teach.keyTerms) {
+        const definition = define(term);
+        if (!definition) continue;
+        terms.push(...block(term, C.orange, { font: 'chunky' }));
+        terms.push(...block(definition.replace(/\s*\[[\d., ]+\]\s*$/, ''), C.dim, { indent: 10 }));
+      }
+      if (terms.length) {
+        blocks.push(block('KEY TERMS', C.gold));
+        blocks.push(terms);
+      }
+    }
+    return blocks;
+  };
+
+  const details = () => {
+    const { canvas, g } = makeCanvas();
+    frame(g);
+    drawText(g, `${kicker} - DETAILS`, 22, 22, C.dim);
+    drawText(g, 'DETAILS', 22, 32, C.gold);
+    const pages = paginate(detailBlocks());
+    const lines = pages[Math.min(page, pages.length - 1)] ?? [];
+    lines.forEach((l, i) => drawLine(g, l, DB_BODY_TOP + i * DB_LINE));
+    const foot = pages.length > 1 ? `A/D PAGE ${Math.min(page, pages.length - 1) + 1}/${pages.length}   ESC BACK   ENTER DEPLOY` : 'ESC BACK   ENTER DEPLOY';
+    drawText(g, foot, 22, DB_H - 34, C.orange);
+    return canvas;
+  };
 
   const render = () => {
     s.replaceChildren();
-    if (!detailsOpen) {
-      const page = h('div', 'cd-briefing-page');
-      page.appendChild(h('div', 'cd-kicker', kicker));
-      page.appendChild(h('h1', 'cd-title cd-brief-title', mission.title));
-      page.appendChild(h('div', 'cd-brief-tagline', teach?.tagline ?? mission.title));
-      const ol = h('ol', 'cd-brief-orders');
-      for (const order of orders.slice(0, 3)) ol.appendChild(h('li', '', order.text));
-      page.appendChild(ol);
-      const buttons = h('div', 'cd-brief-actions');
-      buttons.appendChild(bigButton('BACK  [ESC]', onBack, 'cd-btn alt'));
-      buttons.appendChild(bigButton('DETAILS  [D]', () => {
-        detailsOpen = true;
-        render();
-      }, 'cd-btn alt'));
-      buttons.appendChild(bigButton('DEPLOY  [ENTER]', onGo));
-      page.appendChild(buttons);
-      s.appendChild(page);
-    } else {
-      const page = h('div', 'cd-briefing-page cd-briefing-details-page');
-      page.appendChild(h('div', 'cd-kicker', `${kicker} · DETAILS`));
-      page.appendChild(h('h1', 'cd-title cd-details-title', 'DETAILS'));
-      const grid = h('div', 'cd-brief-details');
-      const situation = h('section', 'cd-panel');
-      situation.appendChild(h('h3', '', 'SITUATION'));
-      situation.appendChild(h('p', 'cd-body', teach?.situation ?? mission.briefing));
-      situation.appendChild(h('h3', '', 'ALL ORDERS'));
-      const ol = h('ol', 'cd-orders');
-      for (const order of orders) ol.appendChild(h('li', '', order.text));
-      situation.appendChild(ol);
-      grid.appendChild(situation);
-
-      const intel = h('section', 'cd-panel cd-intel');
-      intel.appendChild(h('h3', '', 'SY0-701 OBJECTIVES'));
-      for (const id of mission.objectives) {
-        const objective = objectiveById(id);
-        if (!objective) continue;
-        const row = h('div', 'cd-obj');
-        row.appendChild(h('span', `cd-chip d${objective.domain}`, id));
-        row.appendChild(h('span', '', objective.title));
-        row.title = domainById(objective.domain)?.title ?? '';
-        intel.appendChild(row);
-      }
-      if (teach?.keyTerms.length) {
-        intel.appendChild(h('h3', '', 'KEY TERMS'));
-        const dl = h('dl', 'cd-terms');
-        for (const term of teach.keyTerms) {
-          const definition = define(term);
-          if (!definition) continue;
-          dl.appendChild(h('dt', '', term.toUpperCase()));
-          dl.appendChild(h('dd', '', definition.replace(/\s*\[[\d., ]+\]\s*$/, '')));
-        }
-        intel.appendChild(dl);
-      }
-      grid.appendChild(intel);
-      page.appendChild(grid);
-      const buttons = h('div', 'cd-brief-actions');
-      buttons.appendChild(bigButton('BACK  [ESC]', () => {
-        detailsOpen = false;
-        render();
-      }, 'cd-btn alt'));
-      buttons.appendChild(bigButton('DEPLOY  [ENTER]', onGo));
-      page.appendChild(buttons);
-      s.appendChild(page);
+    const pg = h('div', mode === 'details' ? 'cd-briefing-page cd-briefing-details-page' : 'cd-briefing-page');
+    pg.appendChild(mode === 'details' ? details() : overview());
+    const buttons = h('div', 'cd-brief-actions');
+    buttons.appendChild(bigButton('BACK  [ESC]', () => {
+      if (mode === 'details') { mode = 'overview'; render(); } else onBack();
+    }, 'cd-btn alt'));
+    if (mode === 'overview') {
+      buttons.appendChild(bigButton('DETAILS  [D]', () => { mode = 'details'; page = 0; render(); }, 'cd-btn alt'));
     }
+    buttons.appendChild(bigButton('DEPLOY  [ENTER]', onGo));
+    pg.appendChild(buttons);
+    s.appendChild(pg);
   };
 
   render();
@@ -119,15 +201,17 @@ export function briefing(mission: Mission, onGo: () => void, onBack: () => void)
       onGo();
     } else if (e.key === 'Escape' || e.key === 'Backspace') {
       e.preventDefault();
-      if (detailsOpen) {
-        detailsOpen = false;
-        render();
-      } else {
-        onBack();
-      }
-    } else if (e.key.toLowerCase() === 'd') {
+      if (mode === 'details') { mode = 'overview'; render(); } else onBack();
+    } else if (e.key.toLowerCase() === 'd' && mode === 'overview') {
       e.preventDefault();
-      detailsOpen = !detailsOpen;
+      mode = 'details'; page = 0; render();
+    } else if (mode === 'details' && (e.key === 'ArrowRight' || e.key.toLowerCase() === 'a')) {
+      e.preventDefault();
+      page = Math.min(page + 1, paginate(detailBlocks()).length - 1);
+      render();
+    } else if (mode === 'details' && (e.key === 'ArrowLeft' || e.key.toLowerCase() === 'q')) {
+      e.preventDefault();
+      page = Math.max(0, page - 1);
       render();
     }
   });

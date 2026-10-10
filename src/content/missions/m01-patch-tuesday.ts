@@ -122,6 +122,7 @@ export const m01: Mission = {
       id: 'ws1', kind: 'workstation', x: 12.5, y: 10.5, sprite: 'workstation-infected',
       infected: true, tags: ['infected'], cleanObjectives: ['2.5', '4.8'],
       inspect: {
+        call: 'auto',
         label: 'WS-07 (finance)',
         detail: 'Resource inaccessibility: every file in Documents now ends in .lkd and will not open. New file README_RESTORE.txt: "Pay 0.5 BTC for your key." Disk activity spiked at 02:00.',
         category: 'malware',
@@ -133,6 +134,7 @@ export const m01: Mission = {
       id: 'ws2', kind: 'workstation', x: 27.5, y: 14.5, sprite: 'workstation-infected',
       infected: true, tags: ['infected'], cleanObjectives: ['2.5', '4.8'],
       inspect: {
+        call: 'auto',
         label: 'WS-04 (accounts payable)',
         detail: 'Pop-ups: "VIRUS DETECTED, call 1-800 support". Browser homepage changed overnight. New toolbar; proxy log shows it contacting tr4ck-cdn.biz every 60 s, even when idle.',
         category: 'malware',
@@ -144,6 +146,7 @@ export const m01: Mission = {
       id: 'ws3', kind: 'workstation', x: 37.5, y: 13.5, sprite: 'workstation-infected',
       infected: true, tags: ['infected'], cleanObjectives: ['2.5', '4.8'],
       inspect: {
+        call: 'auto',
         label: 'WS-12 (reception)',
         detail: 'Resource consumption: CPU pinned at 100%. Firewall log: SMB (445) connections to 63 internal hosts it has never contacted before. User: "I didn\'t open or run anything."',
         category: 'malware',
@@ -154,6 +157,7 @@ export const m01: Mission = {
     {
       id: 'ws-clean', kind: 'workstation', x: 14.5, y: 10.5, sprite: 'workstation',
       inspect: {
+        call: 'auto',
         label: 'Workstation MKT-11',
         detail: 'Patched last night, AV signatures current, no unusual processes.',
         category: 'legit',
@@ -162,6 +166,7 @@ export const m01: Mission = {
     {
       id: 'ws-decoy', kind: 'workstation', x: 30.5, y: 25.5, sprite: 'workstation-infected', tags: ['decoy'],
       inspect: {
+        call: 'auto',
         label: 'Workstation PRN-02 (print room)',
         detail: 'CPU 96%: spoolsv.exe (print spooler, signed by the OS vendor) rendering a 1,400-page job queued by FACILITIES. Firewall log: outbound 9100/tcp to PRN-FLOOR2, its assigned printer, and nothing else. No new processes or services since the patch run. Endpoint protection: signatures updated 06:00, last full scan clean. Pop-up on screen: "Toner low - tray 2".',
         category: 'legit',
@@ -210,6 +215,7 @@ export const m01: Mission = {
     { id: 'turn-in', text: 'Handle the found USB stick per policy', kind: 'interact', tag: 'security-desk' },
     { id: 'clean-all', text: 'Clean all 3 infected workstations', kind: 'clean', tag: 'infected', count: 3, requiresInspect: true },
     { id: 'no-plug', text: 'Never plug in unknown media', kind: 'avoid', tag: 'plug-usb' },
+    { id: 'wrong-call', text: 'Make the right call on each case file', kind: 'avoid', tag: 'wrong-call', strikes: 3 },
     { id: 'exit', text: 'Reach the exit', kind: 'reach-exit' },
   ],
   script: {
@@ -294,14 +300,17 @@ export const m01Walkthrough: WalkStep[] = [
   { goto: [4, 9] },
   { interact: 'sec-desk' },
   { inspect: 'ws1' },
+  { call: 'ws1' },
   { clean: 'ws1' },
   { goto: [29, 10] },
   { badge: [30, 10] },
   { goto: [31, 10] },
   { goto: [36, 13] },
   { inspect: 'ws3' },
+  { call: 'ws3' },
   { clean: 'ws3' },
   { inspect: 'ws2' },
+  { call: 'ws2' },
   { clean: 'ws2' },
   { wait: 0.2 },
   { goto: [19, 1] },
@@ -373,6 +382,7 @@ export const m01Teach: MissionTeaching = {
   ],
   keyTerms: ['indicators of malicious activity', 'ransomware', 'worm', 'spyware', 'removable device', 'false positive', 'endpoint protection', 'backups'],
   lessons: {
+    'wrong-call': { objective: '2.4', done: 'Every case file got the right triage call before acting.', missed: 'A wrong call was logged on a case file. Decide from the evidence, not the sprite.' },
     'clean-all': {
       objective: '2.5',
       done: 'All infected hosts were cleaned. Endpoint protection is a hardening control (2.5), but cleaning only fixes the symptom. Patch the hole the worm used, or it comes back.',

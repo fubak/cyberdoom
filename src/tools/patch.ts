@@ -82,6 +82,14 @@ export const patchTool: ToolDef = {
       ctx.bus.emit('message', { text: `${name} is already patched.`, kind: 'info' });
       return false;
     }
+    if (ctx.needsCall?.(e.def.id)) {
+      ctx.bus.emit('tool-hit', { toolId: 'patch', entityId: e.def.id, good: false });
+      ctx.bus.emit('message', {
+        text: `Hold on: ${name} still needs a call. Open the case file (L) and choose WHAT DO YOU DO? first.`,
+        kind: 'warn',
+      });
+      return false;
+    }
     e.state.patched = true;
     ctx.bus.emit('tool-hit', { toolId: 'patch', entityId: e.def.id, good: true });
     ctx.bus.emit('message', { text: `PATCHED ${name}: known vulnerability closed before anyone can exploit it.`, kind: 'good' });
@@ -95,6 +103,7 @@ export const patchTool: ToolDef = {
     }
     if (e.infected && e.state.revealed) return { text: `CLEAN IT FIRST (SCANNER ${usbTool.slot})`, ready: false };
     if (e.state.patched) return { text: 'ALREADY PATCHED', ready: false };
+    if (ctx.needsCall?.(e.def.id)) return { text: 'MAKE THE CALL (CASE FILE L)', ready: false };
     return { text: 'APPLY PATCH: WORKSTATION', ready: true };
   },
 };

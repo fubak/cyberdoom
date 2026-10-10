@@ -453,6 +453,7 @@ export const m07: Mission = {
       id: 'ws-plant1', kind: 'workstation', x: 9, y: 9, sprite: 'workstation-infected',
       infected: true, hp: 1, tags: ['flat-host'],
       inspect: {
+        call: 'auto',
         label: 'Plant workstation WS-PLANT-1',
         detail: 'A worm process is beaconing to peers on the flat LAN and scanning SMB on every reachable host.',
         category: 'malware',
@@ -463,6 +464,7 @@ export const m07: Mission = {
       id: 'ws-plant2', kind: 'workstation', x: 11, y: 10, sprite: 'workstation-infected',
       infected: true, hp: 1, tags: ['flat-host'],
       inspect: {
+        call: 'auto',
         label: 'Plant workstation WS-PLANT-2',
         detail: 'Same worm family as WS-PLANT-1 - it replicates to any host still reachable on the flat subnet.',
         category: 'malware',
@@ -473,6 +475,7 @@ export const m07: Mission = {
       id: 'ws-plant3', kind: 'workstation', x: 15, y: 25, sprite: 'workstation-infected',
       infected: true, hp: 1, tags: ['flat-host'],
       inspect: {
+        call: 'auto',
         label: 'Plant workstation WS-PLANT-3',
         detail: 'Worm process spawning outbound connections toward the admin PCs - the flat office LAN is a lateral highway.',
         category: 'malware',
@@ -536,6 +539,7 @@ export const m07: Mission = {
     { id: 'acl-allows', text: 'Write the specific allow rules', kind: 'interact', tag: 'acl', count: 2, requires: ['fw-place'] },
     { id: 'acl-deny', text: 'Append deny-all as the LAST rule', kind: 'interact', tag: 'acl-deny', requires: ['acl-allows'], earlyViolates: 'acl-order' },
     { id: 'acl-order', text: 'Keep deny-all below the allows - first match wins', kind: 'avoid', tag: 'acl-order-breach' },
+    { id: 'wrong-call', text: 'Make the right call on each case file', kind: 'avoid', tag: 'wrong-call', strikes: 3 },
     {
       id: 'validate', text: 'Validate the new segmentation', kind: 'interact', tag: 'validate',
       requires: ['fw-place', 'ips-place', 'admin-path', 'ics-zone', 'acl-allows', 'acl-deny', 'flat-host'],
@@ -561,7 +565,7 @@ export const m07: Mission = {
       ['Force-install the newest desktop OS updates on it', 'Updates for a different OS can break an industrial controller, and none exist for its own OS.'],
       ['Accept the risk with no additional controls', 'Acceptance should be a documented decision after reasonable controls, not a substitute for them.'],
     ]),
-    q('q4', ['4.5'], 'Firewall rules are evaluated top-down, first match wins. Where does an explicit "deny any any" rule belong?', 2, [
+    q('q4', ['4.5', '3.2'], 'Firewall rules are evaluated top-down, first match wins. Where does an explicit "deny any any" rule belong?', 2, [
       ['First, so nothing slips through', 'As the first rule it matches everything, and no traffic ever reaches the allow rules below.'],
       ['In the middle, between inbound and outbound rules', 'Every allow rule below it would become unreachable.'],
       ['Last, after the specific allow rules', 'Specific allows match first, and everything else falls through to the final deny (implicit deny made explicit and logged).'],
@@ -728,9 +732,11 @@ export const m07Walkthrough: WalkStep[] = [
   // clean the worm off the flat hosts (no more re-infection)
   { goto: [9, 8] },
   { inspect: 'ws-plant1' },
+  { call: 'ws-plant1' },
   { clean: 'ws-plant1' },
   { goto: [11, 9] },
   { inspect: 'ws-plant2' },
+  { call: 'ws-plant2' },
   { clean: 'ws-plant2' },
   { goto: [8, 11] },
   { goto: [8, 13] },
@@ -738,6 +744,7 @@ export const m07Walkthrough: WalkStep[] = [
   { goto: [8, 22] },
   { goto: [15, 24] },
   { inspect: 'ws-plant3' },
+  { call: 'ws-plant3' },
   { clean: 'ws-plant3' },
   // validate, then leave
   { goto: [8, 22] },
@@ -773,6 +780,7 @@ export const m07Teach: MissionTeaching = {
     'lateral movement',
   ],
   lessons: {
+    'wrong-call': { objective: '2.4', done: 'Every plant host got the right triage call before cleaning.', missed: 'A wrong call was logged on a plant host. Confirm the indicator, then act.' },
     survey: {
       objective: '3.2',
       done: 'The design board showed one flat /24 and the zones it needed. Segmentation starts from the topology: you cannot place boundaries you have not mapped.',

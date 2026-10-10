@@ -77,6 +77,29 @@ export type EntityKind =
 
 export type AiMode = 'chase' | 'wander' | 'stand' | 'patrol';
 
+/** The in-world triage calls a case file can ask for. */
+export type CallAction = 'quarantine' | 'release' | 'escalate' | 'patch';
+
+export interface CallOption {
+  action: CallAction;
+  text: string;
+}
+
+/**
+ * Live state of a case file's "WHAT DO YOU DO?" prompt. The required action
+ * is NOT stored here: the runtime owns the answer so the file cannot leak it
+ * before the player commits.
+ */
+export interface CallState {
+  options: CallOption[];
+  /** Index of the option last picked, or -1 while a call is still pending. */
+  picked: number;
+  /** True once the required call has been made; only then do actions count. */
+  resolved: boolean;
+  /** Explanation appended to the file after each pick. */
+  feedback?: string;
+}
+
 /** What the Mouse "inspect" reveals about an entity. */
 export interface InspectInfo {
   label: string;
@@ -87,6 +110,12 @@ export interface InspectInfo {
   objectives?: string[];
   /** For npc: behavioral flags observable by inspecting. */
   flags?: string[];
+  /**
+   * When set, inspecting opens a "WHAT DO YOU DO?" prompt on the case file
+   * and a clean/release/patch only counts after the right call is made.
+   * 'auto' derives the right call from category/tags (see content/calls.ts).
+   */
+  call?: CallAction | 'auto';
 }
 
 export interface EvidenceEntry {
@@ -96,6 +125,8 @@ export interface EvidenceEntry {
   detail: string;
   source: 'inspect' | 'log';
   category?: InspectInfo['category'];
+  /** Pending/answered triage call on this file (inspect entries only). */
+  call?: CallState;
 }
 
 export interface EntityDef {
@@ -288,6 +319,8 @@ export interface ToolUseContext {
   role: string;
   /** Whether the entity was inspected (analysis-before-action guards). */
   isInspected?: (entityId: string) => boolean;
+  /** Whether the entity still needs its "WHAT DO YOU DO?" call before actions count. */
+  needsCall?: (entityId: string) => boolean;
   /** Unobstructed line of sight between two points (tile coords). Optional. */
   lineOfSight?: (x0: number, y0: number, x1: number, y1: number) => boolean;
 }

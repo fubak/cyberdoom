@@ -98,6 +98,7 @@ briefing:
       id, kind: 'workstation' as const, x, y, sprite: 'workstation-infected',
       infected: true, tags: ['enc-host'],
       inspect: {
+        call: 'auto' as const,
         label: `Workstation ${name}`,
         detail: 'Files renamed *.lockd, HOW_TO_DECRYPT.txt on every share, SMB writes at ~400 files/min to \\\\fin-share.',
         category: 'malware' as const,
@@ -278,6 +279,7 @@ briefing:
     { id: 'recover', text: 'Recover: restore from offline backup', kind: 'interact', tag: 'recover', requires: ['eradicate'] },
     { id: 'lessons', text: 'File lessons learned', kind: 'interact', tag: 'lessons', requires: ['recover'] },
     { id: 'no-pay', text: 'Do not pay the ransom', kind: 'avoid', tag: 'pay-ransom' },
+    { id: 'wrong-call', text: 'Make the right call on each case file', kind: 'avoid', tag: 'wrong-call', strikes: 3 },
     { id: 'exit', text: 'Reach the exit', kind: 'reach-exit' },
   ],
   script: {
@@ -301,13 +303,13 @@ briefing:
     ],
   },
 debriefQuestions: [
-    q('q1', ['4.8'], 'Ransomware is actively spreading across the finance VLAN. You have confirmed it. What is the NEXT incident-response activity?', 1, [
+    q('q1', ['4.8', '3.4'], 'Ransomware is actively spreading across the finance VLAN. You have confirmed it. What is the NEXT incident-response activity?', 1, [
       ['Eradication: re-image the infected hosts', 'While it is still spreading, newly re-imaged hosts get reinfected. Contain first.'],
       ['Containment: isolate the finance VLAN', 'Containment stops the spread so eradication and recovery can succeed. Order: preparation, detection, analysis, containment, eradication, recovery, lessons learned.'],
       ['Recovery: restore from backups now', 'Restored systems on a live infected network will be encrypted again.'],
       ['Lessons learned: hold the post-incident review', 'Lessons learned comes after recovery, not while the attack is live.'],
     ]),
-    q('q2', ['4.8'], 'An infected laptop may become evidence in court. What must you document from the moment you collect it?', 2, [
+    q('q2', ['4.8', '3.4'], 'An infected laptop may become evidence in court. What must you document from the moment you collect it?', 2, [
       ['Root cause analysis', 'RCA explains why the incident happened. It is not an evidence-handling record.'],
       ['E-discovery', 'E-discovery is identifying and producing electronic information for legal proceedings, not proving how the item was handled.'],
       ['Chain of custody', 'A record of who handled the evidence, when and how. Without it, the defense can argue tampering and the evidence may be excluded.'],
@@ -319,7 +321,7 @@ debriefQuestions: [
       ['Restoring onsite backups at the destroyed data center', 'Onsite backups are lost with the site. That is why geographic dispersion matters.'],
       ['Hot site', 'A hot site is fully equipped with near-current data and can take over in minutes to an hour.'],
     ]),
-    q('q4', ['4.9'], 'Which data source BEST shows which internal host first connected to the ransomware\u2019s command-and-control IP, and when?', 0, [
+    q('q4', ['4.9', '3.4'], 'Which data source BEST shows which internal host first connected to the ransomware\u2019s command-and-control IP, and when?', 0, [
       ['Firewall logs / NetFlow records', 'Flow logs record source, destination and time for the connections they capture (coverage and sampling matter), so filtering on the C2 IP gives the earliest beaconing host — the leading patient-zero candidate, confirmed with host evidence.'],
       ['Vulnerability scan results', 'Scans show weaknesses, not who talked to whom.'],
       ['Badge access logs', 'Badge logs show people entering doors, not hosts making connections.'],
@@ -340,12 +342,16 @@ export const m09Walkthrough: WalkStep[] = [
   { goto: [2, 2] },
   { interact: 'core-switch' },
   { inspect: 'enc1' },
+  { call: 'enc1' },
   { clean: 'enc1' },
   { inspect: 'enc2' },
+  { call: 'enc2' },
   { clean: 'enc2' },
   { inspect: 'enc3' },
+  { call: 'enc3' },
   { clean: 'enc3' },
   { inspect: 'enc4' },
+  { call: 'enc4' },
   { clean: 'enc4' },
   { wait: 0.2 },
   { goto: [37, 2] },
@@ -367,6 +373,7 @@ export const m09Teach: MissionTeaching = {
   ],
   keyTerms: ['ransomware', 'backups', 'replication', 'correlation', 'chain of custody'],
   lessons: {
+    'wrong-call': { objective: '4.8', done: 'Every encrypted host got the right triage call during eradication.', missed: 'A wrong call was logged on a finance host. Eradication needs confirmed targets.' },
     'read-netflow': {
       objective: '4.9',
       done: 'NetFlow showed 10.30.0.43 (FIN-03) beaconing to 203.0.113.66 first; every other host followed after SMB from it.',

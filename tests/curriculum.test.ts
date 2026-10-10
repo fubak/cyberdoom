@@ -123,7 +123,7 @@ describe('mission arc', () => {
       expect(
         Math.abs(shares[domain.domain] - domain.weight),
         `coverage shares: ${JSON.stringify(shares)}`,
-      ).toBeLessThanOrEqual(5);
+      ).toBeLessThanOrEqual(3);
     }
   });
 

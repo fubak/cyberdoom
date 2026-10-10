@@ -618,7 +618,7 @@ export const m11: Mission = {
     { id: 'exit', text: 'Reach the exit before the auditors arrive', kind: 'reach-exit' },
   ],
   debriefQuestions: [
-    q('q1', ['4.2'], 'Decommissioned SSDs held customer PII. What must happen before they leave the building?', 3, [
+    q('q1', ['4.2', '5.4'], 'Decommissioned SSDs held customer PII. What must happen before they leave the building?', 3, [
       ['A quick format', 'A quick format leaves the data recoverable.'],
       ['Delete the files and empty the recycle bin', 'Deletion removes pointers, not data. Forensic tools recover it easily.'],
       ['Donate them as-is to a school', 'Shipping recoverable PII off-site is a breach waiting to happen.'],

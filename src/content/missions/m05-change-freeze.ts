@@ -112,32 +112,32 @@ const evidenceAndWork: EntityDef[] = [
   {
     id: 'vuln-hr', kind: 'workstation', x: 15.5, y: 18.5, sprite: 'workstation',
     tags: ['triage', 'vulnerability-confirmed'],
-    inspect: { label: 'Scan finding HR-01', detail: 'Scanner: vulnerable service present on payroll relay. Service banner and package version match the finding.', category: 'item', objectives: ['4.3'] },
+    inspect: { call: 'auto', label: 'Scan finding HR-01', detail: 'Scanner: vulnerable service present on payroll relay. Service banner and package version match the finding.', category: 'item', objectives: ['4.3'] },
   },
   {
     id: 'vuln-db', kind: 'workstation', x: 23.5, y: 18.5, sprite: 'workstation',
     tags: ['triage', 'vulnerability-confirmed'],
-    inspect: { label: 'Scan finding PAY-02', detail: 'Scanner: vulnerable service present on payroll database. Listener and package version match the finding.', category: 'item', objectives: ['4.3'] },
+    inspect: { call: 'auto', label: 'Scan finding PAY-02', detail: 'Scanner: vulnerable service present on payroll database. Listener and package version match the finding.', category: 'item', objectives: ['4.3'] },
   },
   {
     id: 'vuln-web', kind: 'workstation', x: 15.5, y: 10.5, sprite: 'workstation',
     tags: ['triage', 'vulnerability-confirmed'],
-    inspect: { label: 'Scan finding HR-03', detail: 'Scanner: vulnerable service present on the HR export host. Listener and package version match the finding.', category: 'item', objectives: ['4.3'] },
+    inspect: { call: 'auto', label: 'Scan finding HR-03', detail: 'Scanner: vulnerable service present on the HR export host. Listener and package version match the finding.', category: 'item', objectives: ['4.3'] },
   },
   {
     id: 'vuln-api', kind: 'workstation', x: 24.5, y: 10.5, sprite: 'workstation',
     tags: ['triage', 'vulnerability-confirmed'],
-    inspect: { label: 'Scan finding PAY-04', detail: 'Scanner: vulnerable service present on the payroll API host. Listener and package version match the finding.', category: 'item', objectives: ['4.3'] },
+    inspect: { call: 'auto', label: 'Scan finding PAY-04', detail: 'Scanner: vulnerable service present on the payroll API host. Listener and package version match the finding.', category: 'item', objectives: ['4.3'] },
   },
   {
     id: 'false-positive-old-service', kind: 'workstation', x: 11.5, y: 14.5, sprite: 'workstation',
     infected: false, tags: ['triage'],
-    inspect: { label: 'Scan finding ARCH-05', detail: 'Service inventory: the flagged legacy file-transfer service is absent; package not installed and no listening socket is present.', category: 'item', objectives: ['4.3'] },
+    inspect: { call: 'auto', label: 'Scan finding ARCH-05', detail: 'Service inventory: the flagged legacy file-transfer service is absent; package not installed and no listening socket is present.', category: 'item', objectives: ['4.3'] },
   },
   {
     id: 'false-positive-printer', kind: 'workstation', x: 31.5, y: 5.5, sprite: 'workstation',
     infected: false, tags: ['triage'],
-    inspect: { label: 'Scan finding PRINT-06', detail: 'Service inventory: the flagged database listener is absent; package not installed and no listening socket is present.', category: 'item', objectives: ['4.3'] },
+    inspect: { call: 'auto', label: 'Scan finding PRINT-06', detail: 'Service inventory: the flagged database listener is absent; package not installed and no listening socket is present.', category: 'item', objectives: ['4.3'] },
   },
 ];
 
@@ -340,7 +340,7 @@ export const m05: Mission = {
       ['Compensating', 'Nothing is being substituted for an unavailable control.'],
       ['Deterrent', 'The sign works by discouraging intruders with the threat of being seen. That is deterrence.'],
     ]),
-    q('q4', ['4.3'], 'A scan flags a critical CVE on 40 servers. You confirm that 12 of them do not run the vulnerable service at all. What are those 12, and what is next?', 1, [
+    q('q4', ['4.3', '1.3'], 'A scan flags a critical CVE on 40 servers. You confirm that 12 of them do not run the vulnerable service at all. What are those 12, and what is next?', 1, [
       ['False negatives; rescan with stronger settings', 'A false negative is a real vulnerability the scanner MISSED. These are the opposite.'],
       ['False positives; document them, remediate the other 28 by CVSS and exposure, then rescan to validate', 'Reported but not real = false positive. Confirmed findings get prioritized and fixed, and a rescan validates the remediation.'],
       ['True positives; patch all 40 tonight', 'Patching hosts that are not affected wastes the change window and adds risk for no benefit.'],
@@ -398,9 +398,11 @@ export const m05Walkthrough: WalkStep[] = [
   { interact: 'payroll-preventive' },
   { goto: [15, 18] },
   { inspect: 'vuln-hr' },
+  { call: 'vuln-hr' },
   { patch: 'vuln-hr' },
   { goto: [23, 18] },
   { inspect: 'vuln-db' },
+  { call: 'vuln-db' },
   { patch: 'vuln-db' },
   { goto: [20, 17] },
   { badge: [20, 16] },
@@ -414,9 +416,11 @@ export const m05Walkthrough: WalkStep[] = [
   { interact: 'restore-corrective' },
   { goto: [15, 11] },
   { inspect: 'vuln-web' },
+  { call: 'vuln-web' },
   { patch: 'vuln-web' },
   { goto: [24, 11] },
   { inspect: 'vuln-api' },
+  { call: 'vuln-api' },
   { patch: 'vuln-api' },
   { wait: 0.1 },
   { goto: [20, 10] },

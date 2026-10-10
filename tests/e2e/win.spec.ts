@@ -27,6 +27,9 @@ async function inspectAndClean(page: Page, id: string, x: number, y: number): Pr
     if (inspected) break;
     if (attempt === 3) throw new Error(`could not inspect ${id}`);
   }
+  // The dossier is open on the case file — the "WHAT DO YOU DO?" call gates the
+  // clean. These hosts are all malicious: option 1 (quarantine + clean).
+  await page.keyboard.press('1');
   await closeDossier(page);
   // USB scan at arm's length; retry in case a roaming worm eats a shot.
   for (let attempt = 0; attempt < 6; attempt++) {

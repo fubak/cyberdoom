@@ -11,7 +11,7 @@ import { missionRegistry, teachingRegistry } from '../content/missions';
 import type { LossCause } from '../missions/runtime';
 import { failureExplanation } from './failure';
 import { objectiveById } from '../content/objectives';
-import { drawBigText, drawText, measureBig, measureText } from '../render/font';
+import { drawBigText, drawChunky, drawText, measureBig, measureText } from '../render/font';
 import { RES } from '../render/res';
 import { h, onKeysWhileMounted } from './briefing';
 import {
@@ -78,7 +78,7 @@ interface CheckItem {
   review: boolean;
 }
 
-const C = {
+export const C = {
   text: '#f4e6c8',
   dim: '#a88c68',
   gold: '#f0c020',
@@ -88,12 +88,12 @@ const C = {
   white: '#ffffff',
   orange: '#ff9a40',
 };
-const RAMP = {
+export const RAMP = {
   red: ['#ffb08a', '#ff5a30', '#e02810', '#a01008', '#600800'],
   gold: ['#fff4b0', '#ffd84a', '#f0b020', '#b87010', '#704000'],
   green: ['#d0ffd0', '#7cf0a0', '#3cc068', '#1a8040', '#0a5020'],
 };
-const DOMAIN_COLOR: Record<number, string> = { 1: '#4cc3ff', 2: '#ff5a3c', 3: '#b07cff', 4: '#4ce07a', 5: '#ffc83c' };
+export const DOMAIN_COLOR: Record<number, string> = { 1: '#4cc3ff', 2: '#ff5a3c', 3: '#b07cff', 4: '#4ce07a', 5: '#ffc83c' };
 const DOMAIN_SHORT: Record<number, string> = {
   1: 'GENERAL CONCEPTS',
   2: 'THREATS & VULNS',
@@ -139,7 +139,7 @@ interface Hit {
   go: () => void;
 }
 
-function bevel(g: CanvasRenderingContext2D, x: number, y: number, w: number, hh: number, fill: string): void {
+export function bevel(g: CanvasRenderingContext2D, x: number, y: number, w: number, hh: number, fill: string): void {
   g.fillStyle = fill;
   g.fillRect(x, y, w, hh);
   g.fillStyle = '#8a6a48';
@@ -150,7 +150,7 @@ function bevel(g: CanvasRenderingContext2D, x: number, y: number, w: number, hh:
   g.fillRect(x + w - 1, y, 1, hh);
 }
 
-function brickBackdrop(): HTMLCanvasElement {
+export function brickBackdrop(): HTMLCanvasElement {
   const c = document.createElement('canvas');
   c.width = DB_W * RES;
   c.height = DB_H * RES;
@@ -180,7 +180,7 @@ function brickBackdrop(): HTMLCanvasElement {
   return c;
 }
 
-function bigScaled(g: CanvasRenderingContext2D, text: string, x: number, y: number, ramp: string[], k: number): void {
+export function bigScaled(g: CanvasRenderingContext2D, text: string, x: number, y: number, ramp: string[], k: number): void {
   const off = document.createElement('canvas');
   off.width = (measureBig(text) + 2) * RES;
   off.height = 16 * RES;
@@ -262,11 +262,19 @@ export function debrief(opts: {
     return w;
   };
 
+  const drawLine = (g: CanvasRenderingContext2D, l: PLine, y: number) => {
+    if (l.font === 'chunky') {
+      if (l.prefix) drawChunky(g, l.prefix, DB_X, y, l.prefixColor ?? l.color);
+      if (l.text) drawChunky(g, l.text, DB_X + (l.indent ?? 0), y, l.color);
+    } else {
+      if (l.prefix) drawText(g, l.prefix, DB_X, y, l.prefixColor ?? l.color);
+      if (l.text) drawText(g, l.text, DB_X + (l.indent ?? 0), y, l.color);
+    }
+  };
   const drawLines = (lines: PLine[]) => {
     lines.forEach((l, i) => {
       const y = DB_BODY_TOP + i * DB_LINE;
-      if (l.prefix) drawText(g, l.prefix, DB_X, y, l.prefixColor ?? l.color);
-      if (l.text) drawText(g, l.text, DB_X + (l.indent ?? 0), y, l.color);
+      drawLine(g, l, y);
       if (l.hit !== undefined && view.onHit) {
         const idx = l.hit;
         hits.push({ x: 10, y: y - 1, w: DB_W - 20, h: DB_LINE, go: () => view.onHit?.(idx) });
@@ -560,19 +568,20 @@ export function debrief(opts: {
       const tags = block(q.objectives.map((id) => `${id} ${objectiveById(id)?.title ?? ''}`).join(' / '), C.cyan);
       const questionPages = () => paginate([
         tags,
-        block(q.prompt, C.white),
-        ...order.map((o, j) => block(o.text, C.text, { prefix: String(j + 1), prefixColor: C.gold, hit: j })),
+        block(q.prompt, C.white, { font: 'chunky' }),
+        ...order.map((o, j) => block(o.text, C.text, { prefix: String(j + 1), prefixColor: C.gold, hit: j, font: 'chunky' })),
         block(`PRESS 1-${order.length} OR CLICK AN ANSWER.`, C.orange),
       ]).map((lines) => ({ lines }));
       const feedbackPages = () => {
         const chosen = order[picked];
         return paginate([
           block(chosen.correct ? 'CORRECT.' : 'MISSED. QUEUED FOR SPACED REVIEW.', chosen.correct ? C.green : C.red),
-          block(q.prompt, C.dim),
+          block(q.prompt, C.dim, { font: 'chunky' }),
           ...order.map((o, j) => [
             ...block(`${o.correct ? '[RIGHT] ' : j === picked ? '[YOUR PICK] ' : ''}${o.text}`,
-              o.correct ? C.green : j === picked ? C.red : C.dim, { prefix: String(j + 1), prefixColor: C.gold }),
-            ...block(o.explanation, C.text, { indent: 14 }),
+              o.correct ? C.green : j === picked ? C.red : C.dim, { prefix: String(j + 1), prefixColor: C.gold, font: 'chunky' }),
+            // one block: the explanation can never spill away from its option
+            ...block(o.explanation, C.text, { indent: 14, font: 'chunky' }),
           ]),
         ]).map((lines) => ({ lines }));
       };

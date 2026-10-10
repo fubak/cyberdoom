@@ -74,6 +74,7 @@ describe('m07 segment fault', () => {
     audit(state);
     // clean a host before segmenting: the outbreak puts it right back
     state.bus.emit('inspect', { entityId: 'ws-plant1' });
+    state.bus.emit('call-pick', { entityId: 'ws-plant1', action: 'quarantine' });
     state.bus.emit('cleaned', { entityId: 'ws-plant1' });
     expect(state.rt.byId('ws-plant1')?.infected).toBe(false);
     tick(state, 19);
@@ -82,6 +83,7 @@ describe('m07 segment fault', () => {
     // after the firewall is inline, cleaned hosts stay clean
     state.bus.emit('interact', { entityId: 'fw-chokepoint' });
     state.bus.emit('inspect', { entityId: 'ws-plant1' });
+    state.bus.emit('call-pick', { entityId: 'ws-plant1', action: 'quarantine' });
     state.bus.emit('cleaned', { entityId: 'ws-plant1' });
     tick(state, 19);
     expect(state.rt.byId('ws-plant1')?.infected).toBe(false);

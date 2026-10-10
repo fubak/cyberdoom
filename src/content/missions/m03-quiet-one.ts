@@ -257,7 +257,7 @@ export const m03: Mission = {
     {
       id: 'q3',
       prompt: 'You need to prove the files were copied to a USB drive on the suspect\u2019s laptop. Which data source shows this MOST directly?',
-      objectives: ['4.9'],
+      objectives: ['4.9', '3.3'],
       options: [
         { id: 'a', text: 'Firewall logs', correct: false, explanation: 'Copying to USB never touches the network, so the firewall saw nothing.' },
         { id: 'b', text: 'Endpoint logs (OS/EDR device-connection and file-write events)', correct: true, explanation: 'Only the host records that a mass-storage device was mounted and which files were written to it.' },
@@ -279,7 +279,7 @@ export const m03: Mission = {
     {
       id: 'q5',
       prompt: 'You have three corroborating indicators against one employee. What should you do NEXT?',
-      objectives: ['4.8'],
+      objectives: ['4.8', '2.4'],
       options: [
         { id: 'a', text: 'Report through the incident response process and preserve the evidence with chain of custody', correct: true, explanation: 'Escalating through IR keeps the investigation coordinated with HR and legal. Chain of custody keeps the logs and device usable as evidence.' },
         { id: 'b', text: 'Confront the employee at their desk', correct: false, explanation: 'Confronting her tips her off, so evidence may be destroyed, and it puts you at personal and legal risk. Containment is a coordinated IR step.' },
