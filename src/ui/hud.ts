@@ -13,7 +13,7 @@ import {
   P_OBJ,
   P_RES,
   P_TOOLS,
-  resRowY,
+  resRowPlate,
   statusBarText,
   type BarText,
   type Panel,
@@ -235,6 +235,8 @@ export class Hud {
    * while aimed; never inside the centre aim box). At most two lines,
    * `[LMB]…` then `[E]…`, on a dark plate. Ammo cost is appended in
    * tool-native units ('-1 SCAN') so it can't read as a file size.
+   * Left-aligned so the centre-bottom viewmodel lane stays clear at the
+   * fire moment — the tool switch banner rides the same band.
    */
   private drawPrompt(p: {
     lmb: ToolHint | null;
@@ -272,7 +274,7 @@ export class Hud {
       const textW = measureText(line.text, 'small');
       const costW = line.cost ? 6 + measureText(line.cost, 'small') : 0;
       const w = keyW + (keyW ? 4 : 0) + textW + costW;
-      const x = Math.round(BASE_W / 2 - w / 2);
+      const x = 4;
       g.fillStyle = 'rgba(6,8,12,0.72)';
       g.fillRect(x - 3, y - 1, w + 6, 9);
       let tx = x;
@@ -473,8 +475,9 @@ export class Hud {
     // RESOURCES: gold plate behind the held tool's row (Doom RES table)
     (o.resources ?? []).slice(0, 4).forEach((r, i) => {
       if (!r.active) return;
+      const p = resRowPlate(i);
       g.fillStyle = 'rgba(255,208,64,0.14)';
-      g.fillRect(P_RES[0] + 3, resRowY(i) - 1, P_RES[1] - 6, 9);
+      g.fillRect(p.x, p.y, p.w, p.h);
     });
 
     // every text run in the bar comes from the shared, test-verified layout

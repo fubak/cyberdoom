@@ -35,9 +35,10 @@ export const patchTool: ToolDef = {
   drawViewmodel(g, w, h, _bob, gender, _cd, anim) {
     const look = handLook(gender, anim);
     const ph = usePhase(anim?.sinceUse ?? 9, WINDUP);
-    const push = ph.k > 0 ? ph.k * 16 : ph.k * 6;
+    // impact thrusts the disk UP into the bay; windup dips only a hair
+    const push = ph.k > 0 ? ph.k * 12 : ph.k * 1;
     const x0 = Math.round(w / 2 - 22);
-    const y0 = Math.round(h - 47 - push);
+    const y0 = Math.round(h - 50 - push);
     // 3.5" disk: body, metal shutter, label
     bevel(g, x0, y0, 44, 44, '#1e3a8a', 2);
     rect(g, x0 + 12, y0, 22, 14, '#b8bcc8');
@@ -48,8 +49,8 @@ export const patchTool: ToolDef = {
     drawText(g, 'KB', x0 + 15, y0 + 27, '#1e3a8a');
     rect(g, x0 + 2, y0 + 38, 3, 3, '#0a0c12');
     // hand pinching the bottom edge
-    sleeve(g, x0 + 18, y0 + 66, 22, 1, look);
-    fist(g, x0 + 14, y0 + 34, 26, look, 1);
+    sleeve(g, x0 + 18, y0 + 62, 22, 1, look, h);
+    fist(g, x0 + 14, y0 + 32, 26, look, 1);
   },
   drawFx(g, w, h, anim) {
     impactBurst(g, w / 2, tipY(h), anim.sinceConfirm, anim.confirmGood, 1, 'patch');

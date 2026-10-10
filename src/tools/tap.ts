@@ -38,9 +38,10 @@ export const tapTool: ToolDef = {
     const ph = usePhase(anim?.sinceUse ?? 9, WINDUP);
     const t = anim?.time ?? 0;
     const sweep = ph.phase !== 'idle';
-    const lift = ph.k > 0 ? ph.k * 8 : ph.k * 3;
+    // strike lifts the tap up/back (Doom recoil); windup dips only a hair
+    const lift = ph.k > 0 ? ph.k * 7 : ph.k * 1;
     const x0 = Math.round(w / 2 - 24);
-    const y0 = Math.round(_h - 40 - lift);
+    const y0 = Math.round(_h - 41 - lift);
     // cables
     for (let i = 0; i < 6; i++) {
       rect(g, x0 + 7 - i * 0.6, y0 - i * 3, 3, 3, '#2a7bd8');
@@ -68,8 +69,8 @@ export const tapTool: ToolDef = {
     // capture buffer LEDs
     const ammo = anim?.ammo ?? 0;
     for (let i = 0; i < 6; i++) rect(g, x0 + 5 + i * 6, y0 + 30, 4, 2, i < Math.ceil(ammo / 2) ? '#ffb000' : '#3a2a10');
-    sleeve(g, x0 - 2, y0 + 50, 12, -1, look);
-    sleeve(g, x0 + 50, y0 + 50, 12, 1, look);
+    sleeve(g, x0 - 2, y0 + 50, 12, -1, look, _h);
+    sleeve(g, x0 + 50, y0 + 50, 12, 1, look, _h);
     fist(g, x0 - 7, y0 + 16, 10, look, -1);
     fist(g, x0 + 45, y0 + 16, 10, look, 1);
   },

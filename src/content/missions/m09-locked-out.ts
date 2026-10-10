@@ -247,7 +247,7 @@ briefing:
     },
     {
       id: 'cell-vault', kind: 'item', x: 36.5, y: 4.5, sprite: 'edr-cell',
-      tags: ['arsenal-pickup'], grants: { resource: 'edr-cell', amount: 1 },
+      tags: ['arsenal-pickup'], grants: { resource: 'edr-cell', amount: 2 },
       inspect: { label: 'EDR cell', detail: 'Licence/compute for one EDR containment pulse.', category: 'item', objectives: ['4.5'] },
     },
     {

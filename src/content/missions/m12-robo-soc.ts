@@ -373,7 +373,7 @@ export const m12: Mission = {
     },
     {
       id: 'edr-cell-sc', kind: 'item', x: 24.5, y: 25.5, sprite: 'edr-cell', tags: ['arsenal-pickup'],
-      grants: { resource: 'edr-cell', amount: 1 },
+      grants: { resource: 'edr-cell', amount: 2 },
       inspect: { label: 'EDR cell', detail: 'Licence and compute for one EDR containment pulse.', category: 'item', objectives: ['4.5'] },
     },
     {

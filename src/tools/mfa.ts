@@ -35,10 +35,11 @@ export const mfaTool: ToolDef = {
   drawViewmodel(g, w, h, _bob, gender, _cd, anim) {
     const look = handLook(gender, anim);
     const ph = usePhase(anim?.sinceUse ?? 9, WINDUP);
-    const push = ph.k > 0 ? ph.k * 12 : ph.k * 4;
+    // impact pushes the token UP toward the reader; windup dips only a hair
+    const push = ph.k > 0 ? ph.k * 8 : ph.k * 1;
     const lit = ph.phase === 'impact' || (ph.phase === 'recover' && ph.u < 0.5);
     const x0 = Math.round(w / 2 - 10);
-    const y0 = Math.round(h - 50 - push);
+    const y0 = Math.round(h - 55 - push);
     // USB-A connector: steel shell with the two contact windows
     rect(g, x0 + 3, y0, 14, 14, '#c8ccd8');
     rect(g, x0 + 3, y0, 14, 2, '#eef0f6');
@@ -46,7 +47,7 @@ export const mfaTool: ToolDef = {
     rect(g, x0 + 6, y0 + 4, 3, 4, '#2a2e38');
     rect(g, x0 + 11, y0 + 4, 3, 4, '#2a2e38');
     // key body: long and slim, like a real FIDO2 security key
-    bevel(g, x0, y0 + 14, 20, 48, '#23262e', 2);
+    bevel(g, x0, y0 + 14, 20, 40, '#23262e', 2);
     rect(g, x0 + 2, y0 + 16, 16, 2, '#3a3f4c');
     // gold touch contact (user presence) with a fingerprint-ring pattern
     const cx = x0 + 10;
@@ -61,15 +62,15 @@ export const mfaTool: ToolDef = {
     }
     rect(g, cx - 1, cy - 1, 2, 2, ring);
     // status LED and key-ring hole
-    rect(g, x0 + 8, y0 + 40, 4, 2, lit ? '#ffffff' : '#2ad83a');
-    rect(g, x0 + 7, y0 + 50, 6, 5, '#0a0b0e');
+    rect(g, x0 + 8, y0 + 38, 4, 2, lit ? '#ffffff' : '#2ad83a');
+    rect(g, x0 + 7, y0 + 46, 6, 5, '#0a0b0e');
     // steel key ring through the hole, swinging off to the side
-    rect(g, x0 + 12, y0 + 51, 10, 2, '#aeb6c2');
-    rect(g, x0 + 20, y0 + 51, 2, 10, '#aeb6c2');
-    rect(g, x0 + 12, y0 + 59, 10, 2, '#7a8296');
+    rect(g, x0 + 12, y0 + 47, 10, 2, '#aeb6c2');
+    rect(g, x0 + 20, y0 + 47, 2, 8, '#aeb6c2');
+    rect(g, x0 + 12, y0 + 53, 10, 2, '#7a8296');
     // fist pinches only the far end, so the key stays readable
-    sleeve(g, x0 + 4, y0 + 84, 22, 1, look);
-    fist(g, x0 - 4, y0 + 56, 28, look, 1);
+    sleeve(g, x0 + 4, y0 + 56, 22, 1, look, h);
+    fist(g, x0 - 4, y0 + 36, 28, look, 1);
   },
   drawFx(g, w, h, anim) {
     impactBurst(g, w / 2, tipY(h), anim.sinceConfirm, anim.confirmGood, 0.7);

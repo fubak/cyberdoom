@@ -337,8 +337,8 @@ export const m08: Mission = {
       y: 8.5,
       sprite: 'edr-cell',
       tags: ['arsenal-pickup'],
-      grants: { resource: 'edr-cell', amount: 1 },
-      inspect: { label: 'EDR cell', detail: 'Licence and compute for one EDR containment pulse.', category: 'item', objectives: ['4.5'] },
+      grants: { resource: 'edr-cell', amount: 2 },
+      inspect: { label: 'EDR cells', detail: 'Licence and compute for two EDR containment pulses.', category: 'item', objectives: ['4.5'] },
     },
     {
       id: 'usb-charge-soc',
