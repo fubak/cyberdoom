@@ -88,6 +88,30 @@ export const GLOSSARY: Record<string, string> = {
   'replication':
     'Continuously copying data to another system for availability. It also copies corruption or encryption, so it is not a substitute for backups. [3.4]',
 
+  // --- network zones & segmentation (3.1, 3.2, 4.5) ---
+  'network segmentation':
+    'Dividing a network into separate security zones so traffic between zones must pass through controls. It limits lateral movement and shrinks the attack surface. [3.2]',
+  'security zone':
+    'A network segment grouping systems with the same trust level and data sensitivity (public, screened, internal, restricted, OT). Traffic between zones crosses a control point. [3.2]',
+  'screened subnet':
+    'SY0-701\u2019s name for a DMZ: a buffer zone between an untrusted network and internal zones where public-facing services (web, mail) live. [3.2]',
+  'jump server':
+    'A hardened, monitored host (also called a bastion host) that is the only permitted administrative path into a protected zone: one door to harden, log and watch. [3.2]',
+  'intrusion prevention system':
+    'IPS: a security appliance deployed inline, in the traffic path, that inspects packets and can block attacks in real time. Its failure mode (fail-open vs fail-closed) is an availability-vs-security trade-off. On a tap or SPAN port it cannot block. [3.2]',
+  'intrusion detection system':
+    'IDS: a passive monitor that watches a copy of traffic (network tap or SPAN/mirror port) or a host\u2019s logs, and alerts but cannot block. [3.2]',
+  'air gap':
+    'Physical isolation of a system or zone with no network connection to other networks at all. The strictest segmentation for systems that cannot be patched or hardened. [3.1]',
+  'scada':
+    'SCADA / ICS: industrial control systems running physical plant processes. Often unpatchable legacy or embedded systems, best protected by isolation in a dedicated zone or an air gap. [3.1]',
+  'access control list':
+    'ACL: the ordered rule set on a firewall or router. Rules are evaluated top-down and the first match wins, so specific permits come before a final deny-all. [4.5]',
+  'implicit deny':
+    'The default-deny principle: any traffic not explicitly permitted is dropped. Written explicitly as a final logged deny-all rule so the drop is visible. [4.5]',
+  'lateral movement':
+    'Attacker techniques for moving from one compromised host to others on the network. Flat, unsegmented networks make it easy; zone boundaries and least-privilege rules are the main counter. [2.4]',
+
   // --- identity & access (1.2, 4.6) ---
   'least privilege':
     'Users and processes get only the minimum access their job function requires, and only for as long as they need it. [2.5, 4.6]',

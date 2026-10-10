@@ -4,6 +4,7 @@ import { m03Walkthrough } from '../content/missions/m03-quiet-one';
 import { m04Walkthrough } from '../content/missions/m04-hook-line-sinker';
 import { m05Walkthrough } from '../content/missions/m05-change-freeze';
 import { m06Walkthrough } from '../content/missions/m06-keymaster';
+import { m07Walkthrough } from '../content/missions/m07-segment-fault';
 import { m08Walkthrough } from '../content/missions/m08-zero-day';
 import { m09Walkthrough } from '../content/missions/m09-locked-out';
 import { m10Walkthrough } from '../content/missions/m10-third-party';
@@ -28,6 +29,7 @@ export const walkthroughs: Record<string, WalkStep[]> = {
   m04: m04Walkthrough,
   m05: m05Walkthrough,
   m06: m06Walkthrough,
+  m07: m07Walkthrough,
   m08: m08Walkthrough,
   m09: m09Walkthrough,
   m10: m10Walkthrough,
