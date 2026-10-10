@@ -9,6 +9,7 @@ import { enemyInTheWay, exitEdge } from './engine/interact';
 import { doorUseHint, resolveUse, type UseTargetContext } from './engine/useTarget';
 import { Audio, type MusicTier } from './engine/audio';
 import { Feel } from './engine/feel';
+import { CueGate, spawnCueText } from './engine/spawnCue';
 import { ParticleSystem } from './engine/fx';
 import { lightProbe, lookProbe, placeThreat } from './render/probe';
 import { Renderer } from './render/renderer';
@@ -100,7 +101,9 @@ const TOOL_KICK: Record<string, number> = {
 };
 
 function muzzleHeight(e: Entity): number {
-  const scale = e.def.sprite === 'worm' ? 0.6 : e.def.sprite === 'trojan' ? 0.75 : 0.85;
+  // ENEMIES: melee threats carry ~1.0x close-range presence now — particle
+  // origin heights match the bigger drawn sprites
+  const scale = e.def.sprite === 'worm' ? 0.95 : e.def.sprite === 'trojan' ? 0.9 : 1.0;
   const height =
     e.def.sprite === 'worm' ? 0.95
     : e.def.sprite === 'trojan' ? 1.05
@@ -333,6 +336,7 @@ class Game {
       this.particles.spawn(e.x, e.y);
       this.renderer.spawnTeleport(e.x, e.y);
       this.audio.sfx('spawn', { x: e.x, y: e.y });
+      this.spawnCue(e, 'ambush');
     });
     // deep link: ?mission=m01&gender=female
     const dm = params.get('mission');
@@ -349,6 +353,23 @@ class Game {
   }
 
   // ---------- screens ----------
+
+  /** ENEMIES: when a threat materialises off-screen, the teleport column can't
+   *  be seen — ticker a one-line bearing cue so the ambush still telegraphs.
+   *  `ambush` is a level-scripted spawn; `replica` is worm self-propagation —
+   *  differently worded and throttled so burst copies don't spam the ticker. */
+  private replicaGate = new CueGate(4);
+
+  private spawnCue(e: Entity, kind: 'ambush' | 'replica'): void {
+    const p = this.player;
+    if (!p) return;
+    const rel = Math.atan2(e.y - p.y, e.x - p.x) - p.angle;
+    const label = (e.def.threat ?? e.def.sprite ?? 'threat').toUpperCase();
+    const text = spawnCueText(kind, label, rel);
+    if (!text) return;
+    if (kind === 'replica' && !this.replicaGate.allow(this.runtime?.elapsed ?? 0)) return;
+    this.hud.pushMessage(text, 'warn');
+  }
 
   private setScreen(s: Screen, node: HTMLElement | null): void {
     this.screen = s;
@@ -648,6 +669,7 @@ class Game {
     this.arsenal.reset(mission, this.gender);
     this.useCd = 0;
     this.simT = 0;
+    this.replicaGate.reset();
     this.lastHurtMessageT = -Infinity;
     this.lastHurtT = -Infinity;
     this.endTimer = null;
@@ -911,6 +933,7 @@ class Game {
         this.particles.spawn(e.x, e.y);
         this.renderer.spawnTeleport(e.x, e.y);
         this.audio.sfx('spawn', { x: e.x, y: e.y });
+        this.spawnCue(e, 'replica');
       },
       onSeal: (_e, seal) => {
         if (seal.kind === 'door') this.sealedDoors.add(seal.id);

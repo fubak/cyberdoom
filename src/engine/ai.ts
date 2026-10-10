@@ -345,7 +345,19 @@ export function enemyMoveTo(e: Entity, nx: number, ny: number, map: WorldMap, pl
 function setRenderState(e: Entity, now: number): void {
   const currentMode = mode(e);
   const pop = Math.max(0, 1 - ((e.state.popT as number | undefined) ?? 0) / 0.24);
-  e.state.scale = currentMode === 'windup' ? 1 : 1 + 0.25 * pop;
+  // ENEMIES: the windup rears toward ~1.5x so the strike telegraphs and looms
+  // like Doom's bite, then the recover pops back down; a hit squashes it.
+  const wu = currentMode === 'windup'
+    ? Math.min(1, ((e.state.windupT as number | undefined) ?? 0) / Math.max(0.01, (e.state.windupDur as number | undefined) ?? 0.4))
+    : 0;
+  const wuEase = wu * wu * (3 - 2 * wu);
+  e.state.scale = currentMode === 'windup'
+    ? 1 + 0.5 * wuEase
+    : currentMode === 'recover'
+      ? 1 + 0.45 * pop
+      : currentMode === 'pain'
+        ? 0.94
+        : 1 + 0.25 * pop;
   e.state.tint = currentMode === 'pain' || (e.state.flashT as number) > 0
     ? 0xff3030
     : 0xffffff;

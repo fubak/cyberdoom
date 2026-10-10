@@ -8,12 +8,13 @@ import { VM_CLEAR } from '../tools/anim';
  * the player sees only its crown while it drains integrity. During
  * windup/attack we raise the attacker's vertical anchor — the Doom "lunge" —
  * until at least `ABOVE_FRAC` of its projected silhouette sits above the
- * viewmodel top line.
+ * viewmodel top line. F4 adds a graded ramp: melee threats start swelling and
+ * lifting as they close so the strike never pops in from nothing.
  */
 
 /** Share of the sprite's projected height that must clear the viewmodel line. */
 export const RISE_ABOVE_FRAC = 0.6;
-/** Distance (tiles) inside which the lunge applies. */
+/** Distance (tiles) inside which the full lunge applies. */
 export const RISE_MAX_DIST = 1.35;
 /**
  * Doom pinky loom: during windup/attack the sprite may fill this much of
@@ -25,6 +26,30 @@ export const LOOM_CAP_FRAC = 0.8;
 export const LOOM_FILL_FRAC = 0.47;
 /** Hard bound on the loom scale-up so tiny sprites don't explode at contact. */
 export const LOOM_MAX_SCALE = 2.2;
+
+/**
+ * Graded loom band (F4): the boost is 1 inside LOOM_FULL_DIST and
+ * smooth-decays to 0 at LOOM_MAX_DIST, so a melee attacker swells toward the
+ * lunge as it closes instead of popping at the old 1.35-tile boundary.
+ * CHASE_BOOST is the share of the full loom a merely-chasing melee attacker
+ * gets; windup/recover always get the full loomT.
+ */
+export const LOOM_FULL_DIST = 1.5;
+export const LOOM_MAX_DIST = 2.4;
+export const CHASE_BOOST = 0.62;
+
+const smoothstep = (t: number) => {
+  const x = Math.min(1, Math.max(0, t));
+  return x * x * (3 - 2 * x);
+};
+
+/** 1 inside LOOM_FULL_DIST, smooth-decays to 0 at LOOM_MAX_DIST. */
+export const loomT = (dist: number): number =>
+  smoothstep((LOOM_MAX_DIST - dist) / (LOOM_MAX_DIST - LOOM_FULL_DIST));
+
+/** Graded loom factor for this sprite this frame (0 = baseline sprite). */
+export const loomK = (dist: number, attacking: boolean, melee: boolean): number =>
+  attacking ? loomT(dist) : melee ? CHASE_BOOST * loomT(dist) : 0;
 
 /**
  * Drawn world height a lunging attacker wants at `dist` so that, once the
