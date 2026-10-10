@@ -55,6 +55,10 @@ const TOOL_FIRE_RGB: Record<string, [number, number, number]> = Object.fromEntri
   ]),
 );
 
+/** Tools that fire a world light flood — damaging attacks only, like Doom
+ *  weapons. Inspect/utility tools (mouse, badge, mfa) don't flash. */
+const ATTACK_TOOLS = new Set(['keyboard', 'usb', 'edr', 'patch', 'tap']);
+
 /** Viewmodel recoil jolt per tool — heavy attacks kick harder. */
 const TOOL_KICK: Record<string, number> = {
   keyboard: 1.3,
@@ -188,9 +192,12 @@ class Game {
     this.bus.on('tool-used', ({ toolId }) => {
       if (this.player && this.runtime) alertNear(this.runtime.entities, this.player.x, this.player.y, 8);
       // Doom fire-frame punch: flood walls/floor with tool-coloured light for
-      // ~110 ms and jolt the viewmodel down like a recoil kick
+      // ~110 ms and jolt the viewmodel down like a recoil kick. Only damaging
+      // attack tools flood — inspect/utility tools (mouse, badge, mfa) keep
+      // just the small kick.
       const rgb = TOOL_FIRE_RGB[toolId];
-      if (rgb) this.renderer.fireLight(rgb[0], rgb[1], rgb[2], toolId === 'edr' ? 1.15 : 0.85);
+      if (rgb && ATTACK_TOOLS.has(toolId))
+        this.renderer.fireLight(rgb[0], rgb[1], rgb[2], toolId === 'edr' ? 1.15 : 0.85);
       this.feel.kick(TOOL_KICK[toolId] ?? 1);
     });
     this.bus.on('cleaned', ({ entityId }) => {
