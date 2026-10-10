@@ -1101,6 +1101,8 @@ class Game {
               failed: o.failed,
               progress: o.progress,
             })) ?? [],
+          callsPending:
+            g.runtime?.entities.filter((e) => g.runtime?.callPending(e.def.id)).map((e) => e.def.id) ?? [],
           entities:
             g.runtime?.entities.map((e) => ({
               id: e.def.id,
@@ -1110,6 +1112,7 @@ class Game {
               y: e.y,
               hp: e.hp,
               alive: e.alive,
+              infected: e.infected,
               mode: e.state.mode,
             })) ?? [],
         };
