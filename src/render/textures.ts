@@ -91,33 +91,44 @@ function rivet(g: CanvasRenderingContext2D, x: number, y: number): void {
 }
 
 function steelPanel(p: PaintCtx, x: number, y: number, w: number, h: number, base: [number, number, number]): void {
-  noiseFill(p, base, 14, 1, x, y, w, h);
+  noiseFill(p, base, 19, 1, x, y, w, h);
   const { g } = p;
   const u = 1 / p.s;
   // brushed horizontal streaks
   for (let yy = y + 1; yy < y + h - 1; yy++) {
-    if (p.rnd() < 0.35) {
-      g.fillStyle = `rgba(255,255,255,${0.04 + p.rnd() * 0.05})`;
+    if (p.rnd() < 0.45) {
+      g.fillStyle = `rgba(255,255,255,${0.05 + p.rnd() * 0.07})`;
+      g.fillRect(x + 1, yy, w - 2, 1);
+    }
+    if (p.rnd() < 0.3) {
+      g.fillStyle = `rgba(4,5,8,${0.05 + p.rnd() * 0.08})`;
       g.fillRect(x + 1, yy, w - 2, 1);
     }
   }
-  g.fillStyle = 'rgba(255,255,255,0.34)';
+  // per-texel speckle so the plate never reads flat point-blank
+  for (let k = 0; k < w * h * 0.04; k++) {
+    const sx = x + 1 + p.rnd() * (w - 2);
+    const sy = y + 1 + p.rnd() * (h - 2);
+    g.fillStyle = p.rnd() < 0.5 ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.14)';
+    g.fillRect(sx, sy, u, u);
+  }
+  g.fillStyle = 'rgba(255,255,255,0.42)';
   g.fillRect(x, y, w, u);
   g.fillRect(x, y, u, h);
-  g.fillStyle = 'rgba(0,0,0,0.55)';
+  g.fillStyle = 'rgba(0,0,0,0.62)';
   g.fillRect(x, y + h - 2 * u, w, 2 * u);
   g.fillRect(x + w - 2 * u, y, 2 * u, h);
   for (const sx of [x + 3, x + w - 5]) {
     rivet(g, sx, y + 3);
     rivet(g, sx, y + h - 5);
   }
-  for (let k = 0; k < 6; k++) {
+  for (let k = 0; k < 9; k++) {
     const sx = x + 5 + p.rnd() * Math.max(1, w - 12);
     const sy = y + 6 + p.rnd() * Math.max(1, h - 12);
     const len = 2 + p.rnd() * 7;
-    g.fillStyle = 'rgba(230,235,245,0.24)';
+    g.fillStyle = 'rgba(230,235,245,0.28)';
     g.fillRect(sx, sy, len, u);
-    g.fillStyle = 'rgba(8,10,14,0.48)';
+    g.fillStyle = 'rgba(8,10,14,0.55)';
     g.fillRect(sx, sy + u, len, u);
   }
 }
@@ -280,7 +291,19 @@ export function buildTextures(jobs = false): void {
     seam(g, 49, 3, 49, 45);
     seam(g, 2, 24, 30, 24);
     seam(g, 34, 24, 62, 24);
+    seam(g, 32, 2, 32, 45);
     for (let x = 6; x < 62; x += 7) bolt(g, x, 46.5);
+    // inspection tag + pin LEDs: colour accents that read at 4K point-blank
+    bevel(g, 52, 12, 8, 6, '#7a5a10', '#ffd040', '#241a04');
+    drawText(g, 'QA', 53, 13, '#181004', 'tiny', null);
+    for (const [lx, lc] of [[22, '#ffb010'], [25, '#2cff5a']] as const) {
+      g.fillStyle = '#0a0c10';
+      g.fillRect(lx - 1, 34, 3, 3);
+      g.fillStyle = lc;
+      g.fillRect(lx, 35, 1, 1);
+      p.glow.fillStyle = '#fff';
+      p.glow.fillRect(lx, 35, 1, 1);
+    }
     drip(g, 9, 20, 26);
     drip(g, 55, 27, 18, '10,8,6');
     vShade(g, 0, 5, '6,5,4', 0.3, 0);
@@ -385,7 +408,12 @@ export function buildTextures(jobs = false): void {
       drawText(g, `U${Math.floor(y / 10) + 1}`, 9, y + 2, '#9299a6', 'tiny', '#121418');
       g.fillStyle = '#0e1013';
       g.fillRect(40, y + 6, 16, 1);
+      // patch cable runs between bays: colour accents on the dark chassis
+      const pc = ['#c84830', '#30a0d8', '#d8b018'][Math.floor(p.rnd() * 3)];
+      g.fillStyle = pc;
+      g.fillRect(14 + Math.floor(p.rnd() * 8) * 3, y + 7, 8, 1 / p.s);
     }
+    for (const [x, y] of [[8, 3], [54, 3], [8, 75], [54, 75]]) rivet(g, x, y);
     grime(p, 'rgba(0,0,0,0.45)', 60);
   });
 
@@ -404,11 +432,20 @@ export function buildTextures(jobs = false): void {
         g.fillRect(Math.max(0, x + 1), y + 1, 30, 1);
         g.fillStyle = 'rgba(0,0,0,0.4)';
         g.fillRect(Math.max(0, x + 1), y + 8, 30, 1);
-        for (let i = 0; i < 10; i++) {
-          g.fillStyle = '#483b33';
+        for (let i = 0; i < 22; i++) {
+          g.fillStyle = p.rnd() < 0.6 ? '#483b33' : '#c8bcae';
           g.fillRect(Math.max(1, x + 3 + p.rnd() * 25), y + 3 + p.rnd() * 4, 1 / p.s, 1 / p.s);
         }
       }
+    }
+    // chipped block edges: dark notch + pale scar, reads point-blank
+    for (let k = 0; k < 7; k++) {
+      const cx = 3 + Math.floor(p.rnd() * 58);
+      const cy = 2 + Math.floor(p.rnd() * 70);
+      g.fillStyle = 'rgba(10,8,6,0.7)';
+      g.fillRect(cx, cy, 2 / p.s, 2 / p.s);
+      g.fillStyle = 'rgba(230,220,205,0.4)';
+      g.fillRect(cx, cy + 2 / p.s, 2 / p.s, 1 / p.s);
     }
     // stepped hairline cracks on two blocks + a patched (repointed) block
     for (const [cx, cy] of [[10, 14], [44, 44]] as const) {
@@ -483,7 +520,13 @@ export function buildTextures(jobs = false): void {
     seam(g, 1, 19, 63, 19);
     seam(g, 1, 36.5, 63, 36.5);
     seam(g, 32, 2, 32, 17);
+    seam(g, 16, 21, 16, 36);
+    seam(g, 48, 21, 48, 36);
     for (let x = 6; x < 62; x += 11) bolt(g, x, 20.5);
+    for (let x = 9; x < 62; x += 14) bolt(g, x, 37.5);
+    // rack id tag on the middle deck
+    bevel(g, 26, 39, 12, 7, '#1d232e', '#4a586e', '#0a0c10');
+    drawText(g, 'R7', 29, 41, '#8fd0ff', 'tiny', null);
     cableDrop(g, 18, 47, 60, 5, '#30a0d8', 8);
     drip(g, 8, 19, 22, '10,12,16');
     vShade(g, 0, 5, '6,8,12', 0.3, 0);
@@ -518,11 +561,16 @@ export function buildTextures(jobs = false): void {
     // weld beads along every other rib seam + drip stains under the rivets
     for (let x = 7; x < 64; x += 16) {
       for (let y = 4; y < 52; y += 3) {
-        g.fillStyle = 'rgba(200,190,170,0.3)';
+        g.fillStyle = 'rgba(200,190,170,0.4)';
         g.fillRect(x, y, u, u * 1.6);
-        g.fillStyle = 'rgba(20,14,8,0.4)';
+        g.fillStyle = 'rgba(20,14,8,0.55)';
         g.fillRect(x + u, y, u, u * 1.6);
       }
+    }
+    // oil-dark half of each rib channel: vertical AO keeps ribs crisp at range
+    for (let x = 4; x < 64; x += 8) {
+      g.fillStyle = 'rgba(8,6,4,0.3)';
+      g.fillRect(x, 2, 2, 52);
     }
     for (const sx of [11, 27, 43, 59]) drip(g, sx, 8, 44);
     drip(g, 18, 18, 26, '30,18,8');

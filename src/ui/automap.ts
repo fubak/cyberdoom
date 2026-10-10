@@ -1,5 +1,5 @@
 import type { MapDef } from '../core/types';
-import { drawText } from '../render/font';
+import { drawText, measureText } from '../render/font';
 import { roleColor } from '../render/textures';
 import { VIEW3D_H, VIEW_W } from '../render/renderer';
 import { RES } from '../render/res';
@@ -168,7 +168,12 @@ export class Automap {
     }
     g.fillStyle = 'rgba(0,0,0,0.8)';
     g.fillRect(0, H - 16, W, 14);
-    drawText(g, `${MAP_HINT} · ${this.follow ? 'FOLLOW' : 'FREE'}`, 4, H - 14, '#ffd040', 'small', '#000');
+    // Footer must never clip: pick the font that fits, ellipsize as last resort.
+    let hint = `${MAP_HINT} · ${this.follow ? 'FOLLOW' : 'FREE'}`;
+    const font = measureText(hint, 'small') <= W - 8 ? 'small' : 'tiny';
+    while (hint.length > 4 && measureText(`${hint}…`, font) > W - 8) hint = hint.slice(0, -1);
+    if (hint.length < `${MAP_HINT} · ${this.follow ? 'FOLLOW' : 'FREE'}`.length) hint += '…';
+    drawText(g, hint, 4, H - 14, '#ffd040', font, '#000');
     g.restore();
   }
 }
