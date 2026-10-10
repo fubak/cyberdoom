@@ -73,16 +73,17 @@ void main() {
   // sector strobe: every texel of a strobing sector shares one clock (the
   // vertex 'strobe' attribute is its phase id) — Doom's blinking sector. It
   // also pulls fullbright texels (lamp diffusers, glow strips) down with the
-  // room, so the fixture itself reads as switching off.
+  // room, so the fixture itself reads as switching off. ~1 Hz: lit ~78% of
+  // the cycle with a short dim dip to 45% — Doom's slow sector blink, and
+  // well under the ~3 flashes/s photosensitivity limit.
   float sfl = 1.0;
   if (vStrobe > 0.5) {
     if (uProbeStrobe >= 0.0) {
-      // look probes capture the blink-OFF phase — deterministic, and the
-      // harder readability case (threat vs a darkened sector).
+      // look probes pin the blink phase — deterministic captures.
       sfl = uProbeStrobe;
     } else {
-      float r = fract(sin(floor(uTime * 2.7 + vStrobe * 1.31) * 12.9898) * 43758.5453);
-      sfl = r < 0.42 ? 0.1 : 1.0;
+      float cyc = fract(uTime * 1.0 + vStrobe * 0.37);
+      sfl = cyc < 0.78 ? 1.0 : 0.45;
     }
   }
   if (t.a > 0.75) {
