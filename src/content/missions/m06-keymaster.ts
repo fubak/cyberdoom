@@ -296,7 +296,7 @@ export const m06: Mission = {
         category: 'legit',
         objectives: ['3.3'],
       },
-      log: 'Full-disk encryption enabled on the backup drives: data at rest is unreadable without the key.\nDATA CLASSIFICATION: public < private < sensitive < confidential < restricted < critical. Regulated data (financial information, legal information) and trade secrets get the strongest handling. States: data at rest, data in transit, data in use. Sovereignty and geolocation drive geographic restrictions; protect with encryption, hashing, masking, tokenization, obfuscation, segmentation and permission restrictions.\nLEDGER PILOT: blockchain entries sit on an open public ledger - tamper-evident, but public; never store secrets there.'
+      log: 'Full-disk encryption enabled on the backup drives: data at rest is unreadable without the key.\nDATA CLASSIFICATION: labels such as public, private, sensitive, confidential, restricted and critical - each organization defines its own tiers and handling rules. Regulated data (financial information, legal information) and trade secrets get the strongest handling. States: data at rest, data in transit, data in use. Sovereignty and geolocation drive geographic restrictions; protect with encryption, hashing, masking, tokenization, obfuscation, segmentation and permission restrictions.\nLEDGER PILOT: blockchain entries sit on an open public ledger - tamper-evident, but public; never store secrets there.'
     },
     {
       id: 'vault-exit-console',

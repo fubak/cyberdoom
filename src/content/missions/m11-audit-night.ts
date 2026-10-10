@@ -136,7 +136,7 @@ export const m11: Mission = {
         detail: 'Escorted-access register for the media vault. Signing in issues a time-boxed AUDIT role, logged to your badge — least privilege for the night.',
         category: 'legit', objectives: ['4.2'],
       },
-      log: 'Signed in: AUDIT role granted until 08:00. Media-vault reader now accepts your badge + token.\nAAA BROKER: RADIUS handles network authentication over 802.1X port control; TACACS+ covers device-admin sessions. Authentication proves who, authorization scopes what, accounting writes it down - that is non-repudiation.',
+      log: 'Signed in: AUDIT role granted until 08:00. Media-vault reader now accepts your badge + token.\nAAA BROKER: RADIUS handles network authentication over 802.1X port control; TACACS+ covers device-admin sessions. Authentication proves who, authorization scopes what, accounting writes it down - that record supports non-repudiation.',
     },
     {
       id: 'attest-console', kind: 'console', x: 29.5, y: 18.5, sprite: 'console',
@@ -794,7 +794,7 @@ export const m11: Mission = {
     q('q10', ['5.5'], 'During the exercise, testers and defenders share information in real time so detection and response get measured alongside the attack. This is a(n):', 1, [
       ['Offensive penetration test', 'Pure offensive work measures only the attacker\'s progress - not the defender\'s response.'],
       ['Integrated (purple-team) penetration test', 'Correct. Integrated testing combines offense and defense so both capabilities are exercised and measured.'],
-      ['Defensive-only drill', 'If only defenders act there is no adversary - it becomes a tabletop, not a pen test.'],
+      ['Defensive-only drill', 'With no one emulating the adversary, nothing is attacked - it is a defensive exercise, not a penetration test.'],
       ['External audit', 'An audit reviews controls and evidence; it does not execute adversary techniques.'],
     ]),
   ],
