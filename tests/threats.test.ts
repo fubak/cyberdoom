@@ -146,19 +146,35 @@ describe('malware-type mechanics (SY0-701 2.4)', () => {
     expect(onSpawn).toHaveBeenCalledTimes(2);
   });
 
-  it('trojan stays disguised at range, reveals within 3 tiles and attacks', () => {
+  it('trojan sits frozen while disguised, reveals within 3 tiles and attacks', () => {
     const map = new WorldMap(mapDef);
     const trojan = enemy('t1', 'trojan', 2.5, 2.5, 3);
-    trojan.state.facing = Math.PI; // facing away: it can't spot the player yet
+    trojan.state.facing = 0; // facing +x, straight at the player: inside aggro range
     const player = new Player(7.5, 2.5, Math.PI);
     const onSight = vi.fn();
     const onNotice = vi.fn();
-    const h = hooks({ onSight, onNotice });
+    const onFire = vi.fn();
+    const h = hooks({ onSight, onNotice, onFire });
 
+    // Five tiles away in plain sight is still a pickup: no move, no chase, no shot.
+    for (let i = 0; i < 80; i++) updateEntities([trojan], map, player, 0.025, h);
+    expect(trojan.state.revealedTrojan).toBeUndefined();
+    expect(trojan.state.mode).toBeUndefined();
+    expect(trojan.x).toBe(2.5);
+    expect(trojan.y).toBe(2.5);
+    expect(onSight).not.toHaveBeenCalled();
+    expect(onFire).not.toHaveBeenCalled();
+
+    // Even a combat aggro without exposure keeps it planted.
+    trojan.state.aggroed = true;
+    trojan.state.mode = 'chase';
     for (let i = 0; i < 40; i++) updateEntities([trojan], map, player, 0.025, h);
     expect(trojan.state.revealedTrojan).toBeUndefined();
-    expect(onSight).not.toHaveBeenCalled();
+    expect(trojan.x).toBe(2.5);
+    expect(trojan.y).toBe(2.5);
+    expect(onFire).not.toHaveBeenCalled();
 
+    // Closing within 3 tiles exposes it; then it hunts normally.
     player.x = 5.4;
     player.y = 2.5;
     for (let i = 0; i < 10; i++) updateEntities([trojan], map, player, 0.025, h);
@@ -295,6 +311,51 @@ describe('malware-type mechanics (SY0-701 2.4)', () => {
     for (let i = 1; i < times.length; i++) {
       expect(times[i] - times[i - 1]).toBeLessThan(1.4);
       expect(times[i] - times[i - 1]).toBeGreaterThan(0.7);
+    }
+  });
+
+  it('pins melee cooldown to 0.45-0.75s and ranged cooldown to 1.2-2.0s', () => {
+    // 0.1 passes the ranged fire-chance gate at 6 tiles and exercises the
+    // low end of both cooldown ranges.
+    vi.spyOn(Math, 'random').mockReturnValue(0.1);
+    const map = new WorldMap(mapDef);
+
+    // Melee (worm): cooldown captured right after each hit.
+    const worm = enemy('w-cd', 'worm', 2.5, 2.5, 99);
+    const meleeCds: number[] = [];
+    const meleePlayer = new Player(3.2, 2.5, Math.PI);
+    const onMelee = vi.fn();
+    const mw = hooks({ onMelee });
+    for (let i = 0; i < 400 && meleeCds.length < 3; i++) {
+      updateEntities([worm], map, meleePlayer, 0.025, mw);
+      if (onMelee.mock.calls.length > meleeCds.length) {
+        meleeCds.push(worm.state.attackCooldown as number);
+      }
+    }
+    expect(meleeCds.length).toBeGreaterThanOrEqual(3);
+    for (const cd of meleeCds) {
+      expect(cd).toBeGreaterThanOrEqual(0.45);
+      expect(cd).toBeLessThan(0.75);
+    }
+
+    // Ranged (revealed trojan): cooldown captured right after each shot.
+    const trojan = enemy('t-cd', 'trojan', 1.5, 2.5, 99);
+    trojan.state.revealedTrojan = true;
+    trojan.state.facing = 0; // player is at +x
+    const rangedCds: number[] = [];
+    const player = new Player(7.5, 2.5, Math.PI);
+    const onFire = vi.fn();
+    const rh = hooks({ onFire });
+    for (let i = 0; i < 800 && rangedCds.length < 3; i++) {
+      updateEntities([trojan], map, player, 0.025, rh);
+      if (onFire.mock.calls.length > rangedCds.length) {
+        rangedCds.push(trojan.state.attackCooldown as number);
+      }
+    }
+    expect(rangedCds.length).toBeGreaterThanOrEqual(3);
+    for (const cd of rangedCds) {
+      expect(cd).toBeGreaterThanOrEqual(1.2);
+      expect(cd).toBeLessThan(2.0);
     }
   });
 });

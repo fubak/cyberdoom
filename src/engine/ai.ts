@@ -67,7 +67,9 @@ const DIRECTIONS = Array.from({ length: 8 }, (_, i) => [
   Math.sin((i * Math.PI) / 4),
 ]);
 // Doom-ish melee cadence: cooldown + windup + recover lands a ~1.0-1.3 s cycle.
-const randomCooldown = () => 0.45 + Math.random() * 0.3;
+// Ranged attackers (trojan, ransomware, rat) keep the slower volley cadence.
+const meleeCooldown = () => 0.45 + Math.random() * 0.3;
+const rangedCooldown = () => 1.2 + Math.random() * 0.8;
 
 // Malware-type mechanics (SY0-701 2.4): timers, caps and reveal distances.
 export const WORM_PROPAGATE_DELAY = 8;
@@ -384,6 +386,9 @@ export function updateEntities(
     if (ai === 'chase') {
       const profile = ENEMY_PROFILES[e.def.threat ?? e.def.sprite] ?? ENEMY_PROFILES.worm;
       const speed = profile.speed * ((e.state.speedMul as number | undefined) ?? 1);
+      // A still-disguised trojan is a planted pickup: it neither spots the
+      // player nor moves until the reveal path flips revealedTrojan.
+      const disguisedActive = profile.disguised === true && e.state.revealedTrojan !== true;
       if (profile.regenerate) {
         if (e.state.lastHurtAt === undefined) e.state.lastHurtAt = now;
         const sinceHurt = now - (e.state.lastHurtAt as number);
@@ -438,7 +443,7 @@ export function updateEntities(
             hooks.onWindup(e, profile.windup);
             currentMode = 'windup';
           }
-        } else if ((los && dist < aggro && inFront) || dist < 2.5) {
+        } else if (!disguisedActive && ((los && dist < aggro && inFront) || dist < 2.5)) {
           e.state.mode = 'chase';
           e.state.reaction = 0.25;
           e.state.attackCooldown = 0.25;
@@ -450,7 +455,7 @@ export function updateEntities(
 
       const movedirFromAngle = (angle: number) =>
         ((Math.round(angle / (Math.PI / 4)) % 8) + 8) % 8;
-      if (currentMode === 'chase') {
+      if (currentMode === 'chase' && !disguisedActive) {
         e.state.attackCooldown = Math.max(0, ((e.state.attackCooldown as number | undefined) ?? 0) - dt);
         e.state.movecount = ((e.state.movecount as number | undefined) ?? 0) - dt;
         const tryMove = () => {
@@ -535,7 +540,7 @@ export function updateEntities(
           if (profile.retreatAfterShot) e.state.retreatT = profile.retreatAfterShot;
           else e.state.recoverT = 0.3;
           e.state.popT = 0;
-          e.state.attackCooldown = randomCooldown();
+          e.state.attackCooldown = profile.ranged ? rangedCooldown() : meleeCooldown();
         }
       } else if (currentMode === 'recover') {
         const recoverT = ((e.state.recoverT as number | undefined) ?? 0) - dt;
