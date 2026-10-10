@@ -7,7 +7,7 @@ import type { ViewPose } from '../engine/feel';
 import { buildPaletteLut } from './palette';
 import { genWorkerCount } from './genpool';
 import { buildSprites, prewarmLazySpriteFrames, spriteSets, type SpriteSet } from './sprites';
-import { WALL_H, buildTextures, doorTextureFor, textureOr, textureRegistry } from './textures';
+import { WALL_H, buildTextures, decalTexture, doorTextureFor, hashStr, lookTheme, textureOr, textureRegistry } from './textures';
 import { RES, STATUS_H, VIEW3D_H, VIEW_H, VIEW_W } from './res';
 
 export { VIEW_W, VIEW_H, STATUS_H, VIEW3D_H } from './res';
@@ -51,6 +51,7 @@ uniform float uLight;
 uniform float uFloor;
 uniform float uGain;
 uniform float uFlash;
+uniform vec3 uTint;
 uniform vec2 uUvScale;
 uniform vec2 uUvOffset;
 uniform float uTime;
@@ -71,13 +72,16 @@ void main() {
       fl = r < 0.3 ? 0.4 : 1.0;
     }
     float s = abs(vShade) * uLight * fl;
-    // distance diminishing never drops below ~30% of the sector light (or the
-    // material floor): far things get dim, never pure black
-    float dim = s * 1.4 - vDist * (0.16 - s * 0.08);
-    L = clamp(max(dim, max(0.5 * s, uFloor)), 0.0, 1.0);
+    // distance diminishing never drops below ~55% of the sector light, and
+    // uFloor lifts black the way Doom's COLORMAP never bottoms out: dark
+    // sectors keep their texel structure and hue instead of crushing flat
+    float dim = s * 1.45 - vDist * (0.14 - s * 0.06);
+    L = max(dim, max(0.55 * s, uFloor));
+    L = clamp(L, 0.0, 1.0);
+    // banded like a 24-step colormap
     L = floor(L * 24.0 + 0.5) / 24.0;
   }
-  vec3 c = mix(min(t.rgb * L * uGain, vec3(1.0)), vec3(1.0), uFlash);
+  vec3 c = mix(min(t.rgb * uTint * L * uGain, vec3(1.0)), vec3(1.0), uFlash);
   gl_FragColor = vec4(c, 1.0);
 }`;
 
@@ -130,16 +134,20 @@ void main() { gl_FragColor = vec4(vColor, 1.0); }`;
 
 const timeUniform = { value: 0 };
 
-function worldMaterial(map: THREE.Texture, light = 1): THREE.ShaderMaterial {
+/** Wall families flat enough to carry a decal plate overlay. */
+const DECALABLE = new Set(['wall-panel', 'wall-brick', 'wall-tech', 'wall-ribs', 'wall-brick2']);
+
+function worldMaterial(map: THREE.Texture, light = 1, floor = 0.16, tint?: THREE.Vector3): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
     vertexShader: WORLD_VS,
     fragmentShader: WORLD_FS,
     uniforms: {
       map: { value: map },
       uLight: { value: light },
-      uFloor: { value: 0.16 },
+      uFloor: { value: floor },
       uGain: { value: 1 },
       uFlash: { value: 0 },
+      uTint: { value: tint ?? new THREE.Vector3(1, 1, 1) },
       uUvScale: { value: new THREE.Vector2(1, 1) },
       uUvOffset: { value: new THREE.Vector2(0, 0) },
       uTime: timeUniform,
@@ -360,7 +368,7 @@ export class Renderer {
   }
 
   /** Rebuild level geometry for a new mission. */
-  buildLevel(map: WorldMap, _def: MapDef): void {
+  buildLevel(map: WorldMap, _def: MapDef, missionId?: string): void {
     this.map = map;
     this.levelGroup.clear();
     this.spriteGroup.clear();
@@ -375,6 +383,10 @@ export class Renderer {
     this.hurt = 0;
 
     const isWall = (x: number, y: number) => map.cellAt(x, y)?.kind === 'wall' || !map.cellAt(x, y);
+    // per-mission look identity: wall-variant mix, decal pool, hue tint, floor
+    const theme = lookTheme(missionId, _def.look?.theme);
+    const tintV = new THREE.Vector3(...theme.tint);
+    const seed = hashStr(missionId ?? 'cyberdoom');
     this.computeLight(map, _def);
     const lightAt = (x: number, y: number) => this.tileLight(x, y);
     const builders = new Map<string, { tex: THREE.Texture; b: GeoBuilder }>();
@@ -403,6 +415,21 @@ export class Renderer {
         [s * 0.8, s * 0.8, s, s],
       );
     };
+    // decal overlays sit a hair off the wall face so they never z-fight
+    const decalFace = (b: GeoBuilder, tx: number, ty: number, nx: number, nz: number, shade: number) => {
+      const cx = tx + 0.5 + nx * (0.5 + 0.014);
+      const cz = ty + 0.5 + nz * (0.5 + 0.014);
+      const rx = nz;
+      const rz = -nx;
+      const l = [cx - rx * 0.5, cz - rz * 0.5];
+      const r = [cx + rx * 0.5, cz + rz * 0.5];
+      const s = shade * (nz !== 0 ? 1.08 : 0.84);
+      b.quad(
+        [[l[0], 0, l[1]], [r[0], 0, r[1]], [r[0], H, r[1]], [l[0], H, l[1]]],
+        [[0, 0], [1, 0], [1, 1], [0, 1]],
+        [s * 0.8, s * 0.8, s, s],
+      );
+    };
 
     const flicker = (x: number, y: number) =>
       map.cellAt(x, y)?.kind === 'floor' && lightAt(x, y) > 0.28 && lightAt(x, y) < 0.6 && (x * 7 + y * 13) % 4 === 0 ? -1 : 1;
@@ -415,10 +442,23 @@ export class Renderer {
             const n = map.cellAt(tx + dx, ty + dz);
             if (!n || n.kind === 'wall') continue;
             const isTrack = n.kind === 'door' && !n.secret;
-            const b = isTrack
-              ? builder('doortrak', textureOr('doortrak'))
-              : builder(`w:${cell.tex}`, textureOr(cell.tex));
-            wallFace(b, tx, ty, dx, dz, lightAt(tx + dx, ty + dz) * flicker(tx + dx, ty + dz));
+            const shade = lightAt(tx + dx, ty + dz) * flicker(tx + dx, ty + dz);
+            if (isTrack) {
+              wallFace(builder('doortrak', textureOr('doortrak')), tx, ty, dx, dz, shade);
+              continue;
+            }
+            // deterministic per-face variant: mix in the theme's alt wall
+            // family, and overlay a themed decal plate on ~1/3 of faces
+            const h = (Math.imul(tx * 2 + dx + 1, 73856093) ^ Math.imul(ty * 2 + dz + 1, 19349663) ^ seed) >>> 0;
+            let texId = cell.tex;
+            if (texId === 'wall-panel' && h % 4 === 0) texId = theme.alts[(h >>> 4) % theme.alts.length];
+            else if (texId === 'wall-brick' && h % 6 === 0) texId = 'wall-brick2';
+            wallFace(builder(`w:${texId}`, textureOr(texId)), tx, ty, dx, dz, shade);
+            if (DECALABLE.has(texId) && (h >>> 8) % 3 === 0) {
+              const did = theme.decals[(h >>> 12) % theme.decals.length];
+              const dt = decalTexture(did);
+              if (dt) decalFace(builder(`d:${did}`, dt), tx, ty, dx, dz, shade);
+            }
           }
           continue;
         }
@@ -437,7 +477,7 @@ export class Renderer {
             [[0, 0], [1, 0], [1, 0.1], [0, 0.1]],
             [0.3, 0.3, 0.3, 0.3],
           );
-          const mesh = new THREE.Mesh(b.build(), worldMaterial(tex));
+          const mesh = new THREE.Mesh(b.build(), worldMaterial(tex, 1, 0.3, tintV));
           this.levelGroup.add(mesh);
           this.doorMeshes.set(id, mesh);
         }
@@ -451,7 +491,8 @@ export class Renderer {
         };
         const fk = flicker(tx, ty);
         const s = [ao(tx, ty), ao(tx + 1, ty), ao(tx + 1, ty + 1), ao(tx, ty + 1)].map((v) => v * fk);
-        const floorTex = cell.kind === 'exit' ? 'exit' : textureRegistry.get(cell.tex) && cell.kind === 'floor' ? cell.tex : 'floor';
+        const cellFloor = cell.kind === 'exit' ? 'exit' : textureRegistry.get(cell.tex) && cell.kind === 'floor' ? cell.tex : 'floor';
+        const floorTex = cellFloor === 'floor' ? theme.floor : cellFloor;
         builder(`f:${floorTex}`, textureOr(floorTex, 'floor')).quad(
           [[tx, 0, ty], [tx + 1, 0, ty], [tx + 1, 0, ty + 1], [tx, 0, ty + 1]],
           [[0, 1], [1, 1], [1, 0], [0, 0]],
@@ -468,7 +509,7 @@ export class Renderer {
       }
     }
     for (const { tex, b } of builders.values()) {
-      this.levelGroup.add(new THREE.Mesh(b.build(), worldMaterial(tex)));
+      this.levelGroup.add(new THREE.Mesh(b.build(), worldMaterial(tex, 1, 0.3, tintV)));
     }
   }
 

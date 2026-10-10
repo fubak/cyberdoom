@@ -261,11 +261,34 @@ describe('debrief intermission tallies', () => {
 });
 
 describe('presentSize', () => {
-  it('3840x2160 @1 fits fractionally (2.7x would waste borders)', () => {
+  it('3840x2160 @1 stays fractional: 2x would fill only 74% of the shorter axis', () => {
     const s = presentSize(3840, 2160, 1);
     expect(s.integer).toBe(false);
     expect(s.cssW).toBe(3456);
     expect(s.cssH).toBe(2160);
+  });
+
+  it('3840x2160 @2 (1920x1080 css) is the same fractional case', () => {
+    const s = presentSize(1920, 1080, 2);
+    expect(s.integer).toBe(false);
+    expect(s.cssW).toBe(1728);
+    expect(s.cssH).toBe(1080);
+  });
+
+  it('integer 2x when it fills >=85% of the shorter axis (was 0.9-ratio before)', () => {
+    // phys 2944x1840: fit 2.3, k=2 fills 1600/1840 = 87% -> integer
+    const s = presentSize(1472, 920, 2);
+    expect(s.integer).toBe(true);
+    expect(s.cssW).toBe(1280);
+    expect(s.cssH).toBe(800);
+  });
+
+  it('just under 85% stays fractional-filtered', () => {
+    // phys 3072x1920: fit 2.4, k=2 fills 1600/1920 = 83% -> fractional
+    const s = presentSize(1536, 960, 2);
+    expect(s.integer).toBe(false);
+    expect(s.cssW).toBe(1536);
+    expect(s.cssH).toBe(960);
   });
 
   it('2560x1600 @1 picks exact 2x integer', () => {
@@ -284,10 +307,15 @@ describe('presentSize', () => {
 
   it('2560x1440 @2 (css px) still fits', () => {
     const s = presentSize(2560, 1440, 2);
-    // physical fit = 3.6, so fractional: 2304x1440 css
+    // physical fit = 3.6, k=3 fills 2400/2880 = 83% < 85% -> fractional
     expect(s.integer).toBe(false);
     expect(s.cssW).toBe(2304);
     expect(s.cssH).toBe(1440);
+  });
+
+  it('2560x1440 @1: 1x fills only 56% -> fractional', () => {
+    const s = presentSize(2560, 1440, 1);
+    expect(s.integer).toBe(false);
   });
 
   it('tiny window still fits', () => {

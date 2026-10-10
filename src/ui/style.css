@@ -51,6 +51,12 @@ html, body {
   image-rendering: pixelated;
 }
 
+/* fractional presentation: high-quality filtered scale, no uneven texels */
+#viewport.smooth canvas.gl,
+#viewport.smooth #hud {
+  image-rendering: auto;
+}
+
 /* crosshair */
 #crosshair {
   position: absolute;

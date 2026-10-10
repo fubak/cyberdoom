@@ -346,7 +346,7 @@ class Game {
         p.stage++;
         break;
       case 1: { // level geometry + light
-        this.renderer.buildLevel(p.map!, mission.map);
+        this.renderer.buildLevel(p.map!, mission.map, mission.id);
         p.built = true;
         // texture warm list: every level texture + already-materialized sprite
         // frames for the sets this mission uses (lazy getters are skipped so
@@ -538,7 +538,7 @@ class Game {
     this.edrPulseCount = 0;
     this.sealedDoors.clear();
     this.noticedThreats.clear();
-    if (!prep?.built) this.renderer.buildLevel(this.map, mission.map);
+    if (!prep?.built) this.renderer.buildLevel(this.map, mission.map, mission.id);
     this.audio.setVoice(this.gender);
     this.audio.setListener(this.player.x, this.player.y, this.player.angle);
     this.audio.startAmbience();
