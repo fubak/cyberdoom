@@ -41,15 +41,19 @@ test.describe('death debrief', () => {
     const errors = await bootAndDie(page);
     const canvas = page.locator('canvas.cd-pixel-canvas');
     await expect(canvas).toHaveAttribute('aria-label', /CAUSE OF FAILURE/);
-    // page through the failure explanation to the last report page, then Enter
-    for (let i = 0; i < 10; i++) {
-      const meta = await canvas.getAttribute('data-page');
-      if (!meta) break;
-      const [cur, total] = meta.split('/').map(Number);
+    // Enter on the last cause-of-failure page redeploys; allow an extra press
+    // for the intro-animation skip, then stop as soon as play starts.
+    let screen = 'debrief';
+    for (let i = 0; i < 4; i += 1) {
       await page.keyboard.press('Enter');
-      if (cur >= total) break;
+      screen = await expect
+        .poll(async () => (await cd(page)).screen, { timeout: 1500 })
+        .toBe('play')
+        .then(() => 'play' as const)
+        .catch(async () => (await cd(page)).screen);
+      if (screen === 'play') break;
     }
-    await expect.poll(async () => (await cd(page)).screen).toBe('play');
+    expect(screen).toBe('play');
     expect(errors).toEqual([]);
   });
 });

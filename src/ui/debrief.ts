@@ -159,6 +159,8 @@ interface View {
   sub?: string;
   pages: Page[];
   nextLabel: string;
+  /** Page index from which Enter/the NEXT button triggers `next()`. Default: last page. */
+  nextAt?: number;
   canNext: () => boolean;
   next: () => void;
   onHit?: (i: number) => void;
@@ -380,7 +382,7 @@ export function debrief(opts: {
     if (n > 1) x += button('< PREV', x, fy, page > 0, () => go(-1)) + 4;
     x += button(`EVIDENCE ${entries.length} [L]`, x, fy, true, () => { ev.open = true; }) + 4;
     if (view.extraButton) button(view.extraButton.label, x, fy, true, view.extraButton.go);
-    const last = page >= n - 1;
+    const last = page >= (view.nextAt ?? n - 1);
     const nextLabel = !last ? 'NEXT PAGE [ENTER] >' : view.canNext() ? `${view.nextLabel} [ENTER] >` : view.nextLabel;
     const nw = button(nextLabel, DB_W - 10, fy, !last || view.canNext(), () => advance(), 'r');
     if (n > 1) {
@@ -410,7 +412,7 @@ export function debrief(opts: {
       render();
       return;
     }
-    if (page < view.pages.length - 1) go(1);
+    if (page < (view.nextAt ?? view.pages.length - 1)) go(1);
     else if (view.canNext()) view.next();
   };
 
@@ -550,7 +552,7 @@ export function debrief(opts: {
       if (fx.why) failBlocks.push(block('WHY IT MATTERS', C.gold), block(fx.why, C.white));
       failBlocks.push(block('NEXT TIME', C.gold));
       for (const line of fx.next) failBlocks.push(block(line, C.text, { prefix: '>', prefixColor: C.gold }));
-      failBlocks.push(block('ENTER REDEPLOY  -  K OPTIONAL KNOWLEDGE CHECK (QUIZ)  -  ESC MISSION SELECT', C.orange));
+      failBlocks.push(block('ENTER REDEPLOY  -  -> FULL REPORT  -  K OPTIONAL KNOWLEDGE CHECK (QUIZ)  -  ESC MISSION SELECT', C.orange));
       failPages.push(...paginate(failBlocks).map((lines) => ({ lines })));
     }
     show({
@@ -559,6 +561,7 @@ export function debrief(opts: {
       ramp: opts.won ? RAMP.gold : RAMP.red,
       pages: [...failPages, tally, ...paginate(blocks).map((lines) => ({ lines })), ...paginate(logBlocks).map((lines) => ({ lines }))],
       nextLabel: opts.won ? 'KNOWLEDGE CHECK' : 'REDEPLOY',
+      nextAt: opts.won ? undefined : failPages.length - 1,
       canNext: () => true,
       next: opts.won ? () => runCheck(buildFirstCheck(), 'first') : redeploy,
       extraButton: opts.won ? undefined : { label: 'QUIZ [K]', go: () => runCheck(buildFirstCheck(), 'first') },
