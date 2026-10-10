@@ -9,7 +9,7 @@ import { badgeTool, mfaPending } from '../src/tools/badge';
 import { mfaTool } from '../src/tools/mfa';
 import { tapTool } from '../src/tools/tap';
 import { edrTool } from '../src/tools/edr';
-import { targetNoun } from '../src/tools/hint';
+import { aimIsHostile, HintFader, targetNoun } from '../src/tools/hint';
 import { doorUseHint, resolveUse, type UseTargetContext } from '../src/engine/useTarget';
 import { MissionRuntime } from '../src/missions/runtime';
 import { WorldMap } from '../src/engine/map';
@@ -226,6 +226,29 @@ describe('tool hints agree with use() and never leak verdicts', () => {
     const bug = ent({ id: 'e', kind: 'enemy' }, 5);
     const { ctx: c3 } = ctx({ entities: [bug] });
     expect(edrTool.hint!(c3)).toEqual({ text: 'HOLD: CHARGE CONTAINMENT PULSE', ready: true });
+  });
+
+  it('repeat LMB hint fades on a hostile target but never on an interactable', () => {
+    const fader = new HintFader();
+    // aiming at an infected enemy: the same combat hint disappears after 4 s
+    const bug = ent({ id: 'w', kind: 'enemy' }, 1, true);
+    const { ctx: cb } = ctx({ entities: [bug] });
+    expect(aimIsHostile(cb)).toBe(true);
+    for (const t of [0, 1.5, 3.9]) {
+      expect(fader.apply(keyboardTool.hint!(cb), aimIsHostile(cb), t)?.text).toBe('KILL PROCESS: MALWARE');
+    }
+    expect(fader.apply(keyboardTool.hint!(cb), aimIsHostile(cb), 4.2)).toBeNull();
+    // aiming at a workstation: the interactable hint is still up at 10 s
+    const ws = ent({ id: 'ws', kind: 'workstation' }, 1);
+    const { ctx: cw } = ctx({ entities: [ws] });
+    expect(aimIsHostile(cw)).toBe(false);
+    const f2 = new HintFader();
+    for (const t of [0, 5, 10]) {
+      expect(f2.apply(patchTool.hint!(cw), aimIsHostile(cw), t)?.text).toBe('APPLY PATCH: WORKSTATION');
+    }
+    // a workstation in front of a farther enemy still counts as interactable
+    const { ctx: cboth } = ctx({ entities: [ws, ent({ id: 'w2', kind: 'enemy' }, 6, true)] });
+    expect(aimIsHostile(cboth)).toBe(false);
   });
 
   it('no hint text leaks an entity label for decoy/wrong/malicious entities', () => {

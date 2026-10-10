@@ -22,6 +22,7 @@ import { Dossier } from './ui/dossier';
 import * as screens from './ui/screens';
 import { MissionRuntime } from './missions/runtime';
 import { mfaPending } from './tools/badge';
+import { aimIsHostile, HintFader } from './tools/hint';
 import { missionRegistry } from './content/missions';
 import { objectiveById } from './content/objectives';
 import { toolForSlot } from './tools';
@@ -100,8 +101,7 @@ class Game {
   };
   private promptNextT = 0;
   private lastFireT = -Infinity;
-  private lmbHintText: string | null = null;
-  private lmbHintSince = 0;
+  private lmbHintFader = new HintFader();
   private bannerUntil = 0;
   private lastToolId = '';
   private switchedTool = false;
@@ -532,8 +532,7 @@ class Game {
     this.prompt = { lmb: null, use: null, lmbHot: false, banner: null, footer: null };
     this.promptNextT = 0;
     this.lastFireT = -Infinity;
-    this.lmbHintText = null;
-    this.lmbHintSince = 0;
+    this.lmbHintFader = new HintFader();
     this.bannerUntil = 0;
     this.lastToolId = this.arsenal.current.id;
     this.switchedTool = false;
@@ -977,14 +976,9 @@ class Game {
     const tool = this.arsenal.current;
     const ctx = this.toolCtx();
     let lmb = tool.hint?.(ctx) ?? null;
-    // fade an unchanged hint after a few seconds so it stops crowding combat;
-    // a new hint (different text) shows immediately
-    if (lmb && lmb.text === this.lmbHintText) {
-      if (this.simT - this.lmbHintSince > 4) lmb = null;
-    } else {
-      this.lmbHintText = lmb?.text ?? null;
-      this.lmbHintSince = this.simT;
-    }
+    // fade an unchanged COMBAT hint after a few seconds so it stops crowding
+    // combat; interactable hints (workstation/door/console/pickup) stay up
+    lmb = this.lmbHintFader.apply(lmb, aimIsHostile(ctx), this.simT);
     const ammo = tool.ammo ? this.arsenal.ammoFor(tool) : null;
     if (ammo === 0) lmb = { text: `OUT OF ${tool.ammo!.resource.toUpperCase()}`, ready: false };
     this.prompt.lmb = lmb;
