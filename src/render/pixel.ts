@@ -84,12 +84,14 @@ export function paintRaw(
   const latticeH = Math.ceil(height / 8) + 1;
   const grime = new Float32Array(latticeW * latticeH);
   if (wallGrime) for (let i = 0; i < grime.length; i++) grime[i] = rnd();
-  const grain = sprite ? 0.03 : 0.05;
+  // Walls get hard per-texel grain: at 4K a point-blank wall must read as
+  // crisp pixel texture, not a cloudy panel. Sprites stay smoother.
+  const grain = sprite ? 0.03 : wallGrime ? 0.11 : 0.05;
   for (let y = 0; y < height; y++) {
     const gy = y / 8;
     const y0 = Math.floor(gy);
     const fy = gy - y0;
-    const wallFactor = wallGrime ? Math.max(0, Math.min(1, (y / height - 0.75) / 0.25)) : 0;
+    const wallFactor = wallGrime ? Math.max(0, Math.min(1, (y / height - 0.6) / 0.4)) : 0;
     for (let x = 0; x < width; x++) {
       const i = (y * width + x) * 4;
       if (rgba[i + 3] < 128 || glowData[i + 3] > 0) continue;
@@ -101,7 +103,7 @@ export function paintRaw(
         const fx = gx - x0;
         const top = grime[y0 * latticeW + x0] * (1 - fx) + grime[y0 * latticeW + x0 + 1] * fx;
         const bottom = grime[(y0 + 1) * latticeW + x0] * (1 - fx) + grime[(y0 + 1) * latticeW + x0 + 1] * fx;
-        grimeMul = (top * (1 - fy) + bottom * fy) * wallFactor * 0.14;
+        grimeMul = (top * (1 - fy) + bottom * fy) * wallFactor * 0.22;
       }
       const mul = grainMul * (1 - grimeMul);
       rgba[i] = clamp(rgba[i] * mul);

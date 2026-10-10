@@ -33,14 +33,17 @@ const EYE_H = 0.6;
 
 const WORLD_VS = /* glsl */ `
 attribute float shade;
+attribute float strobe;
 varying vec2 vUv;
 varying float vShade;
 varying float vDist;
 varying vec2 vWorld;
+varying float vStrobe;
 void main() {
   vUv = uv;
   vWorld = (modelMatrix * vec4(position, 1.0)).xz;
   vShade = shade;
+  vStrobe = strobe;
   vec4 mv = modelViewMatrix * vec4(position, 1.0);
   vDist = -mv.z;
   gl_Position = projectionMatrix * mv;
@@ -57,14 +60,31 @@ uniform vec3 uTint;
 uniform vec2 uUvScale;
 uniform vec2 uUvOffset;
 uniform float uTime;
+uniform float uProbeStrobe;
 varying vec2 vWorld;
 varying vec2 vUv;
 varying float vShade;
 varying float vDist;
+varying float vStrobe;
 void main() {
   vec4 t = texture2D(map, vUv * uUvScale + uUvOffset);
   if (t.a < 0.25) discard;
   float L = 1.0;
+  // sector strobe: every texel of a strobing sector shares one clock (the
+  // vertex 'strobe' attribute is its phase id) — Doom's blinking sector. It
+  // also pulls fullbright texels (lamp diffusers, glow strips) down with the
+  // room, so the fixture itself reads as switching off.
+  float sfl = 1.0;
+  if (vStrobe > 0.5) {
+    if (uProbeStrobe >= 0.0) {
+      // look probes capture the blink-OFF phase — deterministic, and the
+      // harder readability case (threat vs a darkened sector).
+      sfl = uProbeStrobe;
+    } else {
+      float r = fract(sin(floor(uTime * 2.7 + vStrobe * 1.31) * 12.9898) * 43758.5453);
+      sfl = r < 0.42 ? 0.1 : 1.0;
+    }
+  }
   if (t.a > 0.75) {
     // negative shade marks a flickering (faulty fluorescent) tile
     float fl = 1.0;
@@ -73,23 +93,29 @@ void main() {
       float r = fract(sin(floor(uTime * 9.0) * 12.9898 + dot(cellId, vec2(3.1, 7.7))) * 43758.5453);
       fl = r < 0.3 ? 0.4 : 1.0;
     }
-    float s = abs(vShade) * uLight * fl;
+    float s = abs(vShade) * uLight * fl * sfl;
     // Doom-style distance diminishing: a lit face is about half as bright by
     // ~10 tiles and near-black before the fog plane; dark sectors crush far
-    // sooner. uFloor is the only minimum — sprites keep their own readability
-    // floors while walls/flats may fall to real darkness.
-    float dim = s * (1.6 - vDist * 0.115);
+    // sooner (their falloff rate rises as s drops, like Doom's colormap
+    // running out of bands): dim sectors read as near-black within ~4 tiles
+    // while lit faces still carry most of their light to ~10. uFloor is the
+    // only minimum — sprites keep their own readability floors while
+    // walls/flats may fall to real darkness.
+    float fade = 0.115 + max(0.0, 0.62 - s) * 2.6;
+    float dim = s * (1.6 - vDist * fade);
     L = max(dim, uFloor);
     L = clamp(L, 0.0, 1.0);
     // banded like a 24-step colormap
     L = floor(L * 24.0 + 0.5) / 24.0;
   }
+  L = min(L, 1.5);
   // Doom fire-frame light flood: a brief tool-coloured boost that fades with
   // distance (overrides banding like Doom's fullbright muzzle-flash frame)
   float reach = (1.0 - clamp(vDist / 14.0, 0.0, 0.92)) * uFire.a;
   L = min(L + reach, 1.5);
   vec3 c = mix(min(t.rgb * uTint * L * uGain, vec3(1.0)), vec3(1.0), uFlash);
   c = min(c + uFire.rgb * reach * 0.4, vec3(1.0));
+  c *= sfl;
   gl_FragColor = vec4(c, 1.0);
 }`;
 
@@ -144,6 +170,8 @@ varying vec3 vColor;
 void main() { gl_FragColor = vec4(vColor, 1.0); }`;
 
 const timeUniform = { value: 0 };
+// <0 = live strobes; >=0 = probes pin all strobing sectors to that brightness.
+const probeStrobeUniform = { value: -1 };
 /** Shared muzzle-flash light: rgb = tool colour, w = intensity (decays ~110 ms). */
 const fireUniform = { value: new THREE.Vector4(0, 0, 0, 0) };
 
@@ -165,6 +193,7 @@ function worldMaterial(map: THREE.Texture, light = 1, floor = 0.16, tint?: THREE
       uUvScale: { value: new THREE.Vector2(1, 1) },
       uUvOffset: { value: new THREE.Vector2(0, 0) },
       uTime: timeUniform,
+      uProbeStrobe: probeStrobeUniform,
     },
     side: THREE.DoubleSide,
   });
@@ -174,15 +203,17 @@ class GeoBuilder {
   pos: number[] = [];
   uv: number[] = [];
   shade: number[] = [];
+  strobe: number[] = [];
   idx: number[] = [];
 
-  /** Quad from 4 corners (CCW from front) with uvs + per-corner shade. */
-  quad(p: number[][], uv: number[][], s: number[]): void {
+  /** Quad from 4 corners (CCW from front) with uvs + per-corner shade. `st` = strobe phase id. */
+  quad(p: number[][], uv: number[][], s: number[], st = 0): void {
     const b = this.pos.length / 3;
     for (let i = 0; i < 4; i++) {
       this.pos.push(p[i][0], p[i][1], p[i][2]);
       this.uv.push(uv[i][0], uv[i][1]);
       this.shade.push(s[i]);
+      this.strobe.push(st);
     }
     this.idx.push(b, b + 1, b + 2, b, b + 2, b + 3);
   }
@@ -192,6 +223,7 @@ class GeoBuilder {
     g.setAttribute('position', new THREE.Float32BufferAttribute(this.pos, 3));
     g.setAttribute('uv', new THREE.Float32BufferAttribute(this.uv, 2));
     g.setAttribute('shade', new THREE.Float32BufferAttribute(this.shade, 1));
+    g.setAttribute('strobe', new THREE.Float32BufferAttribute(this.strobe, 1));
     g.setIndex(this.idx);
     g.computeBoundingSphere();
     return g;
@@ -205,7 +237,7 @@ const DIRS: [number, number][] = [[1, 0], [-1, 0], [0, 1], [0, -1]];
  * zero so dark sectors can go near-black at range — the post pass's black
  * lift still keeps a whisper of texel structure, Doom-COLORMAP style.
  */
-const WORLD_FLOOR = 0.05;
+const WORLD_FLOOR = 0.02;
 
 interface SpriteState {
   mesh: THREE.Mesh;
@@ -256,6 +288,10 @@ export class Renderer {
   private openingDoors: { mesh: THREE.Mesh; t: number }[] = [];
   private map: WorldMap | null = null;
   private light = new Float32Array(0);
+  /** Per-tile strobe phase id (0 = steady). Set by computeLight. */
+  private strobe = new Float32Array(0);
+  private strobeW = 0;
+  private strobeCount = 0;
   private lamps = new Set<string>();
   private deadLamps = new Set<string>();
   private rt: THREE.WebGLRenderTarget;
@@ -410,7 +446,7 @@ export class Renderer {
     const theme = lookTheme(missionId, _def.look?.theme);
     const tintV = new THREE.Vector3(...theme.tint);
     const seed = hashStr(missionId ?? 'cyberdoom');
-    this.computeLight(map, _def, entityDefs);
+    this.computeLight(map, _def, entityDefs, missionId);
     const lightAt = (x: number, y: number) => this.tileLight(x, y);
     const builders = new Map<string, { tex: THREE.Texture; b: GeoBuilder }>();
     const builder = (key: string, tex: THREE.Texture) => {
@@ -423,7 +459,7 @@ export class Renderer {
     };
 
     const H = WALL_H;
-    const wallFace = (b: GeoBuilder, tx: number, ty: number, nx: number, nz: number, shade: number) => {
+    const wallFace = (b: GeoBuilder, tx: number, ty: number, nx: number, nz: number, shade: number, st = 0) => {
       const cx = tx + 0.5 + nx * 0.5;
       const cz = ty + 0.5 + nz * 0.5;
       const rx = nz;
@@ -436,10 +472,11 @@ export class Renderer {
         [[l[0], 0, l[1]], [r[0], 0, r[1]], [r[0], H, r[1]], [l[0], H, l[1]]],
         [[0, 0], [1, 0], [1, 1], [0, 1]],
         [s * 0.8, s * 0.8, s, s],
+        st,
       );
     };
     // decal overlays sit a hair off the wall face so they never z-fight
-    const decalFace = (b: GeoBuilder, tx: number, ty: number, nx: number, nz: number, shade: number) => {
+    const decalFace = (b: GeoBuilder, tx: number, ty: number, nx: number, nz: number, shade: number, st = 0) => {
       const cx = tx + 0.5 + nx * (0.5 + 0.014);
       const cz = ty + 0.5 + nz * (0.5 + 0.014);
       const rx = nz;
@@ -451,11 +488,13 @@ export class Renderer {
         [[l[0], 0, l[1]], [r[0], 0, r[1]], [r[0], H, r[1]], [l[0], H, l[1]]],
         [[0, 0], [1, 0], [1, 1], [0, 1]],
         [s * 0.8, s * 0.8, s, s],
+        st,
       );
     };
 
     const flicker = (x: number, y: number) =>
       map.cellAt(x, y)?.kind === 'floor' && lightAt(x, y) > 0.28 && lightAt(x, y) < 0.6 && (x * 7 + y * 13) % 4 === 0 ? -1 : 1;
+    const strobeAt = (x: number, y: number) => this.strobeAt(Math.floor(x), Math.floor(y));
     for (let ty = 0; ty < map.h; ty++) {
       for (let tx = 0; tx < map.w; tx++) {
         const cell = map.cellAt(tx, ty);
@@ -466,8 +505,9 @@ export class Renderer {
             if (!n || n.kind === 'wall') continue;
             const isTrack = n.kind === 'door' && !n.secret;
             const shade = lightAt(tx + dx, ty + dz) * flicker(tx + dx, ty + dz);
+            const st = strobeAt(tx + dx, ty + dz);
             if (isTrack) {
-              wallFace(builder('doortrak', textureOr('doortrak')), tx, ty, dx, dz, shade);
+              wallFace(builder('doortrak', textureOr('doortrak')), tx, ty, dx, dz, shade, st);
               continue;
             }
             // deterministic per-face variant: mix in the theme's alt wall
@@ -476,11 +516,11 @@ export class Renderer {
             let texId = cell.tex;
             if (texId === 'wall-panel' && h % 4 === 0) texId = theme.alts[(h >>> 4) % theme.alts.length];
             else if (texId === 'wall-brick' && h % 6 === 0) texId = 'wall-brick2';
-            wallFace(builder(`w:${texId}`, textureOr(texId)), tx, ty, dx, dz, shade);
+            wallFace(builder(`w:${texId}`, textureOr(texId)), tx, ty, dx, dz, shade, st);
             if (DECALABLE.has(texId) && (h >>> 8) % 3 === 0) {
               const did = theme.decals[(h >>> 12) % theme.decals.length];
               const dt = decalTexture(did);
-              if (dt) decalFace(builder(`d:${did}`, dt), tx, ty, dx, dz, shade);
+              if (dt) decalFace(builder(`d:${did}`, dt), tx, ty, dx, dz, shade, st);
             }
           }
           continue;
@@ -493,7 +533,7 @@ export class Renderer {
             const n = map.cellAt(tx + dx, ty + dz);
             if (!n || n.kind === 'wall' || n.kind === 'door') continue;
             // door faces are inset slightly so the jamb tracks show
-            wallFace(b, tx, ty, dx, dz, lightAt(tx + dx, ty + dz));
+            wallFace(b, tx, ty, dx, dz, lightAt(tx + dx, ty + dz), strobeAt(tx + dx, ty + dz));
           }
           b.quad(
             [[tx, 0.002, ty], [tx + 1, 0.002, ty], [tx + 1, 0.002, ty + 1], [tx, 0.002, ty + 1]],
@@ -516,10 +556,12 @@ export class Renderer {
         const s = [ao(tx, ty), ao(tx + 1, ty), ao(tx + 1, ty + 1), ao(tx, ty + 1)].map((v) => v * fk);
         const cellFloor = cell.kind === 'exit' ? 'exit' : textureRegistry.get(cell.tex) && cell.kind === 'floor' ? cell.tex : 'floor';
         const floorTex = cellFloor === 'floor' ? theme.floor : cellFloor;
+        const st = strobeAt(tx, ty);
         builder(`f:${floorTex}`, textureOr(floorTex, 'floor')).quad(
           [[tx, 0, ty], [tx + 1, 0, ty], [tx + 1, 0, ty + 1], [tx, 0, ty + 1]],
           [[0, 1], [1, 1], [1, 0], [0, 0]],
           s,
+          st,
         );
         const key = `${tx},${ty}`;
         const ceilTex = this.lamps.has(key) ? 'ceil-light' : this.deadLamps.has(key) ? 'ceil-light-off' : 'ceil';
@@ -527,6 +569,7 @@ export class Renderer {
           [[tx, H, ty], [tx + 1, H, ty], [tx + 1, H, ty + 1], [tx, H, ty + 1]],
           [[0, 1], [1, 1], [1, 0], [0, 0]],
           s.map((v) => v * 0.78),
+          st,
         );
         if (cell.kind === 'exit') this.addStatic('fx-exit', tx + 0.5, ty + 0.5, H - 0.26, L);
       }
@@ -544,6 +587,8 @@ export class Renderer {
     mesh.scale.set(set.w, set.h, 1);
     const shade = new THREE.Float32BufferAttribute(new Float32Array(this.planeGeo.attributes.position.count).fill(1), 1);
     if (!this.planeGeo.getAttribute('shade')) this.planeGeo.setAttribute('shade', shade);
+    if (!this.planeGeo.getAttribute('strobe'))
+      this.planeGeo.setAttribute('strobe', new THREE.Float32BufferAttribute(new Float32Array(this.planeGeo.attributes.position.count), 1));
     this.spriteGroup.add(mesh);
     return { mesh, mat };
   }
@@ -636,16 +681,35 @@ export class Renderer {
     return this.light[ty * m.w + tx];
   }
 
+  private strobeAt(tx: number, ty: number): number {
+    const m = this.map;
+    if (!m || tx < 0 || ty < 0 || tx >= m.w || ty >= m.h) return 0;
+    return this.strobe[ty * m.w + tx];
+  }
+
+  /** Debug (look gate): how many tiles sit in strobing sectors, and how many phases. */
+  strobeStats(): { tiles: number; phases: number; sample?: { x: number; y: number } } {
+    const j = this.strobe.findIndex((v) => v > 0);
+    return {
+      tiles: [...this.strobe].filter((v) => v > 0).length,
+      phases: this.strobeCount,
+      sample: j >= 0 ? { x: (j % this.strobeW) + 0.5, y: ((j / this.strobeW) | 0) + 0.5 } : undefined,
+    };
+  }
+
   /**
    * Sector lighting: the mission's per-tile light is the sector level; within
    * a sector, ceiling lamps on a 3-tile grid cast pools that fall off toward
    * near-black between them. Dark sectors (< 0.5) and ~1 in 5 lamps elsewhere
    * are dead, leaving black patches; the spawn area always stays lit.
    */
-  private computeLight(map: WorldMap, def: MapDef, entityDefs?: { x: number; y: number; kind: string }[]): void {
+  private computeLight(map: WorldMap, def: MapDef, entityDefs?: { x: number; y: number; kind: string }[], missionId?: string): void {
     const w = map.w;
     const h = map.h;
     this.light = new Float32Array(w * h);
+    this.strobe = new Float32Array(w * h);
+    this.strobeW = w;
+    this.strobeCount = 0;
     this.lamps.clear();
     this.deadLamps.clear();
     const src: [number, number, number][] = [];
@@ -707,20 +771,80 @@ export class Renderer {
           if (d2 < 16) best = Math.max(best, ls * Math.exp(-d2 / 3.2));
         }
         const base = map.lightAt(x, y);
-        this.light[y * w + x] = Math.max(0.08, Math.min(1, base * (0.45 + 0.8 * best)));
+        let v = Math.min(1, base * (0.45 + 0.8 * best));
+        // Darkness drama: crush dim sectors toward black — Doom's colormap
+        // loses whole bands in shadow, so a 0.3 sector is a shadow, not a
+        // grey room. Continuous below ~0.5 light, identity above.
+        v *= Math.min(1, 0.45 + 1.1 * v);
+        this.light[y * w + x] = Math.max(0.035, v);
       }
     }
     for (const key of pocket) {
       const [x, y] = key.split(',').map(Number);
-      this.light[y * w + x] = Math.min(this.light[y * w + x], 0.12);
+      this.light[y * w + x] = Math.min(this.light[y * w + x], 0.05);
       // the open cell at the pocket's mouth dims too, so the threshold into
-      // the nook fades rather than snapping
+      // the nook fades rather than snapping — but the mouth stays lit enough
+      // to read as the light source at the pocket's edge (the Doom doorway).
       for (const [dx, dz] of DIRS) {
         const nx = x + dx;
         const ny = y + dz;
         if (!open(nx, ny) || pocket.has(`${nx},${ny}`)) continue;
         const i = ny * w + nx;
-        this.light[i] = Math.min(this.light[i], Math.max(this.light[i] * 0.7, 0.16));
+        this.light[i] = Math.min(this.light[i], Math.max(this.light[i] * 0.55, 0.1));
+      }
+    }
+
+    // Doom strobing sectors: 1-2 lit, connected regions blink in sync per
+    // sector (mid and late missions). Lit enough that the blink reads as a
+    // fixture switching off, never touching the spawn approach or exit pads.
+    const missionNum = /^m(\d+)$/i.exec(missionId ?? '')?.[1];
+    if (missionNum === undefined || +missionNum >= 4) {
+      const seen = new Uint8Array(w * h);
+      const comps: { cells: number[]; cx: number; cy: number }[] = [];
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const i = y * w + x;
+          if (seen[i] || !open(x, y) || this.light[i] < 0.55) continue;
+          const cells: number[] = [];
+          const stack = [i];
+          seen[i] = 1;
+          let sx = 0;
+          let sy = 0;
+          while (stack.length) {
+            const j = stack.pop()!;
+            cells.push(j);
+            const jx = j % w;
+            const jy = (j / w) | 0;
+            sx += jx + 0.5;
+            sy += jy + 0.5;
+            for (const [dx, dz] of DIRS) {
+              const nx = jx + dx;
+              const ny = jy + dz;
+              if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+              const ni = ny * w + nx;
+              if (!seen[ni] && open(nx, ny) && this.light[ni] >= 0.55) {
+                seen[ni] = 1;
+                stack.push(ni);
+              }
+            }
+          }
+          comps.push({ cells, cx: sx / cells.length, cy: sy / cells.length });
+        }
+      }
+      const pick = comps
+        .filter((c) => c.cells.length >= 5 && Math.hypot(c.cx - def.spawn.x, c.cy - def.spawn.y) >= 5)
+        .sort((a, b) => Math.min(a.cells.length, 24) - Math.min(b.cells.length, 24) || a.cx - b.cx || a.cy - b.cy)
+        .slice(0, 2);
+      for (const c of pick) {
+        const phase = ++this.strobeCount;
+        // room-sized patch: the brightest cells of the region (its lamp pool)
+        const core = [...c.cells].sort((a, b) => this.light[b] - this.light[a]).slice(0, 24);
+        for (const j of core) {
+          const jx = j % w;
+          const jy = (j / w) | 0;
+          if (map.cellAt(jx, jy)?.kind === 'exit') continue;
+          this.strobe[j] = phase;
+        }
       }
     }
   }
@@ -945,6 +1069,7 @@ export class Renderer {
   /** FEEL hook: Doom muzzle-flash — flood walls/floor near the camera with
    *  tool-coloured light for ~110 ms on each damaging tool use. */
   fireLight(r: number, g: number, b: number, strength = 0.85): void {
+    if (this.debugNoFlash) return; // probes hold fire flood constant between captures
     fireUniform.value.set(r, g, b, strength);
   }
 
@@ -957,9 +1082,15 @@ export class Renderer {
     const now = performance.now();
     const dt = Math.min(0.1, (now - this.lastTime) / 1000);
     this.lastTime = now;
-    this.time += dt;
-    if (!this.debugNoFlash) timeUniform.value = this.time;
-    fireUniform.value.w = Math.max(0, fireUniform.value.w - dt / 0.11);
+    // debugNoFlash is set by the look probes: freeze all time-driven state
+    // (fire flicker, sprite bob, shader uTime) so before/after captures only
+    // differ by what the probe toggled.
+    if (!this.debugNoFlash) {
+      this.time += dt;
+      timeUniform.value = this.time;
+    }
+    probeStrobeUniform.value = this.debugNoFlash ? 0.1 : -1;
+    if (!this.debugNoFlash) fireUniform.value.w = Math.max(0, fireUniform.value.w - dt / 0.11);
 
     // damage → palette red shift
     if (player.integrity < this.lastIntegrity) this.hurt = Math.min(0.85, this.hurt + 0.3 + (this.lastIntegrity - player.integrity) * 0.012);
@@ -982,9 +1113,11 @@ export class Renderer {
     const yaw = this.camera.rotation.y;
 
     for (const st of [...this.sprites.values(), ...this.ghosts, ...this.projSprites.values()]) {
-      st.animT += dt;
-      st.moveT -= dt;
-      st.flash = Math.max(0, st.flash - dt * 3);
+      if (!this.debugNoFlash) {
+        st.animT += dt;
+        st.moveT -= dt;
+        st.flash = Math.max(0, st.flash - dt * 3);
+      }
       st.mesh.rotation.set(0, yaw, 0);
       st.mat.uniforms.map.value = this.pickFrame(st, cameraAngle, cameraX, cameraY).tex;
       if (st.entity) {

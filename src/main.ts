@@ -114,6 +114,8 @@ class Game {
   private acc = 0;
   private last = 0;
   private simT = 0;
+  /** Debug: freeze sim ticks while look probes capture frames (?debug=1 only). */
+  probeLock = false;
   private lastHurtMessageT = -Infinity;
   private lastHurtT = -Infinity;
   private endTimer: number | null = null;
@@ -643,8 +645,12 @@ class Game {
     this.last = t;
     this.acc += dt;
     while (this.acc >= FIXED_DT) {
-      this.input.poll();
-      this.tick(FIXED_DT);
+      // probeLock freezes the sim while the look probes capture frames, so a
+      // game tick can't drift the camera or the staged enemy between shots.
+      if (!this.probeLock) {
+        this.input.poll();
+        this.tick(FIXED_DT);
+      }
       this.acc -= FIXED_DT;
     }
     this.syncChrome();
@@ -1292,12 +1298,22 @@ class Game {
       /** LOOK: threat-readability probe (see tools/look-contrast.mjs). */
       probe(kind: string, dist: number, withImages = false) {
         if (!g.map || !g.runtime || !g.player) throw new Error('no mission running');
-        return lookProbe(g.renderer, g.map, g.runtime.entities, g.player, kind, dist, withImages);
+        g.probeLock = true;
+        return lookProbe(g.renderer, g.map, g.runtime.entities, g.player, kind, dist, withImages).finally(
+          () => (g.probeLock = false),
+        );
       },
       /** LOOK: light-diminishing probe — wall luma at ~2 vs ~10 tiles + dark-sector luma. */
       lightProbe(dist = 10, withImages = false) {
         if (!g.map || !g.runtime || !g.player) throw new Error('no mission running');
-        return lightProbe(g.renderer, g.map, g.runtime.entities, g.player, dist, withImages);
+        g.probeLock = true;
+        return lightProbe(g.renderer, g.map, g.runtime.entities, g.player, dist, withImages).finally(
+          () => (g.probeLock = false),
+        );
+      },
+      /** LOOK: strobing-sector presence — tiles covered + phase count (Doom blink sectors). */
+      strobeInfo() {
+        return g.renderer.strobeStats();
       },
       stage(kind: string, dist: number) {
         if (!g.map || !g.runtime || !g.player) throw new Error('no mission running');

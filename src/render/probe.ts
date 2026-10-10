@@ -135,8 +135,10 @@ const bandLuma = (v: { w: number; h: number; data: Uint8Array }, x0: number, x1:
 // under the end wall's base, above floor decals.
 const NEAR_FLOOR: [number, number, number, number] = [0.3, 0.7, 0.8, 0.92];
 const FAR_FLOOR: [number, number, number, number] = [0.4, 0.6, 0.52, 0.56];
-// Wide centre band for the dark-sector reading.
-const DARK_BAND: [number, number, number, number] = [0.3, 0.7, 0.15, 0.75];
+// Centre band for the dark-sector reading: the corridor's far end — walls and
+// flats at ~4+ tiles, which is what the <=15-luma target applies to. Near
+// floor and side walls at band edges stay lit by the edge light source.
+const DARK_BAND: [number, number, number, number] = [0.35, 0.65, 0.18, 0.62];
 
 /**
  * LOOK: light-diminishing probe (debug only). Measures the centre-band luma
@@ -160,6 +162,8 @@ export async function lightProbe(
     player.x = x;
     player.y = y;
     player.angle = angle;
+    player.vx = 0;
+    player.vy = 0;
     player.snap();
     for (let i = 0; i < 3; i++) await frame();
   };
@@ -222,6 +226,8 @@ export function placeThreat(
   player.x = px;
   player.y = py;
   player.angle = Math.atan2(line.dy, line.dx);
+  player.vx = 0;
+  player.vy = 0;
   player.snap();
   target.x = px + line.dx * dist;
   target.y = py + line.dy * dist;
