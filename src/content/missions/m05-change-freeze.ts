@@ -3,7 +3,7 @@ import type { MissionTeaching } from '../curriculum';
 import { q } from '../arc-questions';
 import type { WalkStep } from '../../missions/walkthroughs';
 import { lightRects } from '../../missions/levelkit';
-import { stagedThreatWave } from './campaign-map';
+import { addThreatEncounter, floorSpot, liveThreats, stagedThreatWave } from './campaign-map';
 
 const map: MapDef = {
   grid: [
@@ -424,3 +424,21 @@ export const m05Walkthrough: WalkStep[] = [
   { wait: 0.1 },
   { goto: [20, 1] },
 ];
+
+// F1: encounter pacing — worms loose on unpatched hosts in the lobby,
+// a north-office reveal, and a supply top-up for the extra pressure.
+liveThreats(m05, 'open-worm', 'worm', 2, [18, 24, 38, 27]);
+addThreatEncounter(m05, 'north-worm', 'worm', 2, {
+  id: 'north-ambush', area: [2, 4, 37, 8], kind: 'bad',
+  message: 'Worms are still spreading on the unpatched floor — freeze window or not.',
+}, [2, 4, 37, 8]);
+addThreatEncounter(m05, 'mid-rat', 'rat', 1, {
+  id: 'mid-ambush', area: [6, 10, 38, 15], kind: 'bad',
+  message: 'A RAT session lights up on a host mid-freeze.',
+}, [6, 10, 38, 15]);
+m05.entities.push(
+  { id: 'chg-lobby', kind: 'item', ...floorSpot(m05, [10, 24, 38, 27]), sprite: 'charge', tags: ['arsenal-pickup'],
+    grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
+  { id: 'med-north', kind: 'item', ...floorSpot(m05, [2, 4, 37, 8]), sprite: 'medkit',
+    grants: { resource: 'integrity', amount: 25 }, inspect: { label: 'Integrity kit', detail: 'Restores 25 integrity.', category: 'item' } },
+);

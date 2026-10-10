@@ -74,6 +74,40 @@ export function threatWave(
   }));
 }
 
+/** Place live (non-dormant) wanderers on floor cells away from the spawn point. */
+export function liveThreats(
+  mission: Mission,
+  prefix: string,
+  sprite: string,
+  count: number,
+  region?: [number, number, number, number],
+): void {
+  const wave = threatWave(
+    mission.map,
+    prefix,
+    sprite,
+    mission.entities.map(({ x, y }) => ({ x, y })),
+    count,
+    region,
+  ).map((enemy) => ({ ...enemy, ai: 'wander' as const, dormant: false }));
+  mission.entities.push(...wave);
+}
+
+/** First floor-cell centre inside a tile region not crowding an existing entity. */
+export function floorSpot(mission: Mission, region: TileRect): { x: number; y: number } {
+  const [rx1, ry1, rx2, ry2] = region;
+  for (let y = ry1; y <= ry2; y++) {
+    for (let x = rx1; x <= rx2; x++) {
+      if (mission.map.legend[mission.map.grid[y]?.[x] ?? '']?.kind !== 'floor') continue;
+      const px = x + 0.5;
+      const py = y + 0.5;
+      if (mission.entities.some((e) => Math.hypot(e.x - px, e.y - py) < 1.0)) continue;
+      return { x: px, y: py };
+    }
+  }
+  return { x: rx1 + 0.5, y: ry1 + 0.5 };
+}
+
 export function addThreatEncounter(
   mission: Mission,
   prefix: string,

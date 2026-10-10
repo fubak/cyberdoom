@@ -2,7 +2,7 @@ import type { Mission } from '../../core/types';
 import type { MissionTeaching } from '../curriculum';
 import type { WalkStep } from '../../missions/walkthroughs';
 import { lightRects } from '../../missions/levelkit';
-import { addThreatEncounter, setMapCell } from './campaign-map';
+import { addThreatEncounter, floorSpot, liveThreats, setMapCell } from './campaign-map';
 
 /**
  * M3 "The Quiet One": insider threat, correlating data sources.
@@ -386,3 +386,10 @@ addThreatEncounter(m03, 'logicbomb-report', 'logicbomb', 5, {
   kind: 'bad',
   message: 'The insider’s final scheduled payload activated after the report.',
 }, [5, 20, 24, 28]);
+
+// F1: encounter pacing — one live wanderer plus a charge top-up.
+liveThreats(m03, 'open-worm', 'worm', 1, [3, 21, 37, 28]);
+m03.entities.push(
+  { id: 'chg-s', kind: 'item', ...floorSpot(m03, [3, 21, 37, 28]), sprite: 'charge', tags: ['arsenal-pickup'],
+    grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
+);

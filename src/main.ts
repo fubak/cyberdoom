@@ -623,6 +623,7 @@ class Game {
         this.runtime.visited,
         this.player,
         (doorId) => this.runtime?.isSecretDoorRevealed(doorId) ?? false,
+        this.runtime ? `${this.runtime.mission.id.toUpperCase()}: ${this.runtime.mission.title}` : undefined,
       );
       this.dossier.draw();
     }

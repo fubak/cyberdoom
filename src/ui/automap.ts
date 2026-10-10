@@ -30,6 +30,7 @@ export class Automap {
     visited: Set<string>,
     player: { x: number; y: number; angle: number },
     secretDoorRevealed: (doorId: string) => boolean,
+    label?: string,
   ): void {
     if (!this.open) return;
     const g = this.context;
@@ -39,9 +40,19 @@ export class Automap {
 
     const W = VIEW_W / RES;
     const H = VIEW3D_H / RES;
-    const cellSize = Math.min(5, (W - 12) / mapWidth, (H - 12) / mapHeight);
-    const left = (W - mapWidth * cellSize) / 2;
-    const top = (H - mapHeight * cellSize) / 2;
+
+    // Fill ~80% of the view; player-centred panning clamps so the map
+    // covers the screen rather than floating in a black void.
+    const cellSize = Math.max((W * 0.8) / mapWidth, (H * 0.8) / mapHeight);
+    const mapPixW = mapWidth * cellSize;
+    const mapPixH = mapHeight * cellSize;
+    let left = W / 2 - player.x * cellSize;
+    let top = H / 2 - player.y * cellSize;
+    if (mapPixW <= W) left = (W - mapPixW) / 2;
+    else left = Math.min(0, Math.max(W - mapPixW, left));
+    if (mapPixH <= H) top = (H - mapPixH) / 2;
+    else top = Math.min(0, Math.max(H - mapPixH, top));
+
     const point = (x: number, y: number) => [left + x * cellSize, top + y * cellSize] as const;
     const cellAt = (x: number, y: number) => map.legend[map.grid[y]?.[x] ?? ''];
 
@@ -56,11 +67,12 @@ export class Automap {
         const cell = cellAt(x, y);
         if (!cell) continue;
         const [px, py] = point(x, y);
+        if (px > W || py > H || px + cellSize < 0 || py + cellSize < 0) continue;
         const secretHidden = cell.kind === 'door' && cell.secret &&
           !secretDoorRevealed(cell.doorId ?? '');
 
         if (secretHidden || cell.kind === 'wall') {
-          g.fillStyle = '#29170f';
+          g.fillStyle = '#33200f';
           g.fillRect(px, py, cellSize, cellSize);
           continue;
         }
@@ -79,9 +91,9 @@ export class Automap {
           continue;
         }
         g.fillStyle = '#171a1d';
-        g.fillRect(px + 0.5, py + 0.5, cellSize - 1, cellSize - 1);
-        g.strokeStyle = '#8c3825';
-        g.lineWidth = 1;
+        g.fillRect(px, py, cellSize, cellSize);
+        g.strokeStyle = '#c8502e';
+        g.lineWidth = 1.5;
         const edges: [number, number, number, number, number, number][] = [
           [x, y - 1, px, py, px + cellSize, py],
           [x + 1, y, px + cellSize, py, px + cellSize, py + cellSize],
@@ -114,6 +126,12 @@ export class Automap {
     g.lineTo(backX - sideX, backY - sideY);
     g.closePath();
     g.fill();
+
+    if (label) {
+      g.fillStyle = 'rgba(0,0,0,0.75)';
+      g.fillRect(0, 0, W, 11);
+      drawText(g, label, 4, 3, '#ffd040', 'small', '#000');
+    }
     g.fillStyle = 'rgba(0,0,0,0.8)';
     g.fillRect(0, H - 16, W, 14);
     drawText(g, MAP_HINT, 4, H - 14, '#ffd040', 'small', '#000');

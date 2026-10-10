@@ -3,7 +3,7 @@ import { lightRects } from '../../missions/levelkit';
 import type { WalkStep } from '../../missions/walkthroughs';
 import type { MissionTeaching } from '../curriculum';
 import { q } from '../arc-questions';
-import { addThreatEncounter } from './campaign-map';
+import { addThreatEncounter, floorSpot, liveThreats } from './campaign-map';
 
 // M07 SEGMENT FAULT (SY0-701 3.2 placement, 3.1 ICS isolation, 4.5 ruleset order, 2.3 device audit)
 // The plant is one flat subnet. Survey it, audit every device, then rebuild it
@@ -614,7 +614,7 @@ export const m07: Mission = {
 // Dormant pressure: worms wake as the player crosses the flat network, and the
 // attacker escalates to hands-on-keyboard trojans once the easy path dies.
 addThreatEncounter(
-  m07, 'worm-legacy-pack', 'worm', 4,
+  m07, 'worm-legacy-pack', 'worm', 3,
   {
     id: 'flat-worm-pack',
     area: [2, 2, 17, 11],
@@ -624,7 +624,7 @@ addThreatEncounter(
   [2, 2, 17, 11],
 );
 addThreatEncounter(
-  m07, 'worm-hall-pack', 'worm', 3,
+  m07, 'worm-hall-pack', 'worm', 2,
   {
     id: 'core-worm-pack',
     area: [2, 13, 14, 20],
@@ -847,3 +847,28 @@ export const m07Teach: MissionTeaching = {
   examTip:
     'Un-patchable means unreachable: segment it into its own zone or air gap it. Firewalls sit on boundaries, IPS sits inline (SPAN/TAP are IDS roles), admins enter through one jump server, and ACLs end in a logged deny-all.',
 };
+
+// F1: encounter pacing — live skirmisher, room reveals, supplies.
+liveThreats(m07, 'open-worm', 'worm', 1, [12, 13, 25, 19]);
+addThreatEncounter(m07, 'ne-trojan', 'trojan', 3, {
+  id: 'ne-ambush', area: [22, 2, 37, 11], kind: 'bad',
+  message: 'Trojans crawl out of the east server rows.',
+}, [22, 2, 37, 11]);
+addThreatEncounter(m07, 'exit-rat', 'rat', 2, {
+  id: 'exit-ambush', area: [20, 22, 37, 26], kind: 'bad',
+  message: 'RATs surge toward the exit corridor.',
+}, [20, 22, 37, 26]);
+addThreatEncounter(m07, 'vault-trojan', 'trojan', 2, {
+  id: 'vault-ambush', area: [26, 15, 33, 20], kind: 'bad',
+  message: 'The segmented vault was hiding trojans.',
+}, [26, 15, 33, 20]);
+m07.entities.push(
+  { id: 'chg-c', kind: 'item', ...floorSpot(m07, [12, 13, 25, 19]), sprite: 'charge', tags: ['arsenal-pickup'],
+    grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
+  { id: 'chg-ne', kind: 'item', ...floorSpot(m07, [22, 2, 37, 11]), sprite: 'charge', tags: ['arsenal-pickup'],
+    grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
+  { id: 'chg-ex', kind: 'item', ...floorSpot(m07, [20, 22, 37, 26]), sprite: 'charge', tags: ['arsenal-pickup'],
+    grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
+  { id: 'med-sw', kind: 'item', ...floorSpot(m07, [11, 22, 19, 26]), sprite: 'medkit',
+    grants: { resource: 'integrity', amount: 25 }, inspect: { label: 'Integrity kit', detail: 'Restores 25 integrity.', category: 'item' } },
+);

@@ -2,7 +2,7 @@ import type { Mission } from '../../core/types';
 import type { MissionTeaching } from '../curriculum';
 import type { WalkStep } from '../../missions/walkthroughs';
 import { lightRects } from '../../missions/levelkit';
-import { addThreatEncounter, setMapCell } from './campaign-map';
+import { addThreatEncounter, floorSpot, liveThreats, setMapCell } from './campaign-map';
 
 /**
  * M2 "Need to Know": least privilege, just-in-time access, shared credentials.
@@ -364,3 +364,30 @@ export const m02Teach: MissionTeaching = {
   },
   examTip: 'Exam clue words: "only what the job requires" = least privilege. "Assigned by job role" = RBAC. "Cannot prove who did it" = a non-repudiation / accounting failure, usually caused by shared accounts.',
 };
+
+// F1: encounter pacing — opening skirmish, room ambushes, supplies.
+liveThreats(m02, 'open-rat', 'rat', 1, [12, 11, 25, 19]);
+addThreatEncounter(m02, 'north-trojan', 'trojan', 3, {
+  id: 'vault-ambush', area: [16, 5, 23, 8], kind: 'bad',
+  message: 'Trojans drop inside the records vault — the quiet floor was bait.',
+}, [15, 1, 25, 5]);
+addThreatEncounter(m02, 'west-rat', 'rat', 2, {
+  id: 'west-ambush', area: [4, 11, 10, 16], kind: 'bad',
+  message: 'RAT implants nest behind the west office partition.',
+}, [5, 12, 8, 15]);
+addThreatEncounter(m02, 'se-rat', 'rat', 2, {
+  id: 'se-ambush', area: [27, 20, 34, 26], kind: 'bad',
+  message: 'RAT implants come alive in the mail room annex.',
+}, [28, 21, 34, 26]);
+m02.entities.push(
+  { id: 'chg-n', kind: 'item', ...floorSpot(m02, [15, 2, 25, 4]), sprite: 'charge', tags: ['arsenal-pickup'],
+    grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
+  { id: 'chg-e', kind: 'item', ...floorSpot(m02, [29, 9, 37, 19]), sprite: 'charge', tags: ['arsenal-pickup'],
+    grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
+  { id: 'chg-w', kind: 'item', ...floorSpot(m02, [5, 12, 8, 15]), sprite: 'charge', tags: ['arsenal-pickup'],
+    grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
+  { id: 'chg-c', kind: 'item', ...floorSpot(m02, [10, 17, 26, 19]), sprite: 'charge', tags: ['arsenal-pickup'],
+    grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
+  { id: 'med-c', kind: 'item', ...floorSpot(m02, [14, 21, 25, 27]), sprite: 'medkit',
+    grants: { resource: 'integrity', amount: 25 }, inspect: { label: 'Integrity kit', detail: 'Restores 25 integrity.', category: 'item' } },
+);
