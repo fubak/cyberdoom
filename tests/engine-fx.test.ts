@@ -18,13 +18,15 @@ describe('particle system', () => {
     expect(particles.view().color).toBe(colors);
   });
 
-  it('creates the kill flash, hit sparks, and a one-tick charge glow', () => {
+  it('creates the kill burst layers, hit sparks, and a one-tick charge glow', () => {
     const kill = new ParticleSystem(() => 0.5);
     kill.burst(1, 2, 0.4, 'kill');
-    expect(kill.view().count).toBe(49);
-    expect(kill.size[48]).toBeCloseTo(0.6);
-    expect(kill.life[48]).toBeCloseTo(0.12);
-    expect(kill.minPx[48]).toBe(6);
+    // 48 shards + 10 debris motes + 13 splat marks (flash() adds the core)
+    expect(kill.view().count).toBe(71);
+    // first debris mote sits at index 48: long life, holds bright ~70%
+    expect(kill.life[48]).toBeGreaterThan(1.3);
+    expect(kill.maxLife[48]).toBeGreaterThan(1.3);
+    expect(kill.hold[48]).toBeCloseTo(0.7);
 
     const hit = new ParticleSystem(() => 0.5);
     hit.burst(1, 2, 0.4, 'hit');
@@ -49,6 +51,32 @@ describe('particle system', () => {
     expect(charge.color[2]).toBeCloseTo(0.45);
     charge.update(1 / 60);
     expect(charge.view().count).toBe(0);
+  });
+
+  it('kill burst reads at +100ms and +300ms and leaves a splat for seconds', () => {
+    const p = new ParticleSystem(() => 0.5);
+    p.burst(0, 0, 0.4, 'kill', [1, 0.2, 0.1]);
+    const brightest = () => {
+      let n = 0;
+      for (let i = 0; i < p.view().count; i++) {
+        const m = Math.max(p.color[i * 3], p.color[i * 3 + 1], p.color[i * 3 + 2]);
+        if (m > 0.5) n++;
+      }
+      return n;
+    };
+    // +100 ms: shards + core flash still fully bright
+    for (let i = 0; i < 6; i++) p.update(1 / 60);
+    expect(p.view().count).toBeGreaterThan(60);
+    expect(brightest()).toBeGreaterThan(50);
+    // +300 ms: shards and debris still alive and bright (hold-fade)
+    for (let i = 0; i < 12; i++) p.update(1 / 60);
+    expect(p.view().count).toBeGreaterThan(40);
+    expect(brightest()).toBeGreaterThan(30);
+    // +3 s: shards gone, the scorch/gore splat still sits on the floor
+    for (let i = 0; i < 162; i++) p.update(1 / 60);
+    let floor = 0;
+    for (let i = 0; i < p.view().count; i++) if (p.z[i] < 0.05) floor++;
+    expect(floor).toBeGreaterThanOrEqual(10);
   });
 
   it('toolImpact stays under 32 particles per call and gives tools distinct colours', () => {

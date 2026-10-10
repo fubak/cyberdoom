@@ -25,6 +25,8 @@ export class ParticleSystem {
   readonly color = new Float32Array(MAX_PARTICLES * 3);
   readonly size = new Float32Array(MAX_PARTICLES);
   readonly minPx = new Float32Array(MAX_PARTICLES);
+  /** Fraction of maxLife the colour holds at full brightness before tail-fading. */
+  readonly hold = new Float32Array(MAX_PARTICLES);
   private readonly born = new Float64Array(MAX_PARTICLES);
   private readonly currentView: ParticleView;
   private count = 0;
@@ -43,10 +45,15 @@ export class ParticleSystem {
   }
 
   /**
-   * Chunky "data-blood" spray: large, high-contrast shards in the threat's
-   * colour (`tint`) mixed with white-hot cores. Most shards are flung upward
-   * under heavy gravity so they visibly arc and land on the floor (z clamps
-   * at 0) — readable past 6 tiles where a fine confetti puff dissolved.
+   * Chunky "data-blood" spray. A kill is three layers that stay readable
+   * ~300 ms after hp→0 (flash() at the call site adds the bright core):
+   *  - shards: 48 chunky threat-coloured shards (every 3rd fullbright),
+   *    flung up/out under heavy gravity so they arc, land, and sit;
+   *  - debris: slow motes that settle on the floor and linger ~1.5-2.5 s;
+   *  - splat: a dark scorch patch + threat-tinted gore ring ~5 s on the floor.
+   * Doom's gibs read as stuff left behind; the splat + settled debris is
+   * what makes a kill read as a kill instead of a deletion.
+   * A 'hit' is the same spray dialled down: 18 smaller shards, short life.
    */
   burst(x: number, y: number, z: number, kind: 'kill' | 'hit', tint: Color = [1, 0.28, 0.08]): void {
     const rng = this.rng;
@@ -55,25 +62,59 @@ export class ParticleSystem {
       Math.min(1, tint[1] * (0.75 + rng() * 0.5)),
       Math.min(1, tint[2] * (0.75 + rng() * 0.5)),
     ];
-    const count = kind === 'kill' ? 48 : 18;
+    const kill = kind === 'kill';
+    const count = kill ? 48 : 18;
     for (let i = 0; i < count; i++) {
       const angle = rng() * Math.PI * 2;
-      const speed = (kind === 'kill' ? 0.8 : 0.65) + rng() * 2.5;
+      const speed = (kill ? 1.0 : 0.65) + rng() * (kill ? 3.2 : 2.5);
       const big = i % 4 === 0;
-      const hot = kind === 'kill' ? i % 5 === 0 : i % 2 === 0;
+      const hot = kill ? i % 3 === 0 : i % 2 === 0;
       this.add(
         x, y, z + rng() * 0.25,
         Math.cos(angle) * speed,
         Math.sin(angle) * speed,
-        1.3 + rng() * (kind === 'kill' ? 3.4 : 2.2),
-        6 + rng() * 3.5,
-        big ? 0.5 + rng() * 0.4 : 0.3 + rng() * 0.2,
+        1.5 + rng() * (kill ? 3.8 : 2.4),
+        6.5 + rng() * 3.5,
+        kill ? (big ? 0.7 + rng() * 0.5 : 0.45 + rng() * 0.35) : (big ? 0.5 + rng() * 0.4 : 0.35 + rng() * 0.2),
         hot ? [1, 0.97, 0.9] : shard(),
-        big ? 0.1 + rng() * 0.09 : 0.07 + rng() * 0.06,
-        big ? 3 : 3,
+        kill ? (big ? 0.16 + rng() * 0.12 : 0.08 + rng() * 0.06) : (big ? 0.1 + rng() * 0.09 : 0.08 + rng() * 0.06),
+        kill ? (big ? 3.5 : 2.5) : 3,
+        kill ? 0.5 : 0.35,
       );
     }
-    if (kind === 'kill') this.add(x, y, z, 0, 0, 0, 0, 0.12, [1, 1, 1], 0.6, 6);
+    if (!kill) return;
+    // settled debris: slow motes that land (floor drag) and linger ~1.5-2.5 s
+    for (let i = 0; i < 10; i++) {
+      const a = rng() * Math.PI * 2;
+      const sp = 0.3 + rng() * 0.7;
+      this.add(
+        x, y, z + rng() * 0.15,
+        Math.cos(a) * sp, Math.sin(a) * sp, 0.8 + rng() * 1.2,
+        5,
+        1.4 + rng() * 1.1,
+        i % 3 === 0 ? [1, 0.97, 0.9] : shard(),
+        0.06 + rng() * 0.05,
+        2,
+        0.7,
+      );
+    }
+    // ground splat: dark scorch + threat-coloured gore ring that holds ~5 s
+    const gore: Color = [tint[0] * 0.32, tint[1] * 0.32, tint[2] * 0.32];
+    const scorch: Color = [0.05, 0.045, 0.06];
+    this.add(x, y, 0.015, 0, 0, 0, 0, 5.5, scorch, 0.42, 2, 0.85);
+    for (let i = 0; i < 12; i++) {
+      const a = rng() * Math.PI * 2;
+      const r = 0.06 + rng() * 0.45;
+      this.add(
+        x + Math.cos(a) * r, y + Math.sin(a) * r, 0.012 + rng() * 0.012,
+        0, 0, 0, 0,
+        4.2 + rng() * 1.6,
+        i % 3 === 0 ? scorch : gore,
+        0.12 + rng() * 0.16,
+        2,
+        0.85,
+      );
+    }
   }
 
   charge(x: number, y: number, z: number, k: number): void {
@@ -236,16 +277,28 @@ export class ParticleSystem {
         if (i < this.count) this.copyParticle(i, this.count);
         continue;
       }
-      const fade = nextLife / previousLife;
-      const colorIndex = i * 3;
-      this.color[colorIndex] *= fade;
-      this.color[colorIndex + 1] *= fade;
-      this.color[colorIndex + 2] *= fade;
+      // colour holds full for `hold` of maxLife, then linear-fades over the tail
+      const fadePoint = this.maxLife[i] * (1 - this.hold[i]);
+      if (nextLife <= fadePoint) {
+        const fade = nextLife / previousLife;
+        const colorIndex = i * 3;
+        this.color[colorIndex] *= fade;
+        this.color[colorIndex + 1] *= fade;
+        this.color[colorIndex + 2] *= fade;
+      }
       this.life[i] = nextLife;
       this.vz[i] -= this.gravity[i] * dt;
       this.x[i] += this.vx[i] * dt;
       this.y[i] += this.vy[i] * dt;
       this.z[i] = Math.max(0, this.z[i] + this.vz[i] * dt);
+      // floor drag: landed shards lose horizontal speed fast so debris stops
+      // and rests on the floor instead of skating until its life runs out
+      if (this.z[i] <= 0) {
+        const drag = Math.exp(-8 * dt);
+        this.vx[i] *= drag;
+        this.vy[i] *= drag;
+        if (this.vz[i] < 0) this.vz[i] = 0;
+      }
       i++;
     }
     this.currentView.count = this.count;
@@ -273,6 +326,7 @@ export class ParticleSystem {
     color: Color,
     size: number,
     minPx: number,
+    hold = 0,
   ): void {
     let i: number;
     if (this.count < MAX_PARTICLES) {
@@ -298,6 +352,7 @@ export class ParticleSystem {
     this.color[i * 3 + 2] = color[2];
     this.size[i] = size;
     this.minPx[i] = minPx;
+    this.hold[i] = hold;
     this.currentView.count = this.count;
   }
 
@@ -313,6 +368,7 @@ export class ParticleSystem {
     this.maxLife[to] = this.maxLife[from];
     this.size[to] = this.size[from];
     this.minPx[to] = this.minPx[from];
+    this.hold[to] = this.hold[from];
     this.born[to] = this.born[from];
     this.color[to * 3] = this.color[from * 3];
     this.color[to * 3 + 1] = this.color[from * 3 + 1];

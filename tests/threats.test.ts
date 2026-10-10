@@ -164,6 +164,12 @@ describe('combat telegraph and drain floors', () => {
     }
   });
 
+  it('every attack telegraph lasts at least 0.45s, ranged included', () => {
+    for (const [kind, profile] of Object.entries(ENEMY_PROFILES)) {
+      expect(profile.windup, kind).toBeGreaterThanOrEqual(0.45);
+    }
+  });
+
   it.each([
     ['M01', 1.0, 20],
     ['M12', 1.44, 12],

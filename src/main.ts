@@ -272,9 +272,9 @@ class Game {
           this.particles.burst(e.x, e.y, 0.4, 'kill', bloodOf(e));
           // a bigger threat-coloured flash marks the kill from the hit sparks
           this.particles.flash(e.x, e.y, 0.5, bloodOf(e));
-          // kill punctuation: a ~50 ms sim-time hit-stop plus a camera punch
+          // kill punctuation: a ~70 ms sim-time hit-stop plus a camera punch
           this.feel.punch(1);
-          this.hitStopT = Math.max(this.hitStopT, 0.05);
+          this.hitStopT = Math.max(this.hitStopT, 0.07);
         } else {
           this.audio.sfx('clean');
         }
@@ -1333,6 +1333,14 @@ class Game {
               infected: e.infected,
               mode: e.state.mode,
             })) ?? [],
+          projectiles: g.projectiles.map((p) => ({
+            x: p.x,
+            y: p.y,
+            alive: p.alive,
+            hostile: p.hostile,
+            src: p.source,
+            traveled: p.traveled,
+          })),
         };
       },
       startMission(id: string, gender?: string) {
