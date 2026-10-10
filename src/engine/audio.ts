@@ -43,7 +43,7 @@ export class Audio {
   private sfxBus: GainNode | null = null;
   private ambBus: GainNode | null = null;
   private master: GainNode | null = null;
-  private compressor: DynamicsCompressorNode | null = null;
+  private limiter: DynamicsCompressorNode | null = null;
   private analyser: AnalyserNode | null = null;
   private meterSamples: Float32Array<ArrayBuffer> | null = null;
   private noiseBuffer: AudioBuffer | null = null;
@@ -82,16 +82,25 @@ export class Audio {
       this.ambBus = ctx.createGain();
       this.master = ctx.createGain();
       this.master.gain.value = 0.55;
+      // Glue compressor: evens the mix but a 4ms attack lets hit transients
+      // through so loud events still punch over the bed. The limiter after it
+      // is a brick wall for stacked combat sfx so they can't clip.
       const compressor = ctx.createDynamicsCompressor();
-      compressor.threshold.value = -16;
+      compressor.threshold.value = -10;
       compressor.knee.value = 6;
-      compressor.ratio.value = 4;
-      compressor.attack.value = 0.003;
+      compressor.ratio.value = 3.5;
+      compressor.attack.value = 0.004;
       compressor.release.value = 0.15;
+      const limiter = ctx.createDynamicsCompressor();
+      limiter.threshold.value = -2;
+      limiter.knee.value = 0;
+      limiter.ratio.value = 20;
+      limiter.attack.value = 0.001;
+      limiter.release.value = 0.08;
       gritGain.connect(this.master);
       this.ambBus.connect(this.master);
-      this.master.connect(compressor).connect(ctx.destination);
-      this.compressor = compressor;
+      this.master.connect(compressor).connect(limiter).connect(ctx.destination);
+      this.limiter = limiter;
 
       this.noiseBuffer = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
       const samples = this.noiseBuffer.getChannelData(0);
@@ -127,13 +136,13 @@ export class Audio {
 
   meter(): { rmsDb: number; peakDb: number } {
     const ctx = this.ensure();
-    if (!ctx || !this.compressor) return { rmsDb: -Infinity, peakDb: -Infinity };
+    if (!ctx || !this.limiter) return { rmsDb: -Infinity, peakDb: -Infinity };
     if (!this.analyser) {
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 2048;
       analyser.smoothingTimeConstant = 0;
-      this.compressor.disconnect(ctx.destination);
-      this.compressor.connect(analyser).connect(ctx.destination);
+      this.limiter.disconnect(ctx.destination);
+      this.limiter.connect(analyser).connect(ctx.destination);
       this.analyser = analyser;
       this.meterSamples = new Float32Array(analyser.fftSize);
     }
@@ -313,6 +322,17 @@ export class Audio {
     this.noise('bandpass', 1800, 1100, Math.min(duration, 0.18), 1.2, gain * 0.12, opts);
   }
 
+  /** Short crack + low thump so impacts read as hits, not dull thuds. */
+  private impactLayer(opts: SpatialPosition, gain: number, delay = 0): void {
+    this.noise('highpass', 2400, 900, 0.035, 0.9, gain * 0.9, opts, delay);
+    this.oscillator('sine', 85, 36, 0.11, gain, opts, {
+      attack: 0.004,
+      distortion: true,
+      pitchRange: 0.02,
+      delay,
+    });
+  }
+
   private body(
     freqStart: number,
     freqEnd: number,
@@ -424,7 +444,8 @@ export class Audio {
         this.oscillator('sine', 300, 1200, Math.max(0.1, dur ?? 0.5), 0.32, o);
         break;
       case 'bite':
-        this.noise('lowpass', 1600, 180, 0.14, 0.7, 0.72, o);
+        this.noise('highpass', 2600, 1100, 0.035, 0.8, 0.75, o);
+        this.noise('lowpass', 1600, 180, 0.14, 0.7, 0.85, o);
         this.oscillator('square', 150, 65, 0.07, 0.42, o);
         this.body(70, 48, 0.14, 0.45, o);
         break;
@@ -434,16 +455,20 @@ export class Audio {
         this.body(70, 46, 0.24, 0.42, o);
         break;
       case 'impact':
+        this.impactLayer(o, 0.85);
         this.noise('lowpass', 1500, 200, 0.3, 0.8, 0.76, o);
         this.oscillator('sine', 90, 40, 0.25, 0.68, o);
         this.body(70, 45, 0.28, 0.62, o);
         break;
       case 'enemy-pain':
-        this.oscillator('sawtooth', 600, 300, 0.15, 0.52, o, { filter: { type: 'bandpass', frequency: 700, q: 5 } });
+        this.noise('highpass', 2200, 1000, 0.03, 0.9, 0.5, o);
+        this.formant(640, 300, 0.2, 0.95, o);
+        this.body(75, 45, 0.14, 0.5, o);
         break;
       case 'enemy-death':
-        this.noise('bandpass', 1400, 220, 0.45, 1, 0.88, o);
-        this.oscillator('sawtooth', 400, 60, 0.5, 0.72, o, { filter: { type: 'lowpass', frequency: 900, q: 1 } });
+        this.impactLayer(o, 0.9);
+        this.noise('bandpass', 1400, 220, 0.45, 1, 0.95, o);
+        this.oscillator('sawtooth', 400, 60, 0.5, 0.78, o, { filter: { type: 'lowpass', frequency: 900, q: 1 } });
         this.body(70, 45, 0.5, 0.72, o);
         break;
       case 'step':
