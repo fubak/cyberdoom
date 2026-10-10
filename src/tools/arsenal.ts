@@ -52,8 +52,8 @@ const PICKUP_NAME: Record<string, [string, string]> = {
   'edr-cell': ['EDR CELL', 'EDR CELLS'],
   'patch-disk': ['PATCH DISK', 'PATCH DISKS'],
 };
-/** Column width when paging long tool explanations into 2-line ticker pages. */
-const TICKER_COLS = 45;
+/** Column width when paging long tool explanations into ticker pages (matches tickerRows' 52-col tiny-glyph wrap). */
+const TICKER_COLS = 52;
 const RES_LABEL: Record<string, string> = { 'usb-charge': 'SCAN', pcap: 'PCAP', 'edr-cell': 'CELL', 'patch-disk': 'DISK' };
 
 /** Tool-native unit name for an ammo resource ('-1 SCAN', '-1 PCAP', ...). */
