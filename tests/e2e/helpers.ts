@@ -37,6 +37,7 @@ declare global {
       startMission(id: string, gender?: string): void;
       teleport(x: number, y: number, angle?: number): void;
       setTool(slot: number): void;
+      setIntegrity(v: number): void;
       fire(): void;
     };
   }

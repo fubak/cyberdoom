@@ -265,7 +265,7 @@ class Game {
   }
 
   private showPause(): void {
-    if (this.paused || this.screen !== 'play' || !this.runtime) return;
+    if (this.paused || this.screen !== 'play' || !this.runtime || this.runtime.finished) return;
     this.paused = true;
     this.automap.close();
     this.dossier.enabled = false;
@@ -489,6 +489,8 @@ class Game {
       objectives: rt.objectiveSummary(),
       evidence: rt.evidence,
       stats: rt.stats(),
+      loss: rt.lossCause,
+      onRedeploy: () => this.startMission(mission.id),
       onDone: () => this.showMissionSelect(),
     }));
   }
@@ -724,7 +726,7 @@ class Game {
       onMelee: (e, dmg) => {
         this.particles.pop(e.x, e.y, muzzleHeight(e));
         this.audio.sfx('bite', { x: e.x, y: e.y });
-        this.hurtPlayer(dmg, e.x, e.y);
+        this.hurtPlayer(dmg, e.x, e.y, e);
       },
       onFire: (e, projectile) => {
         this.projectiles.push({ ...projectile, alive: true, traveled: 0 });
@@ -754,7 +756,9 @@ class Game {
       }
       this.audio.sfx('impact', { x, y, gain: projectile.hostile || !hit ? 1 : 0.5 });
       if (hitPlayer && projectile.hostile) {
-        this.hurtPlayer(projectile.damage ?? 10, x - projectile.dx, y - projectile.dy);
+        const srcId = projectile.source?.startsWith('enemy:') ? projectile.source.slice(6) : null;
+        const src = srcId ? runtime.entities.find((ent) => ent.def.id === srcId) : undefined;
+        this.hurtPlayer(projectile.damage ?? 10, x - projectile.dx, y - projectile.dy, src);
       }
       if (hit && hit.def.kind === 'workstation' && projectile.traveled > USB_PLUG_RANGE) {
         this.bus.emit('tool-hit', { toolId: 'usb', entityId: hit.def.id, good: false });
@@ -829,7 +833,7 @@ class Game {
     }
   }
 
-  private hurtPlayer(dmg: number, sourceX: number, sourceY: number): void {
+  private hurtPlayer(dmg: number, sourceX: number, sourceY: number, source?: Entity): void {
     const p = this.player;
     const runtime = this.runtime;
     if (!p || !runtime || runtime.finished) return;
@@ -850,13 +854,15 @@ class Game {
     da = Math.atan2(Math.sin(da), Math.cos(da));
     this.arsenal.hurt(Math.abs(da) < 0.35 ? 0 : Math.sign(da));
     p.knockback(awayX, awayY, Math.min(0.35, 0.1 + dmg * 0.01));
+    const by = source?.def.inspect?.label ?? runtime.entities.find((e) => e.x === sourceX && e.y === sourceY)?.def.inspect?.label;
     if (this.simT - this.lastHurtMessageT >= 1.5) {
       this.lastHurtMessageT = this.simT;
-      this.hud.pushMessage(`${runtime.entities.find((e) => e.x === sourceX && e.y === sourceY)?.def.inspect?.label ?? 'Malware'} is draining your integrity!`, 'bad');
+      this.hud.pushMessage(`${by ?? 'Malware'} is draining your integrity!`, 'bad');
     }
     if (!p.alive) {
       this.audio.sfx('death');
-      this.bus.emit('player-down', {});
+      this.hud.pushMessage(`INTEGRITY DEPLETED${by ? ` - ${by}` : ''}`, 'bad');
+      this.bus.emit('player-down', { by: source?.def.inspect?.label, threat: source?.def.sprite });
     }
   }
 
