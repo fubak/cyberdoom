@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Audio, spatialize } from '../src/engine/audio';
+import { Audio, VOICE_CAPS, spatialize } from '../src/engine/audio';
 
 describe('audio spatialization', () => {
   it('keeps nearby sounds loud and fades out at 19 tiles', () => {
@@ -21,5 +21,19 @@ describe('audio spatialization', () => {
     expect(() => audio.setCombat(true)).not.toThrow();
     expect(() => audio.setCombat(false)).not.toThrow();
     expect(audio.meter()).toEqual({ rmsDb: -Infinity, peakDb: -Infinity });
+  });
+});
+
+describe('per-event voice limiting', () => {
+  it('caps every hot combat event to a few concurrent instances', () => {
+    // combat sfx that stack densely must be bounded so the mix can't clip
+    for (const name of ['bite', 'enemy-pain', 'enemy-fire', 'impact', 'windup']) {
+      expect(VOICE_CAPS[name], name).toBeGreaterThanOrEqual(1);
+      expect(VOICE_CAPS[name], name).toBeLessThanOrEqual(4);
+    }
+    // sight barks never repeat on top of themselves
+    for (const name of ['sight-worm', 'sight-trojan', 'sight-ransomware', 'sight-rat', 'sight-rootkit']) {
+      expect(VOICE_CAPS[name], name).toBe(1);
+    }
   });
 });

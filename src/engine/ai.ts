@@ -52,7 +52,7 @@ interface EnemyProfile {
 }
 
 export const ENEMY_PROFILES: Record<string, EnemyProfile> = {
-  worm: { speed: 2.6, ranged: false, damage: 6, painChance: 0.8, range: 0.95, windup: 0.3, propagates: true },
+  worm: { speed: 2.6, ranged: false, damage: 3, painChance: 0.8, range: 0.95, windup: 0.55, propagates: true },
   trojan: { speed: 1.8, ranged: true, damage: 10, painChance: 0.6, projectileSpeed: 5.5, windup: 0.5, disguised: true },
   ransomware: { speed: 1.3, ranged: true, damage: 18, painChance: 0.4, projectileSpeed: 4, windup: 0.7, seals: true },
   logicbomb: { speed: 0, ranged: false, damage: 22, painChance: 0, range: 2.2, windup: 1.4, aggroRange: 4, logicBomb: true },
@@ -66,7 +66,8 @@ const DIRECTIONS = Array.from({ length: 8 }, (_, i) => [
   Math.cos((i * Math.PI) / 4),
   Math.sin((i * Math.PI) / 4),
 ]);
-// Doom-ish melee cadence: cooldown + windup + recover lands a ~1.0-1.3 s cycle.
+// Doom-ish melee cadence: cooldown + windup + recover lands a ~1.2-1.6 s cycle
+// (melee windups telegraph >=0.5 s like Doom's 0.51-0.69 s attack frames).
 // Ranged attackers (trojan, ransomware, rat) keep the slower volley cadence.
 const meleeCooldown = () => 0.45 + Math.random() * 0.3;
 const rangedCooldown = () => 1.2 + Math.random() * 0.8;
@@ -515,8 +516,14 @@ export function updateEntities(
         const windupT = ((e.state.windupT as number | undefined) ?? 0) + dt;
         e.state.windupT = windupT;
         if (windupT >= (e.state.windupDur as number)) {
+          // melee lethality scales with the mission's difficulty dial (speedMul),
+          // so late-mission melee drains faster while ranged damage stays flat
+          const meleeDmg = Math.max(
+            1,
+            Math.round(profile.damage * ((e.state.speedMul as number | undefined) ?? 1)),
+          );
           if (profile.logicBomb) {
-            if (dist <= (profile.range ?? 2.2)) hooks.onMelee(e, profile.damage);
+            if (dist <= (profile.range ?? 2.2)) hooks.onMelee(e, meleeDmg);
             e.alive = false;
           } else if (profile.ranged) {
             const aimDx = player.x - e.x;
@@ -534,11 +541,11 @@ export function updateEntities(
               damage: profile.damage,
             });
           } else if (dist < (profile.range ?? 0.95) + 0.25) {
-            hooks.onMelee(e, profile.damage);
+            hooks.onMelee(e, meleeDmg);
           }
           e.state.mode = profile.retreatAfterShot ? 'retreat' : 'recover';
           if (profile.retreatAfterShot) e.state.retreatT = profile.retreatAfterShot;
-          else e.state.recoverT = 0.3;
+          else e.state.recoverT = profile.ranged ? 0.3 : 0.25;
           e.state.popT = 0;
           e.state.attackCooldown = profile.ranged ? rangedCooldown() : meleeCooldown();
         }

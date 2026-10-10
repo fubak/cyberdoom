@@ -17,6 +17,8 @@ export class Feel {
   private hurtElapsed = 0;
   private hurtSideAmount = 0;
   private bonusAmount = 0;
+  /** Recoil jolt on tool fire: instant hit, ~110 ms settle (Doom muzzle kick). */
+  private kickAmt = 0;
 
   hurt(dmg: number, side = 0): void {
     this.trauma = Math.min(1, this.trauma + dmg / 40);
@@ -36,10 +38,20 @@ export class Feel {
     this.bonusAmount = 0.35;
   }
 
+  /** Fire moment: sharp downward viewmodel recoil jolt. */
+  kick(strength = 1): void {
+    this.kickAmt = Math.max(this.kickAmt, strength);
+  }
+
+  get viewKick(): number {
+    return this.kickAmt;
+  }
+
   update(dt: number): void {
     this.trauma = Math.max(0, this.trauma - 2.2 * dt);
     this.hurtElapsed = Math.min(this.hurtDuration, this.hurtElapsed + dt);
     this.bonusAmount = Math.max(0, this.bonusAmount - (0.35 / 0.25) * dt);
+    this.kickAmt = Math.max(0, this.kickAmt - 9 * dt);
   }
 
   get red(): number {

@@ -14,6 +14,7 @@ import { lookProbe, placeThreat } from './render/probe';
 import { Renderer } from './render/renderer';
 import { prewarmLazySpriteFrames, prioritizeLazySprites, spriteSets } from './render/sprites';
 import { textureRegistry } from './render/textures';
+import { TOOL_FLASH } from './render/viewmodels';
 import { Hud } from './ui/hud';
 import { Automap } from './ui/automap';
 import { setupPresentation } from './ui/present';
@@ -45,6 +46,26 @@ import { genDebugCompare } from './render/genpool';
 const FIXED_DT = 1 / 60;
 const params = new URLSearchParams(location.search);
 const DEBUG = params.get('debug') === '1';
+
+/** Per-tool muzzle-flash colour (0-1 rgb) for the world light flood. */
+const TOOL_FIRE_RGB: Record<string, [number, number, number]> = Object.fromEntries(
+  Object.entries(TOOL_FLASH).map(([k, v]) => [
+    k,
+    v.split(',').map((n) => parseInt(n, 10) / 255) as [number, number, number],
+  ]),
+);
+
+/** Viewmodel recoil jolt per tool — heavy attacks kick harder. */
+const TOOL_KICK: Record<string, number> = {
+  keyboard: 1.3,
+  edr: 1.5,
+  usb: 1,
+  patch: 0.6,
+  tap: 0.5,
+  mouse: 0.4,
+  badge: 0.45,
+  mfa: 0.45,
+};
 
 function muzzleHeight(e: Entity): number {
   const scale = e.def.sprite === 'worm' ? 0.6 : e.def.sprite === 'trojan' ? 0.75 : 0.85;
@@ -164,8 +185,13 @@ class Game {
       if (this.screen === 'play') this.dossier.show(evidence.id);
     });
     // tool sfx are the arsenal's (per-tool, per-phase); using a tool still wakes nearby enemies
-    this.bus.on('tool-used', () => {
+    this.bus.on('tool-used', ({ toolId }) => {
       if (this.player && this.runtime) alertNear(this.runtime.entities, this.player.x, this.player.y, 8);
+      // Doom fire-frame punch: flood walls/floor with tool-coloured light for
+      // ~110 ms and jolt the viewmodel down like a recoil kick
+      const rgb = TOOL_FIRE_RGB[toolId];
+      if (rgb) this.renderer.fireLight(rgb[0], rgb[1], rgb[2], toolId === 'edr' ? 1.15 : 0.85);
+      this.feel.kick(TOOL_KICK[toolId] ?? 1);
     });
     this.bus.on('cleaned', ({ entityId }) => {
       queueMicrotask(() => {
@@ -189,6 +215,8 @@ class Game {
       } else if (!((this.toolFxUntil.get(entityId) ?? -Infinity) >= this.simT)) {
         this.particles.burst(e.x, e.y, 0.4, 'hit');
       }
+      // small light burst at the impact point, so a connected hit reads instantly
+      this.particles.flash(e.x, e.y, 0.45);
       this.audio.sfx('enemy-pain', { x: e.x, y: e.y });
     });
     this.bus.on('tool-hit', ({ toolId, entityId, good }) => {
@@ -616,7 +644,7 @@ class Game {
         // lower/raise on switch comes from anim.lower; death drops the hands off-screen
         viewmodelOffset: {
           x: this.player.weaponBobX,
-          y: this.player.weaponBobY + (lostEnd ? 240 : 0),
+          y: this.player.weaponBobY + (lostEnd ? 240 : 0) + Math.round(this.feel.viewKick * 22),
         },
         credentials: this.runtime.roles[this.runtime.roles.length - 1] ?? this.role,
         objectives: this.runtime.objectiveSummary(),
@@ -1202,6 +1230,14 @@ class Game {
       },
       setCombat(active: boolean) {
         g.audio.setCombat(active);
+      },
+      /** FEEL: muzzle-flash world-light hook (same uniform the game uses on fire). */
+      fireLight(r: number, g2: number, b: number, strength = 0.85) {
+        g.renderer.fireLight(r, g2, b, strength);
+      },
+      /** FEEL: current muzzle-flash intensity 0-1, for capture/tests. */
+      fireLevel() {
+        return g.renderer.fireLevel();
       },
     };
   }

@@ -51,6 +51,7 @@ uniform float uLight;
 uniform float uFloor;
 uniform float uGain;
 uniform float uFlash;
+uniform vec4 uFire;
 uniform vec3 uTint;
 uniform vec2 uUvScale;
 uniform vec2 uUvOffset;
@@ -81,7 +82,12 @@ void main() {
     // banded like a 24-step colormap
     L = floor(L * 24.0 + 0.5) / 24.0;
   }
+  // Doom fire-frame light flood: a brief tool-coloured boost that fades with
+  // distance (overrides banding like Doom's fullbright muzzle-flash frame)
+  float reach = (1.0 - clamp(vDist / 14.0, 0.0, 0.92)) * uFire.a;
+  L = min(L + reach, 1.5);
   vec3 c = mix(min(t.rgb * uTint * L * uGain, vec3(1.0)), vec3(1.0), uFlash);
+  c = min(c + uFire.rgb * reach * 0.4, vec3(1.0));
   gl_FragColor = vec4(c, 1.0);
 }`;
 
@@ -133,6 +139,8 @@ varying vec3 vColor;
 void main() { gl_FragColor = vec4(vColor, 1.0); }`;
 
 const timeUniform = { value: 0 };
+/** Shared muzzle-flash light: rgb = tool colour, w = intensity (decays ~110 ms). */
+const fireUniform = { value: new THREE.Vector4(0, 0, 0, 0) };
 
 /** Wall families flat enough to carry a decal plate overlay. */
 const DECALABLE = new Set(['wall-panel', 'wall-brick', 'wall-tech', 'wall-ribs', 'wall-brick2']);
@@ -147,6 +155,7 @@ function worldMaterial(map: THREE.Texture, light = 1, floor = 0.16, tint?: THREE
       uFloor: { value: floor },
       uGain: { value: 1 },
       uFlash: { value: 0 },
+      uFire: fireUniform,
       uTint: { value: tint ?? new THREE.Vector3(1, 1, 1) },
       uUvScale: { value: new THREE.Vector2(1, 1) },
       uUvOffset: { value: new THREE.Vector2(0, 0) },
@@ -724,6 +733,13 @@ export class Renderer {
       // they read against dark sectors at any range, like Doom's
       st.mat.uniforms.uFloor.value = enemy ? (set.floor ?? 0.85) : e.def.kind === 'item' ? 0.45 : 0.2;
       st.mat.uniforms.uGain.value = enemy ? (set.gain ?? 1.9) : 1;
+      // engine emits state.tint (red during pain/flash) — apply it to the sprite
+      const tint = (e.state.tint as number | undefined) ?? 0xffffff;
+      (st.mat.uniforms.uTint.value as THREE.Vector3).set(
+        ((tint >> 16) & 255) / 255,
+        ((tint >> 8) & 255) / 255,
+        (tint & 255) / 255,
+      );
       // rootkit: invisible beyond ~2 tiles until tap/EDR/damage/close reveals it
       const stealthy = enemy && threatKind === 'rootkit' && !e.state.revealedRootkit;
       st.mesh.visible =
@@ -870,12 +886,24 @@ export class Renderer {
     return { tex: Object.values(f)[0] };
   }
 
+  /** FEEL hook: Doom muzzle-flash — flood walls/floor near the camera with
+   *  tool-coloured light for ~110 ms on each damaging tool use. */
+  fireLight(r: number, g: number, b: number, strength = 0.85): void {
+    fireUniform.value.set(r, g, b, strength);
+  }
+
+  /** Current muzzle-flash intensity (debug/tests). */
+  fireLevel(): number {
+    return fireUniform.value.w;
+  }
+
   render(player: Player, pose?: ViewPose): void {
     const now = performance.now();
     const dt = Math.min(0.1, (now - this.lastTime) / 1000);
     this.lastTime = now;
     this.time += dt;
     if (!this.debugNoFlash) timeUniform.value = this.time;
+    fireUniform.value.w = Math.max(0, fireUniform.value.w - dt / 0.11);
 
     // damage → palette red shift
     if (player.integrity < this.lastIntegrity) this.hurt = Math.min(0.85, this.hurt + 0.3 + (this.lastIntegrity - player.integrity) * 0.012);
@@ -924,7 +952,10 @@ export class Renderer {
         const sc = Math.min(st.scale, maxH / st.set.h);
         st.mesh.scale.set(st.set.w * sc, st.set.h * sc, 1);
       }
-      const painFlash = st.set.anim !== 'monster' && st.flash > 0.75 ? 0.6 : 0;
+      // monsters get an unmistakable ~150 ms white pain flash (flash decays
+      // 3/s from 1.0) before the pain-frame swap / dissolve, like Doom's
+      // bright hit frames; other sprites keep the shorter flicker
+      const painFlash = st.flash > (st.set.anim === 'monster' ? 0.55 : 0.75) ? 0.6 : 0;
       st.mat.uniforms.uFlash.value = this.debugNoFlash ? 0 : painFlash;
     }
     for (const fx of [...this.fx]) {

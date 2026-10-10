@@ -23,6 +23,36 @@ interface VoiceRoute {
   pan: number;
 }
 
+/** Sources + envelopes scheduled by one sfx() call, so a whole event can be stolen. */
+interface VoiceGroup {
+  sources: AudioScheduledSourceNode[];
+  envs: (GainNode | undefined)[];
+}
+
+/** Max concurrent instances of one SFX event; the oldest is faded+stolen past the cap. */
+export const VOICE_CAPS: Record<string, number> = {
+  step: 4,
+  bite: 2,
+  'enemy-pain': 3,
+  'enemy-fire': 2,
+  'enemy-death': 2,
+  impact: 2,
+  growl: 2,
+  hurt: 2,
+  spawn: 2,
+  windup: 3,
+  'sight-worm': 1,
+  'sight-trojan': 1,
+  'sight-ransomware': 1,
+  'sight-rat': 1,
+  'sight-rootkit': 1,
+  'sight-logicbomb': 1,
+  death: 1,
+  win: 1,
+  lose: 1,
+};
+const VOICE_CAP_DEFAULT = 3;
+
 interface FilterSpec {
   type: BiquadFilterType;
   frequency: number;
@@ -57,6 +87,9 @@ export class Audio {
   private combatGainApplied = false;
   private ambienceRequested = false;
   private ambience: { sources: AudioScheduledSourceNode[]; nodes: AudioNode[] } | null = null;
+  private voiceGroups = new Map<string, VoiceGroup[]>();
+  /** Group collecting sources scheduled by the sfx() call currently dispatching. */
+  private group: VoiceGroup | null = null;
 
   private ensure(): AudioContext | null {
     if (!this.unlocked) return null;
@@ -81,7 +114,9 @@ export class Audio {
 
       this.ambBus = ctx.createGain();
       this.master = ctx.createGain();
-      this.master.gain.value = 0.55;
+      // Pre-limiter gain kept low so stacked combat sfx hit the glue compressor
+      // and brick-wall limiter with headroom instead of clipping digitally.
+      this.master.gain.value = 0.45;
       // Glue compressor: evens the mix but a 4ms attack lets hit transients
       // through so loud events still punch over the bed. The limiter after it
       // is a brick wall for stacked combat sfx so they can't clip.
@@ -198,16 +233,29 @@ export class Audio {
     delay: number,
     nodes: AudioNode[],
     bufferOffset?: number,
+    envelope?: GainNode,
   ): void {
     const ctx = this.ctx!;
     const start = ctx.currentTime + delay;
     const end = start + duration;
     this.activeVoices++;
+    const grp = this.group;
+    if (grp) {
+      grp.sources.push(source);
+      grp.envs.push(envelope);
+    }
     source.onended = () => {
       source.disconnect();
       for (const node of nodes) node.disconnect();
       if (route.output !== this.sfxBus) route.output.disconnect();
       this.activeVoices = Math.max(0, this.activeVoices - 1);
+      if (grp) {
+        const i = grp.sources.indexOf(source);
+        if (i >= 0) {
+          grp.sources.splice(i, 1);
+          grp.envs.splice(i, 1);
+        }
+      }
     };
     if (source instanceof AudioBufferSourceNode && bufferOffset !== undefined) {
       source.start(start, bufferOffset);
@@ -267,7 +315,7 @@ export class Audio {
     envelope.gain.setValueAtTime(0.0001, now);
     envelope.gain.linearRampToValueAtTime(Math.max(0.0002, gain * route.gain), now + attack);
     envelope.gain.exponentialRampToValueAtTime(0.0001, now + duration);
-    this.scheduleVoice(source, route, duration, options.delay ?? 0, nodes);
+    this.scheduleVoice(source, route, duration, options.delay ?? 0, nodes, undefined, envelope);
   }
 
   private noise(
@@ -304,6 +352,7 @@ export class Audio {
       delay,
       [filter, envelope],
       Math.random() * Math.max(0, this.noiseBuffer.duration - duration),
+      envelope,
     );
   }
 
@@ -351,11 +400,41 @@ export class Audio {
     return true;
   }
 
+  /**
+   * Per-event voice limiting: past the per-name cap, the oldest instance is
+   * faded out over ~15 ms and its sources stopped, so stacked combat sfx
+   * stay clean instead of summing into clipping.
+   */
+  private limitVoices(name: string, ctx: AudioContext): void {
+    const groups = this.voiceGroups.get(name);
+    if (!groups) return;
+    for (let i = groups.length - 1; i >= 0; i--) {
+      if (groups[i].sources.length === 0) groups.splice(i, 1);
+    }
+    const cap = VOICE_CAPS[name] ?? VOICE_CAP_DEFAULT;
+    while (groups.length >= cap) {
+      const oldest = groups.shift()!;
+      for (let i = 0; i < oldest.sources.length; i++) {
+        const env = oldest.envs[i];
+        if (env) env.gain.setTargetAtTime(0.0001, ctx.currentTime, 0.012);
+        try {
+          oldest.sources[i].stop(ctx.currentTime + 0.06);
+        } catch {
+          // already stopped
+        }
+      }
+    }
+  }
+
   sfx(name: string, opts: SpatialPosition = {}): void {
     const ctx = this.ensure();
     if (!ctx || !this.allow(name, ctx)) return;
+    this.limitVoices(name, ctx);
+    const grp: VoiceGroup = { sources: [], envs: [] };
+    this.group = grp;
     const o = opts;
     const dur = opts.dur;
+    try {
     switch (name) {
       case 'fire':
         this.noise('highpass', 1800, 900, 0.11, 0.8, 0.38, o);
@@ -513,6 +592,14 @@ export class Audio {
       default:
         break;
     }
+    } finally {
+      this.group = null;
+    }
+    if (grp.sources.length > 0) {
+      const groups = this.voiceGroups.get(name) ?? [];
+      groups.push(grp);
+      this.voiceGroups.set(name, groups);
+    }
   }
 
   private roboticGarble(opts: SpatialPosition): void {
@@ -535,6 +622,11 @@ export class Audio {
     envelope.gain.exponentialRampToValueAtTime(0.0001, now + 0.4);
     carrier.connect(envelope).connect(route.output);
     this.activeVoices++;
+    const grp = this.group;
+    if (grp) {
+      grp.sources.push(carrier);
+      grp.envs.push(envelope);
+    }
     carrier.onended = () => {
       carrier.disconnect();
       lfo.disconnect();
@@ -542,6 +634,13 @@ export class Audio {
       envelope.disconnect();
       if (route.output !== this.sfxBus) route.output.disconnect();
       this.activeVoices = Math.max(0, this.activeVoices - 1);
+      if (grp) {
+        const i = grp.sources.indexOf(carrier);
+        if (i >= 0) {
+          grp.sources.splice(i, 1);
+          grp.envs.splice(i, 1);
+        }
+      }
     };
     lfo.start(now);
     lfo.stop(now + 0.41);
