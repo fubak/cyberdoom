@@ -237,6 +237,7 @@ export const m11: Mission = {
     // --- War room: pen-test rules of engagement ---
     {
       id: 'scope-brief', kind: 'console', x: 26.5, y: 13.5, sprite: 'console',
+      tags: ['audit-cast'],
       inspect: {
         label: 'Pen-test engagement letter',
         detail: 'The audit committee hired an outside red team to answer one question: what can an external attacker reach with no inside help? Issue the rules of engagement.',
@@ -276,6 +277,7 @@ export const m11: Mission = {
     // --- War room: the auditors themselves (5.5 evidence) ---
     {
       id: 'rosa', kind: 'npc', x: 12.5, y: 16.5, sprite: 'npc-f', ai: 'stand',
+      tags: ['audit-cast'],
       inspect: {
         label: 'R. Vega — internal audit',
         detail: 'Internal audit: our own staff reviewing controls ahead of the exam. She reports to the audit committee, runs self-assessments, and gathers the evidence the external auditors will sample. Independent in function — but she works here.',
@@ -284,6 +286,7 @@ export const m11: Mission = {
     },
     {
       id: 'cole', kind: 'npc', x: 20.5, y: 16.5, sprite: 'npc-suit', ai: 'stand',
+      tags: ['audit-cast'],
       inspect: {
         label: 'C. Ferro — external auditor',
         detail: 'External: an independent third party engaged for the annual examination. He attests only to what he personally verifies — he cannot take direction on scope, methods or conclusions. His signature is what regulators trust.',
@@ -292,11 +295,105 @@ export const m11: Mission = {
     },
     {
       id: 'iris', kind: 'npc', x: 16.5, y: 18.5, sprite: 'npc-m', ai: 'stand',
+      tags: ['audit-cast'],
       inspect: {
         label: 'I. Chen — penetration test lead',
         detail: 'External red team. Her engagement letter must state the environment: known (full disclosure), partially known (some inside info), or unknown (nothing but public data). The committee asked for the outside-attacker view.',
         category: 'person', objectives: ['5.5'],
       },
+    },
+    // --- War room east: the governance shelf (5.1 — policy/standard/procedure/guideline) ---
+    {
+      id: 'gov-doc-aup', kind: 'console', x: 29.5, y: 14.5, sprite: 'console', tags: ['gov-doc'],
+      inspect: {
+        label: 'Acceptable Use Policy, v3',
+        detail: 'Signed by the CISO, applies to every employee: "personal devices may not join the corporate WLAN." Violations are an HR matter. High-level management intent — no how-to steps.',
+        category: 'legit', objectives: ['5.1'],
+      },
+    },
+    {
+      id: 'gov-pick-aup-policy', kind: 'console', x: 31.5, y: 14.5, sprite: 'console', group: 'gov-aup', tags: ['gov-file'],
+      inspect: { label: 'File as: POLICY', detail: 'A mandatory, high-level statement of management intent that applies organization-wide.', category: 'legit', objectives: ['5.1'] },
+      log: 'Filed as POLICY — correct: it is management\u2019s binding statement of intent for all staff.',
+    },
+    {
+      id: 'gov-pick-aup-standard', kind: 'console', x: 33.5, y: 14.5, sprite: 'console', group: 'gov-aup', tags: ['wrong'],
+      inspect: { label: 'File as: STANDARD', detail: 'A mandatory technical baseline — specific settings or values.', category: 'legit', objectives: ['5.1'] },
+      log: 'Wrong element: a standard mandates specific technical parameters (lengths, versions, algorithms). A rules-of-conduct statement signed for all staff is a policy.',
+    },
+    {
+      id: 'gov-pick-aup-guideline', kind: 'console', x: 35.5, y: 14.5, sprite: 'console', group: 'gov-aup', tags: ['wrong'],
+      inspect: { label: 'File as: GUIDELINE', detail: 'A non-mandatory recommendation.', category: 'legit', objectives: ['5.1'] },
+      log: 'Wrong element: guidelines suggest; this document binds. "Violations are an HR matter" is enforcement language — it is policy, not advice.',
+    },
+    {
+      id: 'gov-doc-pw', kind: 'console', x: 29.5, y: 15.5, sprite: 'console', tags: ['gov-doc'],
+      inspect: {
+        label: 'Password configuration baseline',
+        detail: 'Mandatory for all service accounts: 20+ characters, individual credentials in the PAM vault, rotated quarterly. A specific, required technical setting — not negotiable.',
+        category: 'legit', objectives: ['5.1'],
+      },
+    },
+    {
+      id: 'gov-pick-pw-policy', kind: 'console', x: 31.5, y: 15.5, sprite: 'console', group: 'gov-pw', tags: ['wrong'],
+      inspect: { label: 'File as: POLICY', detail: 'A mandatory, high-level statement of management intent.', category: 'legit', objectives: ['5.1'] },
+      log: 'Wrong element: "20+ characters, rotated quarterly" is a required technical parameter, not a broad statement of intent — this is a standard.',
+    },
+    {
+      id: 'gov-pick-pw-standard', kind: 'console', x: 33.5, y: 15.5, sprite: 'console', group: 'gov-pw', tags: ['gov-file'],
+      inspect: { label: 'File as: STANDARD', detail: 'A mandatory technical baseline — specific settings or values.', category: 'legit', objectives: ['5.1'] },
+      log: 'Filed as STANDARD — correct: it mandates concrete technical parameters for a specific system class.',
+    },
+    {
+      id: 'gov-pick-pw-procedure', kind: 'console', x: 35.5, y: 15.5, sprite: 'console', group: 'gov-pw', tags: ['wrong'],
+      inspect: { label: 'File as: PROCEDURE', detail: 'Step-by-step instructions for completing a task.', category: 'legit', objectives: ['5.1'] },
+      log: 'Wrong element: a procedure is an ordered how-to. This document specifies required parameter values, not steps to follow — it is a standard.',
+    },
+    {
+      id: 'gov-doc-offb', kind: 'console', x: 29.5, y: 16.5, sprite: 'console', tags: ['gov-doc'],
+      inspect: {
+        label: 'Offboarding runbook',
+        detail: 'Steps executed on every departure: collect badge, disable accounts within 4 hours, archive the mailbox, revoke tokens, manager sign-off. An ordered checklist to perform.',
+        category: 'legit', objectives: ['5.1'],
+      },
+    },
+    {
+      id: 'gov-pick-offb-policy', kind: 'console', x: 31.5, y: 16.5, sprite: 'console', group: 'gov-offb', tags: ['wrong'],
+      inspect: { label: 'File as: POLICY', detail: 'A mandatory, high-level statement of management intent.', category: 'legit', objectives: ['5.1'] },
+      log: 'Wrong element: this is an ordered set of steps to execute, not a statement of intent — it is a procedure.',
+    },
+    {
+      id: 'gov-pick-offb-standard', kind: 'console', x: 33.5, y: 16.5, sprite: 'console', group: 'gov-offb', tags: ['wrong'],
+      inspect: { label: 'File as: STANDARD', detail: 'A mandatory technical baseline — specific settings or values.', category: 'legit', objectives: ['5.1'] },
+      log: 'Wrong element: standards fix required values, not sequences of actions. A departure checklist is a procedure.',
+    },
+    {
+      id: 'gov-pick-offb-procedure', kind: 'console', x: 35.5, y: 16.5, sprite: 'console', group: 'gov-offb', tags: ['gov-file'],
+      inspect: { label: 'File as: PROCEDURE', detail: 'Step-by-step instructions for completing a task.', category: 'legit', objectives: ['5.1'] },
+      log: 'Filed as PROCEDURE — correct: it is the ordered, repeatable checklist staff actually execute.',
+    },
+    {
+      id: 'gov-doc-desk', kind: 'console', x: 29.5, y: 17.5, sprite: 'console', tags: ['gov-doc'],
+      inspect: {
+        label: 'Clean-desk awareness tips',
+        detail: 'From the awareness team: "consider locking your screen when away and stowing papers in a drawer." Suggestions only — nothing here is required or enforced.',
+        category: 'legit', objectives: ['5.1'],
+      },
+    },
+    {
+      id: 'gov-pick-desk-policy', kind: 'console', x: 31.5, y: 17.5, sprite: 'console', group: 'gov-desk', tags: ['wrong'],
+      inspect: { label: 'File as: POLICY', detail: 'A mandatory, high-level statement of management intent.', category: 'legit', objectives: ['5.1'] },
+      log: 'Wrong element: "consider" is recommendation language, and nothing is enforced — a guideline, not a binding policy.',
+    },
+    {
+      id: 'gov-pick-desk-procedure', kind: 'console', x: 33.5, y: 17.5, sprite: 'console', group: 'gov-desk', tags: ['wrong'],
+      inspect: { label: 'File as: PROCEDURE', detail: 'Step-by-step instructions for completing a task.', category: 'legit', objectives: ['5.1'] },
+      log: 'Wrong element: these are optional tips, not mandatory steps — a guideline.',
+    },
+    {
+      id: 'gov-pick-desk-guideline', kind: 'console', x: 35.5, y: 17.5, sprite: 'console', group: 'gov-desk', tags: ['gov-file'],
+      inspect: { label: 'File as: GUIDELINE', detail: 'A non-mandatory recommendation.', category: 'legit', objectives: ['5.1'] },
+      log: 'Filed as GUIDELINE — correct: it recommends good practice without requiring it.',
     },
     // --- Server floor: the physical sweep (tag 'asset') ---
     {
@@ -550,7 +647,7 @@ export const m11: Mission = {
     },
     // --- Ambient + pickups ---
     {
-      id: 'worm-hall-a', kind: 'enemy', x: 33.5, y: 17.5, sprite: 'worm', ai: 'wander', hp: 2, infected: true, tags: ['malware'],
+      id: 'worm-hall-a', kind: 'enemy', x: 37.5, y: 17.5, sprite: 'worm', ai: 'wander', hp: 2, infected: true, tags: ['malware'],
       inspect: { label: 'Worm', detail: 'A worm is loose in the war room — a shadow asset let it in.', category: 'malware', objectives: ['2.4'] },
     },
     {
@@ -611,8 +708,11 @@ export const m11: Mission = {
     { id: 'reconcile', text: 'Reconcile the register against the sweep', kind: 'interact', tag: 'reconcile', requires: ['inv-load', 'sweep'] },
     { id: 'dispose', text: 'Dispose of each retired drive correctly', kind: 'interact', tag: 'dispose', count: 4, requires: ['reconcile'] },
     { id: 'dsr', text: 'Answer the three data-subject requests', kind: 'interact', tag: 'dsr', count: 3 },
-    { id: 'scope', text: 'Issue the pen-test rules of engagement', kind: 'interact', tag: 'scope' },
-    { id: 'attest', text: 'Sign the attestation package', kind: 'interact', tag: 'attest', requires: ['reconcile', 'dispose', 'dsr', 'scope'] },
+    { id: 'audit-map', text: 'Identify the audit cast: brief, internal audit, external auditor, red team', kind: 'inspect', tag: 'audit-cast', count: 4 },
+    { id: 'scope', text: 'Issue the pen-test rules of engagement', kind: 'interact', tag: 'scope', requires: ['audit-map'] },
+    { id: 'gov-read', text: 'Read all four governance documents', kind: 'inspect', tag: 'gov-doc', count: 4 },
+    { id: 'governance', text: 'File each governance document under the right element', kind: 'interact', tag: 'gov-file', count: 4, requires: ['gov-read'] },
+    { id: 'attest', text: 'Sign the attestation package', kind: 'interact', tag: 'attest', requires: ['reconcile', 'dispose', 'dsr', 'scope', 'governance'] },
     { id: 'legal-hold', text: 'Never destroy data under legal hold', kind: 'avoid', tag: 'spoliation' },
     { id: 'no-violations', text: 'Badge only doors your role covers', kind: 'doors' },
     { id: 'exit', text: 'Reach the exit before the auditors arrive', kind: 'reach-exit' },
@@ -719,6 +819,9 @@ export const m11Walkthrough: WalkStep[] = [
   { interact: 'dsr3-attest' },
   { goto: [27, 15] },
   { inspect: 'scope-brief' },
+  { inspect: 'rosa' },
+  { inspect: 'cole' },
+  { inspect: 'iris' },
   { interact: 'scope-unknown' },
   { badge: [30, 12] },
   { goto: [30, 11] },
@@ -756,6 +859,18 @@ export const m11Walkthrough: WalkStep[] = [
   { inspect: 'shelf-shadow' },
   { interact: 'shadow-destroy' },
   { goto: [8, 13] },
+  { goto: [31, 15] },
+  { inspect: 'gov-doc-aup' },
+  { inspect: 'gov-doc-pw' },
+  { inspect: 'gov-doc-offb' },
+  { inspect: 'gov-doc-desk' },
+  { interact: 'gov-pick-aup-policy' },
+  { goto: [33, 15] },
+  { interact: 'gov-pick-pw-standard' },
+  { goto: [35, 16] },
+  { interact: 'gov-pick-offb-procedure' },
+  { goto: [35, 17] },
+  { interact: 'gov-pick-desk-guideline' },
   { goto: [29, 19] },
   { interact: 'attest-console' },
   { wait: 0.2 },
@@ -788,6 +903,10 @@ export const m11Teach: MissionTeaching = {
     'data custodian',
     'data controller',
     'data processor',
+    'security policy',
+    'security standard',
+    'security procedure',
+    'security guideline',
   ],
   lessons: {
     'inv-load': {
@@ -824,6 +943,21 @@ export const m11Teach: MissionTeaching = {
       objective: '5.5',
       done: 'Unknown-environment engagement issued: the red team works from public information only, exactly the outside-attacker view the committee asked for.',
       missed: 'The scope was never set — or gave the testers inside knowledge. Known and partially known environments measure an informed attacker; the committee asked what an outsider can reach.',
+    },
+    'audit-map': {
+      objective: '5.5',
+      done: 'The audit cast was identified: internal audit (Vega) self-assesses, external audit (Ferro) independently attests, and the red team (Chen) needs its environment scope.',
+      missed: 'The engagement was scoped without identifying who does what. Internal audit prepares evidence, external audit attests independently, and a pen test needs its environment defined.',
+    },
+    'gov-read': {
+      objective: '5.1',
+      done: 'All four governance documents were read before filing.',
+      missed: 'Documents were filed unread. Governance starts with knowing what each document actually says.',
+    },
+    governance: {
+      objective: '5.1',
+      done: 'Each document filed under the right element: the AUP is policy, the password baseline a standard, the offboarding runbook a procedure, the clean-desk tips a guideline.',
+      missed: 'Governance elements were misfiled or skipped. Policy is binding intent, a standard mandates technical values, a procedure is steps, a guideline only recommends.',
     },
     attest: {
       objective: '5.4',

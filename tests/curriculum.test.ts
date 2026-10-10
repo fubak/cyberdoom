@@ -157,6 +157,11 @@ describe('mission arc', () => {
     expect(playableCoverageLine()).toContain(`${coverage.objectives.length}/28`);
   });
 
+  it('every SY0-701 objective is backed by a win mechanic somewhere in the arc', () => {
+    const winBacked = new Set(playableCoverage().objectives);
+    expect(OBJECTIVES.map((objective) => objective.id).every((id) => winBacked.has(id))).toBe(true);
+  });
+
   it('backs m01 removable-media reporting with a win mechanic and false-positive lesson', () => {
     const m01 = missionRegistry.require('m01');
     const fiveSix = ARC.find((mission) => mission.id === 'm01')

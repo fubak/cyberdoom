@@ -125,10 +125,48 @@ export const GLOSSARY: Record<string, string> = {
     'Assurance that someone cannot credibly deny an action they took, because it is provably tied to them. [1.2]',
   'access badge':
     'A physical security control that grants entry based on the badge holder\u2019s authorization and logs each use. [1.2]',
+  'zero trust':
+    'Security model that trusts nothing by default: every request is authenticated, authorized and continuously validated regardless of network location. Split into a control plane (decisions) and a data plane (enforcement). [1.2]',
+  'policy enforcement point':
+    'PEP: the data-plane component in Zero Trust (gateway, proxy or agent) that opens, monitors and terminates each connection based on the decision point\u2019s ruling. [1.2]',
+  'policy decision point':
+    'PDP: the control-plane component in Zero Trust that evaluates signals and decides access — the policy engine (decides) plus the policy administrator (executes the decision). [1.2]',
+  'honeypot':
+    'Deception technology: a decoy system built to be probed and attacked, diverting attackers and generating high-confidence alerts. [1.2]',
+  'honeynet':
+    'A network of honeypots — an entire decoy environment that lets defenders study attacker movement across systems. [1.2]',
+  'honeytoken':
+    'Deception technology: a fake artifact — credential, file (honeyfile) or database record — with no legitimate use, so any access is a reliable alert. [1.2]',
   'privileged access management':
     'PAM tools that control admin access: password vaulting, just-in-time permissions, ephemeral credentials. Replaces shared admin passwords. [4.6]',
+  'just-in-time access':
+    'JIT: privileged access granted only when needed, scoped to a task, and revoked automatically afterwards — no standing admin rights. [4.6]',
+  'ephemeral credentials':
+    'Short-lived credentials issued for one task or session and expiring automatically, so stolen copies quickly become useless. A PAM capability. [4.6]',
+  'password vaulting':
+    'Storing privileged credentials in a PAM vault so admins check them out per task — each use is approved, logged and time-limited instead of shared. [4.6]',
+  'federation':
+    'Identity trust between organizations: a user logs in once at their identity provider and partner services accept the provider\u2019s signed assertion (SAML, OIDC) without ever seeing the password. [4.6]',
+  'saml':
+    'Security Assertion Markup Language: an XML-based SSO federation standard where the identity provider signs assertions a service provider trusts. [4.6]',
+  'oauth':
+    'OAuth 2.0: a delegated-authorization framework — it grants an app scoped access to resources via tokens. It is not an authentication protocol; OIDC adds identity on top. [4.6]',
+  'openid connect':
+    'OIDC: an identity layer on OAuth 2.0 that returns a signed ID token the relying party can verify — SSO authentication built on delegated authorization. [4.6]',
+  'ldap':
+    'Lightweight Directory Access Protocol: queries and authenticates against a directory service (e.g. Active Directory). A directory protocol, not an SSO federation assertion. [4.6]',
+  'security policy':
+    'A mandatory, high-level statement of management intent that applies organization-wide (e.g. an acceptable use policy). Governance element. [5.1]',
+  'security standard':
+    'A mandatory technical baseline: specific required values or configurations (e.g. password length, approved algorithms). Governance element. [5.1]',
+  'security procedure':
+    'Ordered, step-by-step instructions for performing a task (e.g. an offboarding checklist). Governance element. [5.1]',
+  'security guideline':
+    'A non-mandatory recommendation: suggested good practice that is not enforced. Governance element. [5.1]',
 
   // --- insider threat & investigation (2.1, 3.3, 4.8, 4.9) ---
+  'threat actor':
+    'An entity responsible for an incident, classified by attributes: motivation (espionage, financial gain, ideology, revenge, chaos, service disruption), resources/funding, sophistication, and internal vs external position. [2.1]',
   'insider threat':
     'A threat actor with authorized access (employee, contractor) who misuses it, intentionally or not. [2.1, 5.6]',
   'data exfiltration':

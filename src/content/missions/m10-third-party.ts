@@ -265,6 +265,7 @@ export const m10: Mission = {
     },
     {
       id: 'expedite-console', kind: 'console', x: 32.5, y: 16.5, sprite: 'console', tags: ['shortcut'],
+      implicates: ['rep'],
       inspect: {
         label: 'Vendor fast-track', category: 'suspicious', objectives: ['5.3'],
         detail: 'Sign the pilot and grant remote access now; the rep guarantees the paperwork "catches up later". The assessment, audit clause and independent review would all be skipped.',
@@ -503,6 +504,8 @@ export const m10Walkthrough: WalkStep[] = [
   { goto: [8, 11] },
   { badge: [8, 12] },
   { goto: [30, 17] },
+  { inspect: 'expedite-console' },
+  { inspect: 'rep' },
   { interact: 'rep' },
   { goto: [8, 13] },
   { badge: [8, 12] },

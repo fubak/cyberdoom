@@ -148,6 +148,13 @@ export interface EntityDef {
   reportable?: boolean;
   /** Is this entity actually the culprit in its mission (content decision). */
   culprit?: boolean;
+  /** Reportable entity ids this entity's recorded evidence implicates
+   *  (e.g. a badge log or DLP alert that names a suspect). Inspecting a
+   *  reportable entity also records one evidence entry about that person. */
+  implicates?: string[];
+  /** Corroborating evidence entries required before this entity can be
+   *  marked as a suspect (default 2). Its own inspection counts as one. */
+  evidenceRequired?: number;
   inspect?: InspectInfo;
   /** Objective ids credited when this entity is cleaned; defaults to inspect.objectives. */
   cleanObjectives?: string[];

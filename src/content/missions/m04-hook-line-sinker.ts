@@ -173,6 +173,7 @@ const consoles: EntityDef[] = [
   },
   {
     id: 'signin-log', kind: 'console', x: 12.5, y: 5.5, sprite: 'console', tags: ['signin-log'],
+    implicates: ['mailbox-j-ortiz'],
     log: 'SIGN-IN AUDIT — last 24 hours\n08:14 m.chen@cyberdoom.example — Boston / managed laptop / success\n08:18 r.patel@cyberdoom.example — Boston / managed laptop / success\n09:00 j.ortiz@cyberdoom.example — Chicago / browser / success\n09:20 j.ortiz@cyberdoom.example — Singapore / browser / success\n09:21 j.ortiz@cyberdoom.example — Chicago / browser / success / session active\n09:48 a.reed@cyberdoom.example — Denver / managed laptop / success',
     inspect: {
       label: 'Sign-in audit console',
@@ -409,6 +410,7 @@ export const m04Walkthrough: WalkStep[] = [
   { goto: [12, 5] },
   { interact: 'signin-log' },
   { goto: [16, 5] },
+  { inspect: 'mailbox-j-ortiz' },
   { interact: 'mailbox-j-ortiz' },
   { goto: [25, 5] },
   { interact: 'report-console' },

@@ -734,6 +734,7 @@ class Game {
       } else {
         this.useCd = 0.3;
         if (r.kind === 'entity') this.bus.emit('interact', { entityId: r.entity.def.id });
+        else this.hud.pushMessage('Nothing in reach — aim at it and get closer.', 'info');
       }
     }
 

@@ -243,7 +243,7 @@ describe('MissionRuntime', () => {
     const state = setup(mission({
       entities: [{
         id: 'innocent', kind: 'npc', x: 2, y: 2, sprite: 'npc',
-        reportable: true, culprit: false,
+        reportable: true, culprit: false, evidenceRequired: 1,
         inspect: { label: 'Innocent', detail: '', category: 'person' },
       }],
       missionObjectives: [{
@@ -251,12 +251,56 @@ describe('MissionRuntime', () => {
         tag: 'false-accuse', strikes: 2,
       }],
     }));
+    state.bus.emit('inspect', { entityId: 'innocent' });
     state.bus.emit('interact', { entityId: 'innocent' });
     expect(state.rt.finished).toBeNull();
     expect(state.rt.objectives[0].violations).toBe(1);
     state.bus.emit('interact', { entityId: 'innocent' });
     expect(state.rt.finished).toBe('lost');
     expect(state.rt.lossReason).toBe('No false accusations');
+  });
+
+  it('refuses to mark a suspect without corroborating evidence', () => {
+    const state = setup(mission({
+      entities: [{
+        id: 'insider', kind: 'npc', x: 2, y: 2, sprite: 'npc',
+        reportable: true, culprit: true,
+        inspect: { label: 'Insider', detail: '', category: 'person' },
+      }],
+      missionObjectives: [{ id: 'report', text: 'Report insider', kind: 'report' }],
+    }));
+    state.bus.emit('interact', { entityId: 'insider' });
+    expect(state.rt.objectives[0].done).toBe(false);
+    expect(state.rt.scoreLog.some((entry) => entry.text.startsWith('Correct'))).toBe(false);
+    expect(state.messages.at(-1)?.text).toContain('corroborating evidence');
+    // the refusal is neutral: no verdict leak, no accusation, no violation
+    expect(state.rt.objectives[0].violations).toBe(0);
+  });
+
+  it('marks a suspect once evidence implicating them is in the case file', () => {
+    const state = setup(mission({
+      entities: [
+        {
+          id: 'insider', kind: 'npc', x: 2, y: 2, sprite: 'npc',
+          reportable: true, culprit: true,
+          inspect: { label: 'Insider', detail: '', category: 'person' },
+        },
+        {
+          id: 'auth-log', kind: 'console', x: 3, y: 2, sprite: 'console',
+          implicates: ['insider'], log: '212 shared-account logins',
+          inspect: { label: 'Auth log', detail: '', category: 'legit' },
+        },
+      ],
+      missionObjectives: [{ id: 'report', text: 'Report insider', kind: 'report' }],
+    }));
+    // inspection alone is one entry but not corroboration
+    state.bus.emit('inspect', { entityId: 'insider' });
+    state.bus.emit('interact', { entityId: 'insider' });
+    expect(state.rt.objectives[0].done).toBe(false);
+    // the second implicating source is the corroboration
+    state.bus.emit('interact', { entityId: 'auth-log' });
+    state.bus.emit('interact', { entityId: 'insider' });
+    expect(state.rt.objectives[0].done).toBe(true);
   });
 
   it('refuses an interaction whose requirements are unmet', () => {
@@ -493,11 +537,12 @@ describe('MissionRuntime', () => {
     const state = setup(mission({
       entities: [{
         id: 'culprit', kind: 'npc', x: 2, y: 2, sprite: 'npc',
-        reportable: true, culprit: true,
+        reportable: true, culprit: true, evidenceRequired: 1,
         inspect: { label: 'Insider', detail: '', category: 'suspicious', objectives: ['2.1', '2.4'] },
       }],
       missionObjectives: [{ id: 'report', text: 'Report insider', kind: 'report' }],
     }));
+    state.bus.emit('inspect', { entityId: 'culprit' });
     state.bus.emit('interact', { entityId: 'culprit' });
     expect(state.rt.scoreLog.find((entry) => entry.text.startsWith('Correct'))?.objectives)
       .toEqual(['2.1', '2.4']);

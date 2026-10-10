@@ -146,8 +146,8 @@ export const ARC: ArcMission[] = [
     objectives: [
       w('4.2', 'Reconcile the asset inventory, then sanitize or destroy decommissioned drives and collect certificates of destruction.'),
       w('5.4', 'Answer data-subject requests (right to be forgotten vs retention obligations) and produce attestation evidence.'),
-      ev('5.5', 'Auditor NPCs: internal vs external audit, known vs unknown environment penetration test.'),
-      qz('5.1', 'Debrief: data owner vs custodian vs controller vs processor.'),
+      w('5.5', 'Identify the audit cast (internal audit, external auditor, red team), then issue the pen-test scope the engagement letter calls for — unknown environment for the outside-attacker view.'),
+      w('5.1', 'File each governance document under the right element — policy vs standard vs procedure vs guideline — before the attestation can be signed.'),
     ],
   },
   {

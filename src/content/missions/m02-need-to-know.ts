@@ -125,6 +125,16 @@ export const m02: Mission = {
       inspect: { label: 'IAM kiosk: request DOMAIN ADMIN (all doors)', detail: 'Standing, unscoped privileged access request.', category: 'legit', objectives: ['4.6'] },
     },
     {
+      id: 'auth-log', kind: 'console', x: 26.5, y: 11.5, sprite: 'console', tags: ['auth-log'],
+      implicates: ['greg'],
+      log: 'SERVER AUTH LOG (24 h)\n212 logins as "admin" from 4 different workstations\n0 logins by named accounts',
+      inspect: {
+        label: 'Server authentication log',
+        detail: 'Per-account logins on the servers the sysadmin team manages. Named-account accountability is what shared passwords destroy.',
+        category: 'legit', objectives: ['1.2', '4.9'],
+      },
+    },
+    {
       id: 'report-console', kind: 'console', x: 17.5, y: 11.5, sprite: 'console', tags: ['report-console'],
       log: 'SOC REPORTING: mark the person with the KEYBOARD, then file here.',
       inspect: { label: 'SOC incident console', detail: 'Files security-awareness and insider reports to the SOC.', category: 'legit', objectives: ['5.6'] },
@@ -267,6 +277,50 @@ export const m02: Mission = {
         { id: 'd', text: 'Rule-based access control', correct: false, explanation: 'Rule-based control applies the same conditions to everyone (e.g. "no entry after 22:00"), whatever their role.' },
       ],
     },
+    {
+      id: 'q6',
+      prompt: 'Your team moves remote access to a Zero Trust model. Which component sits in the data plane and actually allows or blocks each connection?',
+      objectives: ['1.2'],
+      options: [
+        { id: 'a', text: 'The policy decision point (PDP)', correct: false, explanation: 'The PDP — the policy engine plus policy administrator — evaluates signals and makes the decision in the control plane. It does not sit in the traffic path.' },
+        { id: 'b', text: 'The SIEM', correct: false, explanation: 'A SIEM collects and correlates telemetry for detection. It advises the decision point but enforces nothing.' },
+        { id: 'c', text: 'The policy enforcement point (PEP)', correct: true, explanation: 'The PEP is the data-plane component — gateway, agent or proxy — that opens, monitors and closes each connection based on the PDP\u2019s decision.' },
+        { id: 'd', text: 'The identity provider', correct: false, explanation: 'The IdP authenticates the subject and feeds trust signals to the decision point. Enforcement happens downstream at the PEP.' },
+      ],
+    },
+    {
+      id: 'q7',
+      prompt: 'An analyst plants a fake file named "prod-passwords.xlsx" on a file share; it contains no real data, and any read fires an alert. What did they deploy?',
+      objectives: ['1.2'],
+      options: [
+        { id: 'a', text: 'A honeytoken (honeyfile)', correct: true, explanation: 'A honeytoken is a deceptive artifact — a file, credential or record — that has no legitimate use, so any touch is suspicious. The whole file share stays real.' },
+        { id: 'b', text: 'A honeypot', correct: false, explanation: 'A honeypot is a whole decoy system built to be probed and attacked. Here only a single bogus file was planted.' },
+        { id: 'c', text: 'A honeynet', correct: false, explanation: 'A honeynet is a network of honeypots — multiple decoy systems — not a single deceptive file.' },
+        { id: 'd', text: 'A tarpit', correct: false, explanation: 'A tarpit delays an attacker\u2019s connections to waste their time. Nothing here delays anything; it alerts on access.' },
+      ],
+    },
+    {
+      id: 'q8',
+      prompt: 'A contractor needs admin rights for one four-hour maintenance window, with every use logged and the rights gone automatically afterwards. What is the BEST fit?',
+      objectives: ['4.6'],
+      options: [
+        { id: 'a', text: 'Add them to the shared domain-admin group for the day', correct: false, explanation: 'Group membership is standing privilege — easy to forget to remove, and every other member gets pooled attribution in the logs.' },
+        { id: 'b', text: 'PAM: check out a vaulted credential just-in-time, expiring at the end of the window', correct: true, explanation: 'Privileged access management vaults the credential, issues just-in-time elevation scoped to the task, logs each use, and expires the ephemeral access automatically.' },
+        { id: 'c', text: 'Create a permanent admin account they promise to stop using', correct: false, explanation: 'A standing account with a promise is exactly the over-privileged, unexpired access PAM exists to eliminate.' },
+        { id: 'd', text: 'Text them the domain-admin password, then change it afterwards', correct: false, explanation: 'Sending a privileged password in a message exposes it, gives no per-use logging, and the credential is still shared while it is valid.' },
+      ],
+    },
+    {
+      id: 'q9',
+      prompt: 'Staff sign in to a third-party SaaS with their company credentials through SSO. Which statement BEST describes the federation?',
+      objectives: ['4.6'],
+      options: [
+        { id: 'a', text: 'The SaaS stores a synced copy of each password and verifies it with LDAP', correct: false, explanation: 'LDAP is a directory access protocol, and syncing passwords to the SaaS is precisely what federation avoids — credentials stay at the identity provider.' },
+        { id: 'b', text: 'The SaaS issues OAuth 2.0 access tokens so users can prove their identity', correct: false, explanation: 'OAuth 2.0 delegates authorization for APIs — it grants scoped access, not identity. OpenID Connect layers authentication on top of OAuth.' },
+        { id: 'c', text: 'The company binds to the SaaS\u2019s directory with SAML to look users up', correct: false, explanation: 'SAML is not a directory lookup. The identity provider signs a SAML assertion the service provider trusts — no password crosses to the SaaS.' },
+        { id: 'd', text: 'The identity provider sends a signed assertion (e.g. SAML) the SaaS trusts; credentials never leave the IdP', correct: true, explanation: 'In federation the service provider trusts the identity provider\u2019s assertion — SAML 2.0 for browser SSO, or OIDC\u2019s ID token — so the SaaS never sees the password.' },
+      ],
+    },
   ],
 };
 
@@ -277,7 +331,10 @@ export const m02Walkthrough: WalkStep[] = [
   { interact: 'ticket' },
   { goto: [22, 12] },
   { interact: 'iam-netops' },
+  { goto: [26, 12] },
+  { interact: 'auth-log' },
   { goto: [12, 13] },
+  { inspect: 'greg' },
   { interact: 'greg' },
   { goto: [17, 12] },
   { interact: 'report-console' },
@@ -319,7 +376,7 @@ export const m02Teach: MissionTeaching = {
     { text: 'Learn who shares the admin password and why it matters.', objective: '1.2' },
     { text: 'Deal with it the way policy expects an analyst to.', objective: '5.6' },
   ],
-  keyTerms: ['least privilege', 'role-based access control', 'shared credentials', 'accounting', 'non-repudiation', 'privileged access management'],
+  keyTerms: ['least privilege', 'role-based access control', 'shared credentials', 'accounting', 'non-repudiation', 'privileged access management', 'zero trust', 'policy enforcement point', 'honeytoken', 'just-in-time access', 'federation'],
   lessons: {
     'no-violations': {
       objective: '4.6',
