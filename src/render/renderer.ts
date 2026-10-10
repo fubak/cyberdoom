@@ -7,7 +7,7 @@ import type { ViewPose } from '../engine/feel';
 import { buildPaletteLut } from './palette';
 import { genWorkerCount } from './genpool';
 import { buildSprites, prewarmLazySpriteFrames, spriteSets, type SpriteSet } from './sprites';
-import { RISE_MAX_DIST, riseBase } from './melee';
+import { LOOM_CAP_FRAC, LOOM_MAX_SCALE, RISE_MAX_DIST, loomTargetH, riseBase } from './melee';
 import { WALL_H, buildTextures, decalTexture, doorTextureFor, hashStr, lookTheme, textureOr, textureRegistry } from './textures';
 import { RES, STATUS_H, VIEW3D_H, VIEW_H, VIEW_W } from './res';
 
@@ -617,7 +617,7 @@ export class Renderer {
 
   /** Bright Doom teleport-fog flash where a threat materialises. */
   spawnTeleport(x: number, y: number): void {
-    this.spawnFx('fx-spawn', ['f0', 'f1', 'f2', 'f3'], x, y, 0, 0.45);
+    this.spawnFx('fx-spawn', ['f0', 'f1', 'f2', 'f3'], x, y, 0, 0.6);
   }
 
   /** Red padlock overlay on a door or console a ransomware has sealed. */
@@ -1006,9 +1006,9 @@ export class Renderer {
     if (e.def.kind === 'enemy') {
       if (st.set.frames.die0) {
         this.spawnFx(st.setId, ['die0', 'die1', 'die2', 'die3', 'die4'], e.x, e.y, 0, 0.55, this.lightAt(e.x, e.y));
-        // persistent, non-blocking corpse: the flattened 'dead' frame stays on the floor
+        // persistent, non-blocking corpse: the fallen 'dead' heap stays on the floor
         if (st.set.frames.dead) {
-          this.addStatic(st.setId, e.x, e.y, 0, this.lightAt(e.x, e.y), 'dead', { floor: 0.55, gain: 1.2 });
+          this.addStatic(st.setId, e.x, e.y, 0, this.lightAt(e.x, e.y), 'dead', { floor: 0.9, gain: 1.3 });
         }
       } else {
         this.spawnFx('fx-puff', ['f0', 'f1', 'f2'], e.x, e.y, 0.4, 0.4);
@@ -1098,9 +1098,12 @@ export class Renderer {
     this.lastIntegrity = player.integrity;
     this.hurt = Math.max(0, this.hurt - dt * 0.6);
     const lowHp = player.integrity > 0 && player.integrity < 25 ? 0.12 + Math.sin(this.time * 5) * 0.06 : 0;
-    this.postMat.uniforms.uHurt.value = Math.min(0.85, Math.max(pose?.hurt ?? this.hurt, lowHp));
-    this.postMat.uniforms.uHurtSide.value = pose?.hurtSide ?? 0;
-    this.postMat.uniforms.uBonus.value = pose?.bonus ?? 0;
+    // debugNoFlash (look probes): flatten every time-varying post/light
+    // uniform so with/without-sprite captures differ only at the sprite
+    this.postMat.uniforms.uHurt.value = this.debugNoFlash ? 0 : Math.min(0.85, Math.max(pose?.hurt ?? this.hurt, lowHp));
+    this.postMat.uniforms.uHurtSide.value = this.debugNoFlash ? 0 : pose?.hurtSide ?? 0;
+    this.postMat.uniforms.uBonus.value = this.debugNoFlash ? 0 : pose?.bonus ?? 0;
+    if (this.debugNoFlash) fireUniform.value.w = 0;
 
     const speed = Math.min(1, Math.hypot(player.vx, player.vy) / 4);
     const bobY = Math.abs(Math.sin(player.bob)) * 0.035 * speed;
@@ -1138,18 +1141,27 @@ export class Renderer {
           st.mesh.position.z = cameraY + (dz / d) * MIN_D;
           d = MIN_D;
         }
-        const maxH = 0.65 * 2 * d * Math.tan((this.camera.fov * Math.PI) / 360);
-        const sc = Math.min(st.scale, maxH / st.set.h);
+        // point-blank: keep the sprite just in front of the near plane.
+        // During windup/recover inside melee range the attacker LOOMS
+        // (Doom pinky): it may fill up to LOOM_CAP_FRAC of the view — past
+        // the usual 65% cap — so ~47% of view height reads over the tool.
+        const mode = st.entity.state.mode;
+        const lunging =
+          st.entity.def.kind === 'enemy' && (mode === 'windup' || mode === 'recover') && d < RISE_MAX_DIST;
+        const span = 2 * d * Math.tan((this.camera.fov * Math.PI) / 360);
+        const maxH = (lunging ? LOOM_CAP_FRAC : 0.65) * span;
+        const want = lunging
+          ? Math.max(st.scale, Math.min(loomTargetH(d, this.camera.fov) / st.set.h, LOOM_MAX_SCALE))
+          : st.scale;
+        const sc = Math.min(want, maxH / st.set.h);
         st.mesh.scale.set(st.set.w * sc, st.set.h * sc, 1);
         // ENEMIES melee lunge: a floor-height attacker at contact range would
         // project entirely behind the tool viewmodel; lift its anchor so at
         // least 60% of its silhouette clears the viewmodel top line.
-        const mode = st.entity.state.mode;
         const baseY = st.mesh.position.y;
-        const lunge =
-          st.entity.def.kind === 'enemy' && (mode === 'windup' || mode === 'recover') && d < RISE_MAX_DIST
-            ? Math.max(0, riseBase(st.set.h * sc, d, EYE_H, this.camera.fov) - baseY)
-            : 0;
+        const lunge = lunging
+          ? Math.max(0, riseBase(st.set.h * sc, d, EYE_H, this.camera.fov) - baseY)
+          : 0;
         st.rise = (st.rise ?? 0) + (lunge - (st.rise ?? 0)) * Math.min(1, dt * 14);
         st.mesh.position.y = baseY + st.rise;
       }

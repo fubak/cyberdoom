@@ -226,8 +226,17 @@ export function placeThreat(
   player.x = px;
   player.y = py;
   player.angle = Math.atan2(line.dy, line.dx);
+  // kill residual motion so the view bob can't shift pixels between the
+  // with/without-sprite captures (a sub-pixel camera move diffs every wall
+  // edge and poisons the contrast mask)
   player.vx = 0;
   player.vy = 0;
+  (player as unknown as { bobAmt: number }).bobAmt = 0;
+  // the suite runs tens of seconds with live AI in the world: hostile
+  // projectiles can tag the player and the hurt wash would tint one capture
+  // and not the other — keep the probe player topped up and un-flashed
+  player.integrity = Math.max(player.integrity, 90);
+  player.hurtT = 0;
   player.snap();
   target.x = px + line.dx * dist;
   target.y = py + line.dy * dist;
@@ -252,6 +261,11 @@ export async function lookProbe(
   r.debugNoFlash = true;
   r.debugHidden.clear();
   for (const e of entities) if (e.def.id !== id) r.debugHidden.add(e.def.id);
+  // freeze the probed enemy's AI motion: when the sim catches up several
+  // fixed steps after a slow generation frame, a chasing enemy can slide
+  // across the view between the with/without captures and blow up the mask
+  const savedSpeedMul = target.state.speedMul;
+  target.state.speedMul = 0;
   try {
     for (let i = 0; i < 4; i++) {
       place();
@@ -265,21 +279,28 @@ export async function lookProbe(
     place();
     const b = await r.captureView();
     let n = 0;
-    let sa = 0;
-    let sb = 0;
+    const sa: number[] = [];
+    const sb: number[] = [];
     const lum: number[] = [];
     for (let i = 0; i < b.data.length; i += 4) {
       lum.push(luma(b.data, i));
       const diff = Math.abs(a.data[i] - b.data[i]) + Math.abs(a.data[i + 1] - b.data[i + 1]) + Math.abs(a.data[i + 2] - b.data[i + 2]);
       if (diff > 12) {
         n++;
-        sa += relLum(a.data, i);
-        sb += relLum(b.data, i);
+        sa.push(relLum(a.data, i));
+        sb.push(relLum(b.data, i));
       }
     }
     lum.sort((x, y) => x - y);
-    const spriteLum = n ? sa / n : 0;
-    const bgLum = n ? sb / n : 0;
+    // Median, not mean: scattered fullbright backdrop texels (lit doorframes,
+    // rack LEDs, signs) behind a few sprite-edge pixels must not dominate —
+    // the same precedent bandLuma uses for flicker texels.
+    const med = (xs: number[]) => {
+      xs.sort((p, q) => p - q);
+      return xs.length ? xs[Math.floor(xs.length / 2)] : 0;
+    };
+    const spriteLum = med(sa);
+    const bgLum = med(sb);
     const hi = Math.max(spriteLum, bgLum);
     const lo = Math.min(spriteLum, bgLum);
     return {
@@ -295,6 +316,7 @@ export async function lookProbe(
       ...(withImages ? { images: [toUrl(a), toUrl(b)] as [string, string] } : {}),
     };
   } finally {
+    target.state.speedMul = savedSpeedMul;
     r.debugHidden.clear();
     r.debugSprite.delete(id);
     r.debugNoFlash = false;
