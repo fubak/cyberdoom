@@ -996,7 +996,7 @@ export const m11Teach: MissionTeaching = {
 // F1: encounter pacing — opening skirmish, vault/server reveals, hall pack,
 // exit-room logic bombs, supplies.
 liveThreats(m11, 'open-worm', 'worm', 1, [2, 13, 37, 19]);
-addThreatEncounter(m11, 'vault-bomb', 'logicbomb', 4, {
+addThreatEncounter(m11, 'vault-ambush-bomb', 'logicbomb', 4, {
   id: 'vault-ambush', area: [2, 2, 17, 11], kind: 'bad',
   message: 'Audit night woke the logic bombs in the records vault.',
 }, [2, 2, 17, 11]);

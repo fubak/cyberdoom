@@ -34,13 +34,20 @@ const relLum = (d: Uint8Array, i: number) => 0.2126 * lin(d[i]) + 0.7152 * lin(d
 const luma = (d: Uint8Array, i: number) => 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2];
 const frame = () => new Promise<void>((r) => requestAnimationFrame(() => r()));
 
-export function darkestLine(map: WorldMap, dist: number): { x: number; y: number; dx: number; dy: number; light: number } | null {
+export type ProbeLine = { x: number; y: number; dx: number; dy: number; light: number };
+
+/**
+ * The `limit` darkest straight runs of `dist + 1` open tiles, best first.
+ * Several candidates are returned because the tile scan can't see mid-height
+ * occluders (waist-high barriers, rack fronts): a probe caller that finds a
+ * staged sprite invisible on the darkest line can try the runner-up lines.
+ */
+export function darkestLines(map: WorldMap, dist: number, limit = 1): ProbeLine[] {
   const open = (x: number, y: number) => {
     const c = map.cellAt(x, y);
     return !!c && c.kind !== 'wall' && c.kind !== 'door' && !map.blocked(x, y);
   };
-  let best: { x: number; y: number; dx: number; dy: number; light: number } | null = null;
-  let bestScore = Infinity;
+  const scored: { line: ProbeLine; score: number }[] = [];
   for (let y = 0; y < map.h; y++) {
     for (let x = 0; x < map.w; x++) {
       for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
@@ -55,14 +62,27 @@ export function darkestLine(map: WorldMap, dist: number): { x: number; y: number
         // a probe sprite is placed at the run's end, so the cell beyond it is
         // the measured backdrop — prefer runs whose backdrop stays dark too
         const score = light + 0.6 * map.lightAt(x + dx * (dist + 1), y + dy * (dist + 1));
-        if (!best || score < bestScore - 1e-6) {
-          bestScore = score;
-          best = { x, y, dx, dy, light };
-        }
+        scored.push({ line: { x, y, dx, dy, light }, score });
       }
     }
   }
-  return best;
+  scored.sort((a, b) => a.score - b.score);
+  // collapse duplicate corridors: same run from the reverse direction is the
+  // same view, and runs sharing a start tile overlap almost completely
+  const seenStarts = new Set<string>();
+  const out: ProbeLine[] = [];
+  for (const { line } of scored) {
+    const key = `${line.x},${line.y},${line.dx},${line.dy}`;
+    if (seenStarts.has(key)) continue;
+    seenStarts.add(key);
+    out.push(line);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+export function darkestLine(map: WorldMap, dist: number): ProbeLine | null {
+  return darkestLines(map, dist, 1)[0] ?? null;
 }
 
 /**
@@ -215,8 +235,9 @@ export function placeThreat(
   player: Player,
   kind: string,
   dist: number,
-): { target: Entity; line: NonNullable<ReturnType<typeof darkestLine>> } {
-  const line = darkestLine(map, dist);
+  forcedLine?: ProbeLine,
+): { target: Entity; line: ProbeLine } {
+  const line = forcedLine ?? darkestLine(map, dist);
   if (!line) throw new Error(`no straight open line of ${dist + 1} tiles`);
   const target = entities.find((e) => e.alive && e.def.kind === 'enemy' && e.def.sprite === kind) ??
     entities.find((e) => e.alive && e.def.kind === 'enemy');
@@ -226,8 +247,17 @@ export function placeThreat(
   player.x = px;
   player.y = py;
   player.angle = Math.atan2(line.dy, line.dx);
+  // kill residual motion so the view bob can't shift pixels between the
+  // with/without-sprite captures (a sub-pixel camera move diffs every wall
+  // edge and poisons the contrast mask)
   player.vx = 0;
   player.vy = 0;
+  (player as unknown as { bobAmt: number }).bobAmt = 0;
+  // the suite runs tens of seconds with live AI in the world: hostile
+  // projectiles can tag the player and the hurt wash would tint one capture
+  // and not the other — keep the probe player topped up and un-flashed
+  player.integrity = Math.max(player.integrity, 90);
+  player.hurtT = 0;
   player.snap();
   target.x = px + line.dx * dist;
   target.y = py + line.dy * dist;
@@ -243,15 +273,49 @@ export async function lookProbe(
   dist: number,
   withImages = false,
 ): Promise<ProbeResult> {
-  const { target, line } = placeThreat(map, entities, player, kind, dist);
+  // try the darkest line first, then runner-up corridors: the tile scan sees
+  // open tiles only, so a mid-height occluder (counter, rack front) can hide
+  // a staged sprite on the darkest line even though it reads plainly on the
+  // next-darkest one. Keep the highest-pixel capture.
+  const lines = darkestLines(map, dist, 4);
+  if (!lines.length) throw new Error(`no straight open line of ${dist + 1} tiles`);
+  let best: ProbeResult | null = null;
+  for (const line of lines) {
+    const r0 = await probeOnLine(r, map, entities, player, kind, dist, line, withImages && best === null);
+    if (!best || r0.spritePx > best.spritePx) best = r0;
+    // a plainly-rendered sprite is enough — only dig deeper when the staged
+    // sprite is occluded or clipped to a sliver
+    if (r0.spritePx >= 120) break;
+  }
+  return best as ProbeResult;
+}
+
+async function probeOnLine(
+  r: Renderer,
+  map: WorldMap,
+  entities: Entity[],
+  player: Player,
+  kind: string,
+  dist: number,
+  line: ProbeLine,
+  withImages: boolean,
+): Promise<ProbeResult> {
+  const { target } = placeThreat(map, entities, player, kind, dist, line);
   const id = target.def.id;
   const place = () => {
-    placeThreat(map, entities, player, kind, dist);
+    placeThreat(map, entities, player, kind, dist, line);
   };
   r.debugSprite.set(id, kind);
   r.debugNoFlash = true;
   r.debugHidden.clear();
   for (const e of entities) if (e.def.id !== id) r.debugHidden.add(e.def.id);
+  // freeze the probed enemy's AI motion: when the sim catches up several
+  // fixed steps after a slow generation frame, a chasing enemy can slide
+  // across the view between the with/without captures and blow up the mask
+  const savedSpeedMul = target.state.speedMul;
+  target.state.speedMul = 0;
+  const savedHurtT = target.hurtT;
+  target.hurtT = 0;
   try {
     for (let i = 0; i < 4; i++) {
       place();
@@ -265,21 +329,28 @@ export async function lookProbe(
     place();
     const b = await r.captureView();
     let n = 0;
-    let sa = 0;
-    let sb = 0;
+    const sa: number[] = [];
+    const sb: number[] = [];
     const lum: number[] = [];
     for (let i = 0; i < b.data.length; i += 4) {
       lum.push(luma(b.data, i));
       const diff = Math.abs(a.data[i] - b.data[i]) + Math.abs(a.data[i + 1] - b.data[i + 1]) + Math.abs(a.data[i + 2] - b.data[i + 2]);
       if (diff > 12) {
         n++;
-        sa += relLum(a.data, i);
-        sb += relLum(b.data, i);
+        sa.push(relLum(a.data, i));
+        sb.push(relLum(b.data, i));
       }
     }
     lum.sort((x, y) => x - y);
-    const spriteLum = n ? sa / n : 0;
-    const bgLum = n ? sb / n : 0;
+    // Median, not mean: scattered fullbright backdrop texels (lit doorframes,
+    // rack LEDs, signs) behind a few sprite-edge pixels must not dominate —
+    // the same precedent bandLuma uses for flicker texels.
+    const med = (xs: number[]) => {
+      xs.sort((p, q) => p - q);
+      return xs.length ? xs[Math.floor(xs.length / 2)] : 0;
+    };
+    const spriteLum = med(sa);
+    const bgLum = med(sb);
     const hi = Math.max(spriteLum, bgLum);
     const lo = Math.min(spriteLum, bgLum);
     return {
@@ -295,6 +366,8 @@ export async function lookProbe(
       ...(withImages ? { images: [toUrl(a), toUrl(b)] as [string, string] } : {}),
     };
   } finally {
+    target.state.speedMul = savedSpeedMul;
+    target.hurtT = savedHurtT;
     r.debugHidden.clear();
     r.debugSprite.delete(id);
     r.debugNoFlash = false;

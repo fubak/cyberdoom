@@ -15,6 +15,27 @@ import { VM_CLEAR } from '../tools/anim';
 export const RISE_ABOVE_FRAC = 0.6;
 /** Distance (tiles) inside which the lunge applies. */
 export const RISE_MAX_DIST = 1.35;
+/**
+ * Doom pinky loom: during windup/attack the sprite may fill this much of
+ * the view (past the normal 0.65 near-plane cap), so the read above the
+ * viewmodel reaches ~LOOM_FILL_FRAC of view height.
+ */
+export const LOOM_CAP_FRAC = 0.8;
+/** Share of view height the lunging silhouette should occupy. */
+export const LOOM_FILL_FRAC = 0.47;
+/** Hard bound on the loom scale-up so tiny sprites don't explode at contact. */
+export const LOOM_MAX_SCALE = 2.2;
+
+/**
+ * Drawn world height a lunging attacker wants at `dist` so that, once the
+ * rise pushes `RISE_ABOVE_FRAC` of it over the viewmodel line, the visible
+ * loom is ~LOOM_FILL_FRAC of the view. The renderer clamps this to
+ * LOOM_CAP_FRAC of the frustum span.
+ */
+export function loomTargetH(dist: number, fovDeg: number): number {
+  const span = 2 * dist * Math.tan((fovDeg * Math.PI) / 360);
+  return (LOOM_FILL_FRAC / RISE_ABOVE_FRAC) * span;
+}
 
 /** Screen-space rect of a bottom-anchored sprite, as fractions of view height (0 = top). */
 export function spriteScreenRect(

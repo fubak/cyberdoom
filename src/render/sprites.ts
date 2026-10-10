@@ -300,33 +300,41 @@ const rootkitModel: Model = (pose) => {
       const hip: V3 = [sx * 8, body + 3, z];
       const knee: V3 = [sx * 19, body + 8, z * 1.15 + swing * 0.6];
       const foot: V3 = [sx * 24, 1, z * 1.5 + swing];
-      limb(out, hip, knee, 1.3, '#2a1d55');
-      limb(out, knee, foot, 1.1, '#3a2a70');
-      out.push(ell(knee, [1.8, 1.8, 1.8], '#4a3890'));
-      out.push(ell(foot, [2.4, 1, 2.2], '#1a1238'));
+      limb(out, hip, knee, 1.3, '#3d2a78');
+      limb(out, knee, foot, 1.1, '#4d3790');
+      out.push(ell(knee, [1.8, 1.8, 1.8], '#5a45a8'));
+      out.push(ell(foot, [2.4, 1, 2.2], '#2a1d55'));
     }
   }
   // flat armored shell with dorsal plates
-  out.push(ell([0, body + 4, 0], [14, 6.5, 11], '#5a46a8', {
+  out.push(ell([0, body + 4, 0], [14, 6.5, 11], '#6a54b8', {
     roll: pain ? 0.2 : 0,
-    decal: (l) => (Math.abs(((l[0] + 14) % 6)) < 0.9 ? '#3a2a70' : null),
+    decal: (l) => (Math.abs(((l[0] + 14) % 6)) < 0.9 ? '#4d3790' : null),
   }));
-  out.push(ell([0, body + 7.5, -2], [9, 3.4, 7], '#342466'));
+  out.push(ell([0, body + 7.5, -2], [9, 3.4, 7], '#453383'));
   // head low at the front: beady eye cluster + hooked mandibles
   const hy = body + 1;
   const open = atk === 1 ? 7 : atk === 0 ? 4 : 2;
-  out.push(ell([0, hy, 11], [7.5, 4.5, 4.5], '#4a3890'));
+  out.push(ell([0, hy, 11], [7.5, 4.5, 4.5], '#5a45a8'));
   for (const sx of [-1, 1]) {
     out.push(ell([sx * 3.4, hy + 1.4, 14.6], [1.7, 1.5, 1], pain ? '#ffffff' : '#8a5cff', { glow: true }));
     out.push(ell([sx * 1.1, hy + 2.6, 14.8], [1.1, 1, 0.8], '#54e8ff', { glow: true }));
-    limb(out, [sx * 4, hy - 2, 12.5], [sx * (4 + open), hy - 5, 16.5], 1.1, '#1a123a');
+    limb(out, [sx * 4, hy - 2, 12.5], [sx * (4 + open), hy - 5, 16.5], 1.1, '#2a1d55');
   }
   // root tendrils trailing behind: thin hooked tails that burrow
   for (const sx of [-1, 0, 1]) {
     const wag = Math.sin(ph + sx * 2) * 2;
-    limb(out, [sx * 5, body + 2, -9], [sx * 7 + wag, 2, -16 - Math.abs(sx) * 2], 1.4, '#241844');
-    out.push(ell([sx * 7 + wag, 1.4, -16.5 - Math.abs(sx) * 2], [1.6, 1.6, 2.4], '#5a48b8'));
+    limb(out, [sx * 5, body + 2, -9], [sx * 7 + wag, 2, -16 - Math.abs(sx) * 2], 1.4, '#33245f');
+    out.push(ell([sx * 7 + wag, 1.4, -16.5 - Math.abs(sx) * 2], [1.6, 1.6, 2.4], '#6a55c8'));
   }
+  // sensor mast: a thin periscope rising off the shell with a blinking
+  // violet tip — lifts the crawler's silhouette out of the floor line so it
+  // still reads as a creature at 10+ tiles
+  const sway = Math.sin(ph * 1.7) * 3;
+  limb(out, [0, body + 9, -3], [sway * 0.5, body + 26, -7], 1.2, '#3d2a78');
+  limb(out, [sway * 0.5, body + 26, -7], [sway, body + 40, -9], 0.9, '#4d3790');
+  const mastLed = pose.kind !== 'walk' || pose.k % 2 === 0;
+  if (mastLed || atk >= 0) out.push(ell([sway, body + 41, -9], [1.8, 1.8, 1.8], atk === 1 ? '#b060ff' : '#8a5cff', { glow: true }));
   if (atk >= 0) out.push(ell([0, hy + 1, 15.5], [3.4, 2, 1.2], atk === 1 ? '#b060ff' : '#54e8ff', { glow: true }));
   return out;
 };
@@ -366,57 +374,67 @@ const logicbombModel: Model = (pose) => {
   return out;
 };
 
-/** RAT: a "remote access terminal" scuttling on four quick legs. The casing
- *  reads as innocuous equipment — that's the disguise — but an attentive
- *  player gets three tells: a whip antenna with a blinking cyan status LED,
- *  a glowing cursor glyph on the front face, and a pair of small lit eyes. */
+/** RAT (remote access trojan): a hunched, wiry quadruped — arched back over
+ *  low hindquarters, four splayed jointed legs mid-scuttle, a whip
+ *  antenna-tail curling high with a blinking beacon tip, and glowing
+ *  cursor-slit eyes in a pointed snout. Pure creature silhouette — nothing
+ *  like the office consoles it used to blend in with. */
 const ratModel: Model = (pose) => {
   const out: Prim[] = [];
   const ph = walkPhase(pose);
   const atk = pose.kind === 'attack' ? pose.k : -1;
   const pain = pose.kind === 'pain';
-  const bob = pose.kind === 'walk' ? Math.abs(Math.sin(ph)) * 2.4 : 0;
-  const by = 28 + bob;
-  const led = pose.kind !== 'walk' || pose.k % 2 === 0; // blinking tell
-  // four quick legs, fast scuttle
-  for (let k = 0; k < 2; k++) {
-    const z = (k - 0.5) * 11;
+  const rear = atk === 0 ? 6 : atk === 1 ? 11 : pain ? -4 : 0; // rears up to strike
+  const bob = pose.kind === 'walk' ? Math.abs(Math.sin(ph * 2)) * 1.8 : 0;
+  // hindquarters low, shoulders hunched high — the classic rodent arch
+  const hq: V3 = [0, 15 + bob * 0.4 + rear * 0.3, -8];
+  const sh: V3 = [0, 27 + bob + rear, 3];
+  out.push(ell(hq, [9.5, 7.5, 8.5], '#426a4d'));
+  out.push(ell([0, 20 + bob * 0.6 + rear * 0.6, -1.5], [8.5, 8, 8], '#3a5c46'));
+  out.push(ell(sh, [7.5, 7, 7], '#3a5c44', { roll: pain ? 0.18 : 0 }));
+  // dorsal ridge: hackle spikes along the arch
+  for (let i = 0; i < 5; i++) {
+    const t = i / 4;
+    out.push(ell([0, 21 + t * 9 + bob * 0.7 + rear * (0.4 + t * 0.6), -9 + t * 11], [1.1, 3.6 - t, 1.4], '#1e3828', { pitch: -0.5 }));
+  }
+  // head slung low and forward: pointed snout, glowing cursor-slit eyes
+  const hy = 18 + bob + rear;
+  const hz = 12;
+  out.push(ell([0, hy, hz], [5.5, 4.5, 5], '#3a5c44'));
+  out.push(ell([0, hy - 1.6, hz + 5.5], [3.6, 2.8, 3.4], '#33553d'));
+  // tall thin ears with lit tips — the remote-receiver tell
+  for (const sx of [-1, 1]) {
+    out.push(ell([sx * 3.2, hy + 5.5, hz - 1.5], [1.1, 2.8, 0.8], '#1e3828', { roll: sx * 0.4 }));
+    out.push(ell([sx * 3.7, hy + 7.8, hz - 1.7], [0.7, 0.9, 0.5], '#40e8ff', { glow: true }));
+  }
+  for (const sx of [-1, 1]) {
+    out.push(ell([sx * 2.4, hy + 1.2, hz + 3.9], [1.7, 1.5, 1], pain ? '#ffffff' : '#50f0ff', { glow: true }));
+    out.push(ell([sx * 2.7, hy + 1.7, hz + 4.4], [0.6, 0.7, 0.5], '#eaffff', { glow: true }));
+  }
+  // mouth opens with a glowing maw on the strike
+  if (atk >= 0) out.push(ell([0, hy - 2.6, hz + 7], [2.9, atk === 1 ? 1.9 : 1, 1.2], '#a8ffcc', { glow: true }));
+  // four jointed legs mid-scuttle: long thin limbs, unmistakably legs
+  for (const [hipZ, phase, front] of [[5, 0, true], [-5, Math.PI, false]] as const) {
     for (const sx of [-1, 1]) {
-      const swing = Math.sin(ph * 2 + k * Math.PI + (sx > 0 ? Math.PI : 0)) * 5;
-      const hip: V3 = [sx * 8, by - 2, z];
-      const knee: V3 = [sx * 13.5, by + 4, z + swing * 0.5];
-      const foot: V3 = [sx * 12, 1.5 + Math.max(0, swing) * 0.6, z + swing];
-      limb(out, hip, knee, 1.4, '#2e5a3a');
-      limb(out, knee, foot, 1.2, '#3a7048');
-      out.push(ell(foot, [2, 1.2, 2.2], '#14281a'));
+      const swing = Math.sin(ph * 2 + phase + (sx > 0 ? Math.PI : 0)) * 4.5;
+      const hip: V3 = [sx * (front ? 5.5 : 7.5), (front ? sh[1] : hq[1]) - 1.5, hipZ];
+      const knee: V3 = [sx * (front ? 11 : 13), hip[1] - 5.5, hipZ + (front ? 2.5 : -2) + swing * 0.6];
+      const foot: V3 = [sx * (front ? 9.5 : 12), 1.2 + Math.max(0, swing) * 0.7, hipZ + (front ? 6 : -6) + swing];
+      limb(out, hip, knee, 1.15, '#33553d');
+      limb(out, knee, foot, 0.95, '#3d6147');
+      out.push(ell(foot, [1.7, 1, 2.1], '#16281c'));
     }
   }
-  // terminal-box body (the "wall cabinet" disguise), green tint
-  out.push(box([0, by, 0], [10.5, 8, 9], '#3f9a55', {
-    roll: pain ? 0.15 : 0,
-    decal: (l) => (Math.abs(l[1] - 6.5) < 1 ? '#2a6a3a' : null),
-  }));
-  out.push(box([0, by + 8.2, 0], [11, 1.2, 9.5], '#57c06a'));
-  // front face: dark screen, status LED, glowing cursor glyph (remote-control tell)
-  out.push(box([0, by + 0.5, 9.3], [6.5, 3.6, 0.5], '#0a140e'));
-  if (led) {
-    out.push(box([-2.2, by + 1.2, 9.7], [1.2, 3, 0.3], '#a8ffcc', { glow: true, roll: 0.5 }));
-    out.push(box([-0.8, by - 0.6, 9.7], [1, 1, 0.3], '#a8ffcc', { glow: true }));
-    out.push(ell([4.5, by + 6.6, 9.4], [1.1, 1.1, 0.5], '#40e8ff', { glow: true }));
-  }
-  // small lit eyes under the front lip — creature-read at close range
-  for (const sx of [-1, 1]) {
-    out.push(ell([sx * 3.2, by + 5.4, 9.4], [1.2, 1.1, 0.6], pain ? '#ffffff' : '#b8ffe0', { glow: true }));
-  }
-  // whip antenna tail
-  const wag = Math.sin(ph) * 2;
-  limb(out, [-6, by + 7, -5], [-9.5 + wag, by + 19, -8.5], 0.7, '#1c3024');
-  if (led) out.push(ell([-9.5 + wag, by + 19.5, -8.5], [1.4, 1.4, 1.4], '#40e8ff', { glow: true }));
-  // attack: the panel splits, glowing bus bars inside
-  if (atk >= 0) {
-    out.push(box([0, by - 1.4, 9.7], [8, 1.6, 0.5], atk === 1 ? '#7dffb0' : '#40e8ff', { glow: true }));
-    for (const sx of [-1, 1]) out.push(ell([sx * 3, by + 0.6, 9.7], [1.7, 1.4, 0.5], '#e8fff0', { glow: true }));
-  }
+  // whip antenna-tail: curls high above the rump, blinking beacon tip —
+  // its height is what keeps the RAT's profile readable at 10+ tiles
+  const wag = Math.sin(ph * 1.5) * 3;
+  const tailA: V3 = [0, hq[1] + 3, -14];
+  const tailB: V3 = [wag * 0.6, 36 + bob * 0.5, -20];
+  const tailC: V3 = [wag, 50 + bob * 0.5 + rear * 0.3, -21];
+  limb(out, tailA, tailB, 1.15, '#1e3828');
+  limb(out, tailB, tailC, 0.85, '#33553d');
+  const led = pose.kind !== 'walk' || pose.k % 2 === 0;
+  if (led || atk >= 0) out.push(ell(tailC, [1.7, 1.7, 1.7], atk === 1 ? '#ffe040' : '#40e8ff', { glow: true }));
   return out;
 };
 
@@ -444,7 +462,34 @@ export function scaleModel(prims: Prim[]): Prim[] {
   }));
 }
 
-function makeMonster(id: string, worldH: number, model: Model, opts: { floor?: number; gain?: number } = {}): void {
+/** Pre-raster growth: scales prim centres and radii out of the feet (y=0
+ *  stays planted) so a squat model fills more of the 64px monster canvas. */
+function growModel(prims: Prim[], grow: number): Prim[] {
+  if (grow === 1) return prims;
+  return prims.map((p) => ({
+    ...p,
+    c: [p.c[0] * grow, p.c[1] * grow, p.c[2] * grow] as V3,
+    r: [p.r[0] * grow, p.r[1] * grow, p.r[2] * grow] as V3,
+    ...(p.decal ? { decal: (l: V3, n: V3) => p.decal!([l[0] / grow, l[1] / grow, l[2] / grow], n) } : {}),
+  }));
+}
+
+/**
+ * Death transform: tip the whole creature backward about its feet (Doom's
+ * backward fall). `a` is the rotation in radians (negative = away from the
+ * viewer); nothing dips below the floor line.
+ */
+function tipOver(p: Prim, a: number, lift = 0): Prim {
+  const cos = Math.cos(a);
+  const sin = Math.sin(a);
+  const [x, y, z] = p.c;
+  const cy = Math.max(1.4, y * cos - z * sin + lift);
+  const cz = y * sin + z * cos;
+  return { ...p, c: [x, cy, cz] as V3, pitch: (p.pitch ?? 0) + a };
+}
+
+function makeMonster(id: string, worldH: number, model: Model, opts: { floor?: number; gain?: number; grow?: number } = {}): void {
+  const grow = opts.grow ?? 1;
   lazyOwner = id;
   const W = TEX.monster;
   const H = TEX.monster;
@@ -479,7 +524,7 @@ function makeMonster(id: string, worldH: number, model: Model, opts: { floor?: n
     return packPixels(W, H, raw, { sprite: true, mirror });
   };
   const startPose = (pose: Pose, rotation: number, mirror: boolean) => {
-    const prims = scaleModel(model(pose));
+    const prims = scaleModel(growModel(model(pose), grow));
     const job = createRasterJob(W, H, prims, { view: (rotation * Math.PI) / 4, ...(pose.kind === 'pain' ? { tint: [255, 120, 80] as V3, tintT: 0.2 } : {}) });
     return { job, finish: () => finishPixels(job, pose, rotation, mirror) };
   };
@@ -500,34 +545,33 @@ function makeMonster(id: string, worldH: number, model: Model, opts: { floor?: n
     registerGenJob(`sprite:${id}:${f.key}`, { setId: id, first: f.key.startsWith('walk0_') }, poseJob(f.pose, f.r, f.mirror));
   }
   const diePrims: Prim[][] = [];
-  const dieBase = model({ kind: 'pain' });
+  const dieBase = growModel(model({ kind: 'pain' }), grow);
+  // Death sequence (~0.5 s): the creature staggers upright, tips over
+  // backward (Doom's fall), then quarantine-scatters — always ending on a
+  // recognisable heap, never a flat smear.
   for (let k = 0; k < 5; k++) {
-    const sq = 1 - k * 0.19;
-    diePrims.push(scaleModel(dieBase.map((p) => ({
-      ...p,
-      c: [p.c[0] * (1 + k * 0.14), p.c[1] * sq + k * 0.6, p.c[2] * (1 + k * 0.1)] as V3,
-      r: [p.r[0], p.r[1] * (1 - k * 0.1), p.r[2]] as V3,
-    }))));
+    const tip = k <= 2 ? -0.15 - k * 0.5 : -1.15 - (k - 2) * 0.12;
+    diePrims.push(scaleModel(dieBase.map((p) => tipOver(p, tip, k * 0.4))));
     const prims = diePrims[k];
     registerGenJob(`sprite:${id}:die${k}`, { setId: id, first: false }, () => {
-      const job = createRasterJob(W, H, prims, { view: 0, tint: [44, 255, 90], tintT: 0.12 + k * 0.14 });
+      const job = createRasterJob(W, H, prims, { view: 0, tint: [44, 255, 90], tintT: k < 3 ? 0.04 + k * 0.05 : 0.2 + k * 0.1 });
       rasterizeRows(job, 0, H);
       const raw = { rgba: job.rgba, glow: job.glow };
-      return k === 0 ? packPixels(W, H, raw, { sprite: true }) : dissolvePixels(W, H, raw, k - 1, id);
+      return k < 3 ? packPixels(W, H, raw, { sprite: true }) : dissolvePixels(W, H, raw, k - 3, id);
     });
   }
-  // persistent corpse: the creature flattened into floor debris
-  const deadPrims = scaleModel(dieBase.map((p) => ({
-    ...p,
-    c: [p.c[0] * 1.5, p.c[1] * 0.26 + 1.4, p.c[2] * 1.3] as V3,
-    r: [p.r[0] * 1.2, Math.max(1.5, p.r[1] * 0.85), p.r[2] * 1.15] as V3,
-  })));
+  // persistent corpse: the fallen heap stays — a dark remains pool under a
+  // chunky, still-readable body that keeps the type's colours and glow tells
+  const deadPrims = scaleModel([
+    ell([0, 1.3, 1.5] as V3, [24, 1.2, 18], '#140a12'),
+    ...dieBase.map((p) => tipOver(p, -1.42, 0.9)),
+  ]);
   const deadRaster = (job: RasterJob) => {
     rasterizeRows(job, 0, job.h);
     return packPixels(W, H, { rgba: job.rgba, glow: job.glow }, { sprite: true });
   };
   registerGenJob(`sprite:${id}:dead`, { setId: id, first: false }, () =>
-    deadRaster(createRasterJob(W, H, deadPrims, { view: 0, tint: [40, 180, 80], tintT: 0.3 })));
+    deadRaster(createRasterJob(W, H, deadPrims, { view: 0, tint: [120, 130, 120], tintT: 0.22 })));
   if (jobsOnly) return;
 
   if (genPoolActive()) {
@@ -613,18 +657,18 @@ function makeMonster(id: string, worldH: number, model: Model, opts: { floor?: n
   for (let k = 0; k < 5; k++) {
     const prims = diePrims[k];
     defineLazy(`die${k}`, () => {
-      const job = createRasterJob(W, H, prims, { view: 0, tint: [44, 255, 90], tintT: 0.12 + k * 0.14 });
+      const job = createRasterJob(W, H, prims, { view: 0, tint: [44, 255, 90], tintT: k < 3 ? 0.04 + k * 0.05 : 0.2 + k * 0.1 });
       return {
         job,
         finish: () => {
           const raw = { rgba: job.rgba, glow: job.glow };
-          return k === 0 ? packTexture(W, H, raw, { sprite: true }) : dissolveFrame(W, H, raw, k - 1, id);
+          return k < 3 ? packTexture(W, H, raw, { sprite: true }) : dissolveFrame(W, H, raw, k - 3, id);
         },
       };
     });
   }
   defineLazy('dead', () => {
-    const job = createRasterJob(W, H, deadPrims, { view: 0, tint: [40, 180, 80], tintT: 0.3 });
+    const job = createRasterJob(W, H, deadPrims, { view: 0, tint: [120, 130, 120], tintT: 0.22 });
     return {
       job,
       finish: () => {
@@ -890,12 +934,15 @@ export function buildSprites(jobs = false): void {
   jobsOnly = jobs;
   spriteJobsDone ||= jobs;
 
-  makeMonster('worm', 0.95, wormModel);
-  makeMonster('trojan', 1.05, trojanModel);
-  makeMonster('ransomware', 1.15, ransomModel, { floor: 1.35, gain: 2.6 });
-  makeMonster('rootkit', 0.8, rootkitModel, { floor: 1.3, gain: 2.7 });
-  makeMonster('logicbomb', 0.62, logicbombModel, { floor: 1.2, gain: 2.4 });
-  makeMonster('rat', 0.78, ratModel, { floor: 1.1, gain: 2.2 });
+  // ENEMIES F3 range targets: every type projects >=10% of view height at
+  // 10 tiles (world h ~1.25-1.35 with a model that fills the canvas) and
+  // keeps Doom-monster contrast in dead-black sectors (uFloor ~1.3 = lit).
+  makeMonster('worm', 1.3, wormModel, { floor: 1.2, gain: 2.4 });
+  makeMonster('trojan', 1.3, trojanModel, { floor: 1.3, gain: 2.6 });
+  makeMonster('ransomware', 1.35, ransomModel, { floor: 1.35, gain: 2.6 });
+  makeMonster('rootkit', 1.35, rootkitModel, { floor: 1.5, gain: 2.7 });
+  makeMonster('logicbomb', 1.25, logicbombModel, { floor: 1.3, gain: 2.6, grow: 1.8 });
+  makeMonster('rat', 1.35, ratModel, { floor: 1.55, gain: 2.7 });
 
   makeSet('workstation', 64, 64, 0.82, 'static', [{ key: 'idle', draw: workstation('clean', 0) }]);
   makeSet('workstation-infected', 64, 64, 0.82, 'flicker', [
@@ -1091,21 +1138,23 @@ export function buildSprites(jobs = false): void {
       p.glow.fillRect(0, 0, 16, 16);
     },
   })));
-  makeSet('fx-payload', 20, 20, 0.32, 'flicker', [0, 1].map((f) => ({
+  // Hostile payloads: Doom-imp-fireball scale — a big roaring orb, every
+  // lit texel on the glow layer (fullbright) so it reads and can be dodged
+  // in dead-dark corridors.
+  makeSet('fx-payload', 20, 20, 0.62, 'flicker', [0, 1].map((f) => ({
     key: `f${f}`,
     draw: (p: PaintCtx) => {
       const { g } = p;
-      g.fillStyle = '#241216';
-      g.fillRect(6, 1, 8, 18);
-      g.fillRect(3, 5, 14, 10);
-      g.fillStyle = '#a82319';
-      g.fillRect(7, 2, 6, 16);
-      g.fillRect(4, 6, 12, 8);
-      lit(p, f ? '#ff9a24' : '#ff5522', 7, 4, 6, 12);
-      lit(p, f ? '#ffe06a' : '#ffb13b', 8, 7, 4, 6);
-      lit(p, '#fff2c0', 9, 8 + f, 2, 3);
-      p.glow.fillStyle = '#fff';
-      p.glow.fillRect(8, 6, 4, 8);
+      pxEllipse(g, 10, 10, 9 - f, 9 - f, '#7a1c0e');
+      pxEllipse(g, 10, 10, 8 - f, 8 - f, '#c83414');
+      pxEllipse(g, 10, 10, 6 - f, 6 - f, f ? '#ff9a24' : '#ff5522');
+      pxEllipse(g, 10, 10, 4 - f, 4 - f, f ? '#ffe06a' : '#ffb13b');
+      pxEllipse(g, 10, 10, 2, 2, '#fff2c0');
+      // licking flame flecks that swap frames
+      lit(p, '#ff5522', 10 - 8 + f * 2, 3 + f * 2, 3, 3);
+      lit(p, '#ffb13b', 10 + 5 - f * 3, 13 - f * 2, 2, 2);
+      // the whole orb is fullbright
+      pxEllipse(p.glow, 10, 10, 9 - f, 9 - f, '#fff');
     },
   })));
   makeSet('fx-puff', 24, 24, 0.34, 'static', [0, 1, 2].map((f) => ({
@@ -1122,22 +1171,29 @@ export function buildSprites(jobs = false): void {
     },
   })));
 
-  // Doom teleport-fog flash where a threat materialises (ambushes, worm copies)
-  makeSet('fx-spawn', 32, 64, 0.95, 'static', [0, 1, 2, 3].map((f) => ({
+  // Doom teleport-fog flash where a threat materialises (ambushes, worm
+  // copies): a tall searing column that collapses inward, a ground-flash
+  // ring, and thrown sparks — big and fullbright enough to read at range.
+  makeSet('fx-spawn', 32, 64, 1.3, 'static', [0, 1, 2, 3].map((f) => ({
     key: `f${f}`,
     draw: (p: PaintCtx) => {
       const { g } = p;
-      const top = 3 + f * 5;
+      const top = 2 + f * 6;
       const bot = 62 - f * 2;
-      const half = 13 - f * 3;
-      g.fillStyle = f < 2 ? '#3fc8f8' : '#2a88c0';
-      g.fillRect(16 - half, top + 4, half * 2, bot - top - 4);
-      lit(p, f === 0 ? '#eaffff' : '#9ff0ff', 16 - half * 0.45, top, half * 0.9, bot - top);
+      const half = 15 - f * 3;
+      // outer fog column
+      g.fillStyle = f < 2 ? '#4fd4ff' : '#2a88c0';
+      g.fillRect(16 - half, top + 3, half * 2, bot - top - 3);
+      // searing core — nearly the whole column is fullbright
+      lit(p, f === 0 ? '#ffffff' : '#d8f8ff', 16 - half * 0.55, top, half * 1.1, bot - top);
       p.glow.fillStyle = '#fff';
-      p.glow.fillRect(16 - half * 0.7, top + 2, half * 1.4, (bot - top) * (0.55 - f * 0.1));
-      for (let i = 0; i < 10; i++) {
-        const sx = ((i * 5 + f * 9) % 28) + 2;
-        const sy = 4 + ((i * 11 + f * 13) % 54);
+      p.glow.fillRect(16 - half * 0.8, top + 1, half * 1.6, (bot - top) * (0.8 - f * 0.12));
+      // ground-flash ring
+      lit(p, f < 2 ? '#b8f4ff' : '#5ac8f0', 16 - 14 + f * 3, 60 + f, 28 - f * 6, 2);
+      // thrown sparks
+      for (let i = 0; i < 12; i++) {
+        const sx = ((i * 7 + f * 11) % 30) + 1;
+        const sy = 3 + ((i * 13 + f * 9) % 56);
         const s = i % 3 === 0 ? 2 : 1;
         lit(p, i % 2 ? '#ffffff' : '#7fe8ff', sx, sy, s, s);
       }
