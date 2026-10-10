@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Audio, VOICE_CAPS, spatialize } from '../src/engine/audio';
+import { Audio, VOICE_CAPS, spatialize, voiceCapFor } from '../src/engine/audio';
 
 describe('audio spatialization', () => {
   it('keeps nearby sounds loud and fades out at 19 tiles', () => {
@@ -35,5 +35,19 @@ describe('per-event voice limiting', () => {
     for (const name of ['sight-worm', 'sight-trojan', 'sight-ransomware', 'sight-rat', 'sight-rootkit']) {
       expect(VOICE_CAPS[name], name).toBe(1);
     }
+  });
+
+  it('shares the family cap across per-type enemy voice names', () => {
+    // pain-worm / death-rat / ... must not evade the old 'enemy-pain' style caps
+    expect(voiceCapFor('pain-worm')).toBe(VOICE_CAPS['enemy-pain']);
+    expect(voiceCapFor('pain-rootkit')).toBe(VOICE_CAPS['enemy-pain']);
+    expect(voiceCapFor('death-rat')).toBe(VOICE_CAPS['enemy-death']);
+    expect(voiceCapFor('attack-logicbomb')).toBe(VOICE_CAPS['bite']);
+    expect(voiceCapFor('fire-trojan')).toBe(VOICE_CAPS['enemy-fire']);
+    expect(voiceCapFor('growl-worm')).toBe(VOICE_CAPS['growl']);
+    // exact-name caps still win over the family alias
+    expect(voiceCapFor('sight-worm')).toBe(1);
+    // unrelated names keep the default cap
+    expect(voiceCapFor('keyboard')).toBe(3);
   });
 });

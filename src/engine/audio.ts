@@ -53,6 +53,20 @@ export const VOICE_CAPS: Record<string, number> = {
 };
 const VOICE_CAP_DEFAULT = 3;
 
+/** Per-type enemy voice names (pain-worm, fire-rat, ...) share the cap of their event family. */
+const VOICE_CAP_ALIAS: Record<string, string> = {
+  pain: 'enemy-pain',
+  death: 'enemy-death',
+  attack: 'bite',
+  fire: 'enemy-fire',
+  growl: 'growl',
+};
+
+export function voiceCapFor(name: string): number {
+  const family = /^([a-z]+)-/.exec(name)?.[1];
+  return VOICE_CAPS[name] ?? VOICE_CAPS[VOICE_CAP_ALIAS[family ?? ''] ?? ''] ?? VOICE_CAP_DEFAULT;
+}
+
 interface FilterSpec {
   type: BiquadFilterType;
   frequency: number;
@@ -393,6 +407,135 @@ export class Audio {
       { attack: Math.min(0.012, duration * 0.15), distortion: true, pitchRange: 0.01 });
   }
 
+  /**
+   * ENEMIES: per-type threat voices. Names arrive as `<kind>-<threat>`
+   * (kind: growl | pain | death | attack | fire) from the combat wiring in
+   * main.ts. Each threat gets a signature timbre so pain/death/attack read
+   * by ear alone; unknown threats fall back to the shared voices.
+   */
+  private enemyVoice(kind: 'growl' | 'pain' | 'death' | 'attack' | 'fire', threat: string, o: SpatialPosition): void {
+    switch (threat) {
+      case 'worm':
+        // high chittering parasite
+        if (kind === 'growl') {
+          this.noise('bandpass', 2400, 1600, 0.3, 2, 0.14, o);
+          [0, 0.09, 0.2].forEach((d, i) => this.oscillator('square', 900 - i * 140, 700 - i * 140, 0.05, 0.1, o, { delay: d }));
+        } else if (kind === 'pain') {
+          this.formant(620, 380, 0.18, 0.7, o);
+          this.noise('bandpass', 2800, 1900, 0.12, 2.5, 0.16, o);
+        } else if (kind === 'death') {
+          this.formant(540, 90, 0.65, 0.9, o);
+          this.noise('lowpass', 900, 200, 0.5, 1, 0.3, o, 0.08);
+        } else if (kind === 'attack') {
+          this.noise('highpass', 2400, 1100, 0.06, 1, 0.3, o);
+          this.body(160, 60, 0.14, 0.5, o);
+        } else {
+          this.noise('bandpass', 2000, 1200, 0.14, 2, 0.2, o);
+          this.oscillator('sawtooth', 700, 240, 0.16, 0.2, o);
+        }
+        return;
+      case 'trojan':
+        // servo-driven gift box: robotic garble + mechanism clacks
+        if (kind === 'growl') {
+          [0, 0.07, 0.16, 0.24].forEach((d, i) => this.oscillator('square', 320 + i * 60, 240, 0.045, 0.09, o, { delay: d }));
+          this.noise('bandpass', 1400, 1000, 0.3, 3, 0.08, o);
+        } else if (kind === 'pain') {
+          this.oscillator('square', 480, 170, 0.14, 0.42, o, { pitchRange: 0.3 });
+          this.noise('bandpass', 2200, 1500, 0.1, 3, 0.12, o);
+        } else if (kind === 'death') {
+          this.oscillator('square', 420, 38, 0.8, 0.5, o, { pitchRange: 0.06 });
+          this.noise('bandpass', 1800, 300, 0.6, 1.6, 0.28, o, 0.1);
+          this.body(90, 40, 0.55, 0.5, o);
+        } else if (kind === 'attack') {
+          this.noise('highpass', 1600, 700, 0.1, 1, 0.32, o);
+          this.oscillator('square', 220, 90, 0.12, 0.4, o);
+        } else {
+          this.noise('bandpass', 2600, 1400, 0.16, 2, 0.26, o);
+          this.oscillator('square', 800, 300, 0.12, 0.24, o, { delay: 0.03 });
+        }
+        return;
+      case 'ransomware':
+        // heavy padlock brute: metallic clangs, chains, deep slam
+        if (kind === 'growl') {
+          this.oscillator('sawtooth', 95, 65, 0.5, 0.3, o, { filter: { type: 'lowpass', frequency: 500 } });
+          this.noise('bandpass', 900, 500, 0.4, 4, 0.14, o, 0.06);
+        } else if (kind === 'pain') {
+          this.oscillator('square', 180, 90, 0.16, 0.5, o, { filter: { type: 'bandpass', frequency: 1200, q: 4 } });
+          this.noise('bandpass', 1500, 800, 0.14, 4, 0.2, o);
+        } else if (kind === 'death') {
+          this.body(95, 30, 0.9, 0.85, o);
+          this.noise('bandpass', 1200, 250, 0.7, 3, 0.34, o, 0.05);
+          this.oscillator('square', 160, 45, 0.5, 0.3, o, { delay: 0.12 });
+        } else if (kind === 'attack') {
+          this.impactLayer(o, 0.55);
+          this.oscillator('sawtooth', 140, 50, 0.22, 0.42, o);
+        } else {
+          this.noise('lowpass', 1400, 300, 0.3, 0.8, 0.34, o);
+          this.body(110, 50, 0.26, 0.5, o);
+        }
+        return;
+      case 'logicbomb':
+        // countdown device: error beeps → detonation
+        if (kind === 'growl') {
+          [0, 0.12].forEach((d) => this.oscillator('square', 1180, 1180, 0.05, 0.12, o, { delay: d }));
+        } else if (kind === 'pain') {
+          [0, 0.07, 0.14].forEach((d, i) => this.oscillator('square', 980 - i * 180, 980 - i * 180, 0.045, 0.3, o, { delay: d }));
+        } else if (kind === 'death' || kind === 'attack') {
+          this.impactLayer(o, 0.85);
+          this.noise('lowpass', 2400, 90, 0.8, 0.7, 0.5, o, 0.02);
+          this.body(120, 28, 0.75, 0.8, o);
+        } else {
+          this.oscillator('square', 880, 660, 0.08, 0.3, o);
+          this.noise('bandpass', 1600, 900, 0.1, 2, 0.2, o);
+        }
+        return;
+      case 'rat':
+        // quick chittering remote agent
+        if (kind === 'growl') {
+          [0, 0.06, 0.13, 0.21].forEach((d, i) => this.oscillator('square', 1500 - i * 110, 1300 - i * 110, 0.035, 0.09, o, { delay: d }));
+        } else if (kind === 'pain') {
+          [0, 0.05, 0.1].forEach((d, i) => this.oscillator('square', 1600 - i * 160, 1150 - i * 160, 0.04, 0.28, o, { delay: d }));
+        } else if (kind === 'death') {
+          this.noise('highpass', 2600, 900, 0.3, 1, 0.32, o);
+          this.oscillator('square', 1400, 150, 0.35, 0.34, o);
+          this.body(200, 60, 0.3, 0.4, o);
+        } else if (kind === 'attack') {
+          this.noise('highpass', 3000, 1600, 0.05, 1, 0.3, o);
+          this.oscillator('square', 1300, 500, 0.09, 0.34, o, { delay: 0.015 });
+        } else {
+          this.noise('bandpass', 3200, 2000, 0.1, 2.5, 0.28, o);
+          this.oscillator('square', 1500, 800, 0.08, 0.22, o, { delay: 0.02 });
+        }
+        return;
+      case 'rootkit':
+        // sub-bass burrower: groans, scrapes, rumbles
+        if (kind === 'growl') {
+          this.oscillator('sine', 70, 48, 0.6, 0.4, o, { distortion: true });
+          this.noise('lowpass', 400, 150, 0.55, 1, 0.2, o);
+        } else if (kind === 'pain') {
+          this.oscillator('sine', 85, 48, 0.28, 0.6, o, { distortion: true });
+          this.noise('bandpass', 700, 350, 0.2, 2, 0.2, o);
+        } else if (kind === 'death') {
+          this.noise('lowpass', 1200, 120, 0.9, 1, 0.42, o);
+          this.body(75, 26, 0.95, 0.8, o);
+        } else if (kind === 'attack') {
+          this.noise('bandpass', 900, 300, 0.22, 2.5, 0.4, o);
+          this.body(110, 45, 0.2, 0.55, o);
+        } else {
+          this.noise('lowpass', 800, 200, 0.3, 1, 0.32, o);
+          this.oscillator('sawtooth', 110, 55, 0.28, 0.34, o, { distortion: true });
+        }
+        return;
+      default:
+        // unknown threat → shared voices
+        if (kind === 'pain') this.sfx('enemy-pain', o);
+        else if (kind === 'death') this.sfx('enemy-death', o);
+        else if (kind === 'attack') this.sfx('bite', o);
+        else if (kind === 'fire') this.sfx('enemy-fire', o);
+        else this.sfx('growl', o);
+    }
+  }
+
   private allow(name: string, ctx: AudioContext): boolean {
     const now = ctx.currentTime;
     if (now - (this.lastPlayed.get(name) ?? -Infinity) < 0.05) return false;
@@ -411,7 +554,7 @@ export class Audio {
     for (let i = groups.length - 1; i >= 0; i--) {
       if (groups[i].sources.length === 0) groups.splice(i, 1);
     }
-    const cap = VOICE_CAPS[name] ?? VOICE_CAP_DEFAULT;
+    const cap = voiceCapFor(name);
     while (groups.length >= cap) {
       const oldest = groups.shift()!;
       for (let i = 0; i < oldest.sources.length; i++) {
@@ -435,6 +578,10 @@ export class Audio {
     const o = opts;
     const dur = opts.dur;
     try {
+    const voice = /^(growl|pain|death|attack|fire)-([a-z]+)$/.exec(name);
+    if (voice) {
+      this.enemyVoice(voice[1] as 'growl' | 'pain' | 'death' | 'attack' | 'fire', voice[2], o);
+    } else {
     switch (name) {
       case 'fire':
         this.noise('highpass', 1800, 900, 0.11, 0.8, 0.38, o);
@@ -591,6 +738,7 @@ export class Audio {
         break;
       default:
         break;
+    }
     }
     } finally {
       this.group = null;

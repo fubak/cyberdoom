@@ -6,6 +6,8 @@ export interface AiHooks {
   onSight(e: Entity): void;
   onWindup(e: Entity, dur: number): void;
   onMelee(e: Entity, dmg: number): void;
+  /** Infighting: a grudge-bearing melee attacker landed its hit on another enemy. */
+  onEnemyMelee?(e: Entity, target: Entity, dmg: number): void;
   onFire(e: Entity, proj: Omit<Projectile, 'alive' | 'traveled'>): void;
   onStep?(e: Entity): void;
   /** Occasional positional growl while actively hunting. */
@@ -404,9 +406,9 @@ export function updateEntities(
           e.state.regenT = 0;
         }
       }
-      const dx = player.x - e.x;
-      const dy = player.y - e.y;
-      const dist = Math.hypot(dx, dy);
+      let dx = player.x - e.x;
+      let dy = player.y - e.y;
+      let dist = Math.hypot(dx, dy);
       let currentMode = mode(e);
       e.state.flashT = Math.max(0, ((e.state.flashT as number | undefined) ?? 0) - dt);
       // Materialise grace: freshly spawned enemies can turn/move but cannot start an attack.
@@ -423,6 +425,22 @@ export function updateEntities(
       }
       e.state.los = los;
       e.state.losT = losT;
+
+      // Doom-style infighting: a grudge target (set when another enemy's
+      // attack hurt this one) overrides the player as the objective.
+      const grudgeId = e.state.grudgeId as string | undefined;
+      const grudgeT = Math.max(0, ((e.state.grudgeT as number | undefined) ?? 0) - dt);
+      e.state.grudgeT = grudgeT;
+      const grudge = grudgeId && grudgeT > 0
+        ? entities.find((t) => t.def.id === grudgeId && t.alive && t.def.kind === 'enemy')
+        : undefined;
+      if (grudgeId && !grudge) delete e.state.grudgeId;
+      if (grudge) {
+        dx = grudge.x - e.x;
+        dy = grudge.y - e.y;
+        dist = Math.hypot(dx, dy);
+        los = map.raycast(e.x, e.y, Math.atan2(dy, dx), dist + 0.25).dist >= dist - 0.1;
+      }
 
       if (currentMode === 'idle') {
         const facing = e.state.facing as number;
@@ -526,8 +544,8 @@ export function updateEntities(
             if (dist <= (profile.range ?? 2.2)) hooks.onMelee(e, meleeDmg);
             e.alive = false;
           } else if (profile.ranged) {
-            const aimDx = player.x - e.x;
-            const aimDy = player.y - e.y;
+            const aimDx = (grudge ? grudge.x : player.x) - e.x;
+            const aimDy = (grudge ? grudge.y : player.y) - e.y;
             const aimDist = Math.hypot(aimDx, aimDy) || 1;
             hooks.onFire(e, {
               x: e.x,
@@ -541,7 +559,8 @@ export function updateEntities(
               damage: Math.round(profile.damage * ((e.state.dmgMul as number | undefined) ?? 1)),
             });
           } else if (dist < (profile.range ?? 0.95) + 0.25) {
-            hooks.onMelee(e, meleeDmg);
+            if (grudge) hooks.onEnemyMelee?.(e, grudge, meleeDmg);
+            else hooks.onMelee(e, meleeDmg);
           }
           e.state.mode = profile.retreatAfterShot ? 'retreat' : 'recover';
           if (profile.retreatAfterShot) e.state.retreatT = profile.retreatAfterShot;
@@ -721,9 +740,20 @@ export function updateProjectiles(
       continue;
     }
     if (p.hostile) {
+      const shooterId = p.source?.startsWith('enemy:') ? p.source.slice(6) : null;
       if (player && Math.hypot(player.x - p.x, player.y - p.y) < player.radius + 0.15) {
         p.alive = false;
         events.push({ p, hit: null, hitPlayer: true, x: p.x, y: p.y });
+      } else {
+        // hostile projectiles can strike other enemies → Doom-style infighting
+        for (const e of entities) {
+          if (!e.alive || e.def.kind !== 'enemy' || e.def.id === shooterId) continue;
+          if (Math.hypot(e.x - p.x, e.y - p.y) < 0.45) {
+            p.alive = false;
+            events.push({ p, hit: e, x: p.x, y: p.y });
+            break;
+          }
+        }
       }
     } else {
       for (const e of entities) {

@@ -331,6 +331,95 @@ const rootkitModel: Model = (pose) => {
   return out;
 };
 
+/** Logicbomb: a squat armed charge hugging the floor. The dark casing is
+ *  ringed with hazard tape and a whip antenna carries a blinking timer LED —
+ *  high contrast + a moving light so it reads at 4+ tiles instead of
+ *  dissolving into the floor. Counting down (attack pose) it glows hot. */
+const logicbombModel: Model = (pose) => {
+  const out: Prim[] = [];
+  const atk = pose.kind === 'attack' ? pose.k : -1;
+  const pain = pose.kind === 'pain';
+  const led = pose.kind !== 'walk' || pose.k % 2 === 0; // status LED blinks on walk phases
+  // hazard-tape ring around the base
+  out.push(box([0, 3.2, 0], [15.5, 3.2, 13.5], '#14161c', {
+    decal: (l) => (Math.abs(((l[0] + l[2] + 16) % 8)) < 2.2 ? '#e8c020' : null),
+  }));
+  // main charge casing
+  out.push(ell([0, 10.5, 0], [12, 8, 10.5], '#8a2414', {
+    roll: pain ? 0.16 : 0,
+    decal: (l) => (Math.abs(((l[0] + 12) % 6)) < 0.9 ? '#5a1408' : null),
+  }));
+  out.push(ell([0, 14, 0], [8.5, 4.5, 7], '#66180c'));
+  // timer readout on the front face: two blinking digits
+  out.push(box([0, 10, 10.6], [5, 3.2, 0.8], '#160804'));
+  if (led) {
+    out.push(box([-1.5, 10, 11.2], [1.7, 1.7, 0.4], '#ff3020', { glow: true }));
+    out.push(box([1.5, 10, 11.2], [1.7, 1.7, 0.4], atk >= 0 ? '#ffb040' : '#ff6040', { glow: true }));
+  }
+  // whip antenna with blinking tip
+  const mastH = atk >= 0 ? 17 : 13;
+  limb(out, [6, 15, -4], [8, 15 + mastH, -6], 0.8, '#2a2e38');
+  if (led || atk >= 0) out.push(ell([8, 15.5 + mastH, -6], [1.7, 1.7, 1.7], atk === 1 ? '#ffe040' : '#ff3020', { glow: true }));
+  // arming glow while it counts down
+  if (atk >= 0) out.push(ell([0, 12, 0], [13.5, 2.2, 11.5], atk === 1 ? '#ff8030' : '#ff4020', { glow: true }));
+  if (pain) out.push(ell([0, 10.5, 10], [4, 2.6, 1], '#ffb040', { glow: true }));
+  return out;
+};
+
+/** RAT: a "remote access terminal" scuttling on four quick legs. The casing
+ *  reads as innocuous equipment — that's the disguise — but an attentive
+ *  player gets three tells: a whip antenna with a blinking cyan status LED,
+ *  a glowing cursor glyph on the front face, and a pair of small lit eyes. */
+const ratModel: Model = (pose) => {
+  const out: Prim[] = [];
+  const ph = walkPhase(pose);
+  const atk = pose.kind === 'attack' ? pose.k : -1;
+  const pain = pose.kind === 'pain';
+  const bob = pose.kind === 'walk' ? Math.abs(Math.sin(ph)) * 2.4 : 0;
+  const by = 28 + bob;
+  const led = pose.kind !== 'walk' || pose.k % 2 === 0; // blinking tell
+  // four quick legs, fast scuttle
+  for (let k = 0; k < 2; k++) {
+    const z = (k - 0.5) * 11;
+    for (const sx of [-1, 1]) {
+      const swing = Math.sin(ph * 2 + k * Math.PI + (sx > 0 ? Math.PI : 0)) * 5;
+      const hip: V3 = [sx * 8, by - 2, z];
+      const knee: V3 = [sx * 13.5, by + 4, z + swing * 0.5];
+      const foot: V3 = [sx * 12, 1.5 + Math.max(0, swing) * 0.6, z + swing];
+      limb(out, hip, knee, 1.4, '#2e5a3a');
+      limb(out, knee, foot, 1.2, '#3a7048');
+      out.push(ell(foot, [2, 1.2, 2.2], '#14281a'));
+    }
+  }
+  // terminal-box body (the "wall cabinet" disguise), green tint
+  out.push(box([0, by, 0], [10.5, 8, 9], '#3f9a55', {
+    roll: pain ? 0.15 : 0,
+    decal: (l) => (Math.abs(l[1] - 6.5) < 1 ? '#2a6a3a' : null),
+  }));
+  out.push(box([0, by + 8.2, 0], [11, 1.2, 9.5], '#57c06a'));
+  // front face: dark screen, status LED, glowing cursor glyph (remote-control tell)
+  out.push(box([0, by + 0.5, 9.3], [6.5, 3.6, 0.5], '#0a140e'));
+  if (led) {
+    out.push(box([-2.2, by + 1.2, 9.7], [1.2, 3, 0.3], '#a8ffcc', { glow: true, roll: 0.5 }));
+    out.push(box([-0.8, by - 0.6, 9.7], [1, 1, 0.3], '#a8ffcc', { glow: true }));
+    out.push(ell([4.5, by + 6.6, 9.4], [1.1, 1.1, 0.5], '#40e8ff', { glow: true }));
+  }
+  // small lit eyes under the front lip — creature-read at close range
+  for (const sx of [-1, 1]) {
+    out.push(ell([sx * 3.2, by + 5.4, 9.4], [1.2, 1.1, 0.6], pain ? '#ffffff' : '#b8ffe0', { glow: true }));
+  }
+  // whip antenna tail
+  const wag = Math.sin(ph) * 2;
+  limb(out, [-6, by + 7, -5], [-9.5 + wag, by + 19, -8.5], 0.7, '#1c3024');
+  if (led) out.push(ell([-9.5 + wag, by + 19.5, -8.5], [1.4, 1.4, 1.4], '#40e8ff', { glow: true }));
+  // attack: the panel splits, glowing bus bars inside
+  if (atk >= 0) {
+    out.push(box([0, by - 1.4, 9.7], [8, 1.6, 0.5], atk === 1 ? '#7dffb0' : '#40e8ff', { glow: true }));
+    for (const sx of [-1, 1]) out.push(ell([sx * 3, by + 0.6, 9.7], [1.7, 1.4, 0.5], '#e8fff0', { glow: true }));
+  }
+  return out;
+};
+
 interface LazyFrame {
   /** Sprite set this frame belongs to (for prewarm prioritization). */
   setId: string;
@@ -344,7 +433,7 @@ let lazyOwner = '';
 const lazyFirstDone = new Set<string>();
 
 /** TESTING: exported so tests/model-raster.test.ts can pin rasterizer output on real models. */
-export const spriteModels = { worm: wormModel, trojan: trojanModel, ransom: ransomModel, rootkit: rootkitModel };
+export const spriteModels = { worm: wormModel, trojan: trojanModel, ransom: ransomModel, rootkit: rootkitModel, logicbomb: logicbombModel, rat: ratModel };
 
 export function scaleModel(prims: Prim[]): Prim[] {
   return prims.map((prim) => ({
@@ -805,6 +894,8 @@ export function buildSprites(jobs = false): void {
   makeMonster('trojan', 1.05, trojanModel);
   makeMonster('ransomware', 1.15, ransomModel, { floor: 1.35, gain: 2.6 });
   makeMonster('rootkit', 0.8, rootkitModel, { floor: 1.3, gain: 2.7 });
+  makeMonster('logicbomb', 0.62, logicbombModel, { floor: 1.2, gain: 2.4 });
+  makeMonster('rat', 0.78, ratModel, { floor: 1.1, gain: 2.2 });
 
   makeSet('workstation', 64, 64, 0.82, 'static', [{ key: 'idle', draw: workstation('clean', 0) }]);
   makeSet('workstation-infected', 64, 64, 0.82, 'flicker', [

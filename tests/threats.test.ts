@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ENEMY_PROFILES, WORM_PROPAGATE_MAX, hurtEntity, updateEntities, type AiHooks } from '../src/engine/ai';
+import { ENEMY_PROFILES, WORM_PROPAGATE_MAX, hurtEntity, updateEntities, updateProjectiles, type AiHooks } from '../src/engine/ai';
 import { WorldMap } from '../src/engine/map';
 import { Player } from '../src/engine/player';
 import type { Entity, MapDef } from '../src/core/types';
@@ -29,6 +29,45 @@ function hooks(overrides: Partial<AiHooks> = {}): AiHooks {
     ...overrides,
   };
 }
+
+describe('infighting', () => {
+  it('hostile projectiles collide with other enemies', () => {
+    const map = new WorldMap(mapDef);
+    const victim = enemy('w1', 'worm', 4, 2.5, 3);
+    const player = new Player(2.5, 5.5, 0);
+    const p = {
+      x: 2.5, y: 2.5, dx: 1, dy: 0, speed: 10, range: 16,
+      source: 'enemy:rat1', hostile: true, damage: 8, alive: true, traveled: 0,
+    };
+    let events: ReturnType<typeof updateProjectiles> = [];
+    for (let i = 0; i < 6 && !events.length; i++) {
+      events = updateProjectiles([p], [victim], map, 0.05, player);
+    }
+    expect(events[0]?.hit).toBe(victim);
+    expect(p.alive).toBe(false);
+  });
+
+  it('a shooter ignores itself but a grudged enemy aims at its attacker', () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    const map = new WorldMap(mapDef);
+    const shooter = enemy('rat1', 'rat', 2.5, 2.5, 3);
+    const victim = enemy('worm1', 'worm', 5.5, 2.5, 3);
+    shooter.state.grudgeId = 'worm1';
+    shooter.state.grudgeT = 8;
+    shooter.state.aggroed = true;
+    shooter.state.mode = 'chase';
+    const player = new Player(2.5, 5.5, 0); // off-axis: aim should not follow the player
+    const onFire = vi.fn();
+    for (let i = 0; i < 400 && !onFire.mock.calls.length; i++) {
+      updateEntities([shooter, victim], map, player, 0.025, hooks({ onFire }));
+    }
+    expect(onFire).toHaveBeenCalled();
+    const proj = onFire.mock.calls[0][1];
+    expect(proj.dx).toBeGreaterThan(0.8); // aimed +x toward the worm
+    expect(Math.abs(proj.dy)).toBeLessThan(0.3);
+    vi.restoreAllMocks();
+  });
+});
 
 describe('new threat profiles', () => {
   it('telegraphs a logic bomb and deals its close-range blast before disappearing', () => {
