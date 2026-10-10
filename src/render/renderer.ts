@@ -74,11 +74,12 @@ void main() {
       fl = r < 0.3 ? 0.4 : 1.0;
     }
     float s = abs(vShade) * uLight * fl;
-    // distance diminishing never drops below ~55% of the sector light, and
-    // uFloor lifts black the way Doom's COLORMAP never bottoms out: dark
-    // sectors keep their texel structure and hue instead of crushing flat
-    float dim = s * 1.45 - vDist * (0.14 - s * 0.06);
-    L = max(dim, max(0.55 * s, uFloor));
+    // Doom-style distance diminishing: a lit face is about half as bright by
+    // ~10 tiles and near-black before the fog plane; dark sectors crush far
+    // sooner. uFloor is the only minimum — sprites keep their own readability
+    // floors while walls/flats may fall to real darkness.
+    float dim = s * (1.6 - vDist * 0.115);
+    L = max(dim, uFloor);
     L = clamp(L, 0.0, 1.0);
     // banded like a 24-step colormap
     L = floor(L * 24.0 + 0.5) / 24.0;
@@ -105,12 +106,15 @@ uniform float uBonus;
 varying vec2 vUv;
 void main() {
   vec3 c = texture2D(tScene, vUv).rgb;
-  // Doom-style palette shift: push toward red but keep luminance structure
+  // Doom-style palette remap, not a flat wash: the hue swings toward red
+  // while every texel keeps its luminance ordering and most of its local
+  // contrast, so wall/sprite detail stays readable through the pain frames
+  // (Doom's red palettes preserve texels the same way).
   float l = dot(c, vec3(0.3, 0.59, 0.11));
-  vec3 red = vec3(max(c.r, l * 1.7 + 0.2), c.g * 0.15, c.b * 0.12);
+  vec3 red = vec3(c.r * 0.5 + l * 1.3 + 0.07, c.g * 0.45 + l * 0.16, c.b * 0.4 + l * 0.1);
   c = mix(c, red, uHurt);
   float edge = uHurtSide > 0.0 ? smoothstep(0.62, 1.0, vUv.x) : smoothstep(0.38, 0.0, vUv.x);
-  c = mix(c, vec3(max(c.r, 0.75), c.g * 0.2, c.b * 0.2), edge * abs(uHurtSide) * uHurt);
+  c = mix(c, vec3(c.r * 0.5 + l * 0.85 + 0.18, c.g * 0.4 + l * 0.12, c.b * 0.35 + l * 0.08), edge * abs(uHurtSide) * uHurt);
   c = mix(c, c * vec3(1.15, 1.05, 0.7) + vec3(0.22, 0.17, 0.0), uBonus);
   // black level: like Doom's COLORMAP, the darkest light never maps to pure black
   c = 0.045 + c * 0.955;
@@ -144,7 +148,7 @@ const timeUniform = { value: 0 };
 const fireUniform = { value: new THREE.Vector4(0, 0, 0, 0) };
 
 /** Wall families flat enough to carry a decal plate overlay. */
-const DECALABLE = new Set(['wall-panel', 'wall-brick', 'wall-tech', 'wall-ribs', 'wall-brick2']);
+const DECALABLE = new Set(['wall-panel', 'wall-brick', 'wall-tech', 'wall-ribs', 'wall-brick2', 'wall-panel2']);
 
 function worldMaterial(map: THREE.Texture, light = 1, floor = 0.16, tint?: THREE.Vector3): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
@@ -195,6 +199,13 @@ class GeoBuilder {
 }
 
 const DIRS: [number, number][] = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+
+/**
+ * Minimum light on world geometry (walls, flats, doors). Kept just above
+ * zero so dark sectors can go near-black at range — the post pass's black
+ * lift still keeps a whisper of texel structure, Doom-COLORMAP style.
+ */
+const WORLD_FLOOR = 0.05;
 
 interface SpriteState {
   mesh: THREE.Mesh;
@@ -380,7 +391,7 @@ export class Renderer {
   }
 
   /** Rebuild level geometry for a new mission. */
-  buildLevel(map: WorldMap, _def: MapDef, missionId?: string): void {
+  buildLevel(map: WorldMap, _def: MapDef, missionId?: string, entityDefs?: { x: number; y: number; kind: string }[]): void {
     this.map = map;
     this.levelGroup.clear();
     this.spriteGroup.clear();
@@ -399,7 +410,7 @@ export class Renderer {
     const theme = lookTheme(missionId, _def.look?.theme);
     const tintV = new THREE.Vector3(...theme.tint);
     const seed = hashStr(missionId ?? 'cyberdoom');
-    this.computeLight(map, _def);
+    this.computeLight(map, _def, entityDefs);
     const lightAt = (x: number, y: number) => this.tileLight(x, y);
     const builders = new Map<string, { tex: THREE.Texture; b: GeoBuilder }>();
     const builder = (key: string, tex: THREE.Texture) => {
@@ -489,7 +500,7 @@ export class Renderer {
             [[0, 0], [1, 0], [1, 0.1], [0, 0.1]],
             [0.3, 0.3, 0.3, 0.3],
           );
-          const mesh = new THREE.Mesh(b.build(), worldMaterial(tex, 1, 0.3, tintV));
+          const mesh = new THREE.Mesh(b.build(), worldMaterial(tex, 1, WORLD_FLOOR, tintV));
           this.levelGroup.add(mesh);
           this.doorMeshes.set(id, mesh);
         }
@@ -521,7 +532,7 @@ export class Renderer {
       }
     }
     for (const { tex, b } of builders.values()) {
-      this.levelGroup.add(new THREE.Mesh(b.build(), worldMaterial(tex, 1, 0.3, tintV)));
+      this.levelGroup.add(new THREE.Mesh(b.build(), worldMaterial(tex, 1, WORLD_FLOOR, tintV)));
     }
   }
 
@@ -631,7 +642,7 @@ export class Renderer {
    * near-black between them. Dark sectors (< 0.5) and ~1 in 5 lamps elsewhere
    * are dead, leaving black patches; the spawn area always stays lit.
    */
-  private computeLight(map: WorldMap, def: MapDef): void {
+  private computeLight(map: WorldMap, def: MapDef, entityDefs?: { x: number; y: number; kind: string }[]): void {
     const w = map.w;
     const h = map.h;
     this.light = new Float32Array(w * h);
@@ -642,6 +653,34 @@ export class Renderer {
       const k = map.cellAt(x, y)?.kind;
       return k !== undefined && k !== 'wall' && k !== 'door';
     };
+    // Dark pockets: dead-end floor cells (closets, secret nooks, maintenance
+    // stubs) with no authored light override. They get no lamp and drop to
+    // near-dark, so every mission gets real black areas to contrast the lit
+    // corridors. Secret doors count as solid: the closet behind them is dark.
+    const pocket = new Set<string>();
+    const solid = (x: number, y: number) => {
+      const c = map.cellAt(x, y);
+      return !c || c.kind === 'wall' || (c.kind === 'door' && !!c.secret);
+    };
+    // never pocket a gameplay-critical cell: exits and cells holding a
+    // required interactable (console/workstation/npc — sprites that sit at a
+    // low readability floor) must stay readable. Pickup nooks still darken:
+    // items carry a 0.45 floor, the Doom "glow in a dark closet" look.
+    const critical = new Set<string>();
+    for (const e of entityDefs ?? []) {
+      if (e.kind === 'console' || e.kind === 'workstation' || e.kind === 'npc') {
+        critical.add(`${Math.floor(e.x)},${Math.floor(e.y)}`);
+      }
+    }
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        if (!open(x, y) || def.lights?.[`${x},${y}`] !== undefined) continue;
+        if (map.cellAt(x, y)?.kind === 'exit' || critical.has(`${x},${y}`)) continue;
+        let walls = 0;
+        for (const [dx, dz] of DIRS) if (solid(x + dx, y + dz)) walls++;
+        if (walls >= 3) pocket.add(`${x},${y}`);
+      }
+    }
     const sx = def.spawn.x;
     const sy = def.spawn.y;
     for (let y = 0; y < h; y++) {
@@ -649,6 +688,7 @@ export class Renderer {
         if (map.cellAt(x, y)?.kind === 'exit') src.push([x + 0.5, y + 0.5, 0.8]);
         if (!open(x, y) || x % 3 !== 1 || y % 3 !== 1) continue;
         const key = `${x},${y}`;
+        if (pocket.has(key)) continue;
         const hash = (Math.imul(x, 73856093) ^ Math.imul(y, 19349663)) >>> 0;
         const nearSpawn = Math.hypot(x + 0.5 - sx, y + 0.5 - sy) < 2.5;
         if (!nearSpawn && (map.lightAt(x, y) < 0.5 || hash % 5 === 0)) {
@@ -667,7 +707,20 @@ export class Renderer {
           if (d2 < 16) best = Math.max(best, ls * Math.exp(-d2 / 3.2));
         }
         const base = map.lightAt(x, y);
-        this.light[y * w + x] = Math.max(0.25, Math.min(1, base * (0.5 + 0.7 * best)));
+        this.light[y * w + x] = Math.max(0.08, Math.min(1, base * (0.45 + 0.8 * best)));
+      }
+    }
+    for (const key of pocket) {
+      const [x, y] = key.split(',').map(Number);
+      this.light[y * w + x] = Math.min(this.light[y * w + x], 0.12);
+      // the open cell at the pocket's mouth dims too, so the threshold into
+      // the nook fades rather than snapping
+      for (const [dx, dz] of DIRS) {
+        const nx = x + dx;
+        const ny = y + dz;
+        if (!open(nx, ny) || pocket.has(`${nx},${ny}`)) continue;
+        const i = ny * w + nx;
+        this.light[i] = Math.min(this.light[i], Math.max(this.light[i] * 0.7, 0.16));
       }
     }
   }

@@ -10,7 +10,7 @@ import { doorUseHint, resolveUse, type UseTargetContext } from './engine/useTarg
 import { Audio } from './engine/audio';
 import { Feel } from './engine/feel';
 import { ParticleSystem } from './engine/fx';
-import { lookProbe, placeThreat } from './render/probe';
+import { lightProbe, lookProbe, placeThreat } from './render/probe';
 import { Renderer } from './render/renderer';
 import { prewarmLazySpriteFrames, prioritizeLazySprites, spriteSets } from './render/sprites';
 import { textureRegistry } from './render/textures';
@@ -425,7 +425,7 @@ class Game {
         p.stage++;
         break;
       case 1: { // level geometry + light
-        this.renderer.buildLevel(p.map!, mission.map, mission.id);
+        this.renderer.buildLevel(p.map!, mission.map, mission.id, mission.entities);
         p.built = true;
         // texture warm list: every level texture + already-materialized sprite
         // frames for the sets this mission uses (lazy getters are skipped so
@@ -618,7 +618,7 @@ class Game {
     this.sealedDoors.clear();
     this.noticedThreats.clear();
     this.drainers.clear();
-    if (!prep?.built) this.renderer.buildLevel(this.map, mission.map, mission.id);
+    if (!prep?.built) this.renderer.buildLevel(this.map, mission.map, mission.id, mission.entities);
     this.audio.setVoice(this.gender);
     this.audio.setListener(this.player.x, this.player.y, this.player.angle);
     this.audio.startAmbience();
@@ -1085,7 +1085,8 @@ class Game {
     this.prompt.banner = this.simT < this.bannerUntil
       ? { title: `${this.arsenal.current.slot} ${this.arsenal.current.name}`, blurb: this.arsenal.current.blurb ?? '' }
       : null;
-    this.prompt.footer = !ending && !this.switchedTool && this.simT < 25 ? MENU_HINT : null;
+    // nav hint strip: first ~9 s of a mission only (pause menu lists keys too)
+    this.prompt.footer = !ending && !this.switchedTool && this.simT < 9 ? MENU_HINT : null;
     const hidden =
       ending ||
       this.arsenal.switching ||
@@ -1292,6 +1293,11 @@ class Game {
       probe(kind: string, dist: number, withImages = false) {
         if (!g.map || !g.runtime || !g.player) throw new Error('no mission running');
         return lookProbe(g.renderer, g.map, g.runtime.entities, g.player, kind, dist, withImages);
+      },
+      /** LOOK: light-diminishing probe — wall luma at ~2 vs ~10 tiles + dark-sector luma. */
+      lightProbe(dist = 10, withImages = false) {
+        if (!g.map || !g.runtime || !g.player) throw new Error('no mission running');
+        return lightProbe(g.renderer, g.map, g.runtime.entities, g.player, dist, withImages);
       },
       stage(kind: string, dist: number) {
         if (!g.map || !g.runtime || !g.player) throw new Error('no mission running');

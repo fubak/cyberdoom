@@ -40,6 +40,7 @@ export function darkestLine(map: WorldMap, dist: number): { x: number; y: number
     return !!c && c.kind !== 'wall' && c.kind !== 'door' && !map.blocked(x, y);
   };
   let best: { x: number; y: number; dx: number; dy: number; light: number } | null = null;
+  let bestScore = Infinity;
   for (let y = 0; y < map.h; y++) {
     for (let x = 0; x < map.w; x++) {
       for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
@@ -51,11 +52,157 @@ export function darkestLine(map: WorldMap, dist: number): { x: number; y: number
         }
         if (!ok) continue;
         const light = sum / (dist + 1);
-        if (!best || light < best.light - 1e-6) best = { x, y, dx, dy, light };
+        // a probe sprite is placed at the run's end, so the cell beyond it is
+        // the measured backdrop — prefer runs whose backdrop stays dark too
+        const score = light + 0.6 * map.lightAt(x + dx * (dist + 1), y + dy * (dist + 1));
+        if (!best || score < bestScore - 1e-6) {
+          bestScore = score;
+          best = { x, y, dx, dy, light };
+        }
       }
     }
   }
   return best;
+}
+
+/**
+ * Brightest straight run that ends against a wall: `len` open tiles then a
+ * blocking cell, so standing at the run start the end wall is ~`len` tiles
+ * away. Used by the light-diminishing probe; returns the highest-scored run.
+ */
+export function litWallLine(map: WorldMap, len: number): { x: number; y: number; dx: number; dy: number; light: number } | null {
+  const open = (x: number, y: number) => {
+    const c = map.cellAt(x, y);
+    return !!c && c.kind !== 'wall' && c.kind !== 'door' && !map.blocked(x, y);
+  };
+  let best: { x: number; y: number; dx: number; dy: number; light: number } | null = null;
+  for (let y = 0; y < map.h; y++) {
+    for (let x = 0; x < map.w; x++) {
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        let ok = true;
+        let sum = 0;
+        for (let k = 0; k < len && ok; k++) {
+          ok = open(x + dx * k, y + dy * k);
+          sum += map.lightAt(x + dx * k, y + dy * k);
+        }
+        // the run must terminate against a wall (the measured face)
+        ok = ok && map.blocked(x + dx * len, y + dy * len);
+        if (!ok) continue;
+        const light = sum / len;
+        if (!best || light > best.light + 1e-6) best = { x, y, dx, dy, light };
+      }
+    }
+  }
+  return best;
+}
+
+export interface LightProbeResult {
+  /** Mean luma (0-255) of the view's centre band: same lit wall at ~2 vs ~10 tiles. */
+  near: number;
+  far: number;
+  /** far/near — distance diminishing, target well under 1 (Doom ≈ half at 10 tiles). */
+  ratio: number;
+  dist: number;
+  /** Centre-band luma standing inside the darkest straight run of the map. */
+  dark: number;
+  darkLight: number;
+  line: { x: number; y: number; dx: number; dy: number; light: number } | null;
+  images?: string[];
+}
+
+// Median luma over a fractional band of the view. Median, not mean: scattered
+// fullbright texels (rack LEDs, glow decals) stay bright at range as they
+// should, and a mean lets them mask the lit surface's falloff.
+const bandLuma = (v: { w: number; h: number; data: Uint8Array }, x0: number, x1: number, y0: number, y1: number) => {
+  const ls: number[] = [];
+  for (let y = Math.floor(v.h * y0); y < v.h * y1; y++) {
+    for (let x = Math.floor(v.w * x0); x < v.w * x1; x++) {
+      ls.push(luma(v.data, (y * v.w + x) * 4));
+    }
+  }
+  if (!ls.length) return 0;
+  ls.sort((a, b) => a - b);
+  return ls[Math.floor(ls.length / 2)];
+};
+
+// Falloff bands, both inside the ~`dist`-tile corridor shot: floor flats have
+// a uniform mix of plate/vent texels and no fullbright elements, and every
+// cell of a lit run carries the same light, so the floor at ~2 tiles vs ~9-10
+// tiles in one view isolates pure distance diminishing — the same gradient
+// Doom's colormap shows down a corridor. (End-wall texels fail this job: dark
+// rack families compress the range and glow signs are authored fullbright.)
+// Bands are wide so the vent/plate mix averages out; the far band sits just
+// under the end wall's base, above floor decals.
+const NEAR_FLOOR: [number, number, number, number] = [0.3, 0.7, 0.8, 0.92];
+const FAR_FLOOR: [number, number, number, number] = [0.4, 0.6, 0.52, 0.56];
+// Wide centre band for the dark-sector reading.
+const DARK_BAND: [number, number, number, number] = [0.3, 0.7, 0.15, 0.75];
+
+/**
+ * LOOK: light-diminishing probe (debug only). Measures the centre-band luma
+ * of the same lit corridor wall from ~`dist` tiles and from ~2 tiles, plus
+ * the centre-band luma inside the map's darkest straight run — all with every
+ * sprite hidden, so only world light is measured.
+ */
+export async function lightProbe(
+  r: Renderer,
+  map: WorldMap,
+  entities: Entity[],
+  player: Player,
+  dist = 10,
+  withImages = false,
+): Promise<LightProbeResult> {
+  r.debugNoFlash = true;
+  r.debugHidden.clear();
+  for (const e of entities) r.debugHidden.add(e.def.id);
+  const images: string[] = [];
+  const stand = async (x: number, y: number, angle: number) => {
+    player.x = x;
+    player.y = y;
+    player.angle = angle;
+    player.snap();
+    for (let i = 0; i < 3; i++) await frame();
+  };
+  try {
+    const lineDist = litWallLine(map, dist) ? dist : Math.max(6, dist - 2);
+    const line = litWallLine(map, lineDist);
+    let far = 0;
+    let near = 0;
+    if (line) {
+      const angle = Math.atan2(line.dy, line.dx);
+      await stand(line.x + 0.5, line.y + 0.5, angle);
+      const a = await r.captureView();
+      far = bandLuma(a, ...FAR_FLOOR);
+      near = bandLuma(a, ...NEAR_FLOOR);
+      if (withImages) images.push(toUrl(a));
+      await stand(line.x + (lineDist - 2) * line.dx + 0.5, line.y + (lineDist - 2) * line.dy + 0.5, angle);
+      const b = await r.captureView();
+      if (withImages) images.push(toUrl(b));
+    }
+    let dark = 0;
+    let darkLight = 0;
+    const dline = darkestLine(map, 6);
+    if (dline) {
+      await stand(dline.x + 0.5, dline.y + 0.5, Math.atan2(dline.dy, dline.dx));
+      const d = await r.captureView();
+      dark = bandLuma(d, ...DARK_BAND);
+      darkLight = dline.light;
+      if (withImages) images.push(toUrl(d));
+    }
+    return {
+      near: +near.toFixed(1),
+      far: +far.toFixed(1),
+      ratio: near > 0 ? +(far / near).toFixed(3) : 0,
+      dist: lineDist,
+      dark: +dark.toFixed(1),
+      darkLight: +darkLight.toFixed(2),
+      line,
+      ...(withImages ? { images } : {}),
+    };
+  } finally {
+    r.debugHidden.clear();
+    r.debugNoFlash = false;
+  }
 }
 
 export function placeThreat(
