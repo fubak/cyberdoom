@@ -11,11 +11,12 @@ import { m08, m08Teach } from './m08-zero-day';
 import { m09, m09Teach } from './m09-locked-out';
 import { m10, m10Teach } from './m10-third-party';
 import { m11, m11Teach } from './m11-audit-night';
+import { m12, m12Teach } from './m12-robo-soc';
 
 /** CURRICULUM: all missions, keyed by id (arc order). */
 export const missionRegistry = new Registry<Mission>();
 
-for (const m of [m01, m02, m03, m04, m05, m06, m08, m09, m10, m11]) missionRegistry.register(m.id, m);
+for (const m of [m01, m02, m03, m04, m05, m06, m08, m09, m10, m11, m12]) missionRegistry.register(m.id, m);
 
 /** CURRICULUM: briefing dossier + after-action lessons, keyed by mission id. */
 export const teachingRegistry = new Registry<MissionTeaching>();
@@ -29,3 +30,4 @@ teachingRegistry.register('m08', m08Teach);
 teachingRegistry.register('m09', m09Teach);
 teachingRegistry.register('m10', m10Teach);
 teachingRegistry.register('m11', m11Teach);
+teachingRegistry.register('m12', m12Teach);

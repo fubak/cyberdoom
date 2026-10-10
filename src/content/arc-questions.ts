@@ -55,42 +55,4 @@ export const ARC_QUESTIONS: Record<string, Question[]> = {
       ['Cross-site scripting', 'XSS is a web-application flaw. This is a network device problem.'],
     ]),
   ],
-  m12: [
-    q('q1', ['4.7'], 'A SOAR playbook disables any account that shows impossible travel. A false positive could lock the CEO out mid-deal. What design is BEST?', 3, [
-      ['Turn the automation off and handle everything manually', 'This throws away the reaction-time benefit, and attackers act in minutes.'],
-      ['Automate it for everyone, with no exceptions', 'There are no guard rails, so one bad signal can disrupt the business at the highest level.'],
-      ['Send an email alert only', 'Too slow for an account takeover in progress.'],
-      ['Auto-contain standard accounts, require human approval for privileged/VIP accounts, and auto-create and escalate a ticket', 'Guard rails keep automation fast where it is safe and put a human in the loop where the impact is high.'],
-    ]),
-    q('q2', ['4.7'], 'The single SOAR server that runs every playbook goes down mid-incident, and nobody remembers the manual steps. Which automation consideration was ignored?', 1, [
-      ['Workforce multiplier', 'That is a benefit of automation, not the risk that bit the team.'],
-      ['Single point of failure / ongoing supportability', 'Automation that everything depends on needs redundancy and maintained manual runbooks.'],
-      ['Enforcing baselines', 'Another benefit, unrelated to the outage.'],
-      ['Employee retention', 'A benefit (less toil), not the failure here.'],
-    ]),
-    q('q3', ['4.4'], 'You need one console that aggregates logs from firewalls, servers and endpoints, correlates them, and raises alerts. Which tool is it?', 2, [
-      ['NetFlow collector', 'NetFlow gives network flow metadata only, not server or endpoint logs.'],
-      ['SNMP traps', 'SNMP traps are device status notifications, not log correlation.'],
-      ['SIEM', 'A SIEM aggregates logs across sources, correlates events, and alerts and reports on them.'],
-      ['SCAP scanner', 'SCAP is a standard for automated configuration and compliance checks, not log correlation.'],
-    ]),
-    q('q4', ['3.2'], 'An inline firewall protects the payment segment. Policy says confidentiality outranks availability for card data. If the firewall crashes, it should:', 0, [
-      ['Fail closed: block all traffic', 'Failing closed protects confidentiality by sacrificing availability, which matches the stated priority.'],
-      ['Fail open: pass all traffic', 'Unfiltered traffic would reach card data, which violates the stated priority.'],
-      ['Switch to tap/monitor mode', 'A passive device cannot block anything, so this is effectively failing open.'],
-      ['Reboot repeatedly until it recovers', 'That is not a failure-mode design. Traffic handling during the outage is still undefined.'],
-    ]),
-    q('q5', ['2.5'], 'Automation pushes an application allow list to every kiosk. What is the effect?', 1, [
-      ['Known-bad applications are blocked and everything else runs', 'That describes a deny list.'],
-      ['Only explicitly approved applications can run, and everything else is blocked', 'Allow listing is default-deny for software, so unknown malware cannot execute.'],
-      ['Every application runs inside a sandbox', 'Sandboxing isolates software. It does not decide what may run.'],
-      ['Applications auto-update to the latest version', 'That is patching, a different mitigation.'],
-    ]),
-    q('q6', ['4.4'], 'The SIEM fires 400 "failed login" alerts a day, almost all from one misconfigured service account, and analysts now ignore that rule. What is BEST?', 1, [
-      ['Disable the rule', 'You would also lose real password-spraying and brute-force alerts.'],
-      ['Fix the service account and tune the rule (a narrow exception or threshold), then validate it still catches real attacks', 'Alert tuning cuts false positives while keeping true positives. Alert fatigue is how real attacks get missed.'],
-      ['Hire more analysts to read every alert', 'More people reading noise does not fix the noise.'],
-      ['Raise every rule\u2019s threshold tenfold', 'A blanket change hides real attacks across every rule, not just the noisy one.'],
-    ]),
-  ],
 };

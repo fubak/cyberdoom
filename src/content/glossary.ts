@@ -187,6 +187,28 @@ export const GLOSSARY: Record<string, string> = {
     'MSP: a third party that manages IT for many customers. Its trusted remote-management channel is a high-value supply-chain target. [2.2]',
   'shared responsibility model':
     'Cloud model dividing security duties between provider and customer. In SaaS the provider runs the app; the customer always owns its data, identities and access decisions. [3.1]',
+
+  // --- SOC operations & automation (2.5, 3.2, 4.4, 4.7) ---
+  'SIEM':
+    'Security information and event management: aggregates logs and events from every source, correlates them, and raises alerts. Tuning balances false positives (noise) against false negatives (missed attacks). [4.4]',
+  'SOAR':
+    'Security orchestration, automation and response: runs playbooks that enrich, ticket and contain incidents automatically, with human gates where a wrong automated action would be costly. [4.7]',
+  'playbook':
+    'An automated, documented sequence of response actions. Playbooks encode the approved steps an incident should follow; runbooks are the manual counterpart. [4.7]',
+  'password spraying':
+    'An attack that tries one common password across many accounts, staying under per-account lockout thresholds. Detected by correlating failures across accounts, not per account. [4.4]',
+  'alert fatigue':
+    'When alert volume overwhelms analysts until real alerts get acked unread or rules get disabled. False positives are the usual driver. [4.4]',
+  'fail closed':
+    'A control failure mode that denies access when the control fails. Choose it where confidentiality and integrity outrank availability — e.g. payment segments. [3.2]',
+  'fail open':
+    'A control failure mode that permits access when the control fails. Choose it where availability or life safety outranks containment — e.g. fire-egress doors. [3.2]',
+  'application allow list':
+    'A control that permits only explicitly approved applications to run; everything else is blocked by default. Stronger than a deny list, which blocks only known-bad software. [2.5]',
+  'single point of failure':
+    'A component whose failure stops the whole system. Critical automation needs redundancy or a maintained manual fallback. [3.2]',
+  'human in the loop':
+    'Keeping a person inside an automated decision path — e.g. analyst approval before containing a privileged account — so automation cannot commit an irreversible act on a false positive. [4.7]',
 };
 
 /** Case-insensitive glossary lookup. */

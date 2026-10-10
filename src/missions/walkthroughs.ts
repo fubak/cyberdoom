@@ -8,6 +8,7 @@ import { m08Walkthrough } from '../content/missions/m08-zero-day';
 import { m09Walkthrough } from '../content/missions/m09-locked-out';
 import { m10Walkthrough } from '../content/missions/m10-third-party';
 import { m11Walkthrough } from '../content/missions/m11-audit-night';
+import { m12Walkthrough } from '../content/missions/m12-robo-soc';
 
 /** Scripted solution of a mission, replayed by tests/walkthrough.test.ts. */
 export type WalkStep =
@@ -31,4 +32,5 @@ export const walkthroughs: Record<string, WalkStep[]> = {
   m09: m09Walkthrough,
   m10: m10Walkthrough,
   m11: m11Walkthrough,
+  m12: m12Walkthrough,
 };
