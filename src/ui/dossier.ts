@@ -274,7 +274,10 @@ export class Dossier {
   private onMouseDown = (event: MouseEvent): void => {
     if (!this.enabled || !this.isOpen) return;
     event.preventDefault();
-    event.stopImmediatePropagation();
+    // With the pointer locked the same click must keep playing: it closes the
+    // file AND reaches the game canvas as a fire edge (so "click again to flag"
+    // works). Swallow it only when the mouse is free, where it can't fire.
+    if (!(document.pointerLockElement && event.button === 0)) event.stopImmediatePropagation();
     this.close();
   };
 

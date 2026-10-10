@@ -102,7 +102,13 @@ export const edrTool: ToolDef = {
       ? { text: `EDR: ${contained} endpoint(s) isolated${weakened ? `, ${weakened} still resisting` : ''}. Containment logged.`, kind: 'good' }
       : { text: 'EDR: no infected endpoints within range. Cell wasted; triage before you respond.', kind: 'warn' });
   },
-  hint() {
-    return { text: 'HOLD: CHARGE CONTAINMENT PULSE', ready: true };
+  hint(ctx) {
+    for (const e of ctx.entities) {
+      if (!e.alive || e.def.kind !== 'enemy') continue;
+      if (Math.hypot(e.x - ctx.playerX, e.y - ctx.playerY) < 11) {
+        return { text: 'HOLD: CHARGE CONTAINMENT PULSE', ready: true };
+      }
+    }
+    return null;
   },
 };

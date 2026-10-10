@@ -52,7 +52,7 @@ export class Face {
   state(integrity: number): FaceState {
     const dead = integrity <= 0;
     let look = 0;
-    if (this.hurtT < 1.0) look = this.dir;
+    if (this.hurtT < 0.55) look = this.dir; // snap toward the hit for ~0.5 s
     else {
       // idle glance cycle (like Doom's status face)
       const c = Math.floor(this.time / 1.6) % 4;
@@ -70,9 +70,10 @@ function mix(a: string, b: string, t: number): string {
   return `#${((ch(16) << 16) | (ch(8) << 8) | ch(0)).toString(16).padStart(6, '0')}`;
 }
 
+/** Doom's five health bands: clean, nicked, beaten, bloody, near-dead. */
 function damageTier(integrity: number): number {
   let t = 0;
-  for (const th of [80, 60, 40, 30, 25, 20, 1]) if (integrity < th) t++;
+  for (const th of [80, 60, 40, 20]) if (integrity < th) t++;
   return t;
 }
 
@@ -105,7 +106,15 @@ function paintPortrait(P: Painter, gender: Gender, st: FaceState, base: string):
   const female = gender === 'female';
   const u = 1 / P.k;
   const lw = (units: number) => Math.max(1, Math.round(units * P.k));
-  const sk = st.dead ? '#8a8f86' : st.integrity < 20 ? shade(base, 0.82) : base;
+  const tier = damageTier(st.integrity);
+  // skin goes pale and grey as integrity drops (Doom's face loses its colour)
+  const sk = st.dead
+    ? '#8a8f86'
+    : tier >= 4
+      ? shade(mix(base, '#98908a', 0.42), 0.82)
+      : tier >= 3
+        ? shade(mix(base, '#a99d92', 0.22), 0.9)
+        : base;
   const skD = shade(sk, 0.78);
   const skDD = shade(sk, 0.62);
   const skL = shade(sk, 1.07);
@@ -113,12 +122,13 @@ function paintPortrait(P: Painter, gender: Gender, st: FaceState, base: string):
   const hairM = shade(hair, 1.3);
   const hairL = shade(hair, 1.75);
   const hairD = shade(hair, 0.7);
-  const blood = '#a01010';
+  const blood = '#b01210';
   const bloodD = '#5a0606';
-  const hurt = st.integrity < 40 && !st.dead;
+  const bloodL = '#e03020';
+  const hurt = tier >= 3 && !st.dead;
 
   // background + CRT scanlines
-  const bg = st.integrity < 25 && !st.dead ? '#3a1414' : '#141826';
+  const bg = tier >= 4 && !st.dead ? '#3a1414' : '#141826';
   P.rect(0, 0, 24, 24, bg);
   for (let y = 0; y < 24; y += 0.5) P.rect(0, y, 24, u, shade(bg, 0.82));
 
@@ -218,9 +228,11 @@ function paintPortrait(P: Painter, gender: Gender, st: FaceState, base: string):
     P.poly([[inner, iy], [12 + side * 2.7, by + arch], [outer, by + 0.5], [outer, by + 0.5 + bt * 0.6], [12 + side * 2.7, by + arch + bt], [inner, iy + bt]], browC);
   }
 
-  // eyes
+  // eyes — the lids sag as the tiers climb (Doom's beaten faces lose the wide eyes)
   const eyeY = 10.7;
   const iris = female ? '#4a3220' : '#2e1e12';
+  const droop = st.dead || st.ouch ? 0 : tier >= 4 ? 0.62 : tier >= 3 ? 0.34 : 0;
+  const white = tier >= 4 && !st.dead ? '#e8b8a8' : '#f2f2ee';
   for (const ex of [9.4, 14.6]) {
     if (st.dead) {
       P.line([[ex - 1, eyeY - 0.9], [ex + 1, eyeY + 0.9]], '#111', lw(0.35));
@@ -229,19 +241,38 @@ function paintPortrait(P: Painter, gender: Gender, st: FaceState, base: string):
     }
     const ry = st.ouch ? 1.2 : 0.8;
     P.ell(ex, eyeY - 0.2, 1.9, ry + 0.45, skD);
-    P.ell(ex, eyeY, 1.45, ry, '#f2f2ee');
+    P.ell(ex, eyeY, 1.45, ry, white);
     P.rect(ex - 1.45, eyeY + ry * 0.4, 2.9, u, '#d8d4cc');
     const ix = ex + st.look * 0.6;
     const ir = Math.min(0.62, ry);
     P.ell(ix, eyeY + 0.05, 0.62, ir, iris);
     P.ell(ix, eyeY + 0.05, 0.3, Math.min(0.3, ir), '#0a0806');
     P.rect(ix - 0.3, eyeY - 0.35, u, u, '#ffffff');
+    if (tier >= 4) {
+      // bloodshot corners
+      P.rect(ex - 1.3, eyeY - 0.1, 0.5, u, '#d83828');
+      P.rect(ex + 0.9, eyeY + 0.15, 0.5, u, '#d83828');
+    }
+    if (droop > 0) {
+      // skin-toned lid slides down over the top of the eye + a crease line
+      P.ell(ex, eyeY - ry - 0.55 + droop * 1.4, 1.9, 1.0, sk);
+      P.line(
+        [
+          [ex - 1.55, eyeY - ry + droop * 1.15],
+          [ex, eyeY - ry + 0.25 + droop * 0.9],
+          [ex + 1.55, eyeY - ry + droop * 1.15],
+        ],
+        skDD,
+      );
+      P.dots(ex - 1.4, eyeY - ry + droop * 0.9, 2.8, 0.6, skD, 0.4, ex === 9.4 ? 5 : 6);
+    }
     P.line([[ex - 1.5, eyeY - 0.1], [ex - 0.6, eyeY - ry - 0.05], [ex + 0.6, eyeY - ry - 0.05], [ex + 1.5, eyeY - 0.1]], '#1a1210', female ? 2 : 1);
     if (female) P.line([[ex + (ex > 12 ? 1.5 : -1.5), eyeY - 0.2], [ex + (ex > 12 ? 2 : -2), eyeY - 0.7]], '#1a1210', 1);
     P.line([[ex - 1.2, eyeY + ry + 0.2], [ex + 1.2, eyeY + ry + 0.2]], skDD);
   }
-  if (!st.dead && st.integrity < 60) P.ell(14.6, 9.6, 1.9, 0.6, '#8a5a66');
-  if (!st.dead && st.integrity < 30) P.ell(14.6, 10.1, 1.7, 0.55, '#6a3a4a');
+  if (!st.dead && tier >= 2) P.ell(14.6, 9.6, 1.9, 0.6, '#8a5a66');
+  if (!st.dead && tier >= 3) P.ell(14.6, 10.1, 1.7, 0.55, '#6a3a4a');
+  if (!st.dead && tier >= 3) P.ell(9.4, 10.1, 1.6, 0.5, '#5a3040');
 
   // nose
   P.line([[12.7, 10.6], [13, 12.6], [13.3, 13.6]], skD, lw(0.3));
@@ -259,6 +290,14 @@ function paintPortrait(P: Painter, gender: Gender, st: FaceState, base: string):
     P.ell(12, 16.5, 1.7, 1.35, '#3a0c0c');
     P.rect(10.9, 15.3, 2.2, 0.45, '#e8e4dc');
     P.line([[10.3, 15.3], [12, 15.1], [13.7, 15.3]], lip, lw(0.35));
+  } else if (tier >= 4) {
+    // near-dead: open grimace, teeth clenched top and bottom, blood at the lip
+    P.ell(12, 16.4, 2.1, 1.6, '#2a0806');
+    P.rect(10.2, 15.3, 3.6, 0.5, '#d8d0c0');
+    P.rect(10.6, 16.9, 2.8, 0.45, '#c0b8a8');
+    for (let x = 10.9; x < 13.4; x += 0.8) P.rect(x, 15.3, u, 0.5, '#8a8478');
+    P.line([[9.6, 15.4], [10.2, 16.3], [13.8, 16.3], [14.4, 15.4]], lip, lw(0.4));
+    P.line([[10.4, 15.4], [10.1, 16.9]], blood, lw(0.3));
   } else if (st.grin) {
     P.poly([[9.3, 15.3], [14.7, 15.3], [13.6, 16.9], [10.4, 16.9]], '#3a0c0c');
     P.rect(9.8, 15.35, 4.4, 0.6, '#f4f4f0');
@@ -266,9 +305,11 @@ function paintPortrait(P: Painter, gender: Gender, st: FaceState, base: string):
     P.line([[9.2, 15.4], [8.8, 14.8]], lip, lw(0.3));
     P.line([[14.8, 15.4], [15.2, 14.8]], lip, lw(0.3));
   } else if (hurt) {
-    P.rect(10.2, 15.7, 3.6, 0.45, '#3a0c0c');
-    P.rect(10.6, 15.7, 2.8, 0.25, '#d8d4cc');
-    P.line([[9.4, 15.4], [10.2, 16.1], [13.8, 16.1], [14.6, 15.4]], lip, lw(0.35));
+    // gritted teeth, deeper mouth shadow than the neutral line
+    P.rect(9.8, 15.5, 4.4, 0.7, '#2a0806');
+    P.rect(10.2, 15.55, 3.6, 0.4, '#d8d0c0');
+    for (let x = 10.7; x < 13.6; x += 0.75) P.rect(x, 15.55, u, 0.4, '#8a8478');
+    P.line([[9.4, 15.3], [10.2, 16.1], [13.8, 16.1], [14.6, 15.3]], lip, lw(0.4));
   } else if (female) {
     P.poly([[10.1, 15.9], [11.3, 15.4], [12, 15.6], [12.7, 15.4], [13.9, 15.9]], lip);
     P.ell(12, 16.3, 1.6, 0.5, shade(lip, 1.1));
@@ -279,28 +320,67 @@ function paintPortrait(P: Painter, gender: Gender, st: FaceState, base: string):
     P.rect(10.8, 16.5, 2.4, u, skL);
   }
 
-  // damage stages (Doom: five health bands)
+  // damage stages — Doom's five faces: each tier adds unmistakable new blood
   const streak = (pts: [number, number][], w = 0.35) => {
     P.line(pts, bloodD, lw(w) + 1);
     P.line(pts, blood, lw(w));
   };
+  const soak = (x: number, y: number, w: number, h: number, p = 0.75, seed = 1) => {
+    P.dots(x, y, w, h, bloodD, p * 0.7, seed + 40);
+    P.dots(x, y, w, h, blood, p, seed);
+    P.dots(x, y, w, h * 0.5, bloodL, p * 0.4, seed + 80);
+  };
   if (!st.dead) {
-    if (st.integrity < 80) {
-      P.line([[7.1, 7.1], [8.9, 7.6]], '#c84a3a', lw(0.3));
-      P.dots(7, 6.8, 2, 1, '#e07060', 0.3, 2);
+    if (tier >= 1) {
+      // nicked brow + a small bruise on the cheekbone
+      P.line([[7.1, 7.1], [8.9, 7.6]], '#c84a3a', lw(0.35));
+      P.line([[7.3, 6.9], [8.9, 7.4]], blood, lw(0.25));
+      P.dots(7, 6.8, 2.2, 1.4, '#e07060', 0.35, 2);
+      P.ell(15.9, 13.2, 1.3, 0.8, mix(sk, '#7a5a78', 0.45));
     }
-    if (st.integrity < 60) streak([[14.4, 4.2], [14.6, 6.4], [15.2, 8.6]]);
-    if (st.integrity < 40) {
-      streak([[7.4, 12], [7.6, 14.4], [8.3, 16.8]]);
-      streak([[14.2, 4.2], [15.8, 4.6]]);
+    if (tier >= 2) {
+      // blood from the hairline runs down past the brow into the eye
+      streak([[14.4, 4.2], [14.6, 6.4], [15.2, 8.6]], 0.5);
+      soak(14.2, 4.4, 1.4, 2.2, 0.5, 11);
+      P.dots(13.4, 3.6, 3, 1.2, blood, 0.35, 12);
+      // sweat on the temple + a swollen bruise under the eye
+      P.dots(6.6, 8.4, 0.9, 1.8, '#9ad0ff', 0.5, 13);
+      P.rect(6.9, 9.6, u, 0.8, '#9ad0ff');
     }
-    if (st.integrity < 20) {
-      streak([[9, 4.2], [11.4, 4.4]], 0.5);
-      streak([[10.4, 4.6], [10.6, 7], [10.4, 8.8]]);
-      streak([[16.4, 11.8], [16.6, 15], [16.2, 17.6]]);
+    if (tier >= 3) {
+      // second runnel down the left cheek to the jaw + blood at the nose and lip
+      streak([[7.4, 11.8], [7.6, 14.4], [8.3, 16.8]], 0.55);
+      soak(7.2, 12.6, 1.4, 3.4, 0.55, 21);
+      streak([[14.2, 4.2], [15.8, 4.6]], 0.45);
+      P.line([[11.2, 14.4], [11, 15.2], [10.6, 15.7]], blood, lw(0.4));
+      P.dots(8.6, 13.2, 1.8, 2.4, blood, 0.45, 22);
+      P.dots(8.2, 15.8, 1.4, 2.6, blood, 0.5, 23);
+      // hair matted flat with sweat/blood
+      P.dots(8, 4.4, 8, 1.4, hairD, 0.5, 24);
+    }
+    if (tier >= 4) {
+      // half the face soaked: forehead gush, twin runnels to the chin, soaked collar
+      soak(8.6, 4.2, 7.4, 1.6, 0.8, 31);
+      streak([[9, 4.2], [11.4, 4.4]], 0.6);
+      streak([[10.4, 4.6], [10.6, 7], [10.4, 8.8]], 0.55);
+      soak(10.2, 6.8, 1.2, 2.4, 0.6, 32);
+      streak([[16.4, 11.8], [16.6, 15], [16.2, 17.6]], 0.6);
+      soak(15.8, 13.4, 1.4, 3.2, 0.6, 33);
+      streak([[8.2, 16.6], [8.6, 18.6], [8.4, 19.4]], 0.45);
+      P.dots(12.4, 15.6, 1.6, 2.4, blood, 0.5, 34);
+      P.line([[11.4, 17.4], [11.6, 18.8]], blood, lw(0.35));
+      // blood pooled on the collar line
+      P.rect(8.6, 19.4, 6.8, 0.6, bloodD);
+      P.dots(8.6, 19.4, 6.8, 1.4, blood, 0.55, 35);
+      // gaunt shading under the cheekbones
+      P.ell(9, 14.6, 1.4, 0.9, skDD);
+      P.ell(15.2, 14.9, 1.2, 0.8, skDD);
     }
   } else {
+    soak(8.4, 4.2, 7.6, 2.2, 0.85, 41);
     streak([[9, 4.2], [15, 4.6]], 0.7);
     streak([[11.4, 5], [11.6, 8], [11.2, 11.6]], 0.45);
+    streak([[8.4, 12.4], [8.6, 15.8], [8.2, 18]], 0.5);
+    P.rect(8.6, 19.4, 6.8, 0.7, bloodD);
   }
 }

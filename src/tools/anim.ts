@@ -30,7 +30,10 @@ export function usePhase(t: number, windup: number): UsePhase {
   const tr = ti - IMPACT;
   if (tr < RECOVER) {
     const u = tr / RECOVER;
-    return { phase: 'recover', k: 1 - u * u * (3 - 2 * u), u };
+    const k = 1 - u * u * (3 - 2 * u);
+    // brief negative dip: the viewmodel recoils past rest before settling
+    const dip = u > 0.3 && u < 0.85 ? -0.18 * Math.sin(((u - 0.3) / 0.55) * Math.PI) : 0;
+    return { phase: 'recover', k: k + dip, u };
   }
   return { phase: 'idle', k: 0, u: 0 };
 }
@@ -162,4 +165,33 @@ export function screenFlash(g: Ctx, w: number, h: number, rgb: string, a: number
   if (a <= 0) return;
   g.fillStyle = `rgba(${rgb},${Math.min(0.6, a)})`;
   g.fillRect(0, 0, w, h);
+}
+
+/**
+ * Doom muzzle-flash equivalent: a short additive light burst bleeding in from
+ * the screen edges, stepped in bands so it stays pixel-crisp. `a` scales all bands.
+ */
+export function edgeFlash(g: Ctx, w: number, h: number, rgb: string, a: number): void {
+  if (a <= 0) return;
+  const t = h * 0.09;
+  g.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < 3; i++) {
+    const ba = a * (1 - i / 3);
+    if (ba <= 0) continue;
+    g.fillStyle = `rgba(${rgb},${ba.toFixed(3)})`;
+    const s = t * (3 - i);
+    g.fillRect(0, 0, w, s); // top
+    g.fillRect(0, h - s, w, s); // bottom
+    g.fillRect(0, 0, s * 0.8, h); // left
+    g.fillRect(w - s * 0.8, 0, s * 0.8, h); // right
+  }
+  g.globalCompositeOperation = 'source-over';
+}
+
+/** Edge flash timed to a tool's use animation; returns true while the flash is live. */
+export function fireFlash(g: Ctx, w: number, h: number, sinceUse: number, rgb: string, strength = 0.4): boolean {
+  if (sinceUse < 0 || sinceUse >= IMPACT) return false;
+  const k = 1 - sinceUse / IMPACT;
+  edgeFlash(g, w, h, rgb, strength * k * k);
+  return true;
 }

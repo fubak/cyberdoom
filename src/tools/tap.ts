@@ -105,7 +105,7 @@ export const tapTool: ToolDef = {
     ctx.bus.emit('tool-hit', { toolId: 'tap', good: seen.length > 0 });
     if (!seen.length) {
       ctx.bus.emit('message', { text: 'PCAP: nothing captured. Point the tap at hosts in view.', kind: 'warn' });
-      return;
+      return false; // a wasted sweep refunds the PCAP
     }
     seen.sort((a, b) => Math.hypot(a.x - ctx.playerX, a.y - ctx.playerY) - Math.hypot(b.x - ctx.playerX, b.y - ctx.playerY));
     for (const e of seen.slice(0, 2)) ctx.bus.emit('message', { text: flowLine(e), kind: 'info' });
@@ -128,7 +128,7 @@ export const tapTool: ToolDef = {
       n++;
     }
     if (n > 0) return { text: `CAPTURE TRAFFIC (${n} IN VIEW)`, ready: true };
-    return { text: 'CAPTURE TRAFFIC: NO HOSTS IN VIEW', ready: false };
+    return null;
   },
 };
 
