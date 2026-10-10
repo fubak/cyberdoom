@@ -102,7 +102,7 @@ export const ARC: ArcMission[] = [
     ],
   },
   {
-    id: 'm07', title: 'SEGMENT FAULT', difficulty: 7, built: false,
+    id: 'm07', title: 'SEGMENT FAULT', difficulty: 7, built: true,
     briefing: 'The plant network is flat: web server, database, admin PCs and a 20-year-old SCADA controller all on one subnet.',
     objectives: [
       w('3.2', 'Place appliances: firewall between zones, IPS inline (not on a tap) in front of the DB, and a jump server as the only admin path.'),
