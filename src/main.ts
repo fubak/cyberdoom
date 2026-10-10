@@ -78,7 +78,9 @@ const musicTierFor = (difficulty: number): MusicTier =>
 const MUSIC_VOL_KEY = 'cyberdoom-music-vol';
 function loadMusicVol(): number {
   try {
-    const v = Number(localStorage.getItem(MUSIC_VOL_KEY));
+    const raw = localStorage.getItem(MUSIC_VOL_KEY);
+    if (raw === null) return 0.7;
+    const v = Number(raw);
     return Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : 0.7;
   } catch {
     return 0.7;
