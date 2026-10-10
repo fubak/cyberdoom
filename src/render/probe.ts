@@ -314,6 +314,8 @@ async function probeOnLine(
   // across the view between the with/without captures and blow up the mask
   const savedSpeedMul = target.state.speedMul;
   target.state.speedMul = 0;
+  const savedHurtT = target.hurtT;
+  target.hurtT = 0;
   try {
     for (let i = 0; i < 4; i++) {
       place();
@@ -365,6 +367,7 @@ async function probeOnLine(
     };
   } finally {
     target.state.speedMul = savedSpeedMul;
+    target.hurtT = savedHurtT;
     r.debugHidden.clear();
     r.debugSprite.delete(id);
     r.debugNoFlash = false;

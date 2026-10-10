@@ -1121,6 +1121,11 @@ export class Renderer {
         st.animT += dt;
         st.moveT -= dt;
         st.flash = Math.max(0, st.flash - dt * 3);
+      } else {
+        // probes measure the sprite's resting look: a pain flash stuck on by
+        // a stray hit between probes would otherwise pin it to the white-out
+        // pain frame for the whole suite
+        st.flash = 0;
       }
       st.mesh.rotation.set(0, yaw, 0);
       st.mat.uniforms.map.value = this.pickFrame(st, cameraAngle, cameraX, cameraY).tex;
