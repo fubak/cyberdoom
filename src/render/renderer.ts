@@ -570,8 +570,11 @@ export class Renderer {
             else if (texId === 'wall-brick' && h % 6 === 0) texId = 'wall-brick2';
             const nv = variantCount(texId);
             if (nv > 1 && (h >>> 16) % nv > 0) texId = `${texId}:v${(h >>> 16) % nv}`;
-            const jit = shade * faceShade(h);
-            wallFace(builder(`w:${texId}`, textureOr(texId)), tx, ty, dx, dz, jit, st, faceTint(h));
+            // wall-secret keeps the sector shade but no variant/jitter/tint:
+            // the misaligned panel IS the secret-door tell and must stay legible
+            const secret = texId === 'wall-secret';
+            const jit = secret ? shade : shade * faceShade(h);
+            wallFace(builder(`w:${texId}`, textureOr(texId)), tx, ty, dx, dz, jit, st, secret ? [1, 1, 1] : faceTint(h));
             if (DECALABLE.has(texId.split(':')[0]) && (h >>> 8) % 3 === 0) {
               const did = theme.decals[(h >>> 12) % theme.decals.length];
               const dt = decalTexture(did);
@@ -587,9 +590,11 @@ export class Renderer {
           for (const [dx, dz] of DIRS) {
             const n = map.cellAt(tx + dx, ty + dz);
             if (!n || n.kind === 'wall' || n.kind === 'door') continue;
-            // door faces are inset slightly so the jamb tracks show
+            // door faces are inset slightly so the jamb tracks show; secret
+            // doors skip jitter/tint so the misaligned tell stays legible
             const dh = cellHash(tx, ty, dx * 3 + dz * 5 + 7, seed);
-            wallFace(b, tx, ty, dx, dz, lightAt(tx + dx, ty + dz) * faceShade(dh), strobeAt(tx + dx, ty + dz), faceTint(dh));
+            const dl = lightAt(tx + dx, ty + dz);
+            wallFace(b, tx, ty, dx, dz, cell.secret ? dl : dl * faceShade(dh), strobeAt(tx + dx, ty + dz), cell.secret ? [1, 1, 1] : faceTint(dh));
           }
           b.quad(
             [[tx, 0.002, ty], [tx + 1, 0.002, ty], [tx + 1, 0.002, ty + 1], [tx, 0.002, ty + 1]],
