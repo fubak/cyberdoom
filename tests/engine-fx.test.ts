@@ -30,6 +30,15 @@ describe('particle system', () => {
     hit.burst(1, 2, 0.4, 'hit');
     expect(hit.view().count).toBe(10);
 
+    // threat-tinted data-blood: non-hot shards stay inside the tint's hue
+    const blood = new ParticleSystem(() => 0.5);
+    blood.burst(0, 0, 0.4, 'kill', [0.2, 0.9, 0.3]);
+    let tinted = 0;
+    for (let i = 0; i < 48; i++) {
+      if (blood.color[i * 3 + 1] > blood.color[i * 3] && blood.color[i * 3 + 1] > blood.color[i * 3 + 2]) tinted++;
+    }
+    expect(tinted).toBeGreaterThan(30);
+
     const charge = new ParticleSystem();
     charge.charge(3, 4, 0.7, 0.5);
     expect(charge.view().count).toBe(1);

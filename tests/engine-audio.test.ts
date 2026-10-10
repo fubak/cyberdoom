@@ -22,6 +22,17 @@ describe('audio spatialization', () => {
     expect(() => audio.setCombat(false)).not.toThrow();
     expect(audio.meter()).toEqual({ rmsDb: -Infinity, peakDb: -Infinity });
   });
+
+  it('keeps the score controls safe without an audio context', () => {
+    const audio = new Audio();
+    expect(() => audio.startMusic('early')).not.toThrow();
+    expect(() => audio.startMusic('late')).not.toThrow();
+    expect(() => audio.setMusicVolume(2)).not.toThrow();
+    expect(audio.musicVolume).toBe(1);
+    expect(() => audio.setMusicVolume(-1)).not.toThrow();
+    expect(audio.musicVolume).toBe(0);
+    expect(() => audio.stopMusic()).not.toThrow();
+  });
 });
 
 describe('per-event voice limiting', () => {
@@ -31,6 +42,8 @@ describe('per-event voice limiting', () => {
       expect(VOICE_CAPS[name], name).toBeGreaterThanOrEqual(1);
       expect(VOICE_CAPS[name], name).toBeLessThanOrEqual(4);
     }
+    // kill punctuation can overlap a second kill but never stacks deep
+    expect(VOICE_CAPS['kill']).toBe(2);
     // sight barks never repeat on top of themselves
     for (const name of ['sight-worm', 'sight-trojan', 'sight-ransomware', 'sight-rat', 'sight-rootkit']) {
       expect(VOICE_CAPS[name], name).toBe(1);

@@ -7,7 +7,7 @@ import { EYE_HEIGHT, Player } from './engine/player';
 import { alertNear, damageEntity, hurtEntity, traceShot, updateEntities, updateProjectiles, wormPropagateCap } from './engine/ai';
 import { enemyInTheWay, exitEdge } from './engine/interact';
 import { doorUseHint, resolveUse, type UseTargetContext } from './engine/useTarget';
-import { Audio } from './engine/audio';
+import { Audio, type MusicTier } from './engine/audio';
 import { Feel } from './engine/feel';
 import { ParticleSystem } from './engine/fx';
 import { lightProbe, lookProbe, placeThreat } from './render/probe';
@@ -58,6 +58,32 @@ const TOOL_FIRE_RGB: Record<string, [number, number, number]> = Object.fromEntri
 /** Tools that fire a world light flood — damaging attacks only, like Doom
  *  weapons. Inspect/utility tools (mouse, badge, mfa) don't flash. */
 const ATTACK_TOOLS = new Set(['keyboard', 'usb', 'edr', 'patch', 'tap']);
+
+/** Data-blood spray tint per threat (matches each enemy's palette). */
+const THREAT_BLOOD: Record<string, [number, number, number]> = {
+  worm: [1, 0.18, 0.05],
+  trojan: [0.78, 0.32, 1],
+  ransomware: [1, 0.52, 0.06],
+  logicbomb: [1, 0.3, 0.1],
+  rat: [0.22, 0.9, 0.38],
+  rootkit: [0.48, 0.32, 1],
+};
+const bloodOf = (e: Entity): [number, number, number] =>
+  THREAT_BLOOD[e.def.threat ?? e.def.sprite] ?? [1, 0.28, 0.08];
+
+/** Music tier per mission difficulty (1-4 early, 5-8 mid, 9+ late). */
+const musicTierFor = (difficulty: number): MusicTier =>
+  difficulty >= 9 ? 'late' : difficulty >= 5 ? 'mid' : 'early';
+
+const MUSIC_VOL_KEY = 'cyberdoom-music-vol';
+function loadMusicVol(): number {
+  try {
+    const v = Number(localStorage.getItem(MUSIC_VOL_KEY));
+    return Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : 0.7;
+  } catch {
+    return 0.7;
+  }
+}
 
 /** Viewmodel recoil jolt per tool — heavy attacks kick harder. */
 const TOOL_KICK: Record<string, number> = {
@@ -151,6 +177,9 @@ class Game {
   private drainers = new Map<string, { label: string; until: number }>();
   /** LEVELS: mission-wide worm-copy budget (reset per mission, shared into ai hooks). */
   private wormBudget = { remaining: 0 };
+  /** Kill hit-stop: remaining sim-time freeze (seconds). */
+  private hitStopT = 0;
+  private musicVol = loadMusicVol();
 
   constructor(app: HTMLElement) {
     const viewport = document.createElement('div');
@@ -225,7 +254,7 @@ class Game {
       // just the small kick.
       const rgb = TOOL_FIRE_RGB[toolId];
       if (rgb && ATTACK_TOOLS.has(toolId))
-        this.renderer.fireLight(rgb[0], rgb[1], rgb[2], toolId === 'edr' ? 1.15 : 0.85);
+        this.renderer.fireLight(rgb[0], rgb[1], rgb[2], toolId === 'edr' ? 2.0 : 1.5);
       this.feel.kick(TOOL_KICK[toolId] ?? 1);
     });
     this.bus.on('cleaned', ({ entityId }) => {
@@ -234,7 +263,11 @@ class Game {
         if (!e || e.alive) return;
         if (e.def.kind === 'enemy') {
           this.audio.sfx(`death-${e.def.threat ?? e.def.sprite}`, { x: e.x, y: e.y });
-          this.particles.burst(e.x, e.y, 0.4, 'kill');
+          this.audio.sfx('kill', { x: e.x, y: e.y });
+          this.particles.burst(e.x, e.y, 0.4, 'kill', bloodOf(e));
+          // kill punctuation: a ~50 ms sim-time hit-stop plus a camera punch
+          this.feel.punch(1);
+          this.hitStopT = Math.max(this.hitStopT, 0.05);
         } else {
           this.audio.sfx('clean');
         }
@@ -248,7 +281,7 @@ class Game {
         this.particles.toolImpact('edr', e.x, e.y, 0.4);
         this.edrPulseCount += 8;
       } else if (!((this.toolFxUntil.get(entityId) ?? -Infinity) >= this.simT)) {
-        this.particles.burst(e.x, e.y, 0.4, 'hit');
+        this.particles.burst(e.x, e.y, 0.4, 'hit', bloodOf(e));
       }
       // small light burst at the impact point, so a connected hit reads instantly
       this.particles.flash(e.x, e.y, 0.45);
@@ -341,6 +374,7 @@ class Game {
 
   private showMissionSelect(): void {
     this.audio.stopAmbience();
+    this.audio.stopMusic();
     document.exitPointerLock?.();
     this.automap.close();
     this.setScreen('mission-select', screens.missionSelect((id) => this.showBriefing(id), () => this.showCharSelect()));
@@ -359,6 +393,16 @@ class Game {
     this.dossier.enabled = false;
     document.exitPointerLock?.();
     this.pauseNode = pauseMenu({
+      musicVol: this.musicVol,
+      onMusicVol: (v) => {
+        this.musicVol = v;
+        this.audio.setMusicVolume(v);
+        try {
+          localStorage.setItem(MUSIC_VOL_KEY, String(v));
+        } catch {
+          // private mode: the setting just won't persist
+        }
+      },
       onResume: () => this.hidePause(true),
       onRestart: () => {
         const id = this.runtime?.mission.id;
@@ -623,10 +667,13 @@ class Game {
     this.noticedThreats.clear();
     this.drainers.clear();
     this.wormBudget.remaining = wormPropagateCap(mission.difficulty);
+    this.hitStopT = 0;
     if (!prep?.built) this.renderer.buildLevel(this.map, mission.map, mission.id, mission.entities);
     this.audio.setVoice(this.gender);
     this.audio.setListener(this.player.x, this.player.y, this.player.angle);
     this.audio.startAmbience();
+    this.audio.setMusicVolume(this.musicVol);
+    this.audio.startMusic(musicTierFor(mission.difficulty));
     this.setScreen('play', null);
     if (!DEBUG) this.input.requestLock();
     this.hud.clearMessages();
@@ -637,6 +684,7 @@ class Game {
     if (this.endCalled) return;
     this.endCalled = true;
     this.audio.stopAmbience();
+    this.audio.stopMusic();
     this.showDebrief();
   }
 
@@ -672,7 +720,7 @@ class Game {
         x: this.player.prevX + (this.player.x - this.player.prevX) * alpha + shake.x,
         y: this.player.prevY + (this.player.y - this.player.prevY) * alpha + shake.y,
         angle: this.player.angle + shake.yaw,
-        dz: lostEnd ? -(EYE_HEIGHT - 0.15) * this.deathDrop : this.player.viewBobZ,
+        dz: lostEnd ? -(EYE_HEIGHT - 0.15) * this.deathDrop : this.player.viewBobZ - this.feel.punchDip,
         roll: lostEnd ? this.deathRoll : 0,
         hurt: this.feel.red,
         hurtSide: this.feel.hurtSide,
@@ -733,6 +781,13 @@ class Game {
     }
     if (this.dossier.isOpen) {
       this.consumeDossierInput();
+      return;
+    }
+    // Kill hit-stop: a ~50 ms sim-time freeze makes each kill land; the
+    // render frame still draws (and the player can still turn).
+    if (this.hitStopT > 0) {
+      this.hitStopT -= dt;
+      this.input.unpoll();
       return;
     }
     const p = this.player;
@@ -841,7 +896,7 @@ class Game {
         if (result === 'killed') {
           this.bus.emit('cleaned', { entityId: target.def.id });
         } else {
-          this.particles.burst(target.x, target.y, 0.4, 'hit');
+          this.particles.burst(target.x, target.y, 0.4, 'hit', bloodOf(target));
           this.audio.sfx(`pain-${target.def.threat ?? target.def.sprite}`, { x: target.x, y: target.y });
           target.state.grudgeId = e.def.id;
           target.state.grudgeT = 8;
@@ -904,7 +959,7 @@ class Game {
         // hostile fire struck another enemy — damage it and turn it on the shooter
         const srcId = projectile.source?.startsWith('enemy:') ? projectile.source.slice(6) : null;
         const result = damageEntity(hit, projectile.damage ?? 8, projectile.dx, projectile.dy);
-        this.particles.burst(x, y, 0.4, 'hit');
+        this.particles.burst(x, y, 0.4, 'hit', bloodOf(hit));
         if (result === 'killed') {
           this.bus.emit('cleaned', { entityId: hit.def.id });
         } else {
@@ -1049,7 +1104,7 @@ class Game {
         if (result === 'killed') {
           this.bus.emit('cleaned', { entityId: hit.def.id });
         } else {
-          this.particles.burst(x, y, 0.4, 'hit');
+          this.particles.burst(x, y, 0.4, 'hit', bloodOf(hit));
           if (hit.def.kind === 'enemy') this.audio.sfx(`pain-${hit.def.threat ?? hit.def.sprite}`, { x: hit.x, y: hit.y });
         }
       } else {
@@ -1356,12 +1411,26 @@ class Game {
         g.audio.setCombat(active);
       },
       /** FEEL: muzzle-flash world-light hook (same uniform the game uses on fire). */
-      fireLight(r: number, g2: number, b: number, strength = 0.85) {
+      fireLight(r: number, g2: number, b: number, strength = 1.5) {
         g.renderer.fireLight(r, g2, b, strength);
       },
       /** FEEL: current muzzle-flash intensity 0-1, for capture/tests. */
       fireLevel() {
         return g.renderer.fireLevel();
+      },
+      /** FEEL: median luma of the next rendered frame's centre band. */
+      viewLuma() {
+        return g.renderer.captureView().then((v) => {
+          const ls: number[] = [];
+          for (let y = Math.floor(v.h * 0.2); y < v.h * 0.8; y++) {
+            for (let x = Math.floor(v.w * 0.3); x < v.w * 0.7; x++) {
+              const i = (y * v.w + x) * 4;
+              ls.push(0.2126 * v.data[i] + 0.7152 * v.data[i + 1] + 0.0722 * v.data[i + 2]);
+            }
+          }
+          ls.sort((a, b) => a - b);
+          return ls[Math.floor(ls.length / 2)] ?? 0;
+        });
       },
     };
   }

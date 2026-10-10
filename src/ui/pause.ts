@@ -9,6 +9,9 @@ export function pauseMenu(actions: {
   onResume: () => void;
   onRestart: () => void;
   onQuit: () => void;
+  /** Music volume 0-1 shown on the MUSIC button; click cycles the level. */
+  musicVol?: number;
+  onMusicVol?: (v: number) => void;
 }): HTMLElement {
   const s = h('div', 'screen cd-inter cd-pause');
   s.setAttribute('role', 'dialog');
@@ -31,6 +34,23 @@ export function pauseMenu(actions: {
     return b;
   });
   s.appendChild(row);
+
+  if (actions.onMusicVol) {
+    const STEPS = [1, 0.7, 0.4, 0.15, 0];
+    let vol = actions.musicVol ?? 0.7;
+    const label = () => `MUSIC ${vol <= 0.001 ? 'MUTED' : `${Math.round(vol * 100)}%`}`;
+    const b = bigButton(label(), () => {
+      // step down through the ladder; below the last step wraps back to full
+      const next = STEPS.findIndex((step) => step < vol - 0.001);
+      vol = next < 0 ? STEPS[0] : STEPS[next];
+      b.textContent = label();
+      actions.onMusicVol!(vol);
+    }, 'cd-btn alt');
+    b.type = 'button';
+    b.dataset.menuItem = 'music';
+    row.appendChild(b);
+    buttons.push(b);
+  }
 
   const help = h('ul', 'cd-pause-help');
   for (const line of [

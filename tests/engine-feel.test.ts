@@ -118,6 +118,18 @@ describe('Feel', () => {
     feel.update(0.125);
     expect(feel.bonusAmt).toBe(0);
   });
+
+  it('dips the camera on a kill punch and settles within ~150 ms', () => {
+    const feel = new Feel();
+    expect(feel.punchDip).toBe(0);
+    feel.punch();
+    expect(feel.punchDip).toBeGreaterThan(0.04);
+    expect(Math.abs(feel.shake(0.123).yaw) + Math.abs(feel.shake(0.123).x)).toBeGreaterThan(0);
+    feel.update(0.15);
+    expect(feel.punchDip).toBeLessThan(0.01);
+    feel.update(0.05);
+    expect(feel.punchDip).toBe(0);
+  });
 });
 
 describe('Doom enemy AI', () => {

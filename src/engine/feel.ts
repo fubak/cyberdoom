@@ -19,6 +19,8 @@ export class Feel {
   private bonusAmount = 0;
   /** Recoil jolt on tool fire: instant hit, ~110 ms settle (Doom muzzle kick). */
   private kickAmt = 0;
+  /** Kill punch: instant camera dip that eases back over ~150 ms. */
+  private punchAmt = 0;
 
   hurt(dmg: number, side = 0): void {
     this.trauma = Math.min(1, this.trauma + dmg / 40);
@@ -47,11 +49,23 @@ export class Feel {
     return this.kickAmt;
   }
 
+  /** Kill punctuation: camera punch + a shake bump so the kill lands hard. */
+  punch(strength = 1): void {
+    this.punchAmt = Math.max(this.punchAmt, strength);
+    this.trauma = Math.min(1, this.trauma + 0.22 * strength);
+  }
+
+  /** Downward camera offset (world units) for the kill punch. */
+  get punchDip(): number {
+    return this.punchAmt * 0.055;
+  }
+
   update(dt: number): void {
     this.trauma = Math.max(0, this.trauma - 2.2 * dt);
     this.hurtElapsed = Math.min(this.hurtDuration, this.hurtElapsed + dt);
     this.bonusAmount = Math.max(0, this.bonusAmount - (0.35 / 0.25) * dt);
     this.kickAmt = Math.max(0, this.kickAmt - 9 * dt);
+    this.punchAmt = Math.max(0, this.punchAmt - 7 * dt);
   }
 
   get red(): number {

@@ -1153,10 +1153,15 @@ export class Renderer {
         st.rise = (st.rise ?? 0) + (lunge - (st.rise ?? 0)) * Math.min(1, dt * 14);
         st.mesh.position.y = baseY + st.rise;
       }
-      // monsters get an unmistakable ~150 ms white pain flash (flash decays
-      // 3/s from 1.0) before the pain-frame swap / dissolve, like Doom's
-      // bright hit frames; other sprites keep the shorter flicker
-      const painFlash = st.flash > (st.set.anim === 'monster' ? 0.55 : 0.75) ? 0.6 : 0;
+      // monsters get an unmistakable ~150 ms white-hot full-sprite flash
+      // (flash decays 3/s from 1.0): ~80 ms near-white then a fast fade,
+      // before the pain-frame swap / dissolve, like Doom's bright hit
+      // frames; other sprites keep the shorter flicker
+      const painFlash = st.set.anim === 'monster'
+        ? Math.min(1, Math.max(0, (st.flash - 0.5) * 2.4))
+        : st.flash > 0.75
+          ? 0.6
+          : 0;
       st.mat.uniforms.uFlash.value = this.debugNoFlash ? 0 : painFlash;
     }
     for (const fx of [...this.fx]) {

@@ -48,6 +48,7 @@ export const VOICE_CAPS: Record<string, number> = {
   'sight-rootkit': 1,
   'sight-logicbomb': 1,
   death: 1,
+  kill: 2,
   win: 1,
   lose: 1,
 };
@@ -66,6 +67,66 @@ export function voiceCapFor(name: string): number {
   const family = /^([a-z]+)-/.exec(name)?.[1];
   return VOICE_CAPS[name] ?? VOICE_CAPS[VOICE_CAP_ALIAS[family ?? ''] ?? ''] ?? VOICE_CAP_DEFAULT;
 }
+
+/** Background-score intensity, picked from the mission's difficulty. */
+export type MusicTier = 'early' | 'mid' | 'late';
+
+interface MusicSpec {
+  bpm: number;
+  /** Bass root frequency (Hz). */
+  root: number;
+  /** Semitone offsets from root per step of a 16-step bar; null = rest. */
+  bass: (number | null)[];
+  kick: number[];
+  hat: number[];
+  snare: number[];
+  /** Bar steps that fire a low detuned chord stab. */
+  stab: number[];
+  /** Stab chord semitones above 2*root (minor = dark). */
+  chord: number[];
+  /** Bass lowpass cutoff — later tiers run brighter/more aggressive. */
+  dark: number;
+}
+
+/** Original looping score beds, one per campaign act. All synth, no samples. */
+const MUSIC: Record<MusicTier, MusicSpec> = {
+  // early missions: a slow, sparse pulse — dread, not drive
+  early: {
+    bpm: 92,
+    root: 55,
+    dark: 620,
+    bass: [0, null, null, null, -2, null, 0, null, null, null, 3, null, null, null, -4, null],
+    kick: [0, 8],
+    hat: [4, 12],
+    snare: [],
+    stab: [0],
+    chord: [0, 3, 7],
+  },
+  // mid missions: a driving eighth-note line with offbeat hats
+  mid: {
+    bpm: 118,
+    root: 55,
+    dark: 850,
+    bass: [0, null, 0, null, -2, null, 3, null, 0, null, 5, null, 3, null, -2, null],
+    kick: [0, 4, 8, 12],
+    hat: [2, 6, 10, 14],
+    snare: [12],
+    stab: [0, 8],
+    chord: [0, 3, 7],
+  },
+  // late missions: fast, dissonant, relentless
+  late: {
+    bpm: 138,
+    root: 49,
+    dark: 1100,
+    bass: [0, 0, -2, null, 0, 3, null, -2, 0, 0, 5, 3, -2, null, -4, -2],
+    kick: [0, 4, 8, 12],
+    hat: [2, 6, 7, 10, 14, 15],
+    snare: [4, 12],
+    stab: [0, 6, 8],
+    chord: [0, 3, 6],
+  },
+};
 
 interface FilterSpec {
   type: BiquadFilterType;
@@ -86,6 +147,8 @@ export class Audio {
   private ctx: AudioContext | null = null;
   private sfxBus: GainNode | null = null;
   private ambBus: GainNode | null = null;
+  private musicBus: GainNode | null = null;
+  private musicDuck: GainNode | null = null;
   private master: GainNode | null = null;
   private limiter: DynamicsCompressorNode | null = null;
   private analyser: AnalyserNode | null = null;
@@ -101,6 +164,12 @@ export class Audio {
   private combatGainApplied = false;
   private ambienceRequested = false;
   private ambience: { sources: AudioScheduledSourceNode[]; nodes: AudioNode[] } | null = null;
+  private musicRequested: MusicTier | null = null;
+  private musicTier: MusicTier = 'early';
+  private musicStep = 0;
+  private musicNextT = 0;
+  private musicTimer: ReturnType<typeof setInterval> | null = null;
+  private musicVol = 0.7;
   private voiceGroups = new Map<string, VoiceGroup[]>();
   /** Group collecting sources scheduled by the sfx() call currently dispatching. */
   private group: VoiceGroup | null = null;
@@ -127,6 +196,10 @@ export class Audio {
       this.sfxBus.connect(shaper).connect(gritLowpass).connect(gritGain);
 
       this.ambBus = ctx.createGain();
+      this.musicDuck = ctx.createGain();
+      this.musicBus = ctx.createGain();
+      // modest send: the score sits under the sfx, never on top of them
+      this.musicBus.gain.value = this.musicVol * 0.5;
       this.master = ctx.createGain();
       // Pre-limiter gain kept low so stacked combat sfx hit the glue compressor
       // and brick-wall limiter with headroom instead of clipping digitally.
@@ -148,6 +221,7 @@ export class Audio {
       limiter.release.value = 0.08;
       gritGain.connect(this.master);
       this.ambBus.connect(this.master);
+      this.musicBus.connect(this.musicDuck).connect(this.master);
       this.master.connect(compressor).connect(limiter).connect(ctx.destination);
       this.limiter = limiter;
 
@@ -163,6 +237,7 @@ export class Audio {
     const ctx = this.ensure();
     if (ctx?.state === 'suspended') void ctx.resume().catch(() => {});
     if (this.ambienceRequested) this.startAmbience();
+    if (this.musicRequested) this.startMusic(this.musicRequested);
   }
 
   setListener(x: number, y: number, angle: number): void {
@@ -180,6 +255,8 @@ export class Audio {
   private applyCombatGain(): void {
     if (!this.ctx || !this.ambBus || this.combatGainApplied) return;
     this.ambBus.gain.setTargetAtTime(this.combat ? 10 ** (-8 / 20) : 1, this.ctx.currentTime, 0.3);
+    // the score ducks under combat sfx so hits/kills still read on top
+    this.musicDuck?.gain.setTargetAtTime(this.combat ? 10 ** (-7 / 20) : 1, this.ctx.currentTime, 0.25);
     this.combatGainApplied = true;
   }
 
@@ -731,6 +808,14 @@ export class Audio {
         this.oscillator('sawtooth', 400, 60, 0.5, 0.78, o, { filter: { type: 'lowpass', frequency: 900, q: 1 } });
         this.body(70, 45, 0.5, 0.72, o);
         break;
+      case 'kill':
+        // heavy kill punctuation under the death voice: sub thump + crunch
+        // + a short noise tail, so every kill lands like Doom's body drop
+        this.impactLayer(o, 0.9);
+        this.noise('lowpass', 2200, 160, 0.42, 0.8, 0.62, o);
+        this.body(100, 32, 0.42, 0.78, o);
+        this.oscillator('sawtooth', 210, 48, 0.3, 0.34, o, { distortion: true });
+        break;
       case 'step':
         this.noise('lowpass', 320, 180, 0.06, 0.8, 0.09, o);
         this.oscillator('sine', 90, 60, 0.06, 0.09, o, { pitchRange: 0.08 });
@@ -854,5 +939,152 @@ export class Audio {
         // A source may already have been stopped by the audio context.
       }
     }
+  }
+
+  // ---------- procedural score ----------
+
+  /**
+   * Start the mission's looping score bed. Safe before the audio context
+   * exists (the request is replayed on unlock) and idempotent: calling with
+   * a different tier switches the pattern at the next step.
+   */
+  startMusic(tier: MusicTier): void {
+    this.musicRequested = tier;
+    this.musicTier = tier;
+    const ctx = this.ensure();
+    if (!ctx || !this.musicBus || this.musicTimer !== null) return;
+    this.musicStep = 0;
+    this.musicNextT = ctx.currentTime + 0.08;
+    this.musicTimer = setInterval(() => this.pumpMusic(), 70);
+    this.pumpMusic();
+  }
+
+  stopMusic(): void {
+    this.musicRequested = null;
+    if (this.musicTimer !== null) {
+      clearInterval(this.musicTimer);
+      this.musicTimer = null;
+    }
+  }
+
+  /** User music volume 0-1 (0 = muted); applied live and persisted by the game. */
+  setMusicVolume(v: number): void {
+    this.musicVol = Math.max(0, Math.min(1, v));
+    if (this.ctx && this.musicBus) {
+      this.musicBus.gain.setTargetAtTime(this.musicVol * 0.5, this.ctx.currentTime, 0.05);
+    }
+  }
+
+  get musicVolume(): number {
+    return this.musicVol;
+  }
+
+  /** Lookahead scheduler: keeps ~0.3 s of the loop queued so it never gaps. */
+  private pumpMusic(): void {
+    const ctx = this.ctx;
+    if (!ctx || !this.musicBus) return;
+    const spec = MUSIC[this.musicTier];
+    const stepDur = 60 / spec.bpm / 2;
+    // clamp catch-up so a suspended tab can't schedule a huge backlog
+    if (this.musicNextT < ctx.currentTime) this.musicNextT = ctx.currentTime + 0.05;
+    while (this.musicNextT < ctx.currentTime + 0.3) {
+      this.scheduleStep(spec, this.musicStep % 16, this.musicNextT, stepDur);
+      this.musicStep++;
+      this.musicNextT += stepDur;
+    }
+  }
+
+  private scheduleStep(spec: MusicSpec, step: number, when: number, stepDur: number): void {
+    const semi = spec.bass[step];
+    if (semi !== null && semi !== undefined) {
+      const f = spec.root * 2 ** (semi / 12);
+      this.mTone('sawtooth', f, f, stepDur * 0.9, 0.14, when, spec.dark);
+      this.mTone('square', f / 2, f / 2, stepDur * 0.9, 0.06, when, spec.dark * 0.7);
+    }
+    if (spec.kick.includes(step)) {
+      this.mTone('sine', 120, 38, 0.13, 0.5, when);
+      this.mNoise('highpass', 2500, 1200, 0.02, 0.8, 0.1, when);
+    }
+    if (spec.hat.includes(step)) this.mNoise('highpass', 6500, 5000, 0.035, 1, 0.055, when);
+    if (spec.snare.includes(step)) this.mNoise('bandpass', 1900, 900, 0.11, 1.1, 0.13, when);
+    if (spec.stab.includes(step)) {
+      for (const c of spec.chord) {
+        const f = spec.root * 2 * 2 ** (c / 12);
+        this.mTone('sawtooth', f * 0.997, f * 0.997, 0.5, 0.045, when, spec.dark * 1.6);
+        this.mTone('sawtooth', f * 1.004, f * 1.004, 0.5, 0.045, when, spec.dark * 1.6);
+      }
+    }
+  }
+
+  /** One scheduled synth voice on the music bus (bypasses sfx routing/caps). */
+  private mTone(
+    type: OscillatorType,
+    f0: number,
+    f1: number,
+    dur: number,
+    gain: number,
+    when: number,
+    cutoff?: number,
+  ): void {
+    const ctx = this.ctx;
+    if (!ctx || !this.musicBus) return;
+    const osc = ctx.createOscillator();
+    osc.type = type;
+    osc.frequency.setValueAtTime(Math.max(20, f0), when);
+    osc.frequency.exponentialRampToValueAtTime(Math.max(20, f1), when + dur);
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0.0001, when);
+    env.gain.linearRampToValueAtTime(gain, when + Math.min(0.01, dur * 0.2));
+    env.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+    let chain: AudioNode = osc;
+    let filter: BiquadFilterNode | null = null;
+    if (cutoff !== undefined) {
+      filter = ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.value = cutoff;
+      chain.connect(filter);
+      chain = filter;
+    }
+    chain.connect(env).connect(this.musicBus);
+    osc.onended = () => {
+      osc.disconnect();
+      filter?.disconnect();
+      env.disconnect();
+    };
+    osc.start(when);
+    osc.stop(when + dur + 0.01);
+  }
+
+  /** One scheduled noise hit on the music bus (kick click, hats, snare). */
+  private mNoise(
+    type: BiquadFilterType,
+    f0: number,
+    f1: number,
+    dur: number,
+    q: number,
+    gain: number,
+    when: number,
+  ): void {
+    const ctx = this.ctx;
+    if (!ctx || !this.musicBus || !this.noiseBuffer) return;
+    const src = ctx.createBufferSource();
+    src.buffer = this.noiseBuffer;
+    const filter = ctx.createBiquadFilter();
+    filter.type = type;
+    filter.frequency.setValueAtTime(Math.max(20, f0), when);
+    filter.frequency.exponentialRampToValueAtTime(Math.max(20, f1), when + dur);
+    filter.Q.value = q;
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0.0001, when);
+    env.gain.linearRampToValueAtTime(gain, when + Math.min(0.006, dur * 0.2));
+    env.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+    src.connect(filter).connect(env).connect(this.musicBus);
+    src.onended = () => {
+      src.disconnect();
+      filter.disconnect();
+      env.disconnect();
+    };
+    src.start(when, Math.random() * Math.max(0, this.noiseBuffer.duration - dur));
+    src.stop(when + dur + 0.01);
   }
 }
