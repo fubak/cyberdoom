@@ -109,6 +109,17 @@ export class Input {
     this.pendingCycle = false;
   }
 
+  /**
+   * Push this tick's edge flags back into the pending set. Use when a tick
+   * freezes (kill hit-stop) so a tap during the freeze is not swallowed.
+   */
+  unpoll(): void {
+    this.pendingKeyFire ||= this.firePressed;
+    this.pendingUse ||= this.usePressed;
+    this.pendingSlot ??= this.slotPressed;
+    this.pendingCycle ||= this.cyclePressed;
+  }
+
   /** Consume accumulated mouse dx (call after reading). */
   consumeMouseDX(): number {
     const d = this.mouseDX;

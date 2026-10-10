@@ -42,28 +42,35 @@ export class ParticleSystem {
     };
   }
 
-  burst(x: number, y: number, z: number, kind: 'kill' | 'hit'): void {
+  /**
+   * Chunky "data-blood" spray: large, high-contrast shards in the threat's
+   * colour (`tint`) mixed with white-hot cores. Most shards are flung upward
+   * under heavy gravity so they visibly arc and land on the floor (z clamps
+   * at 0) — readable past 6 tiles where a fine confetti puff dissolved.
+   */
+  burst(x: number, y: number, z: number, kind: 'kill' | 'hit', tint: Color = [1, 0.28, 0.08]): void {
+    const rng = this.rng;
+    const shard = (): Color => [
+      Math.min(1, tint[0] * (0.75 + rng() * 0.5)),
+      Math.min(1, tint[1] * (0.75 + rng() * 0.5)),
+      Math.min(1, tint[2] * (0.75 + rng() * 0.5)),
+    ];
     const count = kind === 'kill' ? 48 : 10;
     for (let i = 0; i < count; i++) {
-      const angle = this.rng() * Math.PI * 2;
-      const speed = kind === 'kill' ? 0.8 + this.rng() * 2 : 0.7 + this.rng() * 2.3;
-      const color: Color = kind === 'kill'
-        ? i % 6 === 0
-          ? [0.95, 1, 0.96]
-          : [0.24 + this.rng() * 0.2, 0.78 + this.rng() * 0.22, 0.3 + this.rng() * 0.16]
-        : i % 3 === 0
-          ? [1, 0.9, 0.68]
-          : [1, 0.24 + this.rng() * 0.3, 0.035];
+      const angle = rng() * Math.PI * 2;
+      const speed = (kind === 'kill' ? 0.8 : 0.55) + rng() * 2.5;
+      const big = i % 4 === 0;
+      const hot = kind === 'kill' ? i % 5 === 0 : i % 3 === 0;
       this.add(
-        x, y, z,
+        x, y, z + rng() * 0.25,
         Math.cos(angle) * speed,
         Math.sin(angle) * speed,
-        kind === 'kill' ? 0.8 + this.rng() * 1.8 : 0.3 + this.rng() * 1.1,
-        kind === 'kill' ? 3.2 : 2.6,
-        kind === 'kill' ? 0.5 + this.rng() * 0.3 : 0.25,
-        color,
-        kind === 'kill' ? 0.025 + this.rng() * 0.045 : 0.035 + this.rng() * 0.04,
-        1,
+        1.3 + rng() * (kind === 'kill' ? 3.4 : 2.2),
+        6 + rng() * 3.5,
+        big ? 0.5 + rng() * 0.4 : 0.28 + rng() * 0.2,
+        hot ? [1, 0.97, 0.9] : shard(),
+        big ? 0.1 + rng() * 0.09 : 0.05 + rng() * 0.05,
+        big ? 3 : 2,
       );
     }
     if (kind === 'kill') this.add(x, y, z, 0, 0, 0, 0, 0.12, [1, 1, 1], 0.6, 6);
