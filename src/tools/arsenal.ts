@@ -52,7 +52,7 @@ const PICKUP_NAME: Record<string, [string, string]> = {
   'edr-cell': ['EDR CELL', 'EDR CELLS'],
   'patch-disk': ['PATCH DISK', 'PATCH DISKS'],
 };
-/** Columns of the HUD ticker (hud.ts drawTicker wraps at 45, 2 lines). */
+/** Column width when paging long tool explanations into 2-line ticker pages. */
 const TICKER_COLS = 45;
 const RES_LABEL: Record<string, string> = { 'usb-charge': 'SCAN', pcap: 'PCAP', 'edr-cell': 'CELL', 'patch-disk': 'DISK' };
 

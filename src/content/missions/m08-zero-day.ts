@@ -13,7 +13,7 @@ export const m08: Mission = {
   briefing:
     'Exploit chatter on a threat feed names your stack. You have until the next shift to close the holes. ' +
     'Your kit: MOUSE (2) inspects, KEYBOARD (1) operates consoles and patches, USB SCANNER (3) cleans malware, ' +
-    'BADGE (4) opens doors your role covers.',
+    'BADGE (4) opens doors your role covers, EDR (6) fires a containment pulse that quarantines malware in an area.',
   authorizedRoles: ['analyst'],
   loadout: ['keyboard', 'mouse', 'usb', 'badge', 'edr'],
   map: {
