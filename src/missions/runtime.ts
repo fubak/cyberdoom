@@ -509,10 +509,7 @@ export class MissionRuntime {
 
       if (e.def.reportable) {
         if (!this.corroborated(e)) {
-          this.message(
-            'Not enough corroborating evidence yet — collect evidence that implicates this person first.',
-            'info',
-          );
+          this.message(this.corroborationRefusal(e), 'info');
           return;
         }
         this.pendingAccusation = e;
@@ -660,23 +657,55 @@ export class MissionRuntime {
    * counts as one more.
    */
   private corroborated(e: Entity): boolean {
-    const need = e.def.evidenceRequired ?? 2;
-    let have = 0;
+    return this.inspected.has(e.def.id) && this.corroborationCount(e) >= (e.def.evidenceRequired ?? 2);
+  }
+
+  /**
+   * Distinct corroborating sources recorded so far: the suspect's own
+   * inspection plus each evidence-source entity naming them. A source's
+   * inspect and log entries count once — a case is built from separate
+   * sources, not from reading the same record twice.
+   */
+  private corroborationCount(e: Entity): number {
+    const sources = new Set<string>();
     for (const entry of this.evidence) {
-      if (entry.entityId === e.def.id && entry.source === 'inspect') have++;
-      else if (this.byId(entry.entityId)?.def.implicates?.includes(e.def.id)) have++;
+      if (entry.entityId === e.def.id && entry.source === 'inspect') sources.add(e.def.id);
+      else if (this.byId(entry.entityId)?.def.implicates?.includes(e.def.id)) sources.add(entry.entityId);
     }
-    return this.inspected.has(e.def.id) && have >= need;
+    return sources.size;
+  }
+
+  /**
+   * Refusal message built ONLY from evidence the player already holds: the
+   * count of corroborating sources collected, their labels, and a generic
+   * nudge. It never names an unread source and never varies by whether
+   * anything actually implicates the suspect — the answer stays sealed.
+   */
+  private corroborationRefusal(e: Entity): string {
+    const need = e.def.evidenceRequired ?? 2;
+    const haveLabels: string[] = [];
+    if (this.inspected.has(e.def.id)) haveLabels.push('their own file');
+    const seen = new Set<string>();
+    for (const entry of this.evidence) {
+      if (entry.entityId === e.def.id) continue;
+      if (seen.has(entry.entityId)) continue;
+      if (!this.byId(entry.entityId)?.def.implicates?.includes(e.def.id)) continue;
+      seen.add(entry.entityId);
+      haveLabels.push(entry.label);
+    }
+    const label = (e.def.inspect?.label ?? e.def.id).toUpperCase();
+    const parts = [`CASE ON ${label}: ${haveLabels.length}/${need} SOURCES`];
+    if (haveLabels.length) parts.push(`HAVE: ${haveLabels.map((s) => s.toUpperCase()).join(' + ')}`);
+    if (!this.inspected.has(e.def.id)) parts.push('INSPECT THEM FIRST');
+    parts.push('find more corroborating logs or records that name them');
+    return `${parts.join(' — ')}.`;
   }
 
   private resolveAccusation(e: Entity): void {
     const report = this.objectives.find((o) => o.def.kind === 'report');
     if (this.rejectRequirements(report, e)) return;
     if (!this.corroborated(e)) {
-      this.message(
-        'Not enough corroborating evidence yet — collect evidence that implicates this person first.',
-        'info',
-      );
+      this.message(this.corroborationRefusal(e), 'info');
       return;
     }
     if (e.def.culprit) {

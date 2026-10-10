@@ -45,6 +45,8 @@ export { letterGrade } from '../content/curriculum';
 
 const REVIEW_KEY = 'cyberdoom.review.v1';
 const REVIEW_PER_DEBRIEF = 2;
+const SEEN_KEY = 'cyberdoom.seen.v1';
+const INTERLEAVED_PER_DEBRIEF = 2;
 
 
 function loadReview(): string[] {
@@ -63,6 +65,35 @@ function saveReview(q: string[]): void {
   }
 }
 
+/**
+ * Last-asked store for interleaved review: `seq` is a counter bumped once
+ * per debrief, `last` maps `missionId:questionId` -> the seq at which that
+ * question was most recently presented. Interleaved candidates are the
+ * asked questions whose seq is oldest.
+ */
+interface SeenStore {
+  seq: number;
+  last: Record<string, number>;
+}
+
+function loadSeen(): SeenStore {
+  try {
+    const raw = globalThis.localStorage?.getItem(SEEN_KEY);
+    if (!raw) return { seq: 0, last: {} };
+    const parsed = JSON.parse(raw) as SeenStore;
+    return { seq: parsed.seq ?? 0, last: parsed.last ?? {} };
+  } catch {
+    return { seq: 0, last: {} };
+  }
+}
+function saveSeen(s: SeenStore): void {
+  try {
+    globalThis.localStorage?.setItem(SEEN_KEY, JSON.stringify(s));
+  } catch {
+    /* session-only */
+  }
+}
+
 function shuffled<T>(a: readonly T[]): T[] {
   const out = a.slice();
   for (let i = out.length - 1; i > 0; i--) {
@@ -75,7 +106,12 @@ function shuffled<T>(a: readonly T[]): T[] {
 interface CheckItem {
   q: Question;
   missionId: string;
+  /** true when this item is not part of the mission's own quiz (a missed
+   *  spaced-review item or an interleaved earlier-mission refresher). */
   review: boolean;
+  /** true for interleaved reinforcement of an earlier objective that was
+   *  answered correctly before — not a remediation item. */
+  interleave?: boolean;
 }
 
 export const C = {
@@ -251,6 +287,7 @@ export function debrief(opts: {
     mastery = recordField(mastery, demonstrated);
   }
   let review = loadReview();
+  const seen = loadSeen();
 
   // ---------- rendering ----------
   const button = (label: string, x: number, y: number, enabled: boolean, go: () => void, align: 'l' | 'r' = 'l') => {
@@ -541,6 +578,8 @@ export function debrief(opts: {
   };
 
   const buildFirstCheck = (): CheckItem[] => {
+    seen.seq += 1;
+    saveSeen(seen);
     const items: CheckItem[] = mission.debriefQuestions.map((q) => ({ q, missionId: mission.id, review: false }));
     const due = review
       .map((key) => {
@@ -552,7 +591,24 @@ export function debrief(opts: {
       })
       .filter((x): x is CheckItem => x !== null)
       .slice(0, REVIEW_PER_DEBRIEF);
-    return [...items, ...due];
+    // Interleaved reinforcement: refresh earlier-mission objectives even
+    // when they were answered correctly, weighted toward the ones last
+    // seen longest ago. Missed items are handled by the due list above.
+    const dueKeys = new Set(due.map((d) => `${d.missionId}:${d.q.id}`));
+    const earlier = missionRegistry.all().slice(
+      0,
+      missionRegistry.all().findIndex((m) => m.id === mission.id),
+    );
+    const interleaved = earlier
+      .flatMap((m) => m.debriefQuestions.map((q) => ({ q, mid: m.id })))
+      .filter(({ q, mid }) => {
+        const key = `${mid}:${q.id}`;
+        return seen.last[key] !== undefined && !dueKeys.has(key);
+      })
+      .sort((a, b) => (seen.last[`${a.mid}:${a.q.id}`] ?? 0) - (seen.last[`${b.mid}:${b.q.id}`] ?? 0))
+      .slice(0, INTERLEAVED_PER_DEBRIEF)
+      .map(({ q, mid }): CheckItem => ({ q, missionId: mid, review: true, interleave: true }));
+    return [...items, ...due, ...interleaved];
   };
 
   // ---------- 2. knowledge check, one question at a time ----------
@@ -563,14 +619,24 @@ export function debrief(opts: {
       const { q } = item;
       const order = shuffled(q.options);
       let picked = -1;
+      let sel = -1; // selected option, not yet confirmed
+      seen.last[`${item.missionId}:${q.id}`] = seen.seq;
+      saveSeen(seen);
       const kicker = `${mode === 'retry' ? 'RETRY' : 'KNOWLEDGE CHECK'}  ${i + 1}/${items.length}` +
-        (item.review ? `  -  SPACED REVIEW FROM ${item.missionId.toUpperCase()}` : '');
+        (item.review
+          ? `  -  ${item.interleave ? 'REVIEW' : 'SPACED REVIEW'} FROM ${item.missionId.toUpperCase()}`
+          : '');
       const tags = block(q.objectives.map((id) => `${id} ${objectiveById(id)?.title ?? ''}`).join(' / '), C.cyan);
       const questionPages = () => paginate([
         tags,
         block(q.prompt, C.white, { font: 'chunky' }),
-        ...order.map((o, j) => block(o.text, C.text, { prefix: String(j + 1), prefixColor: C.gold, hit: j, font: 'chunky' })),
-        block(`PRESS 1-${order.length} OR CLICK AN ANSWER.`, C.orange),
+        ...order.map((o, j) => block(o.text, j === sel ? C.white : C.text, {
+          prefix: j === sel ? `>${j + 1}` : String(j + 1),
+          prefixColor: j === sel ? C.white : C.gold,
+          hit: j,
+          font: 'chunky',
+        })),
+        block(`PRESS 1-${order.length} OR CLICK TO SELECT, ENTER TO CONFIRM.`, C.orange),
       ]).map((lines) => ({ lines }));
       const feedbackPages = () => {
         const chosen = order[picked];
@@ -585,9 +651,16 @@ export function debrief(opts: {
           ]),
         ]).map((lines) => ({ lines }));
       };
+      const select = (k: number) => {
+        if (picked >= 0 || k < 0 || k >= order.length) return;
+        sel = k;
+        view.pages = questionPages();
+        render();
+      };
       const pick = (k: number) => {
         if (picked >= 0 || k < 0 || k >= order.length) return;
         picked = k;
+        sel = k;
         const chosen = order[k];
         const key = `${item.missionId}:${q.id}`;
         mastery = recordAnswer(mastery, q.objectives, chosen.correct);
@@ -613,7 +686,11 @@ export function debrief(opts: {
           if (i < items.length) ask();
           else summary(mode === 'retry' ? items : null);
         },
-        onHit: (j) => pick(j),
+        onHit: (j) => {
+          // click selects; a second click on the selection confirms
+          if (j === sel) pick(j);
+          else select(j);
+        },
         onKey: (e) => {
           if (!opts.won && e.key === 'Escape') {
             redeploy();
@@ -621,7 +698,11 @@ export function debrief(opts: {
           }
           const n = Number(e.key);
           if (picked < 0 && n >= 1 && n <= order.length) {
-            pick(n - 1);
+            select(n - 1);
+            return true;
+          }
+          if (picked < 0 && (e.key === 'Enter' || e.key === ' ') && sel >= 0) {
+            pick(sel);
             return true;
           }
           return false;
