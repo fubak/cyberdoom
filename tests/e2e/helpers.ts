@@ -26,6 +26,7 @@ export interface CdState {
   inventory: string[];
   dossier: { open: boolean; mode: string; page: number; entries: number };
   lossReason: string | null;
+  callsPending: string[];
   objectives: { id: string; done: boolean; failed: boolean; progress: number }[];
   entities: CdEntity[];
 }

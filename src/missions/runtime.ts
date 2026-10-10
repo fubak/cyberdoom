@@ -1,11 +1,13 @@
 import type { EventBus } from '../core/events';
 import type {
+  CallAction,
   Entity,
   EvidenceEntry,
   Mission,
   MissionObjective,
   ScoreEvent,
 } from '../core/types';
+import { callFeedback, callOptions, requiredCall } from '../content/calls';
 import { objectiveById } from '../content/objectives';
 import type { WorldMap } from '../engine/map';
 import { mfaPending, swipeBadge } from '../tools/badge';
@@ -55,6 +57,7 @@ export class MissionRuntime {
 
   private pendingAccusation: Entity | null = null;
   private inspected = new Set<string>();
+  private callsResolved = new Set<string>();
   private triageScored = new Set<string>();
   private falsePositiveSources = new Set<string>();
   private priorityMisses = new Set<string>();
@@ -135,6 +138,9 @@ export class MissionRuntime {
         source,
         category: e.def.inspect?.category,
       };
+      if (source === 'inspect' && requiredCall(e.def)) {
+        entry.call = { options: callOptions(), picked: -1, resolved: false };
+      }
       this.evidence.push(entry);
     }
     this.bus.emit('evidence', entry);
@@ -240,6 +246,25 @@ export class MissionRuntime {
     if (!e.def.tags?.includes('triage') || this.inspected.has(e.def.id)) return false;
     this.message(
       `Read the evidence first: inspect ${e.def.inspect?.label ?? e.def.id} with MOUSE [2] before deciding.`,
+      'warn',
+    );
+    return true;
+  }
+
+  /**
+   * Field actions (clean / release / patch) on a call-bearing entity count
+   * only after the player made the required "WHAT DO YOU DO?" call on its
+   * case file. Reverts clean state the same way rejectUninspectedClean does.
+   */
+  private rejectUncalled(e: Entity): boolean {
+    if (!requiredCall(e.def) || this.callsResolved.has(e.def.id)) return false;
+    e.alive = true;
+    e.infected = this.initialInfected.get(e.def.id) ?? e.infected;
+    e.hp = this.initialHp.get(e.def.id) ?? e.hp;
+    e.state.cleaned = false;
+    e.state.patched = false;
+    this.message(
+      `Not acted on: ${e.def.inspect?.label ?? e.def.id} still needs a call. Open the case file (L) and choose WHAT DO YOU DO?`,
       'warn',
     );
     return true;
@@ -364,6 +389,27 @@ export class MissionRuntime {
       }
     });
 
+    this.bus.on('call-pick', ({ entityId, action }) => {
+      const e = this.byId(entityId);
+      const need = e ? requiredCall(e.def) : undefined;
+      const entry = this.evidence.find((candidate) => candidate.id === `${entityId}:inspect`);
+      if (!e || !need || !entry?.call || entry.call.resolved) return;
+      const picked = entry.call.options.findIndex((option) => option.action === action);
+      if (picked < 0) return;
+      const right = action === need;
+      entry.call.picked = picked;
+      entry.call.resolved = right;
+      entry.call.feedback = callFeedback(e.def, action, right);
+      this.bus.emit('evidence', entry);
+      if (right) {
+        this.callsResolved.add(entityId);
+        this.log(`Triage call on ${e.def.inspect?.label ?? entityId}: correct`, 10,
+          e.def.inspect?.objectives ?? []);
+      } else {
+        this.wrongCallOnce(e, -25);
+      }
+    });
+
     this.bus.on('scan-miss', ({ entityId }) => {
       const e = this.byId(entityId);
       if (!e || this.initialInfected.get(entityId)) return;
@@ -378,7 +424,7 @@ export class MissionRuntime {
     this.bus.on('cleaned', ({ entityId }) => {
       const e = this.byId(entityId);
       if (!e || !e.alive || !e.infected) return;
-      if (this.rejectUnconfirmedHost(e) || this.rejectUninspectedClean(e)) return;
+      if (this.rejectUnconfirmedHost(e) || this.rejectUninspectedClean(e) || this.rejectUncalled(e)) return;
       e.infected = false;
       e.alive = false;
       e.state.cleaned = true;
@@ -409,6 +455,7 @@ export class MissionRuntime {
           this.wrongCallOnce(e, -30);
           return;
         }
+        if (this.rejectUncalled(e)) return;
         const matching = this.objectivesFor('interact', e);
         if (matching.some((objective) => this.rejectRequirements(objective, e))) return;
         for (const objective of matching) this.countEntity(objective, e.def.id);
@@ -510,7 +557,7 @@ export class MissionRuntime {
       }
 
       if (e.def.kind === 'workstation' && e.infected) {
-        if (this.rejectUnconfirmedHost(e) || this.rejectUninspectedClean(e)) return;
+        if (this.rejectUnconfirmedHost(e) || this.rejectUninspectedClean(e) || this.rejectUncalled(e)) return;
         this.log('Manual patch applied — faster with the scanner', 5,
           e.def.cleanObjectives ?? e.def.inspect?.objectives ?? []);
         e.infected = false;
@@ -531,6 +578,7 @@ export class MissionRuntime {
       if (toolId !== 'patch' || !good || !entityId) return;
       const e = this.byId(entityId);
       if (!e) return;
+      if (this.rejectUncalled(e)) return;
       for (const objective of this.objectivesFor('patch', e)) this.countEntity(objective, entityId);
       this.checkWin();
     });
@@ -622,6 +670,17 @@ export class MissionRuntime {
     return this.inspected.has(id);
   }
 
+  /** The call this entity's case file requires (for tools, tests, walkthroughs). */
+  callRequiredFor(id: string): CallAction | undefined {
+    const e = this.byId(id);
+    return e ? requiredCall(e.def) : undefined;
+  }
+
+  /** True while an entity's required triage call has not been made yet. */
+  callPending(id: string): boolean {
+    return this.callRequiredFor(id) !== undefined && !this.callsResolved.has(id);
+  }
+
   /**
    * What E would do on this entity, mirroring the interact handler's branch
    * order without performing it. No verdicts: a 'wrong'/'decoy' console reads
@@ -632,6 +691,7 @@ export class MissionRuntime {
 
     if (e.def.kind === 'workstation' && e.def.tags?.includes('triage')) {
       if (!this.inspected.has(e.def.id)) return `INSPECT FIRST (MOUSE ${mouseTool.slot})`;
+      if (this.callPending(e.def.id)) return 'MAKE THE CALL (CASE FILE L)';
       return 'FILE TRIAGE CALL';
     }
 
@@ -654,7 +714,7 @@ export class MissionRuntime {
     if (e.def.kind === 'workstation') {
       // infected is only visible once the renderer reveals the infected sprite
       if (!e.state.revealed) return `INSPECT FIRST (MOUSE ${mouseTool.slot})`;
-      if (e.infected) return 'MANUAL CLEANUP';
+      if (e.infected) return this.callPending(e.def.id) ? 'MAKE THE CALL (CASE FILE L)' : 'MANUAL CLEANUP';
       return null;
     }
 

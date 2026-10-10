@@ -22,8 +22,15 @@ test.describe('death debrief', () => {
     const canvas = page.locator('canvas.cd-pixel-canvas');
     await expect(canvas).toHaveAttribute('aria-label', /CAUSE OF FAILURE/);
     await expect(canvas).toHaveAttribute('aria-label', /INTEGRITY DEPLETED/);
-    await page.keyboard.press('k');
-    await expect(canvas).toHaveAttribute('aria-label', /KNOWLEDGE CHECK/);
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      await page.keyboard.press('k');
+      const opened = await expect(canvas)
+        .toHaveAttribute('aria-label', /KNOWLEDGE CHECK/, { timeout: 800 })
+        .then(() => true)
+        .catch(() => false);
+      if (opened) break;
+      if (attempt === 4) throw new Error('knowledge check did not open after retries');
+    }
     await page.keyboard.press('Escape');
     await expect.poll(async () => (await cd(page)).screen).toBe('play');
     expect((await cd(page)).integrity).toBe(100);

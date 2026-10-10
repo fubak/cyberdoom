@@ -83,6 +83,12 @@ function runStep(step: WalkStep, rt: MissionRuntime, map: WorldMap, player: Play
     bus.emit('inspect', { entityId: step.inspect });
     return;
   }
+  if ('call' in step) {
+    const action = rt.callRequiredFor(step.call);
+    expect(action, `${step.call} has no call to make`).toBeDefined();
+    bus.emit('call-pick', { entityId: step.call, action: action! });
+    return;
+  }
   if ('clean' in step) {
     const entity = rt.byId(step.clean);
     expect(entity?.alive).toBe(true);

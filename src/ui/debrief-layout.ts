@@ -1,4 +1,4 @@
-import { canDraw, measureText } from '../render/font';
+import { canDraw, measureChunky, measureText } from '../render/font';
 
 /**
  * CURRICULUM: pure layout for the pixel-font debrief. The debrief renders on a
@@ -19,6 +19,9 @@ export interface PLine {
   text: string;
   color: string;
   indent?: number;
+  /** Body font: 'small' is the tiny caps-adjacent font; 'chunky' is the big round
+   * Doom-style font used for quiz/feedback body text. */
+  font?: 'small' | 'chunky';
   /** Drawn at the left margin before `text` (e.g. an option number). */
   prefix?: string;
   prefixColor?: string;
@@ -34,25 +37,26 @@ export function pixelSafe(text: string): string {
 }
 
 /** Word-wrap by measured pixel width; hard-splits tokens longer than a line. Lossless. */
-export function wrapPixel(text: string, maxW: number = DB_TEXT_W): string[] {
+export function wrapPixel(text: string, maxW: number = DB_TEXT_W, font: 'small' | 'chunky' = 'small'): string[] {
   const width = Math.max(6, maxW);
+  const measure = font === 'chunky' ? measureChunky : measureText;
   const lines: string[] = [];
   for (const paragraph of pixelSafe(text).split('\n')) {
     let line = '';
     for (const word of paragraph.trim().split(/\s+/).filter(Boolean)) {
       const candidate = line ? `${line} ${word}` : word;
-      if (measureText(candidate) <= width) {
+      if (measure(candidate) <= width) {
         line = candidate;
         continue;
       }
       if (line) lines.push(line);
       line = '';
-      if (measureText(word) <= width) {
+      if (measure(word) <= width) {
         line = word;
         continue;
       }
       for (const ch of word) {
-        if (line && measureText(line + ch) > width) {
+        if (line && measure(line + ch) > width) {
           lines.push(line);
           line = '';
         }
@@ -68,13 +72,14 @@ export function wrapPixel(text: string, maxW: number = DB_TEXT_W): string[] {
 export function block(
   text: string,
   color: string,
-  opts: { indent?: number; prefix?: string; prefixColor?: string; hit?: number; maxW?: number } = {},
+  opts: { indent?: number; prefix?: string; prefixColor?: string; hit?: number; maxW?: number; font?: 'small' | 'chunky' } = {},
 ): PLine[] {
   const indent = opts.prefix !== undefined ? DB_HANG + (opts.indent ?? 0) : (opts.indent ?? 0);
   const maxW = (opts.maxW ?? DB_TEXT_W) - indent;
-  return wrapPixel(text, maxW).map((t, i) => ({
+  return wrapPixel(text, maxW, opts.font ?? 'small').map((t, i) => ({
     text: t,
     color,
+    font: opts.font,
     indent,
     prefix: i === 0 ? opts.prefix : undefined,
     prefixColor: opts.prefixColor,

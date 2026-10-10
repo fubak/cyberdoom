@@ -31,6 +31,16 @@ const SMALL: Record<string, number[]> = {
   '\\': [16, 16, 8, 4, 2, 1, 1], '~': [0, 0, 9, 22, 0, 0, 0],
   $: [4, 15, 20, 14, 5, 30, 4], '✓': [0, 1, 2, 2, 20, 8, 0], '✗': [0, 17, 10, 4, 10, 17, 0],
   '·': [0, 0, 0, 12, 12, 0, 0], '→': [0, 4, 2, 31, 2, 4, 0], '∞': [0, 0, 10, 21, 10, 0, 0],
+  // Lowercase (x-height rows 2-6; ascenders reach row 0-1, descenders to row 6-7).
+  a: [0, 0, 14, 1, 15, 17, 15], b: [16, 16, 30, 17, 17, 17, 30], c: [0, 0, 14, 17, 16, 17, 14],
+  d: [1, 1, 15, 17, 17, 17, 15], e: [0, 0, 14, 17, 31, 16, 14], f: [6, 9, 8, 30, 8, 8, 8],
+  g: [0, 15, 17, 17, 15, 1, 14], h: [16, 16, 30, 17, 17, 17, 17], i: [4, 0, 12, 4, 4, 4, 14],
+  j: [2, 0, 6, 2, 2, 18, 12], k: [16, 16, 18, 20, 24, 20, 18], l: [12, 4, 4, 4, 4, 4, 14],
+  m: [0, 0, 26, 21, 21, 21, 21], n: [0, 0, 30, 17, 17, 17, 17], o: [0, 0, 14, 17, 17, 17, 14],
+  p: [0, 30, 17, 17, 30, 16, 16], q: [0, 15, 17, 17, 15, 1, 1], r: [0, 0, 22, 25, 16, 16, 16],
+  s: [0, 0, 15, 16, 14, 1, 30], t: [8, 8, 30, 8, 8, 8, 6], u: [0, 0, 17, 17, 17, 17, 15],
+  v: [0, 0, 17, 17, 17, 10, 4], w: [0, 0, 17, 17, 21, 21, 10], x: [0, 0, 17, 10, 4, 10, 17],
+  y: [0, 17, 17, 17, 15, 1, 14], z: [0, 0, 31, 2, 4, 8, 31],
 };
 
 const TINY: Record<string, number[]> = {
@@ -68,8 +78,13 @@ const FONTS: Record<FontId, FontSpec> = {
 const ALIASES: Record<string, string> = { '—': '-', '–': '-', '…': '.', '’': "'", '‘': "'", '“': '"', '”': '"', '×': 'X' };
 
 function norm(ch: string): string {
-  const a = ALIASES[ch] ?? ch;
-  return a.toUpperCase();
+  return ALIASES[ch] ?? ch;
+}
+
+/** Glyph rows for a char, falling back to its uppercase form (TINY stays caps). */
+function glyphRowsFor(font: FontId, ch: string): number[] | undefined {
+  const glyphs = FONTS[font].glyphs;
+  return glyphs[ch] ?? glyphs[ch.toUpperCase()];
 }
 
 const cache = new Map<string, HTMLCanvasElement>();
@@ -176,7 +191,7 @@ function nativeGlyph(
 
 function glyphCanvas(font: FontId, ch: string, color: string): HTMLCanvasElement | null {
   const spec = FONTS[font];
-  const rows = spec.glyphs[ch];
+  const rows = glyphRowsFor(font, ch);
   if (!rows) return null;
   return nativeGlyph(`${font}|${ch}`, rows, spec.w, 1, [color]);
 }
@@ -186,10 +201,9 @@ export function fontHeight(font: FontId): number {
 }
 
 export function canDraw(text: string, font: FontId = 'small'): boolean {
-  const { glyphs } = FONTS[font];
   return [...text].every((raw) => {
     const ch = norm(raw);
-    return ch === ' ' || ch === '\n' || !!glyphs[ch];
+    return ch === ' ' || ch === '\n' || !!glyphRowsFor(font, ch);
   });
 }
 
@@ -243,7 +257,7 @@ export function drawBigText(
   let cx = Math.round(x);
   for (const raw of text) {
     const ch = norm(raw);
-    const src = FONTS.small.glyphs[ch];
+    const src = glyphRowsFor('small', ch);
     const rows = src && fat ? fatRows(src) : src;
     if (rows) {
       const w = spec.w;
@@ -283,7 +297,7 @@ export function drawChunky(
   let cx = Math.round(x);
   const cy = Math.round(y);
   for (const raw of text) {
-    const rows = FONTS.small.glyphs[norm(raw)];
+    const rows = glyphRowsFor('small', norm(raw));
     if (rows) {
       const fr = fatRows(rows);
       const glyph = nativeGlyph(`chunky|${norm(raw)}`, fr, 6, 1, rs);
@@ -326,5 +340,5 @@ export function wrapText(text: string, maxChars: number, maxLines = 4): string[]
 
 /** Raw 5x7 glyph rows (bit 4 = leftmost pixel) for custom renderers like the title logo. */
 export function glyphRows(ch: string): number[] | undefined {
-  return FONTS.small.glyphs[norm(ch)];
+  return glyphRowsFor('small', norm(ch));
 }

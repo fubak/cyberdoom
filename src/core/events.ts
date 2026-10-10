@@ -4,7 +4,7 @@
  * via declaration merging if needed.
  */
 
-import type { EvidenceEntry } from './types';
+import type { CallAction, EvidenceEntry } from './types';
 
 export interface EventMap {
   /** A tool was used (fired). */
@@ -35,6 +35,8 @@ export interface EventMap {
   'ambush-spawn': { entityId: string };
   /** Player committed a triage verdict on an entity (Mouse, second click). */
   triage: { entityId: string; verdict: 'malicious'; correct: boolean };
+  /** Player picked a "WHAT DO YOU DO?" option on an entity's case file. */
+  'call-pick': { entityId: string; action: CallAction };
   /** Badge reader refused a repeat swipe (no new violation logged). */
   'badge-confirm': { allowed: boolean };
   /** A tool hit/affected an entity; drives viewmodel hit reactions. */

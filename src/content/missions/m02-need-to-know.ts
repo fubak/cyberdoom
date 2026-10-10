@@ -215,7 +215,7 @@ export const m02: Mission = {
     {
       id: 'q1',
       prompt: 'Your badge opens the ANALYST lab but not the ADMIN server room. A teammate suggests asking for server-room access "just in case you ever need it." Under least privilege, what should you do?',
-      objectives: ['4.6'],
+      objectives: ['4.6', '1.2'],
       options: [
         { id: 'a', text: 'Request it now; unused access does no harm', correct: false, explanation: 'Unused access is still attack surface. A lost or cloned badge, or a compromised account, gets everything it is entitled to.' },
         { id: 'b', text: 'Borrow an admin\u2019s badge on the day you need it', correct: false, explanation: 'Using someone else\u2019s credential is impersonation. The log then shows the admin entering, so accounting breaks.' },
@@ -259,7 +259,7 @@ export const m02: Mission = {
     {
       id: 'q5',
       prompt: 'The lab door opens for any badge assigned the ANALYST role, whoever the person is. Which access control model is this?',
-      objectives: ['4.6'],
+      objectives: ['4.6', '5.6'],
       options: [
         { id: 'a', text: 'Role-based access control (RBAC)', correct: true, explanation: 'Permissions attach to the role, and people inherit them by being assigned the role. Change someone\u2019s job and you change their role, not every door.' },
         { id: 'b', text: 'Discretionary access control (DAC)', correct: false, explanation: 'In DAC the resource owner decides who gets access on a case-by-case basis. Here, a centrally defined role decides.' },

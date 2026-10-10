@@ -153,7 +153,10 @@ class Game {
     cross.id = 'crosshair';
     viewport.appendChild(cross);
     this.cross = cross;
-    this.dossier = new Dossier(() => this.runtime?.evidence ?? []);
+    this.dossier = new Dossier(
+      () => this.runtime?.evidence ?? [],
+      (entityId, action) => this.bus.emit('call-pick', { entityId, action }),
+    );
     viewport.appendChild(this.dossier.canvas);
 
     this.bus.on('message', ({ text, kind }) => this.hud.pushMessage(text, kind ?? 'info'));
@@ -1055,6 +1058,7 @@ class Game {
       authorizedRoles: rt.roles,
       role: rt.roles[rt.roles.length - 1] ?? this.role,
       isInspected: (entityId: string) => rt.wasInspected(entityId),
+      needsCall: (entityId: string) => rt.callPending(entityId),
       lineOfSight: (x0: number, y0: number, x1: number, y1: number) => {
         const d = Math.hypot(x1 - x0, y1 - y0);
         return map.raycast(x0, y0, Math.atan2(y1 - y0, x1 - x0), d).dist >= d - 0.3;
@@ -1100,6 +1104,8 @@ class Game {
               failed: o.failed,
               progress: o.progress,
             })) ?? [],
+          callsPending:
+            g.runtime?.entities.filter((e) => g.runtime?.callPending(e.def.id)).map((e) => e.def.id) ?? [],
           entities:
             g.runtime?.entities.map((e) => ({
               id: e.def.id,
@@ -1109,6 +1115,7 @@ class Game {
               y: e.y,
               hp: e.hp,
               alive: e.alive,
+              infected: e.infected,
               mode: e.state.mode,
             })) ?? [],
         };
@@ -1122,6 +1129,9 @@ class Game {
       },
       toggleLog() {
         g.dossier.toggleLog();
+      },
+      call(entityId: string, action: string) {
+        g.bus.emit('call-pick', { entityId, action: action as 'quarantine' });
       },
       teleport(x: number, y: number, angle?: number) {
         if (!g.player || !g.map) return;

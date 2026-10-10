@@ -11,13 +11,15 @@ import { m10Walkthrough } from '../content/missions/m10-third-party';
 import { m11Walkthrough } from '../content/missions/m11-audit-night';
 import { m12Walkthrough } from '../content/missions/m12-robo-soc';
 
-/** Scripted solution of a mission, replayed by tests/walkthrough.test.ts. */
+/** Scripted solution of a mission, replayed by tests/walkthrough.test.ts.
+ * `call` commits the entity's required case-file triage call. */
 export type WalkStep =
   | { goto: [number, number] }
   | { use: [number, number] }
   | { badge: [number, number] }
   | { interact: string }
   | { inspect: string }
+  | { call: string }
   | { clean: string }
   | { patch: string }
   | { wait: number };

@@ -98,6 +98,7 @@ briefing:
       id, kind: 'workstation' as const, x, y, sprite: 'workstation-infected',
       infected: true, tags: ['enc-host'],
       inspect: {
+        call: 'auto' as const,
         label: `Workstation ${name}`,
         detail: 'Files renamed *.lockd, HOW_TO_DECRYPT.txt on every share, SMB writes at ~400 files/min to \\\\fin-share.',
         category: 'malware' as const,
@@ -278,6 +279,7 @@ briefing:
     { id: 'recover', text: 'Recover: restore from offline backup', kind: 'interact', tag: 'recover', requires: ['eradicate'] },
     { id: 'lessons', text: 'File lessons learned', kind: 'interact', tag: 'lessons', requires: ['recover'] },
     { id: 'no-pay', text: 'Do not pay the ransom', kind: 'avoid', tag: 'pay-ransom' },
+    { id: 'wrong-call', text: 'Make the right call on each case file', kind: 'avoid', tag: 'wrong-call', strikes: 3 },
     { id: 'exit', text: 'Reach the exit', kind: 'reach-exit' },
   ],
   script: {
@@ -340,12 +342,16 @@ export const m09Walkthrough: WalkStep[] = [
   { goto: [2, 2] },
   { interact: 'core-switch' },
   { inspect: 'enc1' },
+  { call: 'enc1' },
   { clean: 'enc1' },
   { inspect: 'enc2' },
+  { call: 'enc2' },
   { clean: 'enc2' },
   { inspect: 'enc3' },
+  { call: 'enc3' },
   { clean: 'enc3' },
   { inspect: 'enc4' },
+  { call: 'enc4' },
   { clean: 'enc4' },
   { wait: 0.2 },
   { goto: [37, 2] },
@@ -367,6 +373,7 @@ export const m09Teach: MissionTeaching = {
   ],
   keyTerms: ['ransomware', 'backups', 'replication', 'correlation', 'chain of custody'],
   lessons: {
+    'wrong-call': { objective: '4.8', done: 'Every encrypted host got the right triage call during eradication.', missed: 'A wrong call was logged on a finance host. Eradication needs confirmed targets.' },
     'read-netflow': {
       objective: '4.9',
       done: 'NetFlow showed 10.30.0.43 (FIN-03) beaconing to 203.0.113.66 first; every other host followed after SMB from it.',

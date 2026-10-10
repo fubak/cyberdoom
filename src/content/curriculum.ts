@@ -96,6 +96,7 @@ export const ARC: ArcMission[] = [
     id: 'm06', title: 'KEYMASTER', difficulty: 7, built: true,
     briefing: 'The crypto vaults are failing their audit: plaintext passwords, an expired certificate, and a leaked private key.',
     objectives: [
+      w('1.2', 'Distinguish what a digital signature proves — integrity and non-repudiation — from what it does not: bug-free code, an encrypted channel, or immunity from revocation.'),
       w('1.4', 'Inspect all three certificates and install only the trusted, unexpired chain. Confirm the leaked key by fingerprint; revoke it before generating a new HSM key pair. Wrong choices score; passwords use salted bcrypt, not AES or Base64.'),
       w('3.3', 'Tokenize card numbers before export and encrypt backups at rest; both controls and the audit are required before the exit unlocks.'),
       w('4.6', 'Enter the vault with its authorized role and badge-plus-fingerprint MFA; password plus security question is still one factor type.'),

@@ -9,7 +9,7 @@ export const m06: Mission = {
   id: 'm06',
   title: 'KEYMASTER',
   difficulty: 7,
-  objectives: ['1.4', '3.3', '4.6'],
+  objectives: ['1.2', '1.4', '3.3', '4.6'],
   briefing:
     'KEYMASTER security audit, 2026-10-05. An expired certificate, a leaked VPN key and exposed card data are blocking release. ' +
     'Your kit: KEYBOARD (1) operates consoles, MOUSE (2) inspects, BADGE (4) presents your role, and MFA TOKEN (7) confirms a second factor.',
@@ -481,6 +481,12 @@ export const m06: Mission = {
       ['Data in use', 'In use is data being processed in memory by a running system. A powered-off stolen laptop is not processing anything.'],
       ['Data at rest', 'Data stored on the drive is at rest. Full-disk encryption keeps it unreadable without the key.'],
       ['Data sovereignty', 'Sovereignty is about which jurisdiction\u2019s laws apply to data. It is not a data state.'],
+    ]),
+    q('q7', ['1.2'], 'A router firmware image arrives with a digital signature from the vendor, and the signature verifies. Besides integrity, what does the signature prove?', 1, [
+      ['That the firmware contains no vulnerabilities', 'A signature authenticates the file, not the code inside it. The vendor could sign a buggy build.'],
+      ['That the vendor published it and cannot later deny it', 'A signature binds the image to the vendor\u2019s private key. That proof of origin is non-repudiation: the signer cannot plausibly disown it.'],
+      ['That the download channel was encrypted end to end', 'A signature protects the content wherever it travels. The image could arrive over plain HTTP and still verify.'],
+      ['That the image cannot be revoked later', 'A valid signature does not block revocation. Revocation is a separate check against a CRL or OCSP responder.'],
     ]),
   ],
   script: {
