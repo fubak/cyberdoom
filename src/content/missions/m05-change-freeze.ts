@@ -427,7 +427,7 @@ export const m05Walkthrough: WalkStep[] = [
 
 // F1: encounter pacing — worms loose on unpatched hosts in the lobby,
 // a north-office reveal, and a supply top-up for the extra pressure.
-liveThreats(m05, 'open-worm', 'worm', 2, [10, 24, 38, 27]);
+liveThreats(m05, 'open-worm', 'worm', 2, [18, 24, 38, 27]);
 addThreatEncounter(m05, 'north-worm', 'worm', 2, {
   id: 'north-ambush', area: [2, 4, 37, 8], kind: 'bad',
   message: 'Worms are still spreading on the unpatched floor — freeze window or not.',

@@ -614,7 +614,7 @@ export const m07: Mission = {
 // Dormant pressure: worms wake as the player crosses the flat network, and the
 // attacker escalates to hands-on-keyboard trojans once the easy path dies.
 addThreatEncounter(
-  m07, 'worm-legacy-pack', 'worm', 4,
+  m07, 'worm-legacy-pack', 'worm', 3,
   {
     id: 'flat-worm-pack',
     area: [2, 2, 17, 11],
@@ -624,7 +624,7 @@ addThreatEncounter(
   [2, 2, 17, 11],
 );
 addThreatEncounter(
-  m07, 'worm-hall-pack', 'worm', 3,
+  m07, 'worm-hall-pack', 'worm', 2,
   {
     id: 'core-worm-pack',
     area: [2, 13, 14, 20],
@@ -854,9 +854,9 @@ addThreatEncounter(m07, 'ne-trojan', 'trojan', 3, {
   id: 'ne-ambush', area: [22, 2, 37, 11], kind: 'bad',
   message: 'Trojans crawl out of the east server rows.',
 }, [22, 2, 37, 11]);
-addThreatEncounter(m07, 'exit-worm', 'worm', 3, {
+addThreatEncounter(m07, 'exit-rat', 'rat', 2, {
   id: 'exit-ambush', area: [20, 22, 37, 26], kind: 'bad',
-  message: 'Worms surge toward the exit corridor.',
+  message: 'RATs surge toward the exit corridor.',
 }, [20, 22, 37, 26]);
 addThreatEncounter(m07, 'vault-trojan', 'trojan', 2, {
   id: 'vault-ambush', area: [26, 15, 33, 20], kind: 'bad',

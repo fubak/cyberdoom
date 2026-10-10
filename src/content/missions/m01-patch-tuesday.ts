@@ -328,19 +328,19 @@ m01.entities.push({
   hp: 2, infected: true, tags: ['malware'],
   inspect: { label: 'Worm', detail: 'Roaming the east corridor: self-replicating process.', category: 'malware', objectives: ['2.4'] },
 });
-addThreatEncounter(m01, 'hub-pack', 'worm', 2, {
+addThreatEncounter(m01, 'hub-pack', 'rat', 2, {
   id: 'hub-ambush',
   area: [10, 13, 20, 15],
   kind: 'bad',
-  message: 'Worm traffic behind you — the infection came through the north corridor!',
+  message: 'RAT implants behind you — the infection came through the north corridor!',
 }, [6, 6, 29, 12]);
-addThreatEncounter(m01, 'south-pack', 'worm', 3, {
+addThreatEncounter(m01, 'south-pack', 'rat', 2, {
   id: 'south-ambush',
   area: [22, 17, 25, 19],
   kind: 'bad',
-  message: 'The print-room door was hiding a worm cluster — they are behind you now.',
+  message: 'The print-room door was hiding a RAT cluster — they are behind you now.',
 }, [20, 21, 38, 25]);
-addThreatEncounter(m01, 'exit-worm', 'worm', 2, {
+addThreatEncounter(m01, 'exit-worm', 'worm', 1, {
   id: 'exit-surge',
   after: ['clean-all'],
   kind: 'bad',

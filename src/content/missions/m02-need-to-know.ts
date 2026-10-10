@@ -366,14 +366,14 @@ export const m02Teach: MissionTeaching = {
 };
 
 // F1: encounter pacing — opening skirmish, room ambushes, supplies.
-liveThreats(m02, 'open-worm', 'worm', 1, [12, 11, 25, 19]);
+liveThreats(m02, 'open-rat', 'rat', 1, [12, 11, 25, 19]);
 addThreatEncounter(m02, 'north-trojan', 'trojan', 3, {
   id: 'vault-ambush', area: [16, 5, 23, 8], kind: 'bad',
   message: 'Trojans drop inside the records vault — the quiet floor was bait.',
 }, [15, 1, 25, 5]);
-addThreatEncounter(m02, 'west-worm', 'worm', 2, {
+addThreatEncounter(m02, 'west-rat', 'rat', 2, {
   id: 'west-ambush', area: [4, 11, 10, 16], kind: 'bad',
-  message: 'Worms nest behind the west office partition.',
+  message: 'RAT implants nest behind the west office partition.',
 }, [5, 12, 8, 15]);
 addThreatEncounter(m02, 'se-rat', 'rat', 2, {
   id: 'se-ambush', area: [27, 20, 34, 26], kind: 'bad',

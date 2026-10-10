@@ -634,20 +634,20 @@ export const m06Teach: MissionTeaching = {
 // F1: encounter pacing — opening skirmish, room reveals, seal finale, supplies.
 liveThreats(m06, 'open-worm', 'worm', 1, [2, 19, 37, 27]);
 liveThreats(m06, 'open-trojan', 'trojan', 1, [2, 3, 13, 16]);
-addThreatEncounter(m06, 'cert-worm', 'worm', 4, {
+addThreatEncounter(m06, 'cert-worm', 'worm', 3, {
   id: 'cert-ambush', area: [2, 3, 13, 16], kind: 'bad',
   message: 'Worms infest the certificate office.',
 }, [2, 3, 13, 16]);
-addThreatEncounter(m06, 'key-worm', 'worm', 3, {
+addThreatEncounter(m06, 'key-worm', 'worm', 2, {
   id: 'key-ambush-a', area: [26, 6, 37, 16], kind: 'bad',
   message: 'The key room was never clean — worms in the racks.',
 }, [26, 6, 37, 16]);
 addThreatEncounter(m06, 'key-trojan', 'trojan', 2, {
   id: 'key-ambush-b', area: [26, 6, 37, 16], kind: 'bad',
 }, [26, 6, 37, 16]);
-addThreatEncounter(m06, 'hall-worm', 'worm', 4, {
+addThreatEncounter(m06, 'hall-rat', 'rat', 4, {
   id: 'hall-ambush', area: [2, 18, 37, 22], kind: 'bad',
-  message: 'Worms cut across the south hall behind you.',
+  message: 'RATs cut across the south hall behind you.',
 }, [2, 18, 37, 27]);
 addThreatEncounter(m06, 'seal-rat', 'rat', 2, {
   id: 'seal-surge-a', after: ['seal'], kind: 'bad',

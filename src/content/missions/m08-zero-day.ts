@@ -572,7 +572,7 @@ export const m08Teach: MissionTeaching = {
 // F1: encounter pacing — opening skirmish at the lobby, room reveals,
 // an exit-room ransomware reveal, and supplies.
 liveThreats(m08, 'open-trojan', 'trojan', 1, [14, 13, 37, 20]);
-addThreatEncounter(m08, 'office-worm', 'worm', 4, {
+addThreatEncounter(m08, 'office-worm', 'worm', 3, {
   id: 'office-ambush', area: [2, 2, 17, 11], kind: 'bad',
   message: 'Zero-day worms churn through the west office.',
 }, [2, 2, 17, 11]);
@@ -591,7 +591,7 @@ addThreatEncounter(m08, 'exit-rs', 'ransomware', 2, {
   id: 'exit-ambush', area: [18, 22, 27, 27], kind: 'bad',
   message: 'Ransomware detonates around the exit room!',
 }, [18, 22, 27, 27]);
-addThreatEncounter(m08, 'sw-worm', 'worm', 2, {
+addThreatEncounter(m08, 'sw-worm', 'worm', 1, {
   id: 'lobby-ambush', area: [2, 22, 12, 27], kind: 'bad',
   message: 'The lobby was not safe — worms behind the front desk.',
 }, [7, 22, 12, 27]);
