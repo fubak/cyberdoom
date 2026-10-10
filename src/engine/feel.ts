@@ -12,6 +12,7 @@ export interface ViewPose {
 export class Feel {
   private trauma = 0;
   private hurtPeak = 0;
+  private hurtHold = 0;
   private hurtDuration = 0;
   private hurtElapsed = 0;
   private hurtSideAmount = 0;
@@ -19,11 +20,14 @@ export class Feel {
 
   hurt(dmg: number, side = 0): void {
     this.trauma = Math.min(1, this.trauma + dmg / 40);
-    const intensity = Math.min(0.85, Math.max(0.35, 0.35 + dmg / 40));
-    const duration = Math.min(0.6, Math.max(0.25, 0.25 + dmg * 0.017));
+    // Doom pain wash: any hit floods the view red, holds ~0.1s, then eases out
+    // over ~0.3-0.4s; bigger hits flood deeper and linger a little longer.
+    const peak = Math.min(0.9, 0.62 + dmg * 0.011);
+    const duration = 0.1 + Math.min(0.4, 0.3 + dmg * 0.004);
     const remaining = Math.max(0, this.hurtDuration - this.hurtElapsed);
-    this.hurtPeak = Math.max(this.red, intensity);
+    this.hurtPeak = Math.max(this.red, peak);
     this.hurtDuration = Math.max(remaining, duration);
+    this.hurtHold = 0.1;
     this.hurtElapsed = 0;
     this.hurtSideAmount = Math.max(-1, Math.min(1, side));
   }
@@ -39,11 +43,13 @@ export class Feel {
   }
 
   get red(): number {
-    if (this.hurtDuration <= 0 || this.hurtElapsed >= this.hurtDuration) return 0;
-    const progress = this.hurtElapsed / this.hurtDuration;
-    if (progress <= 0.25) return this.hurtPeak;
-    const eased = (progress - 0.25) / 0.75;
-    return this.hurtPeak * (1 - eased) ** 2;
+    if (this.hurtDuration <= 0) return 0;
+    if (this.hurtElapsed < this.hurtHold) return this.hurtPeak;
+    const decay = this.hurtDuration - this.hurtHold;
+    const t = this.hurtElapsed - this.hurtHold;
+    if (decay <= 0 || t >= decay) return 0;
+    const k = t / decay;
+    return this.hurtPeak * (1 - k) ** 2;
   }
 
   get hurtSide(): number {

@@ -60,45 +60,54 @@ describe('Feel', () => {
     expect(Math.hypot(decayed.yaw, decayed.x, decayed.y)).toBe(0);
   });
 
+  it('floods the view red on any damage, holds ~0.1s, then clears by ~0.5s', () => {
+    const feel = new Feel();
+    feel.hurt(6);
+    expect(feel.red).toBeGreaterThanOrEqual(0.6);
+    feel.update(0.1);
+    expect(feel.red).toBeGreaterThanOrEqual(0.6);
+    feel.update(0.4);
+    expect(feel.red).toBe(0);
+  });
+
   it('scales, eases, stacks and directs the hurt wash while retaining the bonus flash', () => {
     const smallHit = new Feel();
     smallHit.hurt(6, 1);
-    expect(smallHit.red).toBeGreaterThanOrEqual(0.45);
+    expect(smallHit.red).toBeCloseTo(0.686, 3);
     expect(smallHit.hurtSide).toBeCloseTo(1);
     smallHit.update(0.05);
-    expect(smallHit.red).toBeGreaterThanOrEqual(0.45);
+    expect(smallHit.red).toBeCloseTo(0.686, 3);
     smallHit.update(0.25);
     expect(smallHit.red).toBeGreaterThan(0);
     expect(smallHit.hurtSide).toBeGreaterThan(0);
-    smallHit.update(0.06);
+    smallHit.update(0.13);
     expect(smallHit.red).toBe(0);
     expect(smallHit.hurtSide).toBe(0);
 
     const heavyHit = new Feel();
     heavyHit.hurt(18, -0.5);
-    expect(heavyHit.red).toBeCloseTo(0.8);
+    expect(heavyHit.red).toBeCloseTo(0.818, 3);
     expect(heavyHit.hurtSide).toBeCloseTo(-0.5);
-    heavyHit.update(0.55);
+    heavyHit.update(0.45);
     expect(heavyHit.red).toBeGreaterThan(0);
-    heavyHit.update(0.01);
+    heavyHit.update(0.05);
     expect(heavyHit.red).toBe(0);
 
     const cappedHit = new Feel();
     cappedHit.hurt(40, 0.75);
-    expect(cappedHit.red).toBeCloseTo(0.85);
-    cappedHit.update(0.6);
+    expect(cappedHit.red).toBeCloseTo(0.9);
+    cappedHit.update(0.55);
     expect(cappedHit.red).toBe(0);
 
     const stacked = new Feel();
     stacked.hurt(18, -1);
     stacked.update(0.2);
-    const current = stacked.red;
     stacked.hurt(6, 1);
-    expect(stacked.red).toBeCloseTo(current);
+    expect(stacked.red).toBeGreaterThanOrEqual(0.6);
     expect(stacked.hurtSide).toBeCloseTo(1);
-    stacked.update(0.34);
+    stacked.update(0.4);
     expect(stacked.red).toBeGreaterThan(0);
-    stacked.update(0.02);
+    stacked.update(0.05);
     expect(stacked.red).toBe(0);
 
     const feel = new Feel();
