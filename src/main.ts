@@ -32,6 +32,7 @@ import { applyBack, LOOK_HINT, MENU_HINT } from './ui/nav';
 import { pauseMenu } from './ui/pause';
 import { markCompleted } from './missions/progress';
 import { registerThreatSprites } from './missions/threatSprites';
+import { genDebugCompare } from './render/genpool';
 
 /**
  * main.ts — boot + top-level state machine:
@@ -114,7 +115,6 @@ class Game {
     app.appendChild(viewport);
     setupPresentation(viewport);
     this.renderer = new Renderer(viewport);
-    registerThreatSprites();
     // warm lazy sprite frames in idle slices from boot — the player sits on
     // title/menus for seconds before the first level render, plenty of idle
     prewarmLazySpriteFrames();
@@ -320,6 +320,8 @@ class Game {
 
   /** Idle-slice setup for a mission the player is about to deploy into. */
   private prepareMission(id: string): void {
+    // palette-recolored threat sets must exist before syncEntities builds meshes
+    registerThreatSprites();
     const p = { id, map: null as WorldMap | null, built: false, textures: [] as Parameters<Renderer['initTexture']>[0][], texIndex: 0, stage: 0, ready: false };
     this.prepared = p;
     const step = () => {
@@ -495,6 +497,7 @@ class Game {
 
   private startMission(id: string): void {
     const mission = missionRegistry.require(id);
+    registerThreatSprites();
     const prep = this.prepared && this.prepared.id === id ? this.prepared : null;
     this.prepared = null; // prep is consumed; a retry re-runs the synchronous path
     this.map = prep?.map ?? new WorldMap(mission.map);
@@ -1120,6 +1123,10 @@ class Game {
         };
         const worm = spriteSets.require('worm').frames.walk0.image as { width: number; height: number };
         return { wall: dimensions('wall-panel'), flat: dimensions('floor'), worm: [worm.width, worm.height], RES };
+      },
+      /** LOOK: byte-compare installed (worker-produced) pixels vs a local rerun of the same job. */
+      genCompare(keys: string[]) {
+        return keys.map((key) => ({ key, ...(genDebugCompare(key) ?? { same: null, diffs: -1 }) }));
       },
       setTool(slot: number) {
         const t = toolForSlot(slot);

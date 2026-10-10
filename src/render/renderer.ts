@@ -5,6 +5,7 @@ import type { WorldMap } from '../engine/map';
 import type { Player } from '../engine/player';
 import type { ViewPose } from '../engine/feel';
 import { buildPaletteLut } from './palette';
+import { genWorkerCount } from './genpool';
 import { buildSprites, prewarmLazySpriteFrames, spriteSets, type SpriteSet } from './sprites';
 import { WALL_H, buildTextures, doorTextureFor, textureOr, textureRegistry } from './textures';
 import { RES, STATUS_H, VIEW3D_H, VIEW_H, VIEW_W } from './res';
@@ -246,7 +247,7 @@ export class Renderer {
   debugNoFlash = false;
   private hurt = 0;
   private prewarmStarted = false;
-  private gen: { texturesMs: number; spritesMs: number; lazyPrewarmMs?: number } = { texturesMs: 0, spritesMs: 0 };
+  private gen: { texturesMs: number; spritesMs: number; lazyPrewarmMs?: number; workers?: number } = { texturesMs: 0, spritesMs: 0 };
 
   constructor(container: HTMLElement) {
     const texturesStart = performance.now();
@@ -255,8 +256,8 @@ export class Renderer {
     const spritesStart = performance.now();
     buildSprites();
     const spritesMs = performance.now() - spritesStart;
-    this.gen = { texturesMs, spritesMs };
-    (window as Window & { __cdGen?: { texturesMs: number; spritesMs: number; lazyPrewarmMs?: number } }).__cdGen = this.gen;
+    this.gen = { texturesMs, spritesMs, workers: genWorkerCount() };
+    (window as Window & { __cdGen?: { texturesMs: number; spritesMs: number; lazyPrewarmMs?: number; workers?: number } }).__cdGen = this.gen;
     console.info(`[render] generated textures ${texturesMs.toFixed(1)} ms, sprites ${spritesMs.toFixed(1)} ms`);
     this.renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(1);
@@ -465,7 +466,8 @@ export class Renderer {
   }
 
   private makeSpriteMesh(set: SpriteSet, light: number): { mesh: THREE.Mesh; mat: THREE.ShaderMaterial } {
-    const first = Object.values(set.frames)[0];
+    // frames[0] by key order — Object.values() would force every lazy getter
+    const first = set.frames[Object.keys(set.frames)[0]];
     const mat = worldMaterial(first, light);
     const mesh = new THREE.Mesh(this.planeGeo, mat);
     mesh.scale.set(set.w, set.h, 1);

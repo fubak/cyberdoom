@@ -112,12 +112,25 @@ export function paintRaw(
   return { rgba, glow: glowData };
 }
 
-export function packTexture(
+/** Typed-array result of the pack pipeline — transferable to/from workers. */
+export interface PackedPixels {
+  w: number;
+  h: number;
+  /** Base-level RGBA pixels (w*h*4). */
+  data: Uint8Array;
+  mipmaps: { data: Uint8Array; width: number; height: number }[];
+}
+
+/**
+ * Pack painted rgba+glow into the final Y-flipped sprite/wall pixels plus the
+ * mipmap chain. Pure typed-array math — safe to run on a worker thread.
+ */
+export function packPixels(
   w: number,
   h: number,
   raw: { rgba: Uint8ClampedArray; glow: Uint8ClampedArray },
   opts: PackOpts = {},
-): THREE.DataTexture {
+): PackedPixels {
   const { rgba, glow } = raw;
   const src = new Uint8ClampedArray(rgba);
   const outlineW = opts.outlineW ?? (opts.sprite ? Math.max(1, Math.round(0.75 * RES)) : 1);
@@ -244,15 +257,29 @@ export function packTexture(
     mw = nw;
     mh = nh;
   }
-  const t = new THREE.DataTexture(out, w, h, THREE.RGBAFormat);
+  return { w, h, data: out, mipmaps };
+}
+
+/** Wrap packed pixels (from packPixels, or transferred back from a worker) in a DataTexture. */
+export function textureFromPixels(p: PackedPixels): THREE.DataTexture {
+  const t = new THREE.DataTexture(p.data, p.w, p.h, THREE.RGBAFormat);
   t.magFilter = THREE.NearestFilter;
   t.minFilter = THREE.NearestMipmapNearestFilter;
   t.generateMipmaps = false;
-  t.mipmaps = mipmaps;
+  t.mipmaps = p.mipmaps;
   t.wrapS = THREE.RepeatWrapping;
   t.wrapT = THREE.RepeatWrapping;
   t.needsUpdate = true;
   return t;
+}
+
+export function packTexture(
+  w: number,
+  h: number,
+  raw: { rgba: Uint8ClampedArray; glow: Uint8ClampedArray },
+  opts: PackOpts = {},
+): THREE.DataTexture {
+  return textureFromPixels(packPixels(w, h, raw, opts));
 }
 
 /** Noise fill in `cell`-sized blocks around a base colour. */

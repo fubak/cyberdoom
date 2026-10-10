@@ -1,7 +1,9 @@
 import * as THREE from 'three';
 import { Registry } from '../core/registry';
 import { drawText, measureText } from './font';
-import { bevel, grime, noiseFill, packTexture, paintRaw, type PaintCtx, type Painter } from './pixel';
+import { registerGenJob } from './gen';
+import { deferGenJob, genPoolActive, installGenNow } from './genpool';
+import { bevel, grime, noiseFill, packPixels, packTexture, paintRaw, type PaintCtx, type Painter } from './pixel';
 import { RES, TEX } from './res';
 
 /**
@@ -17,9 +19,46 @@ export const WALL_TEX_H = TEX.wallH;
 
 export const textureRegistry = new Registry<THREE.Texture>();
 
-function makeTexture(id: string, w: number, h: number, painter: Painter, wallGrime = false): THREE.Texture {
+/** When true, builders register gen jobs only (worker startup path). */
+let jobsOnly = false;
+let textureJobsDone = false;
+
+/**
+ * With the worker pool: register a blank DataTexture placeholder and queue the
+ * paint job; the worker's pixels fill it in-place when they arrive. Anything
+ * that needs the texture now goes through ensureTexture(), which runs the job
+ * synchronously — identical pixels either way (the pipeline is seeded).
+ */
+function makeTexture(id: string, w: number, h: number, painter: Painter, wallGrime = false): void {
+  const key = `tex:${id}`;
+  registerGenJob(key, { setId: '$tex', first: true }, () =>
+    packPixels(w * RES, h * RES, paintRaw(w, h, id, painter, RES, wallGrime)));
+  if (jobsOnly) return;
+  if (genPoolActive()) {
+    const t = new THREE.DataTexture(new Uint8Array(w * RES * h * RES * 4), w * RES, h * RES, THREE.RGBAFormat);
+    t.magFilter = THREE.NearestFilter;
+    t.minFilter = THREE.NearestMipmapNearestFilter;
+    t.generateMipmaps = false;
+    t.wrapS = THREE.RepeatWrapping;
+    t.wrapT = THREE.RepeatWrapping;
+    t.userData.genKey = key;
+    textureRegistry.register(id, t);
+    const install = (res: ReturnType<typeof packPixels>) => {
+      t.image = { data: res.data, width: res.w, height: res.h };
+      t.mipmaps = res.mipmaps;
+      t.needsUpdate = true;
+    };
+    if (!deferGenJob(key, install)) install(packPixels(w * RES, h * RES, paintRaw(w, h, id, painter, RES, wallGrime)));
+    return;
+  }
   const t = packTexture(w * RES, h * RES, paintRaw(w, h, id, painter, RES, wallGrime));
   textureRegistry.register(id, t);
+}
+
+/** Force a pending generated texture to fill now (demand path; no-op when already filled). */
+function ensureTexture(t: THREE.Texture): THREE.Texture {
+  const key = t.userData?.genKey as string | undefined;
+  if (key) installGenNow(key);
   return t;
 }
 
@@ -102,8 +141,11 @@ function hazard(g: CanvasRenderingContext2D, x: number, y: number, w: number, h:
   g.fillRect(x, y + h - 2 * u, w, 2 * u);
 }
 
-export function buildTextures(): void {
-  if (textureRegistry.ids().length > 0) return;
+/** Pass jobs=true to register gen jobs only (generation-worker startup). */
+export function buildTextures(jobs = false): void {
+  if (jobs ? textureJobsDone : textureRegistry.ids().length > 0) return;
+  jobsOnly = jobs;
+  textureJobsDone ||= jobs;
 
   // Office tech-panel wall: two steel plates, cable tray, cyan status strip.
   wall('wall-panel', (p) => {
@@ -352,6 +394,7 @@ export function buildTextures(): void {
       g.fillRect(x, y, 1 / p.s, 1 / p.s);
     }
   });
+  jobsOnly = false;
 }
 
 function doorTexture(id: string, role: string | undefined): void {
@@ -405,14 +448,14 @@ function doorTexture(id: string, role: string | undefined): void {
 
 /** Look up a texture id, falling back to a neutral wall for unknown ids. */
 export function textureOr(id: string, fallback = 'wall-panel'): THREE.Texture {
-  return textureRegistry.get(id) ?? textureRegistry.require(fallback);
+  return ensureTexture(textureRegistry.get(id) ?? textureRegistry.require(fallback));
 }
 
 /** Door texture for a door cell; role-coded so access level reads at a glance. */
 export function doorTextureFor(tex: string, accessRole: string | undefined): THREE.Texture {
   if (tex === 'door') {
     if (accessRole && !textureRegistry.get(`door:${accessRole}`)) doorTexture(`door:${accessRole}`, accessRole);
-    return textureRegistry.get(accessRole ? `door:${accessRole}` : 'door')!;
+    return ensureTexture(textureRegistry.get(accessRole ? `door:${accessRole}` : 'door')!);
   }
   return textureOr(tex, 'door');
 }

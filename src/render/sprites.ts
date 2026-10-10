@@ -1,9 +1,13 @@
 import * as THREE from 'three';
 import { Registry } from '../core/registry';
 import { drawText } from './font';
+import { registerGenJob, reorderLazyQueue, type GenResult } from './gen';
+import { deferGenJob, genPoolActive, installGenNow, prewarmGenJobs, prioritizeGenJobs, whenGenJobs } from './genpool';
 import { createRasterJob, limb, rasterizeRows, type Prim, type RasterJob, type V3 } from './model';
-import { packTexture, paintRaw, pxEllipse, type PaintCtx } from './pixel';
+import { packPixels, packTexture, paintRaw, pxEllipse, textureFromPixels, type PaintCtx } from './pixel';
 import { RES, TEX } from './res';
+
+export { reorderLazyQueue } from './gen';
 
 /**
  * Procedural billboard sprite sets. Every entity sprite id maps to a SpriteSet
@@ -31,25 +35,73 @@ interface FrameSpec {
   mirror?: boolean;
 }
 
-function makeSet(id: string, cw: number, ch: number, worldH: number, anim: SpriteSet['anim'], frames: FrameSpec[], dissolve = false): SpriteSet {
-  const out: Record<string, THREE.Texture> = {};
-  let firstRaw: ReturnType<typeof paintRaw> | null = null;
+/** When true, builders register gen jobs only (worker startup path). */
+let jobsOnly = false;
+let spriteJobsDone = false;
+
+/**
+ * Frame backed by a queued worker job: the getter materializes synchronously
+ * on demand; the pool installs the texture when the worker result arrives.
+ */
+function defineDeferred(frames: Record<string, THREE.Texture>, key: string, jobKey: string): void {
+  deferGenJob(jobKey, (res) => {
+    Object.defineProperty(frames, key, { configurable: true, enumerable: true, value: textureFromPixels(res) });
+  });
+  Object.defineProperty(frames, key, {
+    configurable: true,
+    enumerable: true,
+    get: () => {
+      installGenNow(jobKey);
+      return frames[key];
+    },
+  });
+}
+
+function makeSet(id: string, cw: number, ch: number, worldH: number, anim: SpriteSet['anim'], frames: FrameSpec[], dissolve = false): void {
   for (const f of frames) {
-    const raw = paintRaw(cw, ch, `${id}:${f.key}`, f.draw, RES, false, true);
-    if (!firstRaw) firstRaw = raw;
-    out[f.key] = packTexture(cw * RES, ch * RES, raw, { sprite: true, shade: true, mirror: f.mirror });
+    registerGenJob(`sprite:${id}:${f.key}`, { setId: id, first: f === frames[0] }, () =>
+      packPixels(cw * RES, ch * RES, paintRaw(cw, ch, `${id}:${f.key}`, f.draw, RES, false, true), { sprite: true, shade: true, mirror: f.mirror }));
   }
-  if (dissolve && firstRaw) {
-    for (let k = 0; k < 4; k++) out[`die${k}`] = dissolveFrame(cw * RES, ch * RES, firstRaw, k, id);
+  if (dissolve) {
+    const f0 = frames[0];
+    for (let k = 0; k < 4; k++) {
+      registerGenJob(`sprite:${id}:die${k}`, { setId: id, first: false }, () => {
+        const raw = paintRaw(cw, ch, `${id}:${f0.key}`, f0.draw, RES, false, true);
+        return dissolvePixels(cw * RES, ch * RES, raw, k, id);
+      });
+    }
+  }
+  if (jobsOnly) return;
+  const out: Record<string, THREE.Texture> = {};
+  if (genPoolActive()) {
+    for (const f of frames) defineDeferred(out, f.key, `sprite:${id}:${f.key}`);
+    if (dissolve) for (let k = 0; k < 4; k++) defineDeferred(out, `die${k}`, `sprite:${id}:die${k}`);
+  } else {
+    let firstRaw: ReturnType<typeof paintRaw> | null = null;
+    for (const f of frames) {
+      const raw = paintRaw(cw, ch, `${id}:${f.key}`, f.draw, RES, false, true);
+      if (!firstRaw) firstRaw = raw;
+      out[f.key] = packTexture(cw * RES, ch * RES, raw, { sprite: true, shade: true, mirror: f.mirror });
+    }
+    if (dissolve && firstRaw) {
+      for (let k = 0; k < 4; k++) out[`die${k}`] = dissolveFrame(cw * RES, ch * RES, firstRaw, k, id);
+    }
   }
   const set: SpriteSet = { w: (worldH * cw) / ch, h: worldH, frames: out, anim };
   spriteSets.register(id, set);
-  spriteRegistry.register(id, out[frames[0].key]);
-  return set;
+  if (genPoolActive()) {
+    whenGenJobs([`sprite:${id}:${frames[0].key}`], () => spriteRegistry.register(id, out[frames[0].key]));
+  } else {
+    spriteRegistry.register(id, out[frames[0].key]);
+  }
 }
 
 /** "Quarantine" death: the sprite breaks into green fullbright pixels and scatters. */
 function dissolveFrame(w: number, h: number, raw: ReturnType<typeof paintRaw>, k: number, seed: string): THREE.Texture {
+  return textureFromPixels(dissolvePixels(w, h, raw, k, seed));
+}
+
+function dissolvePixels(w: number, h: number, raw: ReturnType<typeof paintRaw>, k: number, seed: string): GenResult {
   const rgba = new Uint8ClampedArray(w * h * 4);
   const glow = new Uint8ClampedArray(w * h * 4);
   let s = 0;
@@ -72,7 +124,7 @@ function dissolveFrame(w: number, h: number, raw: ReturnType<typeof paintRaw>, k
       if (k >= 1) glow[o + 3] = 255;
     }
   }
-  return packTexture(w, h, { rgba, glow }, { sprite: true, outline: null });
+  return packPixels(w, h, { rgba, glow }, { sprite: true, outline: null });
 }
 
 function lit(p: PaintCtx, color: string, x: number, y: number, w: number, h: number): void {
@@ -266,7 +318,8 @@ function makeMonster(id: string, worldH: number, model: Model): void {
     ['attack1', { kind: 'attack', k: 1 }],
     ['pain', { kind: 'pain' }],
   ];
-  const finishPose = (raw: { rgba: Uint8ClampedArray; glow: Uint8ClampedArray }, pose: Pose, rotation: number, mirror: boolean): THREE.Texture => {
+  // grain + pack, shared by every thread: seeded -> byte-identical output
+  const finishPixels = (raw: { rgba: Uint8ClampedArray; glow: Uint8ClampedArray }, pose: Pose, rotation: number, mirror: boolean): GenResult => {
     const grain = raw.rgba;
     let seed = 2166136261;
     for (const ch of `${id}:${pose.kind}:${'k' in pose ? pose.k : 0}:${rotation}:${mirror ? 1 : 0}`) seed = Math.imul(seed ^ ch.charCodeAt(0), 16777619);
@@ -283,17 +336,71 @@ function makeMonster(id: string, worldH: number, model: Model): void {
       grain[i + 1] = Math.min(255, grain[i + 1] * m);
       grain[i + 2] = Math.min(255, grain[i + 2] * m);
     }
-    return packTexture(W, H, raw, { sprite: true, mirror });
+    return packPixels(W, H, raw, { sprite: true, mirror });
   };
   const startPose = (pose: Pose, rotation: number, mirror: boolean) => {
     const prims = scaleModel(model(pose));
     const job = createRasterJob(W, H, prims, { view: (rotation * Math.PI) / 4, ...(pose.kind === 'pain' ? { tint: [255, 120, 80] as V3, tintT: 0.2 } : {}) });
-    return { job, finish: () => finishPose(job, pose, rotation, mirror) };
+    return { job, finish: () => finishPixels(job, pose, rotation, mirror) };
   };
-  const renderPose = (pose: Pose, rotation: number, mirror = false): THREE.Texture => {
+  const poseJob = (pose: Pose, rotation: number, mirror: boolean) => () => {
     const { job, finish } = startPose(pose, rotation, mirror);
     rasterizeRows(job, 0, H);
     return finish();
+  };
+  // Register every frame's job first so workers can run them regardless of wiring mode.
+  const poseFrames: { key: string; pose: Pose; r: number; mirror: boolean }[] = [];
+  for (const [key, pose] of poses) {
+    for (let r = 0; r <= 4; r++) {
+      poseFrames.push({ key: `${key}_${r}`, pose, r, mirror: false });
+      if (r >= 1 && r <= 3) poseFrames.push({ key: `${key}_${8 - r}`, pose, r, mirror: true });
+    }
+  }
+  for (const f of poseFrames) {
+    registerGenJob(`sprite:${id}:${f.key}`, { setId: id, first: f.key.startsWith('walk0_') }, poseJob(f.pose, f.r, f.mirror));
+  }
+  const diePrims: Prim[][] = [];
+  const dieBase = model({ kind: 'pain' });
+  for (let k = 0; k < 5; k++) {
+    const sq = 1 - k * 0.19;
+    diePrims.push(scaleModel(dieBase.map((p) => ({
+      ...p,
+      c: [p.c[0] * (1 + k * 0.14), p.c[1] * sq + k * 0.6, p.c[2] * (1 + k * 0.1)] as V3,
+      r: [p.r[0], p.r[1] * (1 - k * 0.1), p.r[2]] as V3,
+    }))));
+    const prims = diePrims[k];
+    registerGenJob(`sprite:${id}:die${k}`, { setId: id, first: false }, () => {
+      const job = createRasterJob(W, H, prims, { view: 0, tint: [44, 255, 90], tintT: 0.12 + k * 0.14 });
+      rasterizeRows(job, 0, H);
+      const raw = { rgba: job.rgba, glow: job.glow };
+      return k === 0 ? packPixels(W, H, raw, { sprite: true }) : dissolvePixels(W, H, raw, k - 1, id);
+    });
+  }
+  if (jobsOnly) return;
+
+  if (genPoolActive()) {
+    // worker pool: every raster frame defers; aliases and the display frame chain through
+    for (const f of poseFrames) defineDeferred(frames, f.key, `sprite:${id}:${f.key}`);
+    for (let k = 0; k < 5; k++) defineDeferred(frames, `die${k}`, `sprite:${id}:die${k}`);
+    const alias = (key: string, target: string) => {
+      Object.defineProperty(frames, key, { configurable: true, enumerable: true, get: () => frames[target] });
+    };
+    alias('walk0', 'walk0_0');
+    for (const [key] of poses.slice(1)) alias(key, `${key}_0`);
+    alias('attack', 'attack1');
+    spriteSets.register(id, { w: worldH, h: worldH, frames, anim: 'monster' });
+    whenGenJobs([`sprite:${id}:walk0_0`], () => spriteRegistry.register(id, frames.walk0));
+    return;
+  }
+
+  const renderPose = (pose: Pose, rotation: number, mirror = false): THREE.Texture => {
+    const { job, finish } = startPose(pose, rotation, mirror);
+    rasterizeRows(job, 0, H);
+    return textureFromPixels(finish());
+  };
+  const poseBegin = (pose: Pose, rotation: number, mirror: boolean) => () => {
+    const p = startPose(pose, rotation, mirror);
+    return { job: p.job, finish: () => textureFromPixels(p.finish()) };
   };
   /**
    * Lazy frame backed by a resumable raster job: the getter finishes
@@ -344,20 +451,14 @@ function makeMonster(id: string, worldH: number, model: Model): void {
   frames.walk0 = frames.walk0_0;
   for (const [key, pose] of poses.slice(1)) {
     for (let r = 0; r <= 4; r++) {
-      defineLazy(`${key}_${r}`, () => startPose(pose, r, false));
-      if (r >= 1 && r <= 3) defineLazy(`${key}_${8 - r}`, () => startPose(pose, r, true));
+      defineLazy(`${key}_${r}`, poseBegin(pose, r, false));
+      if (r >= 1 && r <= 3) defineLazy(`${key}_${8 - r}`, poseBegin(pose, r, true));
     }
     defineAlias(key, () => frames[`${key}_0`]);
   }
   defineAlias('attack', () => frames.attack1);
-  const base = model({ kind: 'pain' });
   for (let k = 0; k < 5; k++) {
-    const sq = 1 - k * 0.19;
-    const prims = scaleModel(base.map((p) => ({
-      ...p,
-      c: [p.c[0] * (1 + k * 0.14), p.c[1] * sq + k * 0.6, p.c[2] * (1 + k * 0.1)] as V3,
-      r: [p.r[0], p.r[1] * (1 - k * 0.1), p.r[2]] as V3,
-    })));
+    const prims = diePrims[k];
     defineLazy(`die${k}`, () => {
       const job = createRasterJob(W, H, prims, { view: 0, tint: [44, 255, 90], tintT: 0.12 + k * 0.14 });
       return {
@@ -376,23 +477,21 @@ function makeMonster(id: string, worldH: number, model: Model): void {
 let prewarmIndex = 0;
 let prewarmRunning = false;
 
-/** Pure queue reorder: priority sets' frames first, then remaining first-frames, then the rest. */
-export function reorderLazyQueue<T extends { setId: string; first: boolean }>(queue: readonly T[], priority: readonly string[]): T[] {
-  const pri = new Set(priority);
-  return [
-    ...queue.filter((f) => pri.has(f.setId)),
-    ...queue.filter((f) => !pri.has(f.setId) && f.first),
-    ...queue.filter((f) => !pri.has(f.setId) && !f.first),
-  ];
-}
-
-/** Move the named sets' pending frames to the front of the prewarm queue. */
+/** Move the named sets' pending frames to the front of the generation queue. */
 export function prioritizeLazySprites(setIds: string[]): void {
+  if (genPoolActive()) {
+    prioritizeGenJobs(setIds);
+    return;
+  }
   const tail = reorderLazyQueue(lazyFrames.slice(prewarmIndex), setIds);
   lazyFrames.splice(prewarmIndex, lazyFrames.length - prewarmIndex, ...tail);
 }
 
 export function prewarmLazySpriteFrames(onComplete?: (ms: number) => void): void {
+  if (genPoolActive()) {
+    prewarmGenJobs(onComplete);
+    return;
+  }
   if (prewarmRunning) return;
   prewarmRunning = true;
   // first frames before everything else, so a demanded getter never hits a cold set
@@ -622,8 +721,11 @@ function personSet(id: string, look: Look): void {
 
 // ---------------------------------------------------------------- items / fx
 
-export function buildSprites(): void {
-  if (spriteSets.ids().length > 0) return;
+/** Pass jobs=true to register gen jobs only (generation-worker startup). */
+export function buildSprites(jobs = false): void {
+  if (jobs ? spriteJobsDone : spriteSets.ids().length > 0) return;
+  jobsOnly = jobs;
+  spriteJobsDone ||= jobs;
 
   makeMonster('worm', 0.95, wormModel);
   makeMonster('trojan', 1.05, trojanModel);
@@ -872,4 +974,5 @@ export function buildSprites(): void {
       g.fillRect(37, 0, 1, 2);
     },
   }]);
+  jobsOnly = false;
 }
