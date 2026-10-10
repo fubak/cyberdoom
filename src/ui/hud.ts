@@ -62,7 +62,7 @@ type GotFx = { k: number; slot: number; blink: boolean } | null;
 export class Hud {
   readonly canvas: HTMLCanvasElement;
   private g: CanvasRenderingContext2D;
-  private messages: { text: string; kind: string; t: number }[] = [];
+  private messages: { text: string; kind: string; t: number; n: number }[] = [];
   private bar: HTMLCanvasElement;
   private time = 0;
   private lastIntegrity = 100;
@@ -96,12 +96,15 @@ export class Hud {
   }
 
   pushMessage(text: string, kind = 'info'): void {
+    // a repeat inside the visible window collapses into an "xN" count on the
+    // same line instead of re-firing (sustained-drain spam reads once)
     const dup = this.messages.find((m) => m.text === text);
     if (dup) {
       dup.t = 5;
+      dup.n = Math.min(dup.n + 1, 99);
       return;
     }
-    this.messages.push({ text, kind, t: 5 });
+    this.messages.push({ text, kind, t: 5, n: 1 });
     if (kind === 'good') this.grinT = 1.4;
     if (this.messages.length > 3) this.messages.shift();
   }
@@ -221,13 +224,24 @@ export class Hud {
     this.drawBar(opts);
   }
 
-  /** Doom-style ticker, top-left, in the chunky HUD font (newest message; wraps to 2 lines). */
+  /**
+   * Compact Doom-style message ticker: tiny glyphs (about half the old
+   * chunky height) at the top-left on a dark backing strip, at most 2
+   * stacked lines, with an "xN" count for collapsed repeats — never wide
+   * enough or tall enough to cover the centre of the view.
+   */
   private drawTicker(): void {
-    const m = this.messages[this.messages.length - 1];
-    if (!m) return;
-    if (m.t < 0.4 && Math.floor(m.t * 20) % 2 === 0) return;
-    const ramp = MSG_RAMP[m.kind] ?? MSG_RAMP.info;
-    wrapText(m.text.toUpperCase(), 45, 2).forEach((line, i) => drawChunky(this.g, line, 2, 2 + i * 9, ramp));
+    const shown = this.messages.slice(-2);
+    shown.forEach((m, i) => {
+      if (m.t < 0.4 && Math.floor(m.t * 20) % 2 === 0) return;
+      const ramp = MSG_RAMP[m.kind] ?? MSG_RAMP.info;
+      const text = m.n > 1 ? `${m.text.toUpperCase()} X${m.n}` : m.text.toUpperCase();
+      const line = wrapText(text, 52, 1)[0];
+      const w = measureText(line, 'tiny');
+      this.g.fillStyle = 'rgba(4,6,10,0.55)';
+      this.g.fillRect(1, 1 + i * 7, w + 3, 6);
+      drawText(this.g, line, 2, 2 + i * 7, ramp[ramp.length - 2], 'tiny', null);
+    });
   }
 
   /**

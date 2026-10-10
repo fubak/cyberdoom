@@ -168,11 +168,14 @@ export class Automap {
     }
     g.fillStyle = 'rgba(0,0,0,0.8)';
     g.fillRect(0, H - 16, W, 14);
-    // Footer must never clip: pick the font that fits, ellipsize as last resort.
-    let hint = `${MAP_HINT} · ${this.follow ? 'FOLLOW' : 'FREE'}`;
+    // Footer must never clip: pick the font that fits, ellipsize as last
+    // resort. The pan/follow state is a G-key chip instead of a bare word so
+    // the hint's own 'G FOLLOW' tail isn't duplicated.
+    const base = MAP_HINT.replace('G FOLLOW - ', '');
+    let hint = `${base} · G:${this.follow ? 'FOLLOW' : 'PAN'}`;
     const font = measureText(hint, 'small') <= W - 8 ? 'small' : 'tiny';
     while (hint.length > 4 && measureText(`${hint}…`, font) > W - 8) hint = hint.slice(0, -1);
-    if (hint.length < `${MAP_HINT} · ${this.follow ? 'FOLLOW' : 'FREE'}`.length) hint += '…';
+    if (hint.length < `${base} · G:${this.follow ? 'FOLLOW' : 'PAN'}`.length) hint += '…';
     drawText(g, hint, 4, H - 14, '#ffd040', font, '#000');
     g.restore();
   }
