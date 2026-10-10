@@ -74,7 +74,10 @@ export const mouseTool: ToolDef = {
   use(ctx: ToolUseContext) {
     const e = ctx.aimEntity(8, 0.26);
     ctx.bus.emit('tool-used', { toolId: 'mouse' });
-    if (!e) return;
+    if (!e) {
+      ctx.bus.emit('message', { text: 'Nothing in reach — aim at it and get closer.', kind: 'info' });
+      return;
+    }
     if (!e.state.inspected && e.state.captured && e.def.inspect?.category !== 'person' && !e.def.tags?.includes('triage')) {
       // the tap already captured this host's traffic: the evidence is in hand, so go straight to the call
       e.state.inspected = true;

@@ -58,6 +58,8 @@ export class MissionRuntime {
   private pendingAccusation: Entity | null = null;
   private inspected = new Set<string>();
   private callsResolved = new Set<string>();
+  private callAttempts = new Map<string, number>();
+  private firstCallRight = 0;
   private triageScored = new Set<string>();
   private falsePositiveSources = new Set<string>();
   private priorityMisses = new Set<string>();
@@ -397,14 +399,22 @@ export class MissionRuntime {
       const picked = entry.call.options.findIndex((option) => option.action === action);
       if (picked < 0) return;
       const right = action === need;
+      const attempt = (this.callAttempts.get(entityId) ?? 0) + 1;
+      this.callAttempts.set(entityId, attempt);
       entry.call.picked = picked;
       entry.call.resolved = right;
       entry.call.feedback = callFeedback(e.def, action, right);
       this.bus.emit('evidence', entry);
       if (right) {
         this.callsResolved.add(entityId);
-        this.log(`Triage call on ${e.def.inspect?.label ?? entityId}: correct`, 10,
-          e.def.inspect?.objectives ?? []);
+        if (attempt === 1) {
+          this.firstCallRight++;
+          this.log(`Triage call on ${e.def.inspect?.label ?? entityId}: correct`, 10,
+            e.def.inspect?.objectives ?? []);
+        } else {
+          this.log(`Triage call on ${e.def.inspect?.label ?? entityId}: correct on attempt ${attempt} (first-call points missed)`, 0,
+            e.def.inspect?.objectives ?? []);
+        }
       } else {
         this.wrongCallOnce(e, -25);
       }
@@ -494,6 +504,13 @@ export class MissionRuntime {
       }
 
       if (e.def.reportable) {
+        if (!this.corroborated(e)) {
+          this.message(
+            'Not enough corroborating evidence yet — collect evidence that implicates this person first.',
+            'info',
+          );
+          return;
+        }
         this.pendingAccusation = e;
         const hasConsole = this.entities.some(
           (x) => x.alive && x.def.kind === 'console' && x.def.tags?.includes('report-console'),
@@ -631,9 +648,33 @@ export class MissionRuntime {
     });
   }
 
+  /**
+   * Corroboration gate for marking/filing a suspect: the suspect must have
+   * been inspected, and the case file must hold at least `evidenceRequired`
+   * (default 2) entries implicating them — their own inspection counts as
+   * one, and each recorded entry from an entity naming them via `implicates`
+   * counts as one more.
+   */
+  private corroborated(e: Entity): boolean {
+    const need = e.def.evidenceRequired ?? 2;
+    let have = 0;
+    for (const entry of this.evidence) {
+      if (entry.entityId === e.def.id && entry.source === 'inspect') have++;
+      else if (this.byId(entry.entityId)?.def.implicates?.includes(e.def.id)) have++;
+    }
+    return this.inspected.has(e.def.id) && have >= need;
+  }
+
   private resolveAccusation(e: Entity): void {
     const report = this.objectives.find((o) => o.def.kind === 'report');
     if (this.rejectRequirements(report, e)) return;
+    if (!this.corroborated(e)) {
+      this.message(
+        'Not enough corroborating evidence yet — collect evidence that implicates this person first.',
+        'info',
+      );
+      return;
+    }
     if (e.def.culprit) {
       this.log('Correct! The insider is contained', 100, e.def.inspect?.objectives ?? []);
       for (const objective of this.objectives) {
@@ -898,6 +939,14 @@ export class MissionRuntime {
       good: true,
       objectives: [],
     });
+    if (this.callAttempts.size > 0) {
+      this.scoreLog.push({
+        text: `First-call accuracy: ${this.firstCallRight}/${this.callAttempts.size}`,
+        points: 0,
+        good: true,
+        objectives: [],
+      });
+    }
   }
 
   stats(): {

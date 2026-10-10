@@ -63,6 +63,21 @@ describe('triage call gating', () => {
     expect(objective(rt, 'clean-all').progress).toBe(1);
   });
 
+  it('scores only the first call: a correct pick after a miss resolves but awards 0', () => {
+    const { bus, rt } = start('m01');
+    bus.emit('inspect', { entityId: 'ws1' });
+    const before = rt.score;
+    bus.emit('call-pick', { entityId: 'ws1', action: 'release' });
+    expect(objective(rt, 'wrong-call').violations).toBe(1);
+    bus.emit('call-pick', { entityId: 'ws1', action: 'quarantine' });
+    const entry = rt.evidence.find((e) => e.id === 'ws1:inspect');
+    expect(entry?.call?.resolved).toBe(true);
+    expect(rt.callPending('ws1')).toBe(false);
+    expect(rt.scoreLog.some((e) => e.text.includes('correct on attempt 2') && e.points === 0)).toBe(true);
+    // no +10 for the retry; the only score movement is the wrong-call violation
+    expect(rt.score).toBeLessThan(before);
+  });
+
   it('release on a legitimate mail only counts after the release call (m04)', () => {
     const { bus, rt } = start('m04');
     bus.emit('inspect', { entityId: 'mail-legit-a' });

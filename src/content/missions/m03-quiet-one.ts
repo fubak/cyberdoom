@@ -88,6 +88,7 @@ export const m03: Mission = {
   entities: [
     {
       id: 'dana', kind: 'npc', x: 8.5, y: 12.5, sprite: 'npc-f', ai: 'stand', reportable: true, culprit: true,
+      evidenceRequired: 3,
       inspect: {
         label: 'R. Kell, R&D lead',
         detail: 'BADGE: Sun 03:12 entry, R&D wing (usually Mon-Fri 09-17). FILE SRV: 1,284 files / 40 GB read from \\\\designs\\confidential; her project share is \\\\designs\\atlas. ENDPOINT: USB mass-storage mounted 03:40, 40 GB written. HR: promotion denied last week.',
@@ -98,6 +99,7 @@ export const m03: Mission = {
     },
     {
       id: 'marcus', kind: 'npc', x: 14.5, y: 16.5, sprite: 'npc-m', ai: 'stand', reportable: true,
+      evidenceRequired: 3,
       inspect: {
         label: 'D. Ortiz, developer',
         detail: 'APP LOG: 9 git commits 22:10-23:40 to atlas-api (his team\'s repo). BADGE: late exits all of release week. FILE SRV: atlas share only. ENDPOINT: no removable media.',
@@ -107,6 +109,7 @@ export const m03: Mission = {
     },
     {
       id: 'priya', kind: 'npc', x: 20.5, y: 12.5, sprite: 'npc-f', ai: 'stand', reportable: true,
+      evidenceRequired: 3,
       inspect: {
         label: 'S. Patel, HR specialist',
         detail: 'OS SECURITY LOG: ~300 personnel records opened today; ~300/day for the past 2 years. BADGE: 08:30-17:15. ENDPOINT: no removable media. DLP: no alerts.',
@@ -116,6 +119,7 @@ export const m03: Mission = {
     },
     {
       id: 'tom', kind: 'npc', x: 26.5, y: 18.5, sprite: 'npc-suit', ai: 'stand', reportable: true,
+      evidenceRequired: 3,
       inspect: {
         label: 'J. Lee, intern',
         detail: 'Observed: avoids eye contact, fidgets when security walks past. BADGE: 09:00-17:00. FILE SRV: intern share only. ENDPOINT: no removable media.',
@@ -124,6 +128,7 @@ export const m03: Mission = {
     },
     {
       id: 'badge-log', kind: 'console', x: 23.5, y: 27.5, sprite: 'console', tags: ['badge-log', 'evidence'],
+      implicates: ['dana', 'marcus'],
       log: 'BADGE LOG: after-hours entries, last 7 days\nSun 03:12 R.KELL (R&D lead): R&D wing (usual Mon-Fri 09-17)\nThu 23:44 D.ORTIZ (Dev): lobby exit, release week\nS.PATEL, J.LEE: none',
       inspect: { label: 'Physical access control log', detail: 'Badge reader events for every door.', category: 'legit', objectives: ['4.9'] },
     },
@@ -135,11 +140,13 @@ export const m03: Mission = {
     },
     {
       id: 'dlp', kind: 'console', x: 37.5, y: 4.5, sprite: 'console', tags: ['evidence'],
+      implicates: ['dana'],
       log: 'DLP ALERTS: overnight\nSun 03:31 rkell: 1,284 files / 40 GB read from \\\\designs\\confidential (role share: \\\\designs\\atlas)\nspatel: ~300 HR records/day inside HRIS (no outbound transfer)',
       inspect: { label: 'DLP console', detail: 'Data-loss-prevention alerts on outbound transfers.', category: 'legit', objectives: ['4.9'] },
     },
     {
       id: 'usb-audit', kind: 'console', x: 29.5, y: 18.5, sprite: 'console', tags: ['evidence'],
+      implicates: ['dana'],
       log: 'ENDPOINT USB AUDIT\nSun 03:40 RKELL-LT: USB mass storage mounted, 40 GB written\nDORTIZ-LT, SPATEL-PC, JLEE-PC: no removable media',
       inspect: { label: 'Endpoint (EDR) USB audit', detail: 'Removable-media events reported by endpoint agents.', category: 'legit', objectives: ['4.9'] },
     },
@@ -287,6 +294,17 @@ export const m03: Mission = {
         { id: 'd', text: 'Quietly keep watching for a few weeks to collect more', correct: false, explanation: 'Confidential data is already leaving. Waiting without reporting lets the damage grow and leaves the response to one person.' },
       ],
     },
+    {
+      id: 'q6',
+      prompt: 'Four actors hit the same industry in one quarter: a state-funded group quietly holds access for years to steal research; a crime crew runs ransomware for payouts; activists deface sites for a cause; an intern stumbles into a breach. What primarily distinguishes them?',
+      objectives: ['2.1'],
+      options: [
+        { id: 'a', text: 'Their motivations and resources — espionage, financial gain, ideology, and an insider acting accidentally', correct: true, explanation: 'SY0-701 distinguishes threat actors by attributes: motivation (espionage, financial gain, ideology, revenge, chaos), plus resources/funding and sophistication. Nation-state, organized crime, hacktivist and unskilled insider each map to a different pairing.' },
+        { id: 'b', text: 'Their physical locations — internal actors are always inside the building', correct: false, explanation: 'Internal vs external is about authorized access, not geography. A disgruntled insider can attack from home, and an external group can recruit someone inside.' },
+        { id: 'c', text: 'The tools they use — ransomware means organized crime every time', correct: false, explanation: 'Tools are shared across actors: nation-states also run ransomware, and criminals also conduct espionage. Motivation and funding, not the malware family, distinguish them.' },
+        { id: 'd', text: 'Whether they are caught — actors who are caught were always insiders', correct: false, explanation: 'Attribution difficulty does not define the actor type. Each group has external and internal members and a different intent.' },
+      ],
+    },
   ],
 };
 
@@ -306,6 +324,7 @@ export const m03Walkthrough: WalkStep[] = [
   { goto: [29, 17] },
   { interact: 'usb-audit' },
   { goto: [9, 12] },
+  { inspect: 'dana' },
   { interact: 'dana' },
   { goto: [37, 17] },
   { interact: 'report-console' },
@@ -322,7 +341,7 @@ export const m03Teach: MissionTeaching = {
     { text: 'Decide who the evidence actually supports.', objective: '2.4' },
     { text: 'Escalate your finding through the proper channel.', objective: '4.8' },
   ],
-  keyTerms: ['insider threat', 'data exfiltration', 'correlation', 'endpoint logs', 'data classification', 'intellectual property', 'chain of custody'],
+  keyTerms: ['threat actor', 'insider threat', 'data exfiltration', 'correlation', 'endpoint logs', 'data classification', 'intellectual property', 'chain of custody'],
   lessons: {
     'report': {
       objective: '2.1',
