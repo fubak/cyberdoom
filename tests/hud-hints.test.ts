@@ -9,7 +9,7 @@ import { badgeTool, mfaPending } from '../src/tools/badge';
 import { mfaTool } from '../src/tools/mfa';
 import { tapTool } from '../src/tools/tap';
 import { edrTool } from '../src/tools/edr';
-import { aimIsHostile, HintFader, targetNoun } from '../src/tools/hint';
+import { targetNoun } from '../src/tools/hint';
 import { doorUseHint, resolveUse, type UseTargetContext } from '../src/engine/useTarget';
 import { MissionRuntime } from '../src/missions/runtime';
 import { WorldMap } from '../src/engine/map';
@@ -228,27 +228,23 @@ describe('tool hints agree with use() and never leak verdicts', () => {
     expect(edrTool.hint!(c3)).toEqual({ text: 'HOLD: CHARGE CONTAINMENT PULSE', ready: true });
   });
 
-  it('repeat LMB hint fades on a hostile target but never on an interactable', () => {
-    const fader = new HintFader();
-    // aiming at an infected enemy: the same combat hint disappears after 4 s
-    const bug = ent({ id: 'w', kind: 'enemy' }, 1, true);
+  it('only range-failure hints are fleeting; action hints never time out', () => {
+    // owner constraint: prompts say what LMB/E does on the aimed-at thing and
+    // stay up while aimed; the TOO FAR hints are the only transient ones
+    // (~1.5 s after the failed action, gated in main.ts via ToolHint.fleeting).
+    const bug = ent({ id: 'w', kind: 'enemy' }, 6, true);
     const { ctx: cb } = ctx({ entities: [bug] });
-    expect(aimIsHostile(cb)).toBe(true);
-    for (const t of [0, 1.5, 3.9]) {
-      expect(fader.apply(keyboardTool.hint!(cb), aimIsHostile(cb), t)?.text).toBe('KILL PROCESS: MALWARE');
-    }
-    expect(fader.apply(keyboardTool.hint!(cb), aimIsHostile(cb), 4.2)).toBeNull();
-    // aiming at a workstation: the interactable hint is still up at 10 s
-    const ws = ent({ id: 'ws', kind: 'workstation' }, 1);
+    expect(keyboardTool.hint!(cb)).toMatchObject({ text: 'TOO FAR: KEYBOARD IS POINT-BLANK', fleeting: true });
+    const ws = ent({ id: 'ws', kind: 'workstation' }, 6);
     const { ctx: cw } = ctx({ entities: [ws] });
-    expect(aimIsHostile(cw)).toBe(false);
-    const f2 = new HintFader();
-    for (const t of [0, 5, 10]) {
-      expect(f2.apply(patchTool.hint!(cw), aimIsHostile(cw), t)?.text).toBe('APPLY PATCH: WORKSTATION');
+    expect(usbTool.hint!(cw)).toMatchObject({ text: 'TOO FAR: WALK UP TO PLUG IN', fleeting: true });
+    // every other hint across every tool must persist while aimed
+    const near = ent({ id: 'w2', kind: 'enemy' }, 1, true);
+    const { ctx: cn } = ctx({ entities: [near, ent({ id: 'ws2', kind: 'workstation' }, 1)] });
+    for (const tool of [keyboardTool, mouseTool, usbTool, patchTool, badgeTool, mfaTool, tapTool, edrTool]) {
+      const h = tool.hint?.(cn);
+      if (h) expect(h.fleeting ?? false, `${tool.id}: "${h.text}"`).toBe(false);
     }
-    // a workstation in front of a farther enemy still counts as interactable
-    const { ctx: cboth } = ctx({ entities: [ws, ent({ id: 'w2', kind: 'enemy' }, 6, true)] });
-    expect(aimIsHostile(cboth)).toBe(false);
   });
 
   it('no hint text leaks an entity label for decoy/wrong/malicious entities', () => {

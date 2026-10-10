@@ -1,11 +1,23 @@
 import type { Gender, ToolDef, ToolHint, ViewmodelAnim } from '../core/types';
-import { drawBigText, drawChunky, drawText, measureBig, measureChunky, measureText, wrapText } from '../render/font';
+import { drawBigText, drawChunky, drawText, measureChunky, measureText, wrapText } from '../render/font';
 import { VIEW_H, VIEW_W } from '../render/renderer';
 import { roleColor } from '../render/textures';
 import { drawToolViewmodel } from '../render/viewmodels';
 import { sortedTools } from '../tools';
-import { vmLine } from '../tools/anim';
 import { BASE_H, BASE_STATUS, BASE_W, RES } from '../render/res';
+import {
+  P_AMMO,
+  P_CRED,
+  P_FACE,
+  P_INT,
+  P_OBJ,
+  P_RES,
+  P_TOOLS,
+  resRowY,
+  statusBarText,
+  type BarText,
+  type Panel,
+} from './barLayout';
 
 /**
  * LOOK: Doom-style 128px native status bar + message ticker + tool viewmodel.
@@ -15,11 +27,7 @@ import { BASE_H, BASE_STATUS, BASE_W, RES } from '../render/res';
  * Bar layout (left → right):
  *   INTEGRITY% | AMMO | TOOLS 1-8 | analyst face | CRED keycard | RESOURCES cur/max | OBJ n/m
  */
-const RED = ['#ff9a7a', '#ff4a2a', '#e01e10', '#a80c06', '#700604'];
-const AMBER = ['#fff0a0', '#ffd040', '#ffa818', '#d07808', '#8a4804'];
-const GREEN = ['#c8ffb0', '#6aff5a', '#2ad83a', '#14a024', '#0a6014'];
-/** White-hot alarm ramp: critical numbers get brighter, never dimmer. */
-const RED_HOT = ['#ffffff', '#ffe0d0', '#ff8a6a', '#ff3a1a', '#d01008'];
+
 const MSG_RAMP: Record<string, string[]> = {
   bad: ['#ffb09a', '#ff5a3a', '#d82a10'],
   good: ['#d0ffc8', '#5aff6a', '#20b830'],
@@ -29,14 +37,6 @@ const MSG_RAMP: Record<string, string[]> = {
 /** Objective strip never exceeds 12% of the 168px 3D view. */
 const OBJ_STRIP_MAX = 20;
 
-type Panel = [x: number, w: number];
-const P_INT: Panel = [0, 58];
-const P_AMMO: Panel = [58, 42];
-const P_TOOLS: Panel = [100, 50];
-const P_FACE: Panel = [150, 32];
-const P_CRED: Panel = [182, 34];
-const P_RES: Panel = [216, 64];
-const P_OBJ: Panel = [280, 40];
 let tickerPattern: CanvasPattern | null = null;
 
 function getTickerPattern(g: CanvasRenderingContext2D): CanvasPattern | null {
@@ -231,9 +231,10 @@ export class Hud {
   }
 
   /**
-   * Action prompt centred under the viewmodel clearance line (top =
-   * vmLine(view height)+2), never inside the centre 20% aim box. At most two
-   * lines, `[LMB]…` then `[E]…`, on a dark plate.
+   * Action prompt in a fixed band just above the status bar (still visible
+   * while aimed; never inside the centre aim box). At most two lines,
+   * `[LMB]…` then `[E]…`, on a dark plate. Ammo cost is appended in
+   * tool-native units ('-1 SCAN') so it can't read as a file size.
    */
   private drawPrompt(p: {
     lmb: ToolHint | null;
@@ -243,22 +244,25 @@ export class Hud {
     footer?: string | null;
   }): void {
     const g = this.g;
-    const lines: { key: string; text: string; ready: boolean; hot: boolean }[] = [];
+    const lines: { key: string; text: string; ready: boolean; hot: boolean; cost?: string | null }[] = [];
     if (p.banner) {
       lines.push({ key: 'TOOL', text: p.banner.title, ready: true, hot: false });
       lines.push({ key: '', text: p.banner.blurb, ready: true, hot: false });
     } else {
-      if (p.lmb) lines.push({ key: 'LMB', text: p.lmb.text, ready: p.lmb.ready, hot: !!p.lmbHot });
+      if (p.lmb) lines.push({ key: 'LMB', text: p.lmb.text, ready: p.lmb.ready, hot: !!p.lmbHot, cost: p.lmb.cost });
       if (p.use) lines.push({ key: 'E', text: p.use, ready: true, hot: false });
       if (lines.length === 0 && p.footer) lines.push({ key: '', text: p.footer, ready: false, hot: false });
     }
     if (!lines.length) return;
     const viewH = BASE_H - BASE_STATUS;
-    let y = vmLine(viewH) + 2;
-    for (const line of lines.slice(0, 2)) {
+    const shown = lines.slice(0, 2);
+    // bottom of the lowest plate sits 1px above the status bar
+    let y = viewH - 9 - (shown.length - 1) * 10;
+    for (const line of shown) {
       const keyW = line.key ? 4 + measureText(line.key, 'small') + 4 : 0;
       const textW = measureText(line.text, 'small');
-      const w = keyW + (keyW ? 4 : 0) + textW;
+      const costW = line.cost ? 6 + measureText(line.cost, 'small') : 0;
+      const w = keyW + (keyW ? 4 : 0) + textW + costW;
       const x = Math.round(BASE_W / 2 - w / 2);
       g.fillStyle = 'rgba(6,8,12,0.72)';
       g.fillRect(x - 3, y - 1, w + 6, 9);
@@ -272,6 +276,7 @@ export class Hud {
       }
       const col = line.hot ? '#ffffff' : line.ready ? '#e8ecf2' : '#9aa0ac';
       drawText(g, line.text, tx, y, col, 'small', '#000');
+      if (line.cost) drawText(g, line.cost, tx + textW + 6, y, '#c89828', 'small', '#000');
       y += 10;
     }
   }
@@ -354,39 +359,21 @@ export class Hud {
     }
   }
 
-  /** Low-integrity (<=25%) damage layered over the arsenal portrait: badly hurt. */
-  private drawCritFace(x: number, y: number, hp: number, pulse: boolean): void {
+  /**
+   * Low-integrity (<=25%) warning: the bar's top edge throbs red and the
+   * face well gets a warning frame — kept OFF the portrait so the damage
+   * ladder (the face's own hurt tiers) stays readable.
+   */
+  private drawCritFrame(by: number, pulse: boolean): void {
     const g = this.g;
-    const p = (c: string, ax: number, ay: number, w = 1, h = 1) => {
-      g.fillStyle = c;
-      g.fillRect(x + ax, y + ay, w, h);
-    };
-    const native = (c: string, ax: number, ay: number, w = 1, h = 1) => p(c, ax, ay, w / RES, h / RES);
-    p('#8a0a06', 6, 3, 5, 2); // forehead gash, blood running down
-    p('#c01810', 7, 5, 2, 8);
-    p('#7a0604', 8, 13, 1, 6);
-    p('#c01810', 15, 4, 3, 1);
-    p('#8a0a06', 16, 5, 1, 5);
-    p('#2a0c40', 13, 8, 6, 4); // swollen black eye
-    p('#4a1a60', 14, 12, 4, 1);
-    p('#a01008', 3, 14, 3, 5); // bloodied cheek, split lip
-    p('#e02414', 10, 17, 4, 2);
-    p('#7a0604', 1, 21, 22, 3); // soaked collar
-    if (hp <= 12) {
-      p('#600402', 2, 8, 2, 9);
-      p('#d02010', 18, 12, 3, 7);
-      p('#400000', 9, 19, 6, 2);
-      p('#ffffff', 15, 9, 1, 1);
-    }
-    if (pulse) {
-      p('#ff2010', -2, -2, 28, 1);
-      p('#ff2010', -2, 25, 28, 1);
-      p('#ff2010', -2, -2, 1, 28);
-      p('#ff2010', 25, -2, 1, 28);
-    }
-    native('#ffb090', 6.25, 8.25);
-    native('#5a0a04', 7.25, 10.25, 1, 4);
-    native('#e84020', 17.25, 15.25, 2, 1);
+    g.fillStyle = pulse ? '#ff2010' : '#7a0804';
+    g.fillRect(0, by, BASE_W, pulse ? 2 : 1);
+    const x = P_FACE[0] + 2;
+    const y = by + 2;
+    g.fillRect(x, y, 28, 1);
+    g.fillRect(x, y + 29, 28, 1);
+    g.fillRect(x, y, 1, 30);
+    g.fillRect(x + 27, y, 1, 30);
   }
 
   private drawBar(o: {
@@ -408,17 +395,16 @@ export class Hud {
     g.drawImage(this.bar, 0, by, BASE_W, BASE_STATUS);
 
     const pulse = Math.floor(this.time * 5) % 2 === 0;
-    // INTEGRITY: big fat digits; <=25% the well throbs red and the digits go white-hot
     const hp = Math.ceil(o.integrity);
     const crit = hp > 0 && hp <= 25;
     if (crit) alarmWell(g, P_INT, by, pulse);
-    bigCentered(g, `${hp}%`, P_INT, by + 5, crit && pulse ? RED_HOT : RED, true);
-    label(g, crit && !pulse ? 'CRITICAL' : 'INTEGRITY', P_INT, by + 20, crit ? '#ff5a3a' : undefined);
 
-    // AMMO / bandwidth
+    // AMMO / bandwidth art: READY lamp for unlimited tools, alarm well when low
+    const rr = o.resources?.find((x) => x.active);
+    const low =
+      o.ammo !== null && (o.ammo === 0 || (!!rr && rr.max > 0 && o.ammo <= Math.max(1, Math.floor(rr.max * 0.25))));
+    const ready = this.cooldown <= 0.01;
     if (o.ammo === null) {
-      // unlimited tool: show a READY lamp instead of a meaningless ammo count
-      const ready = this.cooldown <= 0.01;
       const lx = P_AMMO[0] + 15;
       g.fillStyle = '#000';
       g.fillRect(lx, by + 7, 16, 12);
@@ -426,22 +412,16 @@ export class Hud {
       g.fillRect(lx + 1, by + 8, 14, 10);
       g.fillStyle = ready ? '#8aff9a' : '#ffa818';
       g.fillRect(lx + 2, by + 9, 12, 3);
-      label(g, ready ? 'READY' : 'BUSY', P_AMMO, by + 20, ready ? '#5aff6a' : '#ffc030');
-    } else {
-      const rr = o.resources?.find((x) => x.active);
-      const low = o.ammo === 0 || (!!rr && rr.max > 0 && o.ammo <= Math.max(1, Math.floor(rr.max * 0.25)));
-      if (low) alarmWell(g, P_AMMO, by, pulse);
-      bigCentered(g, `${o.ammo}`, P_AMMO, by + 5, low ? (pulse ? RED_HOT : RED) : AMBER, true);
-      label(g, (rr ? rr.label : o.ammoName).toUpperCase().slice(0, 6), P_AMMO, by + 20, low ? '#ff5a3a' : undefined);
+    } else if (low) {
+      alarmWell(g, P_AMMO, by, pulse);
     }
 
-    // TOOLS grid (Doom ARMS): 4x2, slots 1-8, lit when owned, boxed when held,
+    // TOOLS grid wells (Doom ARMS): 4x2, slots 1-8, boxed when held,
     // blinking gold right after a tool is found
     const tools = sortedTools();
     for (let i = 0; i < 8; i++) {
       const slot = i + 1;
       const t = tools.find((tt) => tt.slot === slot);
-      const owned = !!t && (o.owned ? o.owned.includes(t.id) : true);
       const x = P_TOOLS[0] + 3 + (i % 4) * 11;
       const y = by + 6 + Math.floor(i / 4) * 10;
       const active = !!t && t.slot === o.tool.slot;
@@ -450,7 +430,6 @@ export class Hud {
       g.fillRect(x, y, 11, 7);
       g.fillStyle = active || fresh ? '#ffd040' : '#2a2e38';
       g.fillRect(x, y, 11, 1);
-      drawText(g, `${slot}`, x + 3, y + 1, fresh ? '#000' : active ? '#fff0a0' : owned ? '#ffa818' : '#3a3e48', 'small', fresh ? null : '#000');
     }
 
     // FACE
@@ -462,7 +441,7 @@ export class Hud {
       g.restore();
     }
     else this.drawFace(P_FACE[0] + 4, by + 2, o.gender, o.integrity);
-    if (crit) this.drawCritFace(P_FACE[0] + 5, by + 4, hp, pulse);
+    if (crit) this.drawCritFrame(by, pulse);
 
     // CRED keycard + current role
     const rc = roleColor(o.credentials);
@@ -481,34 +460,34 @@ export class Hud {
     g.fillStyle = '#3a404c';
     g.fillRect(cx + 9, cy + 7, 5, 1);
     g.fillRect(cx + 9, cy + 9, 4, 1);
-    label(g, o.credentials.toUpperCase().slice(0, 7), P_CRED, by + 20, rc.light);
 
-    // RESOURCES: every ammo type as current/max in a 2x2 grid, like Doom's
-    // BULL/SHEL/RCKT/CELL table — label over a punchier small-font value so
-    // the longest possible value ('30/30') fits inside the well
+    // RESOURCES: gold plate behind the held tool's row (Doom RES table)
     (o.resources ?? []).slice(0, 4).forEach((r, i) => {
-      const cx = P_RES[0] + 2 + (i % 2) * 30;
-      const cy = by + 3 + Math.floor(i / 2) * 12;
-      const col = !r.owned ? '#3a3e48' : r.cur === 0 ? '#ff4a2a' : r.active ? '#fff0a0' : '#ffa818';
-      const lab = r.active ? '#ffd040' : r.owned ? '#8a90a0' : '#3a3e48';
-      drawText(g, r.label, cx, cy, lab, 'tiny', '#000');
-      const v = `${r.cur}/${r.max}`;
-      const font = measureText(v, 'small') <= 29 ? 'small' : 'tiny';
-      drawText(g, v, cx + 29 - measureText(v, font), cy + 5, col, font, '#000');
+      if (!r.active) return;
+      g.fillStyle = 'rgba(255,208,64,0.14)';
+      g.fillRect(P_RES[0] + 3, resRowY(i) - 1, P_RES[1] - 6, 9);
     });
 
-    // OBJECTIVES n/m
-    const done = o.progress?.done ?? o.objectives.filter((x) => x.done).length;
-    const total = o.progress?.total ?? o.objectives.length;
-    const failed = o.progress?.failed ?? o.objectives.some((x) => x.failed);
-    const objectiveCount = `${done}/${total}`;
-    const objectiveColor = failed ? RED[0] : done === total ? GREEN[0] : GREEN[1];
-    if (measureBig(objectiveCount) <= P_OBJ[1] - 6) {
-      bigCentered(g, objectiveCount, P_OBJ, by + 5, failed ? RED : done === total ? GREEN : GREEN.slice(1));
-    } else {
-      label(g, objectiveCount, P_OBJ, by + 6, objectiveColor);
-    }
-    label(g, failed ? 'FAIL' : 'OBJ', P_OBJ, by + 20, failed ? '#ff5a3a' : undefined);
+    // every text run in the bar comes from the shared, test-verified layout
+    const texts = statusBarText(
+      {
+        integrity: o.integrity,
+        ammo: o.ammo,
+        ammoName: o.ammoName,
+        ready,
+        credentials: o.credentials,
+        credTint: rc.light,
+        tool: o.tool,
+        tools,
+        owned: o.owned ?? [],
+        got: o.got,
+        resources: o.resources ?? [],
+        objectives: o.objectives,
+        progress: o.progress,
+      },
+      pulse,
+    );
+    for (const t of texts) drawBarText(g, t);
   }
 
   /** 26x28 procedural analyst portrait; reacts to damage like Doom's face. */
@@ -643,14 +622,13 @@ export class Hud {
   }
 }
 
-function bigCentered(g: CanvasRenderingContext2D, text: string, p: Panel, y: number, ramp: string[], fat = false): void {
-  drawBigText(g, text, p[0] + Math.round((p[1] - measureBig(text, fat)) / 2), y, ramp, undefined, fat);
-}
-
-/** Panel labels: the 5x7 font (Doom-size), not the 3x5 one. */
-function label(g: CanvasRenderingContext2D, text: string, p: Panel, y: number, col = '#c8c0b0'): void {
-  const font = measureText(text, 'small') <= p[1] - 6 ? 'small' : 'tiny';
-  drawText(g, text, p[0] + Math.round((p[1] - measureText(text, font)) / 2), y + (font === 'tiny' ? 1 : 0), col, font, '#000');
+/** Render one laid-out bar text run (all positions/styles from barLayout.ts). */
+function drawBarText(g: CanvasRenderingContext2D, t: BarText): void {
+  if (t.font === 'big' || t.font === 'bigfat') {
+    drawBigText(g, t.text, t.x, t.y, t.color as string[], undefined, t.font === 'bigfat');
+  } else {
+    drawText(g, t.text, t.x, t.y, t.color as string, t.font as 'small' | 'tiny', t.shadow === undefined ? '#000' : t.shadow);
+  }
 }
 
 /** Alarm: the recessed well behind a critical number throbs dark red. */
@@ -694,25 +672,28 @@ function paintBarBackground(): HTMLCanvasElement {
     g.fillRect(x, 2, u, BASE_STATUS - 4);
     g.fillStyle = '#4a463c';
     g.fillRect(x + u, 2, u, BASE_STATUS - 4);
-    // recessed well: dark top/left, light bottom/right
+    // recessed well: dark top/left, light bottom/right. The RES column
+    // gets a deeper well so its four labelled rows fill the whole panel.
     const wx = x + 3;
     const ww = w - 6;
+    const wt = x === P_RES[0] ? 3 : 4;
+    const wh = x === P_RES[0] ? BASE_STATUS - 4 : BASE_STATUS - 8;
     g.fillStyle = '#2a2722';
-    g.fillRect(wx, 4, ww, BASE_STATUS - 8);
-    const well = g.createLinearGradient(0, 4, 0, BASE_STATUS - 4);
+    g.fillRect(wx, wt, ww, wh);
+    const well = g.createLinearGradient(0, wt, 0, wt + wh);
     well.addColorStop(0, 'rgba(0,0,0,0.3)');
     well.addColorStop(0.5, 'rgba(40,36,30,0.08)');
     well.addColorStop(1, 'rgba(150,140,120,0.12)');
     g.fillStyle = well;
-    g.fillRect(wx + u, 4 + u, ww - 2 * u, BASE_STATUS - 8 - 2 * u);
+    g.fillRect(wx + u, wt + u, ww - 2 * u, wh - 2 * u);
     g.fillStyle = '#151310';
-    g.fillRect(wx, 4, ww, u);
-    g.fillRect(wx, 4, u, BASE_STATUS - 8);
+    g.fillRect(wx, wt, ww, u);
+    g.fillRect(wx, wt, u, wh);
     g.fillStyle = '#cfc6b4';
-    g.fillRect(wx, BASE_STATUS - 5, ww, u);
-    g.fillRect(wx + ww - u, 4, u, BASE_STATUS - 8);
+    g.fillRect(wx, wt + wh - 1, ww, u);
+    g.fillRect(wx + ww - u, wt, u, wh);
     g.fillStyle = '#8a8476';
-    g.fillRect(wx + u, BASE_STATUS - 6, ww - u, u);
+    g.fillRect(wx + u, wt + wh - 2, ww - u, u);
     // rivets
     for (const [rx, ry] of [[x + 3, 2], [x + w - 4, 2]]) {
       g.fillStyle = '#171612';
