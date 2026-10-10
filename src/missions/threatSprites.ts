@@ -4,7 +4,7 @@ import { spriteRegistry, spriteSets, type SpriteSet } from '../render/sprites';
 const PALETTES: Record<string, { source: string; color: [number, number, number] }> = {
   logicbomb: { source: 'worm', color: [255, 176, 64] },
   rat: { source: 'trojan', color: [96, 255, 144] },
-  rootkit: { source: 'ransomware', color: [144, 112, 255] },
+  // rootkit has its own model now (a low burrowing crawler) — see sprites.ts.
 };
 
 function recolorPixels(source: Uint8Array, color: [number, number, number]): Uint8Array {

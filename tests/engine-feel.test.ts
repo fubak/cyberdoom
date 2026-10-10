@@ -263,7 +263,11 @@ describe('Doom enemy AI', () => {
     const e = enemy('wanderer', 'worm');
     e.def.ai = 'wander';
     e.state.wanderA = 0;
-    hurtEntity(e, 1, 0, () => 0.1);
+    // pain entered without an alert (hurtEntity now aggros wanderers — F1);
+    // facing away from the player so it can't spot them when pain ends
+    e.state.mode = 'pain';
+    e.state.painT = 0.2;
+    e.state.facing = Math.PI;
     updateEntities([e], map, new Player(7, 2.5, 0), 0.1, hooks());
     expect(e.state.wanderT).toBeUndefined();
     updateEntities([e], map, new Player(7, 2.5, 0), 0.1, hooks());

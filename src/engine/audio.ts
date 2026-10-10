@@ -434,11 +434,45 @@ export class Audio {
           filter: { type: 'lowpass', frequency: 420, q: 1 }, distortion: true,
         });
         break;
+      case 'sight-logicbomb':
+        // fuse hiss + a rising charge whine
+        this.noise('bandpass', 1200, 3200, 0.3, 1, 0.3, o);
+        this.oscillator('square', 300, 1400, 0.35, 0.2, o, { delay: 0.08 });
+        break;
+      case 'sight-rat':
+        // chittering bursts: short high blips + a scrape
+        for (let i = 0; i < 4; i++) {
+          this.oscillator('square', 1400 - i * 150, 1100 - i * 120, 0.05, 0.26, o, { delay: i * 0.055 });
+        }
+        this.noise('bandpass', 2400, 1600, 0.12, 1.4, 0.3, o, 0.1);
+        break;
+      case 'sight-rootkit':
+        // sub-bass throb surfacing out of a hiss — something was under the floor
+        this.oscillator('sine', 55, 90, 0.5, 0.6, o, { distortion: true });
+        this.noise('bandpass', 400, 900, 0.4, 1, 0.2, o, 0.1);
+        break;
+      case 'growl':
+        // low hunting rumble, positional; wobbles like breathing
+        this.oscillator('sawtooth', 70, 95, 0.5, 0.3, o, {
+          filter: { type: 'lowpass', frequency: 300, q: 2 }, distortion: true, pitchRange: 0.06,
+        });
+        this.noise('lowpass', 350, 150, 0.4, 1, 0.14, o);
+        break;
+      case 'seal':
+        // padlock slam: metallic clack + dead-bolt thud
+        this.noise('bandpass', 700, 1800, 0.07, 1.6, 0.5, o);
+        this.oscillator('square', 220, 90, 0.12, 0.42, o, { delay: 0.04 });
+        this.body(65, 42, 0.16, 0.5, o);
+        break;
+      case 'unseal':
+        [880, 1100].forEach((f, i) => this.oscillator('square', f, f, 0.07, 0.24, o, { delay: i * 0.08 }));
+        break;
       case 'spawn':
         // teleport-fog whoosh + materialise thump
-        this.noise('bandpass', 300, 2600, 0.32, 1, 0.5, o);
-        this.oscillator('sine', 90, 300, 0.3, 0.42, o);
-        this.oscillator('square', 1600, 400, 0.12, 0.18, o, { delay: 0.05 });
+        this.noise('bandpass', 300, 2800, 0.36, 1, 0.72, o);
+        this.oscillator('sine', 90, 320, 0.32, 0.5, o);
+        this.oscillator('square', 1600, 400, 0.14, 0.24, o, { delay: 0.05 });
+        this.body(80, 50, 0.3, 0.4, o);
         break;
       case 'windup':
         this.oscillator('sine', 300, 1200, Math.max(0.1, dur ?? 0.5), 0.32, o);

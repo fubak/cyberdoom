@@ -22,6 +22,9 @@ export interface SpriteSet {
   frames: Record<string, THREE.Texture>;
   /** How the renderer animates it. */
   anim: 'monster' | 'person' | 'flicker' | 'static';
+  /** Enemy lighting overrides: brightness floor and gain (contrast tuning). */
+  floor?: number;
+  gain?: number;
 }
 
 export const spriteRegistry = new Registry<THREE.Texture>();
@@ -247,8 +250,8 @@ const ransomModel: Model = (pose) => {
   const bob = pose.kind === 'walk' ? Math.abs(Math.sin(ph)) * 1.5 : 0;
   for (const sx of [-1, 1]) {
     const sw = pose.kind === 'walk' ? Math.sin(ph) * 5 * sx : 0;
-    out.push(box([sx * 7, 10 + Math.max(0, -sw) * 0.4, sw], [4.5, 9.5, 5], '#5a3a1a'));
-    out.push(box([sx * 7, 2, sw + 1.5], [5.5, 2, 6.5], '#2a1808'));
+    out.push(box([sx * 7, 10 + Math.max(0, -sw) * 0.4, sw], [4.5, 9.5, 5], '#7a5024'));
+    out.push(box([sx * 7, 2, sw + 1.5], [5.5, 2, 6.5], '#4a3010'));
   }
   const body = 33 + bob;
   out.push(box([0, body, 0], [15, 13, 10], '#d8740c', {
@@ -273,10 +276,58 @@ const ransomModel: Model = (pose) => {
   }
   for (const sx of [-1, 1]) {
     const hand: V3 = atk === 0 ? [sx * 14, body + 24, 4] : atk === 1 ? [sx * 12, body + 6, 11] : pain ? [sx * 21, body + 14, -2] : [sx * 18, body - 10 + Math.sin(ph + (sx > 0 ? Math.PI : 0)) * 2, 3];
-    limb(out, [sx * 15, body + 8, 0], hand, 3.4, '#6a3a0a');
-    out.push(ell(hand, [4.6, 4.6, 4.6], '#4a2808'));
+    limb(out, [sx * 15, body + 8, 0], hand, 3.4, '#8a5218');
+    out.push(ell(hand, [4.6, 4.6, 4.6], '#6a3e10'));
     for (let k = 1; k <= 3; k++) out.push(ell([hand[0], hand[1] - 3 - k * 3.2, hand[2]], [1.4, 2, 1], '#b8c0cc', { roll: k % 2 ? 0 : 0.6 }));
   }
+  return out;
+};
+
+/** Rootkit: a low, wide burrowing crawler that hugs the floor — sprawled
+ *  hooked legs, a flat armored shell, and root tendrils trailing behind.
+ *  Flat-and-sprawled against ransomware's upright padlock bulk. */
+const rootkitModel: Model = (pose) => {
+  const out: Prim[] = [];
+  const ph = walkPhase(pose);
+  const atk = pose.kind === 'attack' ? pose.k : -1;
+  const pain = pose.kind === 'pain';
+  const bob = pose.kind === 'walk' ? Math.sin(ph * 2) * 0.8 : 0;
+  const body = 13 + bob; // hugs the ground
+  for (let k = 0; k < 3; k++) {
+    const z = (k - 1) * 8;
+    for (const sx of [-1, 1]) {
+      const swing = Math.sin(ph + k * 2.1 + (sx > 0 ? Math.PI : 0)) * 3;
+      const hip: V3 = [sx * 8, body + 3, z];
+      const knee: V3 = [sx * 19, body + 8, z * 1.15 + swing * 0.6];
+      const foot: V3 = [sx * 24, 1, z * 1.5 + swing];
+      limb(out, hip, knee, 1.3, '#2a1d55');
+      limb(out, knee, foot, 1.1, '#3a2a70');
+      out.push(ell(knee, [1.8, 1.8, 1.8], '#4a3890'));
+      out.push(ell(foot, [2.4, 1, 2.2], '#1a1238'));
+    }
+  }
+  // flat armored shell with dorsal plates
+  out.push(ell([0, body + 4, 0], [14, 6.5, 11], '#5a46a8', {
+    roll: pain ? 0.2 : 0,
+    decal: (l) => (Math.abs(((l[0] + 14) % 6)) < 0.9 ? '#3a2a70' : null),
+  }));
+  out.push(ell([0, body + 7.5, -2], [9, 3.4, 7], '#342466'));
+  // head low at the front: beady eye cluster + hooked mandibles
+  const hy = body + 1;
+  const open = atk === 1 ? 7 : atk === 0 ? 4 : 2;
+  out.push(ell([0, hy, 11], [7.5, 4.5, 4.5], '#4a3890'));
+  for (const sx of [-1, 1]) {
+    out.push(ell([sx * 3.4, hy + 1.4, 14.6], [1.7, 1.5, 1], pain ? '#ffffff' : '#8a5cff', { glow: true }));
+    out.push(ell([sx * 1.1, hy + 2.6, 14.8], [1.1, 1, 0.8], '#54e8ff', { glow: true }));
+    limb(out, [sx * 4, hy - 2, 12.5], [sx * (4 + open), hy - 5, 16.5], 1.1, '#1a123a');
+  }
+  // root tendrils trailing behind: thin hooked tails that burrow
+  for (const sx of [-1, 0, 1]) {
+    const wag = Math.sin(ph + sx * 2) * 2;
+    limb(out, [sx * 5, body + 2, -9], [sx * 7 + wag, 2, -16 - Math.abs(sx) * 2], 1.4, '#241844');
+    out.push(ell([sx * 7 + wag, 1.4, -16.5 - Math.abs(sx) * 2], [1.6, 1.6, 2.4], '#5a48b8'));
+  }
+  if (atk >= 0) out.push(ell([0, hy + 1, 15.5], [3.4, 2, 1.2], atk === 1 ? '#b060ff' : '#54e8ff', { glow: true }));
   return out;
 };
 
@@ -293,7 +344,7 @@ let lazyOwner = '';
 const lazyFirstDone = new Set<string>();
 
 /** TESTING: exported so tests/model-raster.test.ts can pin rasterizer output on real models. */
-export const spriteModels = { worm: wormModel, trojan: trojanModel, ransom: ransomModel };
+export const spriteModels = { worm: wormModel, trojan: trojanModel, ransom: ransomModel, rootkit: rootkitModel };
 
 export function scaleModel(prims: Prim[]): Prim[] {
   return prims.map((prim) => ({
@@ -304,7 +355,7 @@ export function scaleModel(prims: Prim[]): Prim[] {
   }));
 }
 
-function makeMonster(id: string, worldH: number, model: Model): void {
+function makeMonster(id: string, worldH: number, model: Model, opts: { floor?: number; gain?: number } = {}): void {
   lazyOwner = id;
   const W = TEX.monster;
   const H = TEX.monster;
@@ -376,19 +427,32 @@ function makeMonster(id: string, worldH: number, model: Model): void {
       return k === 0 ? packPixels(W, H, raw, { sprite: true }) : dissolvePixels(W, H, raw, k - 1, id);
     });
   }
+  // persistent corpse: the creature flattened into floor debris
+  const deadPrims = scaleModel(dieBase.map((p) => ({
+    ...p,
+    c: [p.c[0] * 1.5, p.c[1] * 0.26 + 1.4, p.c[2] * 1.3] as V3,
+    r: [p.r[0] * 1.2, Math.max(1.5, p.r[1] * 0.85), p.r[2] * 1.15] as V3,
+  })));
+  const deadRaster = (job: RasterJob) => {
+    rasterizeRows(job, 0, job.h);
+    return packPixels(W, H, { rgba: job.rgba, glow: job.glow }, { sprite: true });
+  };
+  registerGenJob(`sprite:${id}:dead`, { setId: id, first: false }, () =>
+    deadRaster(createRasterJob(W, H, deadPrims, { view: 0, tint: [40, 180, 80], tintT: 0.3 })));
   if (jobsOnly) return;
 
   if (genPoolActive()) {
     // worker pool: every raster frame defers; aliases and the display frame chain through
     for (const f of poseFrames) defineDeferred(frames, f.key, `sprite:${id}:${f.key}`);
     for (let k = 0; k < 5; k++) defineDeferred(frames, `die${k}`, `sprite:${id}:die${k}`);
+    defineDeferred(frames, 'dead', `sprite:${id}:dead`);
     const alias = (key: string, target: string) => {
       Object.defineProperty(frames, key, { configurable: true, enumerable: true, get: () => frames[target] });
     };
     alias('walk0', 'walk0_0');
     for (const [key] of poses.slice(1)) alias(key, `${key}_0`);
     alias('attack', 'attack1');
-    spriteSets.register(id, { w: worldH, h: worldH, frames, anim: 'monster' });
+    spriteSets.register(id, { w: worldH, h: worldH, frames, anim: 'monster', ...opts });
     whenGenJobs([`sprite:${id}:walk0_0`], () => spriteRegistry.register(id, frames.walk0));
     return;
   }
@@ -470,7 +534,17 @@ function makeMonster(id: string, worldH: number, model: Model): void {
       };
     });
   }
-  spriteSets.register(id, { w: worldH, h: worldH, frames, anim: 'monster' });
+  defineLazy('dead', () => {
+    const job = createRasterJob(W, H, deadPrims, { view: 0, tint: [40, 180, 80], tintT: 0.3 });
+    return {
+      job,
+      finish: () => {
+        const raw = { rgba: job.rgba, glow: job.glow };
+        return packTexture(W, H, raw, { sprite: true });
+      },
+    };
+  });
+  spriteSets.register(id, { w: worldH, h: worldH, frames, anim: 'monster', ...opts });
   spriteRegistry.register(id, frames.walk0);
 }
 
@@ -729,7 +803,8 @@ export function buildSprites(jobs = false): void {
 
   makeMonster('worm', 0.95, wormModel);
   makeMonster('trojan', 1.05, trojanModel);
-  makeMonster('ransomware', 1.15, ransomModel);
+  makeMonster('ransomware', 1.15, ransomModel, { floor: 1.35, gain: 2.6 });
+  makeMonster('rootkit', 0.8, rootkitModel, { floor: 1.3, gain: 2.7 });
 
   makeSet('workstation', 64, 64, 0.82, 'static', [{ key: 'idle', draw: workstation('clean', 0) }]);
   makeSet('workstation-infected', 64, 64, 0.82, 'flicker', [
@@ -955,6 +1030,50 @@ export function buildSprites(jobs = false): void {
       if (f === 0) lit(p, '#ffffff', 10, 10, 4, 4);
     },
   })));
+
+  // Doom teleport-fog flash where a threat materialises (ambushes, worm copies)
+  makeSet('fx-spawn', 32, 64, 0.95, 'static', [0, 1, 2, 3].map((f) => ({
+    key: `f${f}`,
+    draw: (p: PaintCtx) => {
+      const { g } = p;
+      const top = 3 + f * 5;
+      const bot = 62 - f * 2;
+      const half = 13 - f * 3;
+      g.fillStyle = f < 2 ? '#3fc8f8' : '#2a88c0';
+      g.fillRect(16 - half, top + 4, half * 2, bot - top - 4);
+      lit(p, f === 0 ? '#eaffff' : '#9ff0ff', 16 - half * 0.45, top, half * 0.9, bot - top);
+      p.glow.fillStyle = '#fff';
+      p.glow.fillRect(16 - half * 0.7, top + 2, half * 1.4, (bot - top) * (0.55 - f * 0.1));
+      for (let i = 0; i < 10; i++) {
+        const sx = ((i * 5 + f * 9) % 28) + 2;
+        const sy = 4 + ((i * 11 + f * 13) % 54);
+        const s = i % 3 === 0 ? 2 : 1;
+        lit(p, i % 2 ? '#ffffff' : '#7fe8ff', sx, sy, s, s);
+      }
+    },
+  })));
+  // Red padlock overlay: marks a door/console a ransomware has encrypted
+  makeSet('fx-seal', 32, 48, 0.5, 'static', [{
+    key: 'idle',
+    draw: (p: PaintCtx) => {
+      const { g } = p;
+      // shackle
+      lit(p, '#ff5040', 11, 4, 3, 11);
+      lit(p, '#ff5040', 18, 4, 3, 11);
+      lit(p, '#ff5040', 11, 4, 10, 3);
+      // body
+      g.fillStyle = '#c01810';
+      g.fillRect(7, 14, 18, 21);
+      lit(p, '#ff4030', 7, 14, 18, 3);
+      lit(p, '#ff6a50', 7, 14, 2, 21);
+      g.fillStyle = '#7a0c08';
+      g.fillRect(7, 32, 18, 3);
+      // keyhole
+      g.fillStyle = '#180402';
+      g.fillRect(14, 19, 4, 6);
+      g.fillRect(15, 25, 2, 4);
+    },
+  }]);
 
   // Ceiling-hung EXIT sign above exit tiles
   makeSet('fx-exit', 48, 16, 0.2, 'static', [{

@@ -193,6 +193,8 @@ interface SpriteState {
   scale: number;
   kind: Entity['def']['kind'];
   entity: Entity | null;
+  /** Forced frame key (persistent corpses, seal marks). */
+  frame?: string;
 }
 
 interface Fx {
@@ -215,6 +217,10 @@ export class Renderer {
   private ghosts: SpriteState[] = [];
   private projSprites = new Map<Projectile, SpriteState>();
   private fx: Fx[] = [];
+  private sealMarks = new Map<string, SpriteState>();
+  /** Last rendered player position — used to gate rootkit visibility. */
+  private lastPX = 0;
+  private lastPY = 0;
   private doorMeshes = new Map<string, THREE.Mesh>();
   private openingDoors: { mesh: THREE.Mesh; t: number }[] = [];
   private map: WorldMap | null = null;
@@ -360,6 +366,7 @@ export class Renderer {
     this.spriteGroup.clear();
     this.sprites.clear();
     this.ghosts = [];
+    this.sealMarks.clear();
     this.projSprites.clear();
     this.fx = [];
     this.doorMeshes.clear();
@@ -477,14 +484,16 @@ export class Renderer {
     return { mesh, mat };
   }
 
-  private addStatic(setId: string, x: number, z: number, y: number, light: number): void {
+  private addStatic(setId: string, x: number, z: number, y: number, light: number, frame?: string, tune?: { floor?: number; gain?: number }): void {
     const set = spriteSets.get(setId);
     if (!set) return;
     const { mesh, mat } = this.makeSpriteMesh(set, light);
+    if (tune?.floor !== undefined) mat.uniforms.uFloor.value = tune.floor;
+    if (tune?.gain !== undefined) mat.uniforms.uGain.value = tune.gain;
     mesh.position.set(x, y, z);
     this.ghosts.push({
       mesh, mat, set, setId, lastX: x, lastY: z, facing: null, moveT: 0, animT: 0, lastHp: 0, flash: 0, scale: 1,
-      kind: 'prop', entity: null,
+      kind: 'prop', entity: null, frame,
     });
   }
 
@@ -494,6 +503,54 @@ export class Renderer {
     const { mesh, mat } = this.makeSpriteMesh(set, light);
     mesh.position.set(x, y, z);
     this.fx.push({ mesh, mat, set, frames, t: 0, dur });
+  }
+
+  /** Bright Doom teleport-fog flash where a threat materialises. */
+  spawnTeleport(x: number, y: number): void {
+    this.spawnFx('fx-spawn', ['f0', 'f1', 'f2', 'f3'], x, y, 0, 0.45);
+  }
+
+  /** Red padlock overlay on a door or console a ransomware has sealed. */
+  sealMark(id: string, x: number, y: number, kind: 'door' | 'entity'): void {
+    this.unsealMark(id);
+    const set = spriteSets.get('fx-seal');
+    if (!set) return;
+    const place = (px: number, py: number, h: number) => {
+      const { mesh, mat } = this.makeSpriteMesh(set, 1);
+      mesh.position.set(px, h, py);
+      const st: SpriteState = {
+        mesh, mat, set, setId: 'fx-seal', lastX: px, lastY: py, facing: null, moveT: 0, animT: 0,
+        lastHp: 0, flash: 0, scale: 1, kind: 'prop', entity: null, frame: 'idle',
+      };
+      this.ghosts.push(st);
+      this.sealMarks.set(id, st);
+    };
+    if (kind === 'entity') {
+      place(x, y, 0.5);
+      return;
+    }
+    // door: the slab fills the cell, so float a padlock on each open side
+    const tx = Math.floor(x);
+    const ty = Math.floor(y);
+    let placed = false;
+    if (this.map) {
+      for (const [dx, dz] of DIRS) {
+        const n = this.map.cellAt(tx + dx, ty + dz);
+        if (!n || n.kind === 'wall' || n.kind === 'door') continue;
+        place(tx + 0.5 + dx * 0.42, ty + 0.5 + dz * 0.42, 0.28);
+        placed = true;
+      }
+    }
+    if (!placed) place(x, y, 0.28);
+  }
+
+  unsealMark(id: string): void {
+    const st = this.sealMarks.get(id);
+    if (!st) return;
+    this.sealMarks.delete(id);
+    this.spriteGroup.remove(st.mesh);
+    const i = this.ghosts.indexOf(st);
+    if (i >= 0) this.ghosts.splice(i, 1);
   }
 
   /** Remove the mesh for an opened door (animated: the door slides up). */
@@ -573,14 +630,17 @@ export class Renderer {
         continue;
       }
       seen.add(id);
+      const threatKind = e.def.threat ?? e.def.sprite;
       const setId = this.debugSprite.get(id) ?? (
-        e.def.kind === 'workstation'
-          ? !e.state.revealed
-            ? 'workstation'
-            : e.infected
-              ? 'workstation-infected'
-              : (e.def.sprite ?? 'workstation')
-          : e.def.sprite
+        e.def.kind === 'enemy' && threatKind === 'trojan' && !e.state.revealedTrojan
+          ? 'usb' // disguised: reads as a harmless found-USB pickup
+          : e.def.kind === 'workstation'
+            ? !e.state.revealed
+              ? 'workstation'
+              : e.infected
+                ? 'workstation-infected'
+                : (e.def.sprite ?? 'workstation')
+            : e.def.sprite
       );
       const set = spriteSets.get(setId) ?? spriteSets.require('npc-m');
       if (!st) {
@@ -621,9 +681,13 @@ export class Renderer {
       st.mat.uniforms.uLight.value = enemy ? 1 : e.def.kind === 'item' ? Math.max(0.7, lit) : lit;
       // monsters keep a much higher floor than walls (and a slight gain) so
       // they read against dark sectors at any range, like Doom's
-      st.mat.uniforms.uFloor.value = enemy ? 0.85 : e.def.kind === 'item' ? 0.45 : 0.2;
-      st.mat.uniforms.uGain.value = enemy ? 1.9 : 1;
-      st.mesh.visible = !this.debugHidden.has(id);
+      st.mat.uniforms.uFloor.value = enemy ? (set.floor ?? 0.85) : e.def.kind === 'item' ? 0.45 : 0.2;
+      st.mat.uniforms.uGain.value = enemy ? (set.gain ?? 1.9) : 1;
+      // rootkit: invisible beyond ~2 tiles until tap/EDR/damage/close reveals it
+      const stealthy = enemy && threatKind === 'rootkit' && !e.state.revealedRootkit;
+      st.mesh.visible =
+        !this.debugHidden.has(id) &&
+        !(stealthy && Math.hypot(e.x - this.lastPX, e.y - this.lastPY) > 2);
     }
     for (const [id, st] of [...this.sprites]) {
       if (!seen.has(id) && st.entity && st.entity.alive === false) continue;
@@ -701,8 +765,16 @@ export class Renderer {
     this.spriteGroup.remove(st.mesh);
     if (e) this.sprites.delete(e.def.id);
     if (!e) return;
-    if (e.def.kind === 'enemy' && st.set.frames.die0) {
-      this.spawnFx(st.setId, ['die0', 'die1', 'die2', 'die3'], e.x, e.y, 0, 0.5, this.lightAt(e.x, e.y));
+    if (e.def.kind === 'enemy') {
+      if (st.set.frames.die0) {
+        this.spawnFx(st.setId, ['die0', 'die1', 'die2', 'die3', 'die4'], e.x, e.y, 0, 0.55, this.lightAt(e.x, e.y));
+        // persistent, non-blocking corpse: the flattened 'dead' frame stays on the floor
+        if (st.set.frames.dead) {
+          this.addStatic(st.setId, e.x, e.y, 0, this.lightAt(e.x, e.y), 'dead', { floor: 0.55, gain: 1.2 });
+        }
+      } else {
+        this.spawnFx('fx-puff', ['f0', 'f1', 'f2'], e.x, e.y, 0.4, 0.4);
+      }
     } else if (e.def.kind === 'workstation') {
       this.addStatic('workstation', e.x, e.y, 0, this.lightAt(e.x, e.y));
       this.spawnFx('fx-puff', ['f0', 'f1', 'f2', 'f2'], e.x, e.y, 0.4, 0.4);
@@ -713,6 +785,10 @@ export class Renderer {
     const f = st.set.frames;
     const anim = st.set.anim;
     const t = st.animT;
+    if (st.frame) {
+      const forced = f[st.frame];
+      if (forced) return { tex: forced };
+    }
     if (anim === 'monster') {
       // Doom-style rotations: which of 8 views faces the camera
       const toCam = Math.atan2(py - st.lastY, px - st.lastX);
@@ -774,6 +850,8 @@ export class Renderer {
     const cameraX = pose?.x ?? player.x;
     const cameraY = pose?.y ?? player.y;
     const cameraAngle = pose?.angle ?? player.angle;
+    this.lastPX = player.x;
+    this.lastPY = player.y;
     this.camera.position.set(cameraX, pose ? EYE_H + pose.dz : EYE_H + bobY, cameraY);
     this.camera.rotation.set(0, -cameraAngle - Math.PI / 2, pose?.roll ?? 0, 'YXZ');
     const yaw = this.camera.rotation.y;

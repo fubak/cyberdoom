@@ -108,6 +108,10 @@ class Game {
   /** EDR pulse window: lightning column per hurt target, capped at 96 particles. */
   private edrPulseUntil = -Infinity;
   private edrPulseCount = 0;
+  /** doorIds currently sealed by a live ransomware (encryption-as-denial). */
+  private sealedDoors = new Set<string>();
+  /** threat types whose mechanic explainer was already tickered this mission. */
+  private noticedThreats = new Set<string>();
 
   constructor(app: HTMLElement) {
     const viewport = document.createElement('div');
@@ -209,6 +213,7 @@ class Game {
       const e = this.runtime?.entities.find((entity) => entity.def.id === entityId);
       if (!e) return;
       this.particles.spawn(e.x, e.y);
+      this.renderer.spawnTeleport(e.x, e.y);
       this.audio.sfx('spawn', { x: e.x, y: e.y });
     });
     // deep link: ?mission=m01&gender=female
@@ -531,6 +536,8 @@ class Game {
     this.toolFxUntil.clear();
     this.edrPulseUntil = -Infinity;
     this.edrPulseCount = 0;
+    this.sealedDoors.clear();
+    this.noticedThreats.clear();
     if (!prep?.built) this.renderer.buildLevel(this.map, mission.map);
     this.audio.setVoice(this.gender);
     this.audio.setListener(this.player.x, this.player.y, this.player.angle);
@@ -721,7 +728,7 @@ class Game {
     }
 
     updateEntities(runtime.entities, map, p, dt, {
-      onSight: (e) => this.audio.sfx(`sight-${e.def.sprite}`, { x: e.x, y: e.y }),
+      onSight: (e) => this.audio.sfx(`sight-${e.def.threat ?? e.def.sprite}`, { x: e.x, y: e.y }),
       onWindup: (e, dur) => this.audio.sfx('windup', { x: e.x, y: e.y, dur }),
       onMelee: (e, dmg) => {
         this.particles.pop(e.x, e.y, muzzleHeight(e));
@@ -732,6 +739,29 @@ class Game {
         this.projectiles.push({ ...projectile, alive: true, traveled: 0 });
         this.particles.pop(e.x, e.y, muzzleHeight(e));
         this.audio.sfx('enemy-fire', { x: e.x, y: e.y });
+      },
+      onGrowl: (e) => this.audio.sfx('growl', { x: e.x, y: e.y, gain: 0.6 }),
+      onSpawn: (e) => {
+        this.particles.spawn(e.x, e.y);
+        this.renderer.spawnTeleport(e.x, e.y);
+        this.audio.sfx('spawn', { x: e.x, y: e.y });
+      },
+      onSeal: (_e, seal) => {
+        if (seal.kind === 'door') this.sealedDoors.add(seal.id);
+        this.renderer.sealMark(seal.id, seal.x, seal.y, seal.kind);
+        this.audio.sfx('seal', { x: seal.x, y: seal.y });
+      },
+      onUnseal: (_e, seal) => {
+        if (seal.kind === 'door') this.sealedDoors.delete(seal.id);
+        this.renderer.unsealMark(seal.id);
+        this.audio.sfx('unseal', { x: seal.x, y: seal.y });
+        this.hud.pushMessage('Lock released.', 'good');
+      },
+      onNotice: (e, text) => {
+        const key = e.def.threat ?? e.def.sprite;
+        if (this.noticedThreats.has(key)) return;
+        this.noticedThreats.add(key);
+        this.hud.pushMessage(text, 'warn');
       },
     });
 
@@ -1155,6 +1185,11 @@ class Game {
   private openDoor(doorId: string): void {
     const map = this.map;
     if (!map || map.doorFrac(doorId) >= 1) return;
+    if (this.sealedDoors.has(doorId)) {
+      this.audio.sfx('denied');
+      this.hud.pushMessage('ENCRYPTED: a ransomware sealed this door — neutralize it to release the lock.', 'warn');
+      return;
+    }
     const firstOpen = map.doorFrac(doorId) === 0;
     map.startOpening(doorId);
     if (!firstOpen) return;
