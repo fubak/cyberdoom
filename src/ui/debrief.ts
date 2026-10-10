@@ -505,7 +505,7 @@ export function debrief(opts: {
       if (fx.why) failBlocks.push(block('WHY IT MATTERS', C.gold), block(fx.why, C.white));
       failBlocks.push(block('NEXT TIME', C.gold));
       for (const line of fx.next) failBlocks.push(block(line, C.text, { prefix: '>', prefixColor: C.gold }));
-      failBlocks.push(block('ENTER REDEPLOY  -  K KNOWLEDGE CHECK (OPTIONAL)  -  ESC MISSION SELECT', C.orange));
+      failBlocks.push(block('ENTER REDEPLOY  -  K OPTIONAL KNOWLEDGE CHECK (QUIZ)  -  ESC MISSION SELECT', C.orange));
       failPages.push(...paginate(failBlocks).map((lines) => ({ lines })));
     }
     show({
@@ -516,7 +516,7 @@ export function debrief(opts: {
       nextLabel: opts.won ? 'KNOWLEDGE CHECK' : 'REDEPLOY',
       canNext: () => true,
       next: opts.won ? () => runCheck(buildFirstCheck(), 'first') : redeploy,
-      extraButton: opts.won ? undefined : { label: 'KNOWLEDGE CHECK [K]', go: () => runCheck(buildFirstCheck(), 'first') },
+      extraButton: opts.won ? undefined : { label: 'QUIZ [K]', go: () => runCheck(buildFirstCheck(), 'first') },
       onKey: opts.won ? undefined : (e) => {
         if (e.key === 'k' || e.key === 'K') {
           runCheck(buildFirstCheck(), 'first');
