@@ -3,13 +3,13 @@ import { lightRects } from '../../missions/levelkit';
 import type { WalkStep } from '../../missions/walkthroughs';
 import type { MissionTeaching } from '../curriculum';
 import { q } from '../arc-questions';
-import { addThreatEncounter, floorSpot, liveThreats } from './campaign-map';
+import { addThreatEncounter, floorSpot, liveThreats, retex } from './campaign-map';
 
 /**
  * M11 "Audit Night": reconcile a stale asset inventory, dispose of retired
  * media correctly, answer data-subject requests, set a pen-test scope, and
  * sign the attestation before the external auditors arrive at 08:00.
- * Difficulty 9.
+ * Difficulty 11.
  *
  * Critical path, three gates:
  *   1. SERVER FLOOR (analyst badge): physically sweep every asset, then
@@ -31,7 +31,7 @@ import { addThreatEncounter, floorSpot, liveThreats } from './campaign-map';
 export const m11: Mission = {
   id: 'm11',
   title: 'AUDIT NIGHT',
-  difficulty: 9,
+  difficulty: 11,
   objectives: ['4.2', '5.4', '5.5', '5.1'],
   briefing:
     'External auditors walk in at 08:00 and the asset register has not been touched since 2021. ' +
@@ -647,7 +647,7 @@ export const m11: Mission = {
     },
     // --- Ambient + pickups ---
     {
-      id: 'worm-hall-a', kind: 'enemy', x: 37.5, y: 17.5, sprite: 'worm', ai: 'wander', hp: 2, infected: true, tags: ['malware'],
+      id: 'worm-hall-a', kind: 'enemy', x: 33.5, y: 10.5, sprite: 'worm', ai: 'wander', hp: 2, infected: true, tags: ['malware'],
       inspect: { label: 'Worm', detail: 'A worm is loose in the war room — a shadow asset let it in.', category: 'malware', objectives: ['2.4'] },
     },
     {
@@ -761,8 +761,8 @@ export const m11: Mission = {
       },
     ],
     secrets: [
-      { id: 'vault-closet', area: [2, 5, 3, 7], label: 'Vault supply closet' },
-      { id: 'parts-cage', area: [36, 9, 37, 10], label: 'Server-floor parts cage' },
+      { id: 'vault-closet', area: [2, 5, 3, 7], label: 'Vault supply closet', grant: { resource: 'integrity', amount: 40 } },
+      { id: 'parts-cage', area: [36, 9, 37, 10], label: 'Server-floor parts cage', grant: { resource: 'usb-charge', amount: 16 } },
     ],
   },
 };
@@ -1028,4 +1028,18 @@ m11.entities.push(
     grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
   { id: 'chg-x2', kind: 'item', ...floorSpot(m11, [2, 13, 37, 19]), sprite: 'charge', tags: ['arsenal-pickup'],
     grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
+);
+
+// — rF2 landmarks: east server hall = bright grid floor + console audit wall;
+// west media-vault block = dim rust floor.
+m11.map.legend[','] = { kind: 'floor', tex: 'floor-grid' };
+m11.map.legend[';'] = { kind: 'floor', tex: 'floor-rust' };
+retex(m11, [28, 4, 38, 12], 'floor', ',');
+retex(m11, [2, 4, 10, 9], 'floor', ';');
+retex(m11, [2, 20, 18, 26], 'floor', ';');
+m11.map.lights = { ...m11.map.lights, ...lightRects([[28, 4, 38, 11, 0.85], [2, 4, 10, 8, 0.45], [2, 20, 18, 26, 0.55]]) };
+m11.entities.push(
+  { id: 'audit-wall-a', kind: 'prop', x: 31.5, y: 6.5, sprite: 'console' },
+  { id: 'audit-wall-b', kind: 'prop', x: 34.5, y: 6.5, sprite: 'console' },
+  { id: 'vault-desk', kind: 'prop', x: 5.5, y: 6.5, sprite: 'workstation' },
 );

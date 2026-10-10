@@ -3,7 +3,7 @@ import { lightRects } from '../../missions/levelkit';
 import type { WalkStep } from '../../missions/walkthroughs';
 import type { MissionTeaching } from '../curriculum';
 import { q } from '../arc-questions';
-import { addThreatEncounter, floorSpot, liveThreats } from './campaign-map';
+import { addThreatEncounter, floorSpot, liveThreats, retex } from './campaign-map';
 
 export const m08: Mission = {
   id: 'm08',
@@ -462,8 +462,8 @@ export const m08: Mission = {
       },
     ],
     secrets: [
-      { id: 'dmz-closet', area: [2, 5, 4, 9], label: 'DMZ supply closet' },
-      { id: 'server-closet', area: [35, 5, 37, 9], label: 'Server room supply closet' },
+      { id: 'dmz-closet', area: [2, 5, 4, 9], label: 'DMZ supply closet', grant: { resource: 'integrity', amount: 40 } },
+      { id: 'server-closet', area: [35, 5, 37, 9], label: 'Server room supply closet', grant: { resource: 'usb-charge', amount: 16 } },
     ],
   },
 };
@@ -615,4 +615,18 @@ m08.entities.push(
     grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
   { id: 'chg-x3', kind: 'item', ...floorSpot(m08, [22, 2, 37, 11]), sprite: 'charge', tags: ['arsenal-pickup'],
     grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
+);
+
+// — rF2 landmarks: east server hall = bright grid floor + console row; west
+// DMZ offices + south briefing room = dim rust floors.
+m08.map.legend[','] = { kind: 'floor', tex: 'floor-grid' };
+m08.map.legend[';'] = { kind: 'floor', tex: 'floor-rust' };
+retex(m08, [28, 4, 38, 11], 'floor', ',');
+retex(m08, [2, 4, 14, 11], 'floor', ';');
+retex(m08, [2, 21, 15, 27], 'floor', ';');
+m08.map.lights = { ...m08.map.lights, ...lightRects([[28, 4, 38, 10, 0.85], [2, 21, 15, 27, 0.55]]) };
+m08.entities.push(
+  { id: 'noc-wall-a', kind: 'prop', x: 31.5, y: 7.5, sprite: 'console' },
+  { id: 'noc-wall-b', kind: 'prop', x: 36.5, y: 7.5, sprite: 'console' },
+  { id: 'dmz-desk', kind: 'prop', x: 6.5, y: 6.5, sprite: 'workstation' },
 );

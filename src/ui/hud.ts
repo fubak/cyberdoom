@@ -214,7 +214,7 @@ export class Hud {
       this.objShowT = 3.5;
     }
     this.lastObjKey = objKey;
-    if (this.tabHeld) this.drawObjectiveStrip(opts.objectives, -1);
+    if (this.tabHeld) this.drawObjectivesOverlay(opts.objectives);
     else if (this.objShowT > 0 && opts.objectives[this.objIdx]) this.drawObjectiveStrip(opts.objectives, this.objIdx);
     else this.drawTicker();
     if (opts.prompt) this.drawPrompt(opts.prompt);
@@ -314,6 +314,44 @@ export class Hud {
         g.fillRect(tx, y + 3, w - 1, 1);
       }
     });
+  }
+
+  /** TAB: full objectives list — every objective with its status lamp, like the
+   *  pause-menu 'TAB OBJECTIVES' line promises. Held only while Tab is down. */
+  private drawObjectivesOverlay(objs: { text: string; done: boolean; failed: boolean }[]): void {
+    const g = this.g;
+    const done = objs.filter((o) => o.done).length;
+    const rows = objs.map((o) => ({
+      lamp: o.failed ? '#e01e10' : o.done ? '#2ad83a' : '#ffd040',
+      col: o.failed ? '#ff5a3a' : o.done ? '#5aff6a' : '#f0ece4',
+      settled: o.done || o.failed,
+      lines: wrapText(o.text.toUpperCase(), 52, 2),
+    }));
+    const rowH = 9;
+    const h = Math.min(BASE_H - BASE_STATUS - 4, 14 + rows.reduce((n, r) => n + r.lines.length, 0) * rowH + 4);
+    g.fillStyle = getTickerPattern(g) ?? 'rgba(0,0,0,0.85)';
+    g.fillRect(0, 0, BASE_W, h);
+    g.fillStyle = '#a87a10';
+    g.fillRect(0, h - 1, BASE_W, 1);
+    drawChunky(g, `OBJECTIVES ${done}/${objs.length}`, 4, 3, MSG_RAMP.warn);
+    let y = 13;
+    for (const row of rows) {
+      g.fillStyle = '#000';
+      g.fillRect(4, y + 1, 5, 5);
+      g.fillStyle = row.lamp;
+      g.fillRect(5, y + 2, 3, 3);
+      row.lines.forEach((line, i) => {
+        const w = drawText(g, line, 13, y, row.col, 'small', '#000');
+        if (row.settled && i === 0) {
+          g.fillStyle = row.col;
+          g.fillRect(13, y + 3, w - 1, 1);
+        }
+        y += rowH - 1;
+        if (y > h - 8) return;
+      });
+      y += 1;
+      if (y > h - 8) break;
+    }
   }
 
   /** Low-integrity (<=25%) damage layered over the arsenal portrait: badly hurt. */

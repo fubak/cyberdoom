@@ -2,11 +2,11 @@ import type { Mission } from '../../core/types';
 import type { MissionTeaching } from '../curriculum';
 import type { WalkStep } from '../../missions/walkthroughs';
 import { lightRects } from '../../missions/levelkit';
-import { addThreatEncounter, floorSpot, liveThreats, setMapCell } from './campaign-map';
+import { addThreatEncounter, floorSpot, liveThreats, retex, setMapCell } from './campaign-map';
 
 /**
  * M3 "The Quiet One": insider threat, correlating data sources.
- * Difficulty 5. Nobody's inspect text gives a verdict. Each log shows raw
+ * Difficulty 3. Nobody's inspect text gives a verdict. Each log shows raw
  * entries and three employees each appear in exactly one log with an innocent
  * explanation. Only the insider appears in all three.
  * Critical path, two concept gates:
@@ -20,7 +20,7 @@ import { addThreatEncounter, floorSpot, liveThreats, setMapCell } from './campai
 export const m03: Mission = {
   id: 'm03',
   title: 'THE QUIET ONE',
-  difficulty: 6,
+  difficulty: 3,
   objectives: ['2.1', '2.4', '4.9', '3.3', '4.8'],
   briefing:
     'A DLP alert fired overnight: confidential R&D designs left the network, taken with valid credentials. ' +
@@ -165,23 +165,23 @@ export const m03: Mission = {
       inspect: { label: 'Logic-bomb payload', detail: 'Dropped by a scheduled task set to fire when the logs were opened.', category: 'malware', objectives: ['2.4'] } },
     { id: 'bomb-rw', kind: 'enemy', x: 29.5, y: 5.5, sprite: 'logicbomb', ai: 'chase', hp: 1, infected: true, dormant: true, tags: ['malware'],
       inspect: { label: 'Logic-bomb payload', detail: 'Scheduled execution condition recorded in the records share.', category: 'malware', objectives: ['2.4'] } },
-    { id: 'chg-lobby', kind: 'item', x: 14.5, y: 22.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 4 },
+    { id: 'chg-lobby', kind: 'item', x: 14.5, y: 22.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 2 },
       inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for your write-protected scanner stick.', category: 'item' } },
-    { id: 'chg-floor', kind: 'item', x: 4.5, y: 18.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 4 },
+    { id: 'chg-floor', kind: 'item', x: 4.5, y: 18.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 2 },
       inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for your write-protected scanner stick.', category: 'item' } },
-    { id: 'chg-legal', kind: 'item', x: 30.5, y: 22.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 4 },
+    { id: 'chg-legal', kind: 'item', x: 30.5, y: 22.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 2 },
       inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for your write-protected scanner stick.', category: 'item' } },
     { id: 'med-archive', kind: 'item', x: 1.5, y: 10.5, sprite: 'medkit', grants: { resource: 'integrity', amount: 25 },
       inspect: { label: 'Integrity kit', detail: 'Restores 25 integrity.', category: 'item' } },
-    { id: 'chg-mail', kind: 'item', x: 5.5, y: 3.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 6 },
+    { id: 'chg-mail', kind: 'item', x: 5.5, y: 3.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 4 },
       inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for your write-protected scanner stick.', category: 'item' } },
-    { id: 'chg-open-plan', kind: 'item', x: 19.5, y: 24.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 8 },
+    { id: 'chg-open-plan', kind: 'item', x: 19.5, y: 24.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 4 },
       inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for your write-protected scanner stick.', category: 'item' } },
-    { id: 'chg-open-plan-cache', kind: 'item', x: 17.5, y: 24.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 8 },
+    { id: 'chg-open-plan-cache', kind: 'item', x: 17.5, y: 24.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 4 },
       inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for your write-protected scanner stick.', category: 'item' } },
-    { id: 'chg-open-plan-west', kind: 'item', x: 23.5, y: 23.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 8 },
+    { id: 'chg-open-plan-west', kind: 'item', x: 23.5, y: 23.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 4 },
       inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for your write-protected scanner stick.', category: 'item' } },
-    { id: 'chg-east-hall', kind: 'item', x: 30.5, y: 21.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 8 },
+    { id: 'chg-east-hall', kind: 'item', x: 30.5, y: 21.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 4 },
       inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for your write-protected scanner stick.', category: 'item' } },
     { id: 'med-mail', kind: 'item', x: 9.5, y: 5.5, sprite: 'medkit', grants: { resource: 'integrity', amount: 25 },
       inspect: { label: 'Integrity kit', detail: 'Restores 25 integrity.', category: 'item' } },
@@ -233,9 +233,9 @@ export const m03: Mission = {
         message: 'Case filed: lockdown lifted, exit open.' },
     ],
     secrets: [
-      { id: 'archive', area: [1, 9, 2, 12], label: 'Paper archive' },
-      { id: 'mail', area: [4, 2, 10, 6], label: 'Old mail room' },
-      { id: 'pillar-cache', area: [9, 11, 9, 11], label: 'Pillar cache' },
+      { id: 'archive', area: [1, 9, 2, 12], label: 'Paper archive', grant: { resource: 'integrity', amount: 40 } },
+      { id: 'mail', area: [4, 2, 10, 6], label: 'Old mail room', grant: { resource: 'integrity', amount: 40 } },
+      { id: 'pillar-cache', area: [9, 11, 9, 11], label: 'Pillar cache', grant: { resource: 'usb-charge', amount: 14 } },
     ],
   },
   debriefQuestions: [
@@ -411,4 +411,20 @@ liveThreats(m03, 'open-worm', 'worm', 1, [3, 21, 37, 28]);
 m03.entities.push(
   { id: 'chg-s', kind: 'item', ...floorSpot(m03, [3, 21, 37, 28]), sprite: 'charge', tags: ['arsenal-pickup'],
     grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
+);
+
+// — rF2 landmarks: east records wing = grid floor + console evidence wall;
+// pillar plaza (centre) = grid floor; SW brick office = dim rust bullpen.
+m03.map.legend[','] = { kind: 'floor', tex: 'floor-grid' };
+m03.map.legend[';'] = { kind: 'floor', tex: 'floor-rust' };
+retex(m03, [28, 1, 38, 19], 'floor', ',');
+retex(m03, [4, 8, 27, 19], 'floor', ',');
+retex(m03, [3, 20, 15, 28], 'floor', ';');
+m03.map.lights = { ...m03.map.lights, ...lightRects([[29, 4, 38, 19, 0.7], [4, 20, 15, 28, 0.55]]) };
+m03.entities.push(
+  { id: 'rec-wall-a', kind: 'prop', x: 31.5, y: 5.5, sprite: 'console' },
+  { id: 'rec-wall-b', kind: 'prop', x: 34.5, y: 5.5, sprite: 'console' },
+  { id: 'ops-desk-a', kind: 'prop', x: 6.5, y: 21.5, sprite: 'workstation' },
+  { id: 'pillar-stash', kind: 'item', x: 9.5, y: 11.5, sprite: 'pcap', tags: ['arsenal-pickup'],
+    grants: { resource: 'pcap', amount: 6 } },
 );

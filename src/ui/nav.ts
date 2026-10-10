@@ -35,7 +35,7 @@ export interface NavState {
 /** HUD / map strings. Kept short enough for the 320px status width. */
 export const LOOK_HINT = 'CLICK TO LOOK - ESC MENU';
 export const MENU_HINT = 'ESC MENU - M MAP - L LOG';
-export const MAP_HINT = 'WASD MOVE - M OR ESC CLOSE';
+export const MAP_HINT = 'WHEEL/+- ZOOM - WASD PAN - G FOLLOW - M/ESC CLOSE';
 
 export function applyBack(state: NavState): NavState {
   switch (state.overlay) {

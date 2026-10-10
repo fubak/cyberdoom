@@ -3,10 +3,10 @@ import type { MissionTeaching } from '../curriculum';
 import { q } from '../arc-questions';
 import type { WalkStep } from '../../missions/walkthroughs';
 import { lightRects } from '../../missions/levelkit';
-import { addThreatEncounter, floorSpot } from './campaign-map';
+import { addThreatEncounter, floorSpot, retex } from './campaign-map';
 
 /**
- * M12 "Robo SOC": automate the SOC by Friday — the finale (difficulty 10).
+ * M12 "Robo SOC": automate the SOC by Friday — the finale (difficulty 12).
  * Alert volume tripled, and the attackers know the deadline.
  * Critical path, four gates:
  *   1. SIEM HALL (analyst badge): read the alert queue to earn the SOC role.
@@ -24,7 +24,7 @@ import { addThreatEncounter, floorSpot } from './campaign-map';
 export const m12: Mission = {
   id: 'm12',
   title: 'ROBO SOC',
-  difficulty: 10,
+  difficulty: 12,
   objectives: ['4.7', '4.4', '3.2', '2.5'],
   briefing:
     'Alert volume tripled. Leadership wants the SOC automated by Friday, and the attackers know it. ' +
@@ -439,8 +439,8 @@ export const m12: Mission = {
       { id: 'vault-ambush', area: [29, 1, 38, 6], spawn: ['vault-rootkit'], kind: 'bad', message: 'A rootkit wakes inside the crypto vault.' },
     ],
     secrets: [
-      { id: 'egress-cache', area: [2, 22, 2, 22], label: 'Egress supply cache' },
-      { id: 'noc-cache', area: [36, 22, 36, 22], label: 'NOC supply cache' },
+      { id: 'egress-cache', area: [2, 22, 2, 22], label: 'Egress supply cache', grant: { resource: 'patch-disk', amount: 3 } },
+      { id: 'noc-cache', area: [36, 22, 36, 22], label: 'NOC supply cache', grant: { resource: 'pcap', amount: 6 } },
     ],
   },
   debriefQuestions: [
@@ -591,13 +591,13 @@ addThreatEncounter(m12, 'exit-worm', 'worm', 2, {
 // F1: encounter pacing — live skirmishers, room ambushes, objective waves,
 // signoff finale, and supplies. All six malware families appear in the capstone.
 m12.entities.push(
-  { id: 'sc-worm', kind: 'enemy', x: 14.5, y: 22.5, sprite: 'worm', ai: 'wander',
+  { id: 'sc-worm', kind: 'enemy', x: 14.5, y: 15.5, sprite: 'worm', ai: 'wander',
     hp: 3, infected: true, tags: ['malware'],
     inspect: { label: 'Worm', detail: 'Self-replicating process roaming the security centre lobby.', category: 'malware', objectives: ['2.4'] } },
   { id: 'hall-worm-c', kind: 'enemy', x: 13.5, y: 17.5, sprite: 'worm', ai: 'wander',
     hp: 3, infected: true, tags: ['malware'],
     inspect: { label: 'Worm', detail: 'Self-replicating process roaming the SOC floor.', category: 'malware', objectives: ['2.4'] } },
-  { id: 'hall-rat-c', kind: 'enemy', x: 24.5, y: 18.5, sprite: 'rat', ai: 'wander',
+  { id: 'hall-rat-c', kind: 'enemy', x: 25.5, y: 17.5, sprite: 'rat', ai: 'wander',
     hp: 2, infected: true, tags: ['malware'],
     inspect: { label: 'RAT', detail: 'Remote-access implant beaconing out of the SOC floor.', category: 'malware', objectives: ['2.4'] } },
 );
@@ -678,4 +678,21 @@ m12.entities.push(
     grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
   { id: 'chg-x4', kind: 'item', ...floorSpot(m12, [1, 8, 9, 19]), sprite: 'charge', tags: ['arsenal-pickup'],
     grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
+);
+
+// — rF2 landmarks: NOC annex (SE) = bright grid floor + console video wall;
+// egress offices (SW) = dim rust bullpen; crypto vault (NE) = ribbed walls.
+m12.map.legend[','] = { kind: 'floor', tex: 'floor-grid' };
+m12.map.legend[';'] = { kind: 'floor', tex: 'floor-rust' };
+m12.map.legend['U'] = { kind: 'wall', tex: 'wall-ribs' };
+retex(m12, [28, 21, 38, 26], 'floor', ',');
+retex(m12, [0, 21, 10, 26], 'floor', ';');
+retex(m12, [21, 0, 39, 6], 'wall', 'U');
+m12.map.lights = { ...m12.map.lights, ...lightRects([[28, 21, 38, 26, 0.9], [0, 21, 10, 26, 0.5], [21, 1, 38, 6, 0.45]]) };
+m12.entities.push(
+  { id: 'noc-wall-a', kind: 'prop', x: 29.5, y: 23.5, sprite: 'console' },
+  { id: 'noc-wall-b', kind: 'prop', x: 31.5, y: 23.5, sprite: 'console' },
+  { id: 'noc-wall-c', kind: 'prop', x: 33.5, y: 23.5, sprite: 'console' },
+  { id: 'egress-desk-a', kind: 'prop', x: 4.5, y: 21.5, sprite: 'workstation' },
+  { id: 'egress-desk-b', kind: 'prop', x: 7.5, y: 21.5, sprite: 'workstation' },
 );

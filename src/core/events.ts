@@ -31,6 +31,8 @@ export interface EventMap {
   'player-down': { by?: string; threat?: string };
   /** Player picked up an item. */
   pickup: { entityId: string };
+  /** A secret area awarded its named payoff; main applies it like a pickup grant. */
+  'grant-item': { resource: string; amount: number };
   /** A script trigger spawned a dormant enemy (telegraphing: fog + sfx). */
   'ambush-spawn': { entityId: string };
   /** Player committed a triage verdict on an entity (Mouse, second click). */

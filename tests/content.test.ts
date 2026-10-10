@@ -120,7 +120,7 @@ describe('missions', () => {
       .map((entry) => missionRegistry.get(entry.id)!);
     const budgets = built.map((m) => encounterBudget(m.difficulty));
     expect(budgets).toEqual([...budgets].sort((a, b) => a - b));
-    expect([1, 3, 6, 8].map(encounterBudget)).toEqual([6, 10, 20, 32]);
+    expect([1, 3, 6, 8].map(encounterBudget)).toEqual([6, 8, 12, 16]);
     for (const m of built) {
       const budget = encounterBudget(m.difficulty);
       expect(

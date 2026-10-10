@@ -2,7 +2,7 @@ import type { Mission } from '../../core/types';
 import type { MissionTeaching } from '../curriculum';
 import type { WalkStep } from '../../missions/walkthroughs';
 import { lightRects } from '../../missions/levelkit';
-import { addThreatEncounter, setMapCell } from './campaign-map';
+import { addThreatEncounter, retex, setMapCell } from './campaign-map';
 
 /**
  * M1 "Patch Tuesday" — antimalware, endpoint hygiene, removable media.
@@ -229,9 +229,9 @@ export const m01: Mission = {
         message: 'All hosts clean: quarantine lifted, exit unsealed.' },
     ],
     secrets: [
-      { id: 'closet', area: [1, 23, 2, 25], label: 'Supply closet' },
-      { id: 'crawl', area: [32, 1, 38, 2], label: 'Cable crawlspace' },
-      { id: 'core', area: [30, 4, 30, 4], label: 'Server core alcove' },
+      { id: 'closet', area: [1, 23, 2, 25], label: 'Supply closet', grant: { resource: 'usb-charge', amount: 16 } },
+      { id: 'crawl', area: [32, 1, 38, 2], label: 'Cable crawlspace', grant: { resource: 'integrity', amount: 40 } },
+      { id: 'core', area: [30, 4, 30, 4], label: 'Server core alcove', grant: { resource: 'usb-charge', amount: 16 } },
     ],
   },
   debriefQuestions: [
@@ -411,3 +411,20 @@ export const m01Teach: MissionTeaching = {
   },
   examTip: 'Exam questions identify malware by its behavior. Self-spreads with no user action = worm. Disguised and run by the user = trojan. Encrypts files and demands payment = ransomware. Hides and collects data = spyware. Triggers on a condition = logic bomb.',
 };
+
+// — rF2 landmarks: the east server hall reads as the NOC (grid floor, bright,
+// console video wall), the south-west brick office as the dim ops bullpen
+// (rust floor, workstations) so navigation can be learned without the marker.
+m01.map.legend[','] = { kind: 'floor', tex: 'floor-grid' };
+m01.map.legend[';'] = { kind: 'floor', tex: 'floor-rust' };
+retex(m01, [30, 1, 38, 15], 'floor', ',');
+retex(m01, [0, 19, 14, 28], 'floor', ';');
+m01.map.lights = { ...m01.map.lights, ...lightRects([[31, 1, 38, 14, 0.85], [0, 20, 14, 28, 0.55]]) };
+m01.entities.push(
+  { id: 'noc-wall-a', kind: 'prop', x: 33.5, y: 1.8, sprite: 'console' },
+  { id: 'noc-wall-b', kind: 'prop', x: 35.5, y: 1.8, sprite: 'console' },
+  { id: 'bullpen-desk-a', kind: 'prop', x: 5.5, y: 22.5, sprite: 'workstation' },
+  { id: 'bullpen-desk-b', kind: 'prop', x: 11.5, y: 22.5, sprite: 'workstation' },
+  { id: 'core-cache', kind: 'item', x: 30.5, y: 4.5, sprite: 'charge', tags: ['arsenal-pickup'],
+    grants: { resource: 'usb-charge', amount: 8 } },
+);

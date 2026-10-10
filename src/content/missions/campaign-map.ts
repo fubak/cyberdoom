@@ -1,9 +1,24 @@
 import type { MapDef, Mission, MissionTrigger, TileRect } from '../../core/types';
+import { WorldMap } from '../../engine/map';
 
 export function setMapCell(map: MapDef, x: number, y: number, cell: string): void {
   const row = map.grid[y];
   if (!row || x < 0 || x >= row.length) return;
   map.grid[y] = `${row.slice(0, x)}${cell}${row.slice(x + 1)}`;
+}
+
+/** LEVELS: landmark dressing — swap every cell of kind `from` inside `region`
+ *  for `glyph` (which must map to a cell of the same kind in the legend).
+ *  Floors stay floors, walls stay walls; doors/exits/props are untouched. */
+export function retex(mission: Mission, region: TileRect, from: 'floor' | 'wall', glyph: string): void {
+  if (mission.map.legend[glyph]?.kind !== from) return;
+  const [x0, y0, x1, y1] = region;
+  for (let y = y0; y <= y1; y++) {
+    for (let x = x0; x <= x1; x++) {
+      const ch = mission.map.grid[y]?.[x];
+      if (ch !== undefined && mission.map.legend[ch]?.kind === from) setMapCell(mission.map, x, y, glyph);
+    }
+  }
 }
 
 export function threatWave(
@@ -13,6 +28,9 @@ export function threatWave(
   occupied: { x: number; y: number }[],
   count = 20,
   region?: [number, number, number, number],
+  /** Spawn-safety for live enemies: reject candidates within `minDist` tiles of
+   *  the player start or with a clear line of sight to it. */
+  spawnSafe?: { minDist: number; los: boolean },
 ): Array<{
   id: string;
   kind: 'enemy';
@@ -35,11 +53,15 @@ export function threatWave(
     rootkit: 3,
   };
   const positions: { x: number; y: number }[] = [];
+  const world = spawnSafe?.los ? new WorldMap(map) : null;
+  const minSpawnDist = spawnSafe ? Math.max(5, spawnSafe.minDist) : 5;
   const [rx1, ry1, rx2, ry2] = region ?? [2, 4, map.grid[0].length - 3, map.grid.length - 3];
   for (let y = Math.max(4, ry1); y <= Math.min(map.grid.length - 3, ry2); y++) {
     for (let x = Math.max(2, rx1); x <= Math.min(map.grid[0].length - 3, rx2); x++) {
       if (map.legend[map.grid[y][x]]?.kind !== 'floor') continue;
-      if (Math.hypot(x + 0.5 - map.spawn.x, y + 0.5 - map.spawn.y) < 5) continue;
+      const spawnDist = Math.hypot(x + 0.5 - map.spawn.x, y + 0.5 - map.spawn.y);
+      if (spawnDist < minSpawnDist) continue;
+      if (world && world.raycast(map.spawn.x, map.spawn.y, Math.atan2(y + 0.5 - map.spawn.y, x + 0.5 - map.spawn.x), spawnDist).dist >= spawnDist - 0.2) continue;
       if (occupied.some((entity) => Math.hypot(entity.x - (x + 0.5), entity.y - (y + 0.5)) < 1.8)) continue;
       if (positions.some((point) => Math.hypot(point.x - (x + 0.5), point.y - (y + 0.5)) < 2.4)) continue;
       positions.push({ x: x + 0.5, y: y + 0.5 });
@@ -74,7 +96,9 @@ export function threatWave(
   }));
 }
 
-/** Place live (non-dormant) wanderers on floor cells away from the spawn point. */
+/** Place live (non-dormant) wanderers on floor cells away from the spawn point.
+ *  Live enemies must be Doom-safe: at least 8 tiles from the player start AND
+ *  out of its line of sight. */
 export function liveThreats(
   mission: Mission,
   prefix: string,
@@ -89,6 +113,7 @@ export function liveThreats(
     mission.entities.map(({ x, y }) => ({ x, y })),
     count,
     region,
+    { minDist: 8, los: true },
   ).map((enemy) => ({ ...enemy, ai: 'wander' as const, dormant: false }));
   mission.entities.push(...wave);
 }

@@ -163,6 +163,24 @@ class Game {
         this.automap.toggle();
         return;
       }
+      // Automap controls (Doom-style): +/- zoom, G toggles follow/free-pan.
+      if (this.automap.isOpen && !this.paused && !this.dossier.isOpen && this.player) {
+        if (event.code === 'Equal' || event.code === 'NumpadAdd') {
+          event.preventDefault();
+          this.automap.zoomBy(1);
+          return;
+        }
+        if (event.code === 'Minus' || event.code === 'NumpadSubtract') {
+          event.preventDefault();
+          this.automap.zoomBy(-1);
+          return;
+        }
+        if (event.code === 'KeyG') {
+          event.preventDefault();
+          this.automap.toggleFollow(this.player);
+          return;
+        }
+      }
       if (event.code !== 'Escape') return;
       // The dossier listener runs first and closes itself on Escape.
       if (this.dossier.isOpen) return;
@@ -249,6 +267,19 @@ class Game {
     this.bus.on('pickup', () => {
       this.feel.bonus();
       this.audio.sfx('pickup', this.player ? { x: this.player.x, y: this.player.y } : {});
+    });
+    // Secret payoffs: runtime emits the grant; apply it like a floor pickup and
+    // say what was found so every secret visibly pays off.
+    this.bus.on('grant-item', ({ resource, amount }) => {
+      let text: string;
+      if (resource === 'integrity') {
+        if (this.player) this.player.integrity = Math.min(100, this.player.integrity + amount);
+        text = `+${amount} INTEGRITY`;
+      } else {
+        text = this.arsenal.grant(resource, amount);
+      }
+      this.audio.sfx('pickup', this.player ? { x: this.player.x, y: this.player.y } : {});
+      this.hud.pushMessage(`Found: ${text}`, 'good');
     });
     this.bus.on('reach-exit', () => this.audio.sfx('win'));
     this.bus.on('ambush-spawn', ({ entityId }) => {

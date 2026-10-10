@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { missionRegistry } from '../src/content/missions';
+import { difficultyScale, encounterBudget } from '../src/missions/difficulty';
 
 // Campaign order is the mission id sequence (m01..m12), which matches the
 // intended difficulty arc.
@@ -21,6 +22,27 @@ describe('difficulty curve', () => {
       ).toBeGreaterThanOrEqual(peak - 4);
       peak = Math.max(peak, count);
     });
+  });
+
+  it('ramps the difficulty rating monotonically — every mission is its own step', () => {
+    const d = ordered.map((m) => m.difficulty);
+    for (let i = 1; i < d.length; i++) {
+      expect(d[i], `${ordered[i].id} plateaus at d${d[i]} after ${ordered[i - 1].id}`).toBeGreaterThan(d[i - 1]);
+    }
+    // Stat scaling follows: the finale is clearly harder than mid-campaign,
+    // which is clearly harder than the early arc, while the openers stay forgiving.
+    const s = (i: number) => difficultyScale(ordered[i].difficulty);
+    expect(s(11).hpBonus).toBeGreaterThan(s(7).hpBonus);
+    expect(s(7).hpBonus).toBeGreaterThan(s(3).hpBonus);
+    expect(s(11).speedMul).toBeGreaterThan(s(7).speedMul);
+    expect(s(7).speedMul).toBeGreaterThan(s(3).speedMul);
+    expect(s(11).dmgMul).toBeGreaterThan(s(3).dmgMul);
+    expect(s(0).hpBonus).toBe(0);
+    expect(s(0).speedMul).toBe(1);
+    expect(s(0).dmgMul).toBe(1);
+    // Encounter budgets never shrink down the arc.
+    const budgets = ordered.map((m) => encounterBudget(m.difficulty));
+    expect(budgets).toEqual([...budgets].sort((a, b) => a - b));
   });
 
   it('gives every mission an opening skirmish and at least one telegraphed ambush', () => {

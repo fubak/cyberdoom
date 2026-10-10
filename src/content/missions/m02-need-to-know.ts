@@ -2,11 +2,11 @@ import type { Mission } from '../../core/types';
 import type { MissionTeaching } from '../curriculum';
 import type { WalkStep } from '../../missions/walkthroughs';
 import { lightRects } from '../../missions/levelkit';
-import { addThreatEncounter, floorSpot, liveThreats, setMapCell } from './campaign-map';
+import { addThreatEncounter, floorSpot, liveThreats, retex, setMapCell } from './campaign-map';
 
 /**
  * M2 "Need to Know": least privilege, just-in-time access, shared credentials.
- * Difficulty 3. Critical path, three concept gates:
+ * Difficulty 2. Critical path, three concept gates:
  *   1. ANALYST badge opens the SOC lab (your role is enough).
  *   2. NETOPS door: request JIT access at the IAM kiosk for exactly what ticket
  *      CHG-4471 needs. Requesting DOMAIN ADMIN FAILS the mission.
@@ -19,7 +19,7 @@ import { addThreatEncounter, floorSpot, liveThreats, setMapCell } from './campai
 export const m02: Mission = {
   id: 'm02',
   title: 'NEED TO KNOW',
-  difficulty: 3,
+  difficulty: 2,
   objectives: ['4.6', '1.2', '5.6'],
   briefing:
     'New floor, first day. Your badge carries the ANALYST role. The doors here use ' +
@@ -216,9 +216,9 @@ export const m02: Mission = {
         message: 'Uplink restored and incident filed: SOC released the datacenter door.' },
     ],
     secrets: [
-      { id: 'break', area: [27, 25, 31, 28], label: 'Break room' },
-      { id: 'cable', area: [5, 12, 8, 15], label: 'Cable vault' },
-      { id: 'server-room', area: [36, 23, 36, 23], label: 'Server-side cache' },
+      { id: 'break', area: [27, 25, 31, 28], label: 'Break room', grant: { resource: 'integrity', amount: 40 } },
+      { id: 'cable', area: [5, 12, 8, 15], label: 'Cable vault', grant: { resource: 'usb-charge', amount: 16 } },
+      { id: 'server-room', area: [36, 23, 36, 23], label: 'Server-side cache', grant: { resource: 'usb-charge', amount: 16 } },
     ],
   },
   debriefQuestions: [
@@ -447,4 +447,21 @@ m02.entities.push(
     grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
   { id: 'med-c', kind: 'item', ...floorSpot(m02, [14, 21, 25, 27]), sprite: 'medkit',
     grants: { resource: 'integrity', amount: 25 }, inspect: { label: 'Integrity kit', detail: 'Restores 25 integrity.', category: 'item' } },
+);
+
+// — rF2 landmarks: east datacenter = bright grid floor + console uplink wall;
+// admin suite SW = dim rust floor with workstations; break room = rust.
+m02.map.legend[','] = { kind: 'floor', tex: 'floor-grid' };
+m02.map.legend[';'] = { kind: 'floor', tex: 'floor-rust' };
+retex(m02, [30, 8, 38, 20], 'floor', ',');
+retex(m02, [4, 21, 15, 28], 'floor', ';');
+retex(m02, [27, 24, 31, 28], 'floor', ';');
+m02.map.lights = { ...m02.map.lights, ...lightRects([[31, 8, 38, 19, 0.85], [5, 21, 13, 27, 0.5]]) };
+m02.entities.push(
+  { id: 'dc-wall-a', kind: 'prop', x: 34.5, y: 9.5, sprite: 'console' },
+  { id: 'dc-wall-b', kind: 'prop', x: 36.5, y: 9.5, sprite: 'console' },
+  { id: 'adm-desk-a', kind: 'prop', x: 6.5, y: 26.5, sprite: 'workstation' },
+  { id: 'adm-desk-b', kind: 'prop', x: 9.5, y: 26.5, sprite: 'workstation' },
+  { id: 'srv-cache', kind: 'item', x: 36.5, y: 23.5, sprite: 'charge', tags: ['arsenal-pickup'],
+    grants: { resource: 'usb-charge', amount: 8 } },
 );
