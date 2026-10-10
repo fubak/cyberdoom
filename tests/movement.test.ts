@@ -84,11 +84,11 @@ describe('Player movement', () => {
       walk.move(m, 1, 0, false, 0, 1 / 60);
       run.move(m, 1, 0, true, 0, 1 / 60);
     }
-    expect(Math.hypot(walk.vx, walk.vy) / EYE_HEIGHT).toBeCloseTo(7.1, 1);
-    expect(Math.hypot(run.vx, run.vy) / EYE_HEIGHT).toBeCloseTo(14.2, 1);
+    expect(Math.hypot(walk.vx, walk.vy) / EYE_HEIGHT).toBeCloseTo(6.95, 1);
+    expect(Math.hypot(run.vx, run.vy) / EYE_HEIGHT).toBeCloseTo(13.83, 1);
     expect(MOVE.stopSpeed / EYE_HEIGHT).toBeCloseTo(0.054);
   });
-  it('accelerates to 90 percent of run terminal speed in about 0.67 seconds', () => {
+  it('accelerates to 90 percent of run terminal speed in about 0.65 seconds', () => {
     const open: MapDef = {
       ...def,
       grid: Array.from({ length: 40 }, (_, y) =>
@@ -97,11 +97,11 @@ describe('Player movement', () => {
     };
     const m = new WorldMap(open);
     const p = new Player(20.5, 20.5, 0);
-    for (let i = 0; i < 40; i++) p.move(m, 1, 0, true, 0, 1 / 60);
-    expect(Math.hypot(p.vx, p.vy) / EYE_HEIGHT).toBeCloseTo(14.2 * 0.9, 1);
-    expect(40 / 60).toBeCloseTo(0.67, 1);
+    for (let i = 0; i < 39; i++) p.move(m, 1, 0, true, 0, 1 / 60);
+    expect(Math.hypot(p.vx, p.vy) / EYE_HEIGHT).toBeCloseTo(13.83 * 0.9, 1);
+    expect(39 / 60).toBeCloseTo(0.65, 1);
   });
-  it('slides about 4.1 eye-heights after releasing a full run', () => {
+  it('slides about 3.9 eye-heights after releasing a full run', () => {
     const open: MapDef = {
       ...def,
       grid: Array.from({ length: 64 }, (_, y) =>
@@ -114,8 +114,8 @@ describe('Player movement', () => {
     const startX = p.x;
     for (let i = 0; i < 105; i++) p.move(m, 0, 0, true, 0, 1 / 60);
     const slideDistance = (p.x - startX) / EYE_HEIGHT;
-    expect(slideDistance).toBeGreaterThanOrEqual(4.1 - 0.3);
-    expect(slideDistance).toBeLessThanOrEqual(4.1 + 0.3);
+    expect(slideDistance).toBeGreaterThanOrEqual(3.9 - 0.3);
+    expect(slideDistance).toBeLessThanOrEqual(3.9 + 0.3);
     expect(p.vx).toBe(0);
   });
   it('keeps unnormalized SR50 diagonal running speed', () => {
@@ -129,7 +129,7 @@ describe('Player movement', () => {
     const m = new WorldMap(open);
     const p = new Player(10.5, 10.5, 0);
     for (let i = 0; i < 120; i++) p.move(m, 1, 1, true, 0, 1 / 60);
-    expect(Math.hypot(p.vx, p.vy) / EYE_HEIGHT).toBeCloseTo(14.2 * Math.sqrt(1.64), 1);
+    expect(Math.hypot(p.vx, p.vy) / EYE_HEIGHT).toBeCloseTo(13.83 * Math.sqrt(1.64), 1);
   });
   it('slides along the wall when moving diagonally into it', () => {
     const openBeyondEastWall: MapDef = {

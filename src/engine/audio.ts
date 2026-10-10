@@ -84,49 +84,61 @@ interface MusicSpec {
   stab: number[];
   /** Stab chord semitones above 2*root (minor = dark). */
   chord: number[];
+  /** Lead motif per step, semitones above 4*root; null = rest. */
+  lead: (number | null)[];
   /** Bass lowpass cutoff — later tiers run brighter/more aggressive. */
   dark: number;
 }
 
 /** Original looping score beds, one per campaign act. All synth, no samples. */
 const MUSIC: Record<MusicTier, MusicSpec> = {
-  // early missions: a slow, sparse pulse — dread, not drive
+  // early missions: a steady eighth-note pulse under a somber motif
   early: {
-    bpm: 92,
+    bpm: 100,
     root: 55,
     dark: 620,
-    bass: [0, null, null, null, -2, null, 0, null, null, null, 3, null, null, null, -4, null],
+    bass: [0, null, 0, null, -2, null, 3, null, 0, null, -2, null, -4, null, 3, null],
     kick: [0, 8],
-    hat: [4, 12],
-    snare: [],
-    stab: [0],
-    chord: [0, 3, 7],
-  },
-  // mid missions: a driving eighth-note line with offbeat hats
-  mid: {
-    bpm: 118,
-    root: 55,
-    dark: 850,
-    bass: [0, null, 0, null, -2, null, 3, null, 0, null, 5, null, 3, null, -2, null],
-    kick: [0, 4, 8, 12],
     hat: [2, 6, 10, 14],
     snare: [12],
     stab: [0, 8],
     chord: [0, 3, 7],
+    lead: [12, null, null, 10, null, null, 7, null, null, 12, null, null, 14, null, 12, null],
   },
-  // late missions: fast, dissonant, relentless
-  late: {
-    bpm: 138,
-    root: 49,
-    dark: 1100,
-    bass: [0, 0, -2, null, 0, 3, null, -2, 0, 0, 5, 3, -2, null, -4, -2],
+  // mid missions: driving sixteenth-note bass, backbeat snare, offbeat hats
+  mid: {
+    bpm: 126,
+    root: 55,
+    dark: 850,
+    bass: [0, 0, -2, 0, 3, 0, -2, 3, 0, 0, 5, 3, -2, 0, -4, -2],
     kick: [0, 4, 8, 12],
     hat: [2, 6, 7, 10, 14, 15],
     snare: [4, 12],
-    stab: [0, 6, 8],
+    stab: [0, 8],
+    chord: [0, 3, 7],
+    lead: [12, null, 12, null, 15, null, 14, null, 12, null, 10, null, 7, null, 10, null],
+  },
+  // late missions: fast, dissonant, relentless — full 16th hats and a
+  // double-kick push under an aggressive semitone lead line
+  late: {
+    bpm: 144,
+    root: 49,
+    dark: 1100,
+    bass: [0, 0, -2, 0, 0, 3, -2, 0, 0, 5, 0, 3, -2, 0, -4, -2],
+    kick: [0, 4, 8, 12, 14],
+    hat: [2, 3, 6, 7, 10, 11, 14, 15],
+    snare: [4, 12, 15],
+    stab: [0, 6, 8, 14],
     chord: [0, 3, 6],
+    lead: [12, 13, null, 12, null, 10, 12, null, 15, null, 14, 13, null, 12, 10, 8],
   },
 };
+
+/**
+ * Music-bus send coefficient: the score should sit ~-18..-20 dB RMS under the
+ * sfx bus, not whisper at -30 dB. Denser patterns plus this send get it there.
+ */
+const MUSIC_SEND = 2.4;
 
 interface FilterSpec {
   type: BiquadFilterType;
@@ -199,7 +211,7 @@ export class Audio {
       this.musicDuck = ctx.createGain();
       this.musicBus = ctx.createGain();
       // modest send: the score sits under the sfx, never on top of them
-      this.musicBus.gain.value = this.musicVol * 0.5;
+      this.musicBus.gain.value = this.musicVol * MUSIC_SEND;
       this.master = ctx.createGain();
       // Pre-limiter gain kept low so stacked combat sfx hit the glue compressor
       // and brick-wall limiter with headroom instead of clipping digitally.
@@ -498,11 +510,14 @@ export class Audio {
           this.noise('bandpass', 2400, 1600, 0.3, 2, 0.14, o);
           [0, 0.09, 0.2].forEach((d, i) => this.oscillator('square', 900 - i * 140, 700 - i * 140, 0.05, 0.1, o, { delay: d }));
         } else if (kind === 'pain') {
-          this.formant(620, 380, 0.18, 0.7, o);
+          // two variants so repeated hits don't sound like a replayed sample
+          if (Math.random() < 0.5) this.formant(620, 380, 0.18, 0.75, o);
+          else this.formant(700, 300, 0.14, 0.7, o);
           this.noise('bandpass', 2800, 1900, 0.12, 2.5, 0.16, o);
         } else if (kind === 'death') {
-          this.formant(540, 90, 0.65, 0.9, o);
-          this.noise('lowpass', 900, 200, 0.5, 1, 0.3, o, 0.08);
+          this.impactLayer(o, 0.5);
+          this.formant(540, 90, 0.65, 0.95, o);
+          this.noise('lowpass', 900, 200, 0.5, 1, 0.32, o, 0.08);
         } else if (kind === 'attack') {
           this.noise('highpass', 2400, 1100, 0.06, 1, 0.3, o);
           this.body(160, 60, 0.14, 0.5, o);
@@ -517,12 +532,14 @@ export class Audio {
           [0, 0.07, 0.16, 0.24].forEach((d, i) => this.oscillator('square', 320 + i * 60, 240, 0.045, 0.09, o, { delay: d }));
           this.noise('bandpass', 1400, 1000, 0.3, 3, 0.08, o);
         } else if (kind === 'pain') {
-          this.oscillator('square', 480, 170, 0.14, 0.42, o, { pitchRange: 0.3 });
+          if (Math.random() < 0.5) this.oscillator('square', 480, 170, 0.14, 0.45, o, { pitchRange: 0.3 });
+          else this.oscillator('square', 560, 140, 0.11, 0.42, o, { pitchRange: 0.3 });
           this.noise('bandpass', 2200, 1500, 0.1, 3, 0.12, o);
         } else if (kind === 'death') {
-          this.oscillator('square', 420, 38, 0.8, 0.5, o, { pitchRange: 0.06 });
-          this.noise('bandpass', 1800, 300, 0.6, 1.6, 0.28, o, 0.1);
-          this.body(90, 40, 0.55, 0.5, o);
+          this.impactLayer(o, 0.55);
+          this.oscillator('square', 420, 38, 0.8, 0.55, o, { pitchRange: 0.06 });
+          this.noise('bandpass', 1800, 300, 0.6, 1.6, 0.3, o, 0.1);
+          this.body(90, 40, 0.55, 0.55, o);
         } else if (kind === 'attack') {
           this.noise('highpass', 1600, 700, 0.1, 1, 0.32, o);
           this.oscillator('square', 220, 90, 0.12, 0.4, o);
@@ -537,12 +554,14 @@ export class Audio {
           this.oscillator('sawtooth', 95, 65, 0.5, 0.3, o, { filter: { type: 'lowpass', frequency: 500 } });
           this.noise('bandpass', 900, 500, 0.4, 4, 0.14, o, 0.06);
         } else if (kind === 'pain') {
-          this.oscillator('square', 180, 90, 0.16, 0.5, o, { filter: { type: 'bandpass', frequency: 1200, q: 4 } });
+          if (Math.random() < 0.5) this.oscillator('square', 180, 90, 0.16, 0.52, o, { filter: { type: 'bandpass', frequency: 1200, q: 4 } });
+          else this.oscillator('sawtooth', 230, 70, 0.14, 0.5, o, { filter: { type: 'bandpass', frequency: 1000, q: 4 } });
           this.noise('bandpass', 1500, 800, 0.14, 4, 0.2, o);
         } else if (kind === 'death') {
-          this.body(95, 30, 0.9, 0.85, o);
-          this.noise('bandpass', 1200, 250, 0.7, 3, 0.34, o, 0.05);
-          this.oscillator('square', 160, 45, 0.5, 0.3, o, { delay: 0.12 });
+          this.impactLayer(o, 0.6);
+          this.body(95, 30, 0.9, 0.9, o);
+          this.noise('bandpass', 1200, 250, 0.7, 3, 0.36, o, 0.05);
+          this.oscillator('square', 160, 45, 0.5, 0.34, o, { delay: 0.12 });
         } else if (kind === 'attack') {
           this.impactLayer(o, 0.55);
           this.oscillator('sawtooth', 140, 50, 0.22, 0.42, o);
@@ -556,7 +575,8 @@ export class Audio {
         if (kind === 'growl') {
           [0, 0.12].forEach((d) => this.oscillator('square', 1180, 1180, 0.05, 0.12, o, { delay: d }));
         } else if (kind === 'pain') {
-          [0, 0.07, 0.14].forEach((d, i) => this.oscillator('square', 980 - i * 180, 980 - i * 180, 0.045, 0.3, o, { delay: d }));
+          const base = Math.random() < 0.5 ? 980 : 1180;
+          [0, 0.07, 0.14].forEach((d, i) => this.oscillator('square', base - i * 180, base - i * 180, 0.045, 0.32, o, { delay: d }));
         } else if (kind === 'death' || kind === 'attack') {
           this.impactLayer(o, 0.85);
           this.noise('lowpass', 2400, 90, 0.8, 0.7, 0.5, o, 0.02);
@@ -571,11 +591,13 @@ export class Audio {
         if (kind === 'growl') {
           [0, 0.06, 0.13, 0.21].forEach((d, i) => this.oscillator('square', 1500 - i * 110, 1300 - i * 110, 0.035, 0.09, o, { delay: d }));
         } else if (kind === 'pain') {
-          [0, 0.05, 0.1].forEach((d, i) => this.oscillator('square', 1600 - i * 160, 1150 - i * 160, 0.04, 0.28, o, { delay: d }));
+          const base = Math.random() < 0.5 ? 1600 : 1800;
+          [0, 0.05, 0.1].forEach((d, i) => this.oscillator('square', base - i * 160, base - i * 320, 0.04, 0.3, o, { delay: d }));
         } else if (kind === 'death') {
-          this.noise('highpass', 2600, 900, 0.3, 1, 0.32, o);
-          this.oscillator('square', 1400, 150, 0.35, 0.34, o);
-          this.body(200, 60, 0.3, 0.4, o);
+          this.impactLayer(o, 0.5);
+          this.noise('highpass', 2600, 900, 0.3, 1, 0.34, o);
+          this.oscillator('square', 1400, 150, 0.35, 0.36, o);
+          this.body(200, 60, 0.3, 0.45, o);
         } else if (kind === 'attack') {
           this.noise('highpass', 3000, 1600, 0.05, 1, 0.3, o);
           this.oscillator('square', 1300, 500, 0.09, 0.34, o, { delay: 0.015 });
@@ -590,11 +612,13 @@ export class Audio {
           this.oscillator('sine', 70, 48, 0.6, 0.4, o, { distortion: true });
           this.noise('lowpass', 400, 150, 0.55, 1, 0.2, o);
         } else if (kind === 'pain') {
-          this.oscillator('sine', 85, 48, 0.28, 0.6, o, { distortion: true });
+          if (Math.random() < 0.5) this.oscillator('sine', 85, 48, 0.28, 0.62, o, { distortion: true });
+          else this.oscillator('sine', 100, 40, 0.22, 0.6, o, { distortion: true });
           this.noise('bandpass', 700, 350, 0.2, 2, 0.2, o);
         } else if (kind === 'death') {
-          this.noise('lowpass', 1200, 120, 0.9, 1, 0.42, o);
-          this.body(75, 26, 0.95, 0.8, o);
+          this.impactLayer(o, 0.55);
+          this.noise('lowpass', 1200, 120, 0.9, 1, 0.44, o);
+          this.body(75, 26, 0.95, 0.85, o);
         } else if (kind === 'attack') {
           this.noise('bandpass', 900, 300, 0.22, 2.5, 0.4, o);
           this.body(110, 45, 0.2, 0.55, o);
@@ -809,12 +833,13 @@ export class Audio {
         this.body(70, 45, 0.5, 0.72, o);
         break;
       case 'kill':
-        // heavy kill punctuation under the death voice: sub thump + crunch
+        // heavy kill punctuation under the death voice: sub thump + mid crack
         // + a short noise tail, so every kill lands like Doom's body drop
-        this.impactLayer(o, 0.9);
-        this.noise('lowpass', 2200, 160, 0.42, 0.8, 0.62, o);
-        this.body(100, 32, 0.42, 0.78, o);
-        this.oscillator('sawtooth', 210, 48, 0.3, 0.34, o, { distortion: true });
+        this.impactLayer(o, 1.0);
+        this.noise('bandpass', 1600, 420, 0.2, 1.2, 0.5, o);
+        this.noise('lowpass', 2200, 160, 0.45, 0.8, 0.68, o);
+        this.body(110, 30, 0.5, 0.85, o);
+        this.oscillator('sawtooth', 210, 48, 0.3, 0.4, o, { distortion: true });
         break;
       case 'step':
         this.noise('lowpass', 320, 180, 0.06, 0.8, 0.09, o);
@@ -971,7 +996,7 @@ export class Audio {
   setMusicVolume(v: number): void {
     this.musicVol = Math.max(0, Math.min(1, v));
     if (this.ctx && this.musicBus) {
-      this.musicBus.gain.setTargetAtTime(this.musicVol * 0.5, this.ctx.currentTime, 0.05);
+      this.musicBus.gain.setTargetAtTime(this.musicVol * MUSIC_SEND, this.ctx.currentTime, 0.05);
     }
   }
 
@@ -998,15 +1023,27 @@ export class Audio {
     const semi = spec.bass[step];
     if (semi !== null && semi !== undefined) {
       const f = spec.root * 2 ** (semi / 12);
-      this.mTone('sawtooth', f, f, stepDur * 0.9, 0.14, when, spec.dark);
-      this.mTone('square', f / 2, f / 2, stepDur * 0.9, 0.06, when, spec.dark * 0.7);
+      this.mTone('sawtooth', f, f, stepDur * 1.8, 0.14, when, spec.dark);
+      this.mTone('square', f / 2, f / 2, stepDur * 1.8, 0.06, when, spec.dark * 0.7);
+    }
+    // sustained low drone under each half-bar: keeps the bed's sustained RMS
+    // up between percussive hits instead of collapsing to silence
+    if (step % 8 === 0) {
+      this.mTone('triangle', spec.root, spec.root, stepDur * 8.4, 0.075, when, spec.dark * 0.6);
+      this.mTone('sine', spec.root * 2, spec.root * 2, stepDur * 8.4, 0.04, when);
     }
     if (spec.kick.includes(step)) {
       this.mTone('sine', 120, 38, 0.13, 0.5, when);
       this.mNoise('highpass', 2500, 1200, 0.02, 0.8, 0.1, when);
     }
-    if (spec.hat.includes(step)) this.mNoise('highpass', 6500, 5000, 0.035, 1, 0.055, when);
+    if (spec.hat.includes(step)) this.mNoise('highpass', 6500, 5000, 0.035, 1, step % 4 === 2 ? 0.055 : 0.03, when);
     if (spec.snare.includes(step)) this.mNoise('bandpass', 1900, 900, 0.11, 1.1, 0.13, when);
+    const leadSemi = spec.lead[step];
+    if (leadSemi !== null && leadSemi !== undefined) {
+      const f = spec.root * 4 * 2 ** (leadSemi / 12);
+      this.mTone('square', f, f, stepDur * 0.85, 0.05, when, spec.dark * 2.2);
+      this.mTone('sawtooth', f * 1.005, f * 1.005, stepDur * 0.85, 0.028, when, spec.dark * 2.2);
+    }
     if (spec.stab.includes(step)) {
       for (const c of spec.chord) {
         const f = spec.root * 2 * 2 ** (c / 12);
@@ -1035,7 +1072,10 @@ export class Audio {
     const env = ctx.createGain();
     env.gain.setValueAtTime(0.0001, when);
     env.gain.linearRampToValueAtTime(gain, when + Math.min(0.01, dur * 0.2));
-    env.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+    // hold near full gain for most of the note, short release tail: keeps the
+    // music bed's sustained RMS up instead of every voice collapsing in ~100 ms
+    env.gain.setValueAtTime(gain, when + Math.min(0.01, dur * 0.2));
+    env.gain.setTargetAtTime(0.0001, when + dur * 0.8, dur * 0.06);
     let chain: AudioNode = osc;
     let filter: BiquadFilterNode | null = null;
     if (cutoff !== undefined) {

@@ -3,9 +3,11 @@ import { WorldMap } from './map';
 export const EYE_HEIGHT = 0.6; // Must match EYE_H in renderer.ts.
 
 export const MOVE = {
-  walkSpeed: 7.1 * EYE_HEIGHT,
-  runSpeed: 14.2 * EYE_HEIGHT,
-  friction: 3.445,
+  // Doom ground speeds in tiles/s: walk 4.17, run ~8.30.
+  walkSpeed: 6.95 * EYE_HEIGHT,
+  runSpeed: 13.83 * EYE_HEIGHT,
+  // exponential approach rate: t90 = ln(10)/friction ≈ 0.65 s (Doom ~0.66 s)
+  friction: 3.543,
   strafeScaleRun: 0.8,
   strafeScaleWalk: 0.96,
   stopSpeed: 0.027 * (EYE_HEIGHT / 0.5),

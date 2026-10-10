@@ -61,7 +61,7 @@ export const ENEMY_PROFILES: Record<string, EnemyProfile> = {
   trojan: { speed: 1.8, ranged: true, damage: 10, painChance: 0.6, projectileSpeed: 5.5, windup: 0.5, disguised: true },
   ransomware: { speed: 1.3, ranged: true, damage: 18, painChance: 0.4, projectileSpeed: 4, windup: 0.7, seals: true },
   logicbomb: { speed: 0, ranged: false, damage: 22, painChance: 0, range: 2.2, windup: 1.4, aggroRange: 4, logicBomb: true },
-  rat: { speed: 3.2, ranged: true, damage: 8, painChance: 0.6, projectileSpeed: 7, windup: 0.35, retreatAfterShot: 0.7 },
+  rat: { speed: 3.2, ranged: true, damage: 8, painChance: 0.6, projectileSpeed: 7, windup: 0.5, retreatAfterShot: 0.7 },
   rootkit: { speed: 1.6, ranged: false, damage: 12, painChance: 0.4, range: 0.95, windup: 0.5, regenerate: true, hidesWhenIdle: true, stealthy: true },
 };
 
@@ -73,6 +73,7 @@ const DIRECTIONS = Array.from({ length: 8 }, (_, i) => [
 ]);
 // Doom-ish melee cadence: cooldown + windup + recover lands a ~1.2-1.6 s cycle
 // (melee windups telegraph >=0.5 s like Doom's 0.51-0.69 s attack frames).
+// Every attack telegraphs >=0.45 s — ranged windups included (RAT is 0.5 s).
 // Ranged attackers (trojan, ransomware, rat) keep the slower volley cadence.
 const meleeCooldown = () => 0.45 + Math.random() * 0.3;
 const rangedCooldown = () => 1.2 + Math.random() * 0.8;
@@ -727,6 +728,8 @@ export function traceShot(
   let dist = maxD;
   for (const e of entities) {
     if (!e.alive) continue;
+    // floor pickups (charges, medkits, disks) shouldn't soak scan shots
+    if (e.def.kind === 'item') continue;
     const toX = e.x - x;
     const toY = e.y - y;
     const along = toX * dirX + toY * dirY;
@@ -780,6 +783,8 @@ export function updateProjectiles(
     } else {
       for (const e of entities) {
         if (!e.alive) continue;
+        // floor pickups (charges, medkits, disks) shouldn't eat tool fire
+        if (e.def.kind === 'item') continue;
         if (Math.hypot(e.x - p.x, e.y - p.y) < 0.45) {
           p.alive = false;
           events.push({ p, hit: e, x: p.x, y: p.y });
