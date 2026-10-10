@@ -193,7 +193,8 @@ export const m03: Mission = {
     { id: 'med-mail', kind: 'item', x: 9.5, y: 5.5, sprite: 'medkit', grants: { resource: 'integrity', amount: 25 },
       inspect: { label: 'Integrity kit', detail: 'Restores 25 integrity.', category: 'item' } },
     {
-      id: 'find-edr', kind: 'item', x: 34.5, y: 24.5, sprite: 'tool-edr',
+      // EDR console sits on the walk to the (required) legal console — unmissable and lit
+      id: 'find-edr', kind: 'item', x: 33.5, y: 27.5, sprite: 'tool-edr',
       tags: ['arsenal-pickup'], grants: { resource: 'tool:edr', amount: 1 },
       inspect: { label: 'EDR console (found)', detail: 'Endpoint detection and response console with containment.', category: 'item', objectives: ['4.5'] },
     },

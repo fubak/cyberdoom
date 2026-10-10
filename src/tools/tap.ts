@@ -66,6 +66,12 @@ export const tapTool: ToolDef = {
       rect(g, sx + i, sy + 6 - hgt / 2, 1, hgt, '#3dff8a');
     }
     if (sweep) rect(g, sx + Math.floor(((t * 3) % 1) * 40), sy, 1, 13, '#d0ffe0');
+    if (ph.phase === 'impact') {
+      // lit fire pose: the capture screen burns white-green through the whole
+      // impact window, synced with the world fire-light pulse
+      rect(g, sx, sy, 40, 13, 'rgba(210,255,225,0.55)');
+      rect(g, x0, y0, 48, 2, '#d8ffe4');
+    }
     // capture buffer LEDs
     const ammo = anim?.ammo ?? 0;
     for (let i = 0; i < 6; i++) rect(g, x0 + 5 + i * 6, y0 + 30, 4, 2, i < Math.ceil(ammo / 2) ? '#ffb000' : '#3a2a10');

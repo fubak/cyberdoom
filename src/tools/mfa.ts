@@ -35,7 +35,8 @@ export const mfaTool: ToolDef = {
   drawViewmodel(g, w, h, _bob, gender, _cd, anim) {
     const look = handLook(gender, anim);
     const ph = usePhase(anim?.sinceUse ?? 9, WINDUP);
-    // impact pushes the token UP toward the reader; windup dips only a hair
+    // insert + touch: the token seats UP into the reader and HELD through the
+    // impact window while the fingerprint read lands (LED blinks white/amber)
     const push = ph.k > 0 ? ph.k * 8 : ph.k * 1;
     const lit = ph.phase === 'impact' || (ph.phase === 'recover' && ph.u < 0.5);
     const x0 = Math.round(w / 2 - 10);
@@ -46,6 +47,10 @@ export const mfaTool: ToolDef = {
     rect(g, x0 + 15, y0 + 2, 2, 12, '#7a8296');
     rect(g, x0 + 6, y0 + 4, 3, 4, '#2a2e38');
     rect(g, x0 + 11, y0 + 4, 3, 4, '#2a2e38');
+    if (ph.phase === 'impact') {
+      // contact flash where the key seats in the reader
+      rect(g, x0 + 3, y0, 14, 2, '#ffffff');
+    }
     // key body: long and slim, like a real FIDO2 security key
     bevel(g, x0, y0 + 14, 20, 40, '#23262e', 2);
     rect(g, x0 + 2, y0 + 16, 16, 2, '#3a3f4c');
@@ -61,8 +66,11 @@ export const mfaTool: ToolDef = {
       rect(g, cx + r - 1, cy - r, 1, r * 2, ring);
     }
     rect(g, cx - 1, cy - 1, 2, 2, ring);
-    // status LED and key-ring hole
-    rect(g, x0 + 8, y0 + 38, 4, 2, lit ? '#ffffff' : '#2ad83a');
+    // status LED: blinks white/amber while the fingerprint read is in flight
+    const led = lit
+      ? Math.floor((anim?.time ?? 0) * 16) % 2 === 0 ? '#ffffff' : '#ffb020'
+      : '#2ad83a';
+    rect(g, x0 + 8, y0 + 38, 4, 2, led);
     rect(g, x0 + 7, y0 + 46, 6, 5, '#0a0b0e');
     // steel key ring through the hole, swinging off to the side
     rect(g, x0 + 12, y0 + 47, 10, 2, '#aeb6c2');

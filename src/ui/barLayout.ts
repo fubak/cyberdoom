@@ -50,8 +50,9 @@ export function barTextBox(t: BarText): { x: number; y: number; w: number; h: nu
 }
 
 /** RESOURCES column: one labelled row per ammo type, Doom RES table style. */
-export const RES_ROW_TOP = 2;
-export const RES_ROW_PITCH = 7;
+export const RES_ROW_TOP = 1;
+// 6px pitch keeps the last row (DISK) a clear 5px off the bar's bottom edge.
+export const RES_ROW_PITCH = 6;
 export function resRowY(i: number): number {
   return BASE_H - BASE_STATUS + RES_ROW_TOP + i * RES_ROW_PITCH;
 }
@@ -134,7 +135,7 @@ export function statusBarText(o: BarLayoutInput, pulse: boolean): BarText[] {
   // font at 7px pitch reads as one overlapping blob); the held tool's
   // row is highlighted in gold on a plate.
   o.resources.slice(0, 4).forEach((r, i) => {
-    const ry = resRowY(i) + 1; // tiny glyphs (5px) centred in the 7px row
+    const ry = resRowY(i) + 1; // tiny glyphs (5px) centred in the 6px row
     const col = !r.owned ? '#4a4e58' : r.cur === 0 ? '#ff4a2a' : r.active ? '#fff0a0' : '#ffa818';
     const lab = r.active ? '#ffd040' : r.owned ? '#c8c0b0' : '#4a4e58';
     push(r.label, 'tiny', P_RES[0] + 4, ry, lab);

@@ -127,16 +127,19 @@ export const badgeTool: ToolDef = {
   drawFx(g, w, _h, anim) {
     const ph = usePhase(anim.sinceUse, WINDUP);
     if (ph.phase === 'impact' || (ph.phase === 'recover' && ph.u < 0.6)) {
-      // RFID arcs radiating toward the reader
+      // RFID arcs radiating toward the reader — green/red once the verdict lands
       const k = ph.phase === 'impact' ? ph.u : 1 + ph.u;
-      g.fillStyle = '#9fe8ff';
+      const verdict = anim.sinceConfirm < 0.9;
+      const arc = verdict ? (anim.confirmGood ? '#6aff8a' : '#ff5a40') : '#9fe8ff';
+      const glowRgb = verdict ? (anim.confirmGood ? '106,255,138' : '255,90,64') : '140,220,255';
+      g.fillStyle = arc;
       for (let a = 0; a < 3; a++) {
         const r = 6 + a * 7 + k * 6;
         for (let t = -0.7; t <= 0.7; t += 0.12) {
           g.fillRect(Math.round(w / 2 - 14 + Math.sin(t) * r), Math.round(vmLine(_h) + 26 - Math.cos(t) * r * 0.6), 1, 1);
         }
       }
-      glow(g, w / 2 - 14, vmLine(_h) + 26, 14, '140,220,255', 0.3);
+      glow(g, w / 2 - 14, vmLine(_h) + 26, 14, glowRgb, 0.3);
     }
     impactBurst(g, w / 2, tipY(_h), anim.sinceConfirm, anim.confirmGood, 0.7);
   },

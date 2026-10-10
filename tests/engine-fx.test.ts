@@ -28,7 +28,7 @@ describe('particle system', () => {
 
     const hit = new ParticleSystem(() => 0.5);
     hit.burst(1, 2, 0.4, 'hit');
-    expect(hit.view().count).toBe(10);
+    expect(hit.view().count).toBe(18);
 
     // threat-tinted data-blood: non-hot shards stay inside the tint's hue
     const blood = new ParticleSystem(() => 0.5);

@@ -55,22 +55,22 @@ export class ParticleSystem {
       Math.min(1, tint[1] * (0.75 + rng() * 0.5)),
       Math.min(1, tint[2] * (0.75 + rng() * 0.5)),
     ];
-    const count = kind === 'kill' ? 48 : 10;
+    const count = kind === 'kill' ? 48 : 18;
     for (let i = 0; i < count; i++) {
       const angle = rng() * Math.PI * 2;
-      const speed = (kind === 'kill' ? 0.8 : 0.55) + rng() * 2.5;
+      const speed = (kind === 'kill' ? 0.8 : 0.65) + rng() * 2.5;
       const big = i % 4 === 0;
-      const hot = kind === 'kill' ? i % 5 === 0 : i % 3 === 0;
+      const hot = kind === 'kill' ? i % 5 === 0 : i % 2 === 0;
       this.add(
         x, y, z + rng() * 0.25,
         Math.cos(angle) * speed,
         Math.sin(angle) * speed,
         1.3 + rng() * (kind === 'kill' ? 3.4 : 2.2),
         6 + rng() * 3.5,
-        big ? 0.5 + rng() * 0.4 : 0.28 + rng() * 0.2,
+        big ? 0.5 + rng() * 0.4 : 0.3 + rng() * 0.2,
         hot ? [1, 0.97, 0.9] : shard(),
-        big ? 0.1 + rng() * 0.09 : 0.05 + rng() * 0.05,
-        big ? 3 : 2,
+        big ? 0.1 + rng() * 0.09 : 0.07 + rng() * 0.06,
+        big ? 3 : 3,
       );
     }
     if (kind === 'kill') this.add(x, y, z, 0, 0, 0, 0, 0.12, [1, 1, 1], 0.6, 6);
@@ -89,12 +89,13 @@ export class ParticleSystem {
   }
 
   /**
-   * Brief bright core at an impact point — reads as a light burst
-   * (~120 ms). White-hot center inside a tool-coloured halo.
+   * Bright core at an impact point — reads as a light burst for ~300 ms so a
+   * connected hit (or kill) is unmistakable at 6-10 tiles. White-hot center
+   * inside a halo tinted with the caller's colour (threat colour for damage).
    */
   flash(x: number, y: number, z: number, color: Color = [1, 0.88, 0.55]): void {
-    this.add(x, y, z + 0.04, 0, 0, 0.35, 0, 0.09, [1, 1, 0.95], 0.95, 12);
-    this.add(x, y, z, 0, 0, 0.18, 0, 0.13, color, 0.6, 9);
+    this.add(x, y, z + 0.04, 0, 0, 0.35, 0, 0.22, [1, 1, 0.95], 1.1, 14);
+    this.add(x, y, z, 0, 0, 0.18, 0, 0.3, color, 0.75, 11);
   }
 
   /**

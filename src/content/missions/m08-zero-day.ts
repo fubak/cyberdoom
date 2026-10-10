@@ -13,9 +13,9 @@ export const m08: Mission = {
   briefing:
     'Exploit chatter on a threat feed names your stack. You have until the next shift to close the holes. ' +
     'Your kit: MOUSE (2) inspects, KEYBOARD (1) operates consoles and patches, USB SCANNER (3) cleans malware, ' +
-    'BADGE (4) opens doors your role covers.',
+    'BADGE (4) opens doors your role covers, EDR (6) fires a containment pulse that quarantines malware in an area.',
   authorizedRoles: ['analyst'],
-  loadout: ['keyboard', 'mouse', 'usb', 'badge'],
+  loadout: ['keyboard', 'mouse', 'usb', 'badge', 'edr'],
   map: {
     grid: [
     '##############################################',
@@ -301,14 +301,35 @@ export const m08: Mission = {
       inspect: { label: 'Network worm', detail: 'The worm was dormant in the server room.', category: 'malware', objectives: ['2.4'] },
     },
     {
-      id: 'find-edr',
+      // EDR is issued now, so the floor find is the patch kit this mission teaches
+      id: 'find-patch',
       kind: 'item',
       x: 3.5,
       y: 23.5,
-      sprite: 'tool-edr',
+      sprite: 'tool-patch',
       tags: ['arsenal-pickup'],
-      grants: { resource: 'tool:edr', amount: 1 },
-      inspect: { label: 'EDR console (found)', detail: 'Endpoint detection and response console with containment.', category: 'item', objectives: ['4.5'] },
+      grants: { resource: 'tool:patch', amount: 1 },
+      inspect: { label: 'Patch disk kit (found)', detail: 'Bootable patch media: vendor security updates you can install by hand.', category: 'item', objectives: ['4.3'] },
+    },
+    {
+      id: 'patch-disk-lobby',
+      kind: 'item',
+      x: 8.5,
+      y: 23.5,
+      sprite: 'patch-disk',
+      tags: ['arsenal-pickup'],
+      grants: { resource: 'patch-disk', amount: 2 },
+      inspect: { label: 'Patch disks', detail: 'Two vendor security updates on disk.', category: 'item', objectives: ['4.3'] },
+    },
+    {
+      id: 'patch-disk-corridor',
+      kind: 'item',
+      x: 5.5,
+      y: 25.5,
+      sprite: 'patch-disk',
+      tags: ['arsenal-pickup'],
+      grants: { resource: 'patch-disk', amount: 1 },
+      inspect: { label: 'Patch disk', detail: 'A vendor security update on disk.', category: 'item', objectives: ['4.3'] },
     },
     {
       id: 'edr-cell-soc',

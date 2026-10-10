@@ -69,6 +69,26 @@ export const mouseTool: ToolDef = {
     flatHand(g, cx - 2, cy - 30 + press * 2, 16, look, 1, Math.round(press * 3));
   },
   drawFx(g, w, _h, anim) {
+    // click cue: a tiny arrow cursor snaps onto the aim point and a select
+    // ring pops around it, tinted by the verdict (green ok / red bad read)
+    const ph = usePhase(anim.sinceUse, WINDUP);
+    if (ph.phase === 'impact') {
+      const u = ph.u;
+      const cx = Math.round(w / 2 + 9);
+      const cy = Math.round(_h * 0.5 - 2);
+      const col = anim.sinceConfirm < 0.6 && !anim.confirmGood ? '255,90,60' : '120,255,150';
+      g.fillStyle = `rgba(${col},${0.95 * (1 - u * 0.7)})`;
+      // pointer arrow, tip on the aim point
+      g.fillRect(cx, cy, 2, 2);
+      g.fillRect(cx, cy + 2, 4, 2);
+      g.fillRect(cx, cy + 4, 6, 2);
+      g.fillRect(cx, cy + 6, 2, 2);
+      g.fillRect(cx + 4, cy + 6, 2, 2);
+      // expanding select ring
+      const r = Math.round(2 + u * 9);
+      g.strokeStyle = `rgba(${col},${0.8 * (1 - u)})`;
+      g.strokeRect(cx - 3 - r, cy - 3 - r, (3 + r) * 2 + 2, (3 + r) * 2 + 2);
+    }
     impactBurst(g, w / 2, tipY(_h), anim.sinceConfirm, anim.confirmGood, 0.6, 'select');
   },
   use(ctx: ToolUseContext) {

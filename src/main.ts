@@ -270,6 +270,8 @@ class Game {
           this.audio.sfx(`death-${e.def.threat ?? e.def.sprite}`, { x: e.x, y: e.y });
           this.audio.sfx('kill', { x: e.x, y: e.y });
           this.particles.burst(e.x, e.y, 0.4, 'kill', bloodOf(e));
+          // a bigger threat-coloured flash marks the kill from the hit sparks
+          this.particles.flash(e.x, e.y, 0.5, bloodOf(e));
           // kill punctuation: a ~50 ms sim-time hit-stop plus a camera punch
           this.feel.punch(1);
           this.hitStopT = Math.max(this.hitStopT, 0.05);
@@ -288,8 +290,8 @@ class Game {
       } else if (!((this.toolFxUntil.get(entityId) ?? -Infinity) >= this.simT)) {
         this.particles.burst(e.x, e.y, 0.4, 'hit', bloodOf(e));
       }
-      // small light burst at the impact point, so a connected hit reads instantly
-      this.particles.flash(e.x, e.y, 0.45);
+      // threat-coloured light burst at the impact point, so a connected hit reads instantly
+      this.particles.flash(e.x, e.y, 0.45, bloodOf(e));
       this.audio.sfx(`pain-${e.def.threat ?? e.def.sprite}`, { x: e.x, y: e.y });
     });
     this.bus.on('tool-hit', ({ toolId, entityId, good }) => {
@@ -322,12 +324,12 @@ class Game {
       let text: string;
       if (resource === 'integrity') {
         if (this.player) this.player.integrity = Math.min(100, this.player.integrity + amount);
-        text = `+${amount} INTEGRITY`;
+        text = `PICKED UP ${amount} INTEGRITY.`;
       } else {
         text = this.arsenal.grant(resource, amount);
       }
       this.audio.sfx('pickup', this.player ? { x: this.player.x, y: this.player.y } : {});
-      this.hud.pushMessage(`Found: ${text}`, 'good');
+      this.hud.pushMessage(text, 'good');
     });
     this.bus.on('reach-exit', () => this.audio.sfx('win'));
     this.bus.on('ambush-spawn', ({ entityId }) => {
@@ -1032,7 +1034,7 @@ class Game {
         let text: string;
         if (resource === 'integrity') {
           p.integrity = Math.min(100, p.integrity + amount);
-          text = `+${amount} INTEGRITY`;
+          text = `PICKED UP ${amount} INTEGRITY.`;
         } else if (resource.startsWith('role:')) {
           text = `Access granted: ${resource.slice(5).toUpperCase()}`;
         } else {
