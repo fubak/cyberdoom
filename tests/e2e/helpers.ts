@@ -39,6 +39,7 @@ declare global {
       teleport(x: number, y: number, angle?: number): void;
       setTool(slot: number): void;
       setIntegrity(v: number): void;
+      openCaseFile(entityId: string): void;
       fire(): void;
     };
   }

@@ -248,6 +248,18 @@ export class MissionRuntime {
     return true;
   }
 
+  /** Rough compass bearing from the player to a point, for refusal text. */
+  private bearingTo(x: number, y: number): string {
+    const p = this.currentPlayer;
+    if (!p) return 'nearby';
+    const dx = x - p.x;
+    const dy = y - p.y;
+    if (Math.hypot(dx, dy) < 1.5) return 'right here';
+    const dirs = ['east', 'south-east', 'south', 'south-west', 'west', 'north-west', 'north', 'north-east'];
+    const i = ((Math.round(Math.atan2(dy, dx) / (Math.PI / 4)) % 8) + 8) % 8;
+    return `to the ${dirs[i]}`;
+  }
+
   private guardUninspectedTriage(e: Entity): boolean {
     if (!e.def.tags?.includes('triage') || this.inspected.has(e.def.id)) return false;
     this.message(
@@ -455,9 +467,12 @@ export class MissionRuntime {
 
       // ENEMIES-owned (ransomware seal): an encrypted console is unusable until
       // the ransomware that sealed it is killed (ai.ts clears state.sealedBy).
+      // Name the missing step — which process and where — so a sealed
+      // progression console never reads as a dead end.
       if (e.state.sealedBy) {
+        const sealer = this.byId(e.state.sealedBy as string);
         this.bus.emit('message', {
-          text: `ENCRYPTED: ${e.def.inspect?.label ?? 'this system'} is sealed by ransomware — neutralize it to release the lock.`,
+          text: `ENCRYPTED: ${e.def.inspect?.label ?? 'this system'} is sealed by a ransomware process${sealer?.alive ? ` ${this.bearingTo(sealer.x, sealer.y)}` : ''} — kill it to release the lock.`,
           kind: 'warn',
         });
         return;

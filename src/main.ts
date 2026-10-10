@@ -5,6 +5,7 @@ import { WorldMap } from './engine/map';
 import { Input } from './engine/input';
 import { EYE_HEIGHT, Player } from './engine/player';
 import { alertNear, damageEntity, hurtEntity, traceShot, updateEntities, updateProjectiles, wormPropagateCap } from './engine/ai';
+import type { SealTarget } from './engine/ai';
 import { enemyInTheWay, exitEdge } from './engine/interact';
 import { doorUseHint, resolveUse, type UseTargetContext } from './engine/useTarget';
 import { Audio, type MusicTier } from './engine/audio';
@@ -176,6 +177,8 @@ class Game {
   private edrPulseCount = 0;
   /** doorIds currently sealed by a live ransomware (encryption-as-denial). */
   private sealedDoors = new Set<string>();
+  /** Entities whose evidence already auto-opened the dossier this mission. */
+  private dossierOpened = new Set<string>();
   /** threat types whose mechanic explainer was already tickered this mission. */
   private noticedThreats = new Set<string>();
   /** attacker id -> {label, simT until it counts as actively draining}. */
@@ -248,7 +251,26 @@ class Game {
 
     this.bus.on('message', ({ text, kind }) => this.hud.pushMessage(text, kind ?? 'info'));
     this.bus.on('evidence', (evidence) => {
-      if (this.screen === 'play') this.dossier.show(evidence.id);
+      if (this.screen !== 'play') return;
+      // Auto-open the dossier on an entity's FIRST inspection. Later evidence
+      // for the same entity — or any evidence while a hostile is within 6
+      // tiles — goes to the ticker instead so combat is never interrupted;
+      // L (evidence log) still opens the full case file. If the dossier is
+      // already open (e.g. the player is mid triage-call) refresh it so the
+      // picked answer renders.
+      if (this.dossier.isOpen) {
+        this.dossier.show(evidence.id);
+        return;
+      }
+      const hostileNear = !!this.player && !!this.runtime?.entities.some(
+        (e) => e.alive && e.def.kind === 'enemy' && Math.hypot(e.x - this.player!.x, e.y - this.player!.y) <= 6,
+      );
+      if (!hostileNear && !this.dossierOpened.has(evidence.entityId)) {
+        this.dossierOpened.add(evidence.entityId);
+        this.dossier.show(evidence.id);
+        return;
+      }
+      this.hud.pushMessage(`${evidence.label} — logged. L for the case file.`, 'info');
     });
     // tool sfx are the arsenal's (per-tool, per-phase); using a tool still wakes nearby enemies
     this.bus.on('tool-used', ({ toolId }) => {
@@ -690,6 +712,7 @@ class Game {
     this.edrPulseUntil = -Infinity;
     this.edrPulseCount = 0;
     this.sealedDoors.clear();
+    this.dossierOpened.clear();
     this.noticedThreats.clear();
     this.drainers.clear();
     this.wormBudget.remaining = wormPropagateCap(mission.difficulty);
@@ -1353,6 +1376,9 @@ class Game {
       toggleLog() {
         g.dossier.toggleLog();
       },
+      openCaseFile(entityId: string) {
+        g.dossier.show(`${entityId}:inspect`);
+      },
       /** LEVELS: reveal every tile on the automap (screenshot/QA aid). */
       revealMap() {
         g.runtime?.revealAll();
@@ -1474,12 +1500,28 @@ class Game {
     };
   }
 
+  /** Rough compass bearing from the player to a point, for refusal text. */
+  private bearingTo(x: number, y: number): string {
+    const p = this.player;
+    if (!p) return 'nearby';
+    const dx = x - p.x;
+    const dy = y - p.y;
+    if (Math.hypot(dx, dy) < 1.5) return 'right here';
+    const dirs = ['east', 'south-east', 'south', 'south-west', 'west', 'north-west', 'north', 'north-east'];
+    const i = ((Math.round(Math.atan2(dy, dx) / (Math.PI / 4)) % 8) + 8) % 8;
+    return `to the ${dirs[i]}`;
+  }
+
   private openDoor(doorId: string): void {
     const map = this.map;
     if (!map || map.doorFrac(doorId) >= 1) return;
     if (this.sealedDoors.has(doorId)) {
       this.audio.sfx('denied');
-      this.hud.pushMessage('ENCRYPTED: a ransomware sealed this door — neutralize it to release the lock.', 'warn');
+      const sealer = this.runtime?.entities.find(
+        (e) => e.alive && (e.state.seal as SealTarget | undefined)?.kind === 'door' && (e.state.seal as SealTarget).id === doorId,
+      );
+      const where = sealer && this.player ? this.bearingTo(sealer.x, sealer.y) : '';
+      this.hud.pushMessage(`ENCRYPTED: a ransomware sealed this door${where ? ` ${where}` : ''} — kill the ransomware to release the lock.`, 'warn');
       return;
     }
     const firstOpen = map.doorFrac(doorId) === 0;
