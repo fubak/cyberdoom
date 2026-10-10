@@ -3,40 +3,40 @@ import type { MissionTeaching } from '../curriculum';
 import { q } from '../arc-questions';
 import type { WalkStep } from '../../missions/walkthroughs';
 import { lightRects } from '../../missions/levelkit';
-import { addThreatEncounter, floorSpot, liveThreats, retex, stagedThreatWave } from './campaign-map';
+import { addThreatEncounter, mixedThreatEncounter, floorSpot, liveThreats, retex, stagedThreatWave } from './campaign-map';
 
 const map: MapDef = {
   grid: [
-    '########################################',
-    '##################..E..#################',
-    '##################..X..#################',
-    '##################.....#################',
-    '##.........................WW......#####',
-    '##..........................W......#####',
-    '##...1.............................#####',
-    '##.......WW..................W.....#####',
-    '##...############...X..#################',
-    '#################......#################',
-    '######W.........#......#........WW.#..##',
-    '######W.........#......#.........W.#..##',
-    '######.............................2..##',
-    '######..........#......#..............##',
-    '######.......WW.#......#.W.........#..##',
-    '######........W.#......#...........#..##',
-    '####################O##Q################',
-    '##...#W..........................W..####',
-    '##...#..........#...................####',
-    '##...#W.........#......#.........WW.####',
-    '##...3..............................####',
-    '##...#.......WW.#......#.W..........####',
-    '##...#..........B......#............####',
-    '#################...A..#################',
-    '###..................................###',
-    '###...........SSS....................###',
-    '###...........SS.....................###',
-    '###..................................###',
-    '########################################',
-    '########################################',
+    '################################################',
+    '##################..E..#########################',
+    '##################..X..#########################',
+    '##################.....###################....##',
+    '##.........................WW......#######....##',
+    '##..........................W......########..###',
+    '##...1.............................#####..#..###',
+    '##.......WW..................W.....#####..4..###',
+    '##...############...X..#################..#..###',
+    '#################......####################..###',
+    '######W.........#......#........WW.#..####...###',
+    '######W.........#......#.........W.#..###.....##',
+    '######.............................2..##.......#',
+    '######..........#......#..............##.......#',
+    '######.......WW.#......#.W.........#...T.......#',
+    '######........W.#......#...........#..##.......#',
+    '####################O##Q################.......#',
+    '##...#W..........................W..#####.....##',
+    '##...#..........#...................######...###',
+    '##...#W.........#......#.........WW.#######..###',
+    '##...3..............................#######..###',
+    '##...#.......WW.#......#.W..........#######..###',
+    '##...#..........B......#............####..#..###',
+    '#################...A..#################..5..###',
+    '###..................................###..#..###',
+    '###...........SSS....................######..###',
+    '###...........SS......................U.......##',
+    '###..................................##.......##',
+    '################################################',
+    '################################################',
   ],
   legend: {
     '#': { kind: 'wall', tex: 'wall-panel' },
@@ -465,3 +465,36 @@ m05.entities.push(
   { id: 'store-med', kind: 'item', x: 3.5, y: 19.5, sprite: 'medkit',
     grants: { resource: 'integrity', amount: 25 } },
 );
+
+// rF4: 48x30 silhouette — octagonal change-control hub with N/S spokes and two
+// end caps; a locked loop door opens after hosts are confirmed, and two secret
+// control-room closets sit off the spokes.
+m05.map.legend.T = { kind: 'door', tex: 'door', doorId: 'rf4-hub' };
+m05.map.legend.U = { kind: 'door', tex: 'door', doorId: 'rf4-hub-loop', locked: true,
+  lockText: 'The south loop unlocks once every confirmed host is patched.' };
+m05.map.legend['4'] = { kind: 'door', tex: 'wall-secret', secret: true, doorId: 'rf4-hub-cache-n' };
+m05.map.legend['5'] = { kind: 'door', tex: 'wall-secret', secret: true, doorId: 'rf4-hub-cache-s' };
+m05.entities.push(
+  { id: 'rf4-hub-cache-n-item', kind: 'item', x: 40.5, y: 7.5, sprite: 'charge', tags: ['arsenal-pickup'],
+    grants: { resource: 'usb-charge', amount: 8 } },
+  { id: 'rf4-hub-cache-s-item', kind: 'item', x: 40.5, y: 23.5, sprite: 'medkit' },
+  { id: 'rf4-hub-prop', kind: 'prop', x: 43.5, y: 14.5, sprite: 'console' },
+  { id: 'rf4-hub-supply', kind: 'item', x: 44.5, y: 27.5, sprite: 'charge', tags: ['arsenal-pickup'],
+    grants: { resource: 'usb-charge', amount: 8 } },
+);
+m05.script!.secrets!.push(
+  { id: 'rf4-hub-cache-n', area: [40, 6, 41, 8], label: 'Freeze-window locker', grant: { resource: 'usb-charge', amount: 8 } },
+  { id: 'rf4-hub-cache-s', area: [40, 22, 41, 24], label: 'Rollback kit cage', grant: { resource: 'integrity', amount: 20 } },
+);
+mixedThreatEncounter(m05, 'hub-mix', [['rootkit', 1], ['rat', 2]],
+  { id: 'hub-ambush', area: [39, 14, 46, 18], kind: 'bad',
+    message: 'Unchecked change bred rootkits under the review hub — rats swarm with them.' },
+  [40, 10, 46, 18]);
+addThreatEncounter(m05, 'spoke-worms', 'worm', 2,
+  { id: 'spoke-ambush', area: [43, 19, 44, 25], kind: 'bad',
+    message: 'Worm processes churn through the south spoke.' },
+  [41, 26, 45, 27]);
+m05.script!.triggers!.push({ id: 'hub-loop-open', after: ['confirmed-hosts'], kind: 'good',
+  message: 'All confirmed hosts patched — the south loop door releases for a clean return.',
+  openDoors: ['rf4-hub-loop'] });
+m05.map.lights = { ...m05.map.lights, ...lightRects([[40, 10, 46, 18, 0.65], [42, 3, 45, 9, 0.55], [41, 19, 45, 27, 0.55], [40, 6, 41, 8, 0.85], [40, 22, 41, 24, 0.85], [41, 7, 41, 7, 0.35], [41, 23, 41, 23, 0.35]]) };

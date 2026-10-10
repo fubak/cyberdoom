@@ -3,7 +3,7 @@ import type { MissionTeaching } from '../curriculum';
 import { q } from '../arc-questions';
 import type { WalkStep } from '../../missions/walkthroughs';
 import { lightRects } from '../../missions/levelkit';
-import { addThreatEncounter, floorSpot, retex } from './campaign-map';
+import { addThreatEncounter, mixedThreatEncounter, floorSpot, retex } from './campaign-map';
 
 /**
  * M12 "Robo SOC": automate the SOC by Friday — the finale (difficulty 12).
@@ -34,34 +34,39 @@ export const m12: Mission = {
   loadout: ['keyboard', 'mouse', 'usb', 'badge', 'mfa', 'tap', 'patch'],
   map: {
     grid: [
-    '########################################',
-    '#.......###.................#..........#',
-    '#.......###......EEEE.......#..........#',
-    '#.........#......EEEE.......#..........#',
-    '#.........#..B........B..B..####.......#',
-    '#.........#..B........B..B..###........#',
-    '#.........#.................###........#',
-    '#####P#############X#############M######',
-    '#.........#..SSS.......SSS..#..........#',
-    '#.........#..SSS.......SSS..#..........#',
-    '#.........#.................#..........#',
-    '#.........#.................#..........#',
-    '#.........#......SSSSSSSSSSS#..........#',
-    '#.........#......SSSSSSSSSSS#..........#',
-    '#.........W......SSSSS......L..........#',
-    '#.........#......SSSSS......#..........#',
-    '#...B..B..#.................#..B...B...#',
-    '#...B..B..#.................#..B...B...#',
-    '#.........#.................#..........#',
-    '#.........#.................#..........#',
-    '#####G#############s#############g######',
-    '#BBB......#.................#......BBB.#',
-    '#B.B......#.................#......B.B.#',
-    '#B1B......#.................#......B2B.#',
-    '#.........e.................n..........#',
-    '#.........#.................#..........#',
-    '#.........#.................#..........#',
-    '########################################',
+    '################################################',
+    '#.......###.................#..........#########',
+    '#.......###......EEEE.......#..........#########',
+    '#.........#......EEEE.......#..........#########',
+    '#.........#..B........B..B..####.......#####..##',
+    '#.........#..B........B..B..###........#####..##',
+    '#.........#.................###........#####..##',
+    '#####P#############X#############M##########..##',
+    '#.........#..SSS.......SSS..#..........#####4###',
+    '#.........#..SSS.......SSS..#..........####..###',
+    '#.........#.................#..........###....##',
+    '#.........#.................#..........##......#',
+    '#.........#......SSSSSSSSSSS#..........##......#',
+    '#.........#......SSSSSSSSSSS#..........T...##..#',
+    '#.........W......SSSSS......L..........#...##..#',
+    '#.........#......SSSSS......#..........##..##..#',
+    '#...B..B..#.................#..B...B...##......#',
+    '#...B..B..#.................#..B...B...##......#',
+    '#.........#.................#..........###....##',
+    '#.........#.................#..........####..###',
+    '#####G#############s#############g#########5####',
+    '#BBB......#.................#......BBB.###...###',
+    '#B.B......#.................#......B.B.###...###',
+    '#B1B......#.................#......B2B.###...###',
+    '#.........e.................n..........#########',
+    '#.........#.................#..........#########',
+    '#.........#.................#..........#########',
+    '####################6#########v#################',
+    '####################.#########.#################',
+    '####################.#########.#################',
+    '########...............................#########',
+    '########...............................#########',
+    '################################################',
   ],
     legend: {
       '#': { kind: 'wall', tex: 'wall-panel' },
@@ -719,3 +724,34 @@ m12.entities.push(
   { id: 'egress-desk-a', kind: 'prop', x: 4.5, y: 21.5, sprite: 'workstation' },
   { id: 'egress-desk-b', kind: 'prop', x: 7.5, y: 21.5, sprite: 'workstation' },
 );
+
+// rF4: 48x33 silhouette — NE octagonal SOC arena with cut corners around a
+// sealed core pillar, plus a long south response sweep; a locked loop door
+// opens after sign-off and two secret war-room caches sit off the arena.
+m12.map.legend.T = { kind: 'door', tex: 'door', doorId: 'rf4-arena' };
+m12.map.legend.v = { kind: 'door', tex: 'door', doorId: 'rf4-sweep' };
+m12.map.legend['6'] = { kind: 'door', tex: 'door', doorId: 'rf4-sweep-loop', locked: true,
+  lockText: 'The sweep return door unlocks after the runbook sign-off.' };
+m12.map.legend['4'] = { kind: 'door', tex: 'wall-secret', secret: true, doorId: 'rf4-war-n' };
+m12.map.legend['5'] = { kind: 'door', tex: 'wall-secret', secret: true, doorId: 'rf4-war-s' };
+m12.entities.push(
+  { id: 'rf4-war-n-item', kind: 'item', x: 44.5, y: 5.5, sprite: 'charge', tags: ['arsenal-pickup'],
+    grants: { resource: 'usb-charge', amount: 8 } },
+  { id: 'rf4-war-s-item', kind: 'item', x: 43.5, y: 22.5, sprite: 'medkit' },
+);
+m12.script!.secrets!.push(
+  { id: 'rf4-war-n', area: [44, 4, 45, 7], label: 'War-room north cache', grant: { resource: 'usb-charge', amount: 8 } },
+  { id: 'rf4-war-s', area: [42, 21, 44, 23], label: 'War-room south cache', grant: { resource: 'integrity', amount: 20 } },
+);
+mixedThreatEncounter(m12, 'arena-mix', [['ransomware', 2], ['rat', 4]],
+  { id: 'arena-ambush', area: [41, 9, 46, 19], kind: 'bad',
+    message: 'The SOC arena is a live firefight — ransomware anchors a rat swarm.' },
+  [41, 9, 46, 19]);
+addThreatEncounter(m12, 'sweep-worms', 'worm', 5,
+  { id: 'sweep-ambush', area: [8, 30, 38, 31], kind: 'bad',
+    message: 'Worm traffic surges down the response sweep.' },
+  [8, 30, 38, 31]);
+m12.script!.triggers!.push({ id: 'sweep-loop-open', after: ['signoff'], kind: 'good',
+  message: 'Runbook signed off — the sweep return door releases for the exit run.',
+  openDoors: ['rf4-sweep-loop'] });
+m12.map.lights = { ...m12.map.lights, ...lightRects([[41, 9, 46, 19, 0.7], [8, 30, 38, 31, 0.55], [44, 4, 45, 7, 0.85], [42, 21, 44, 23, 0.85], [44, 9, 44, 9, 0.35], [43, 19, 43, 19, 0.35]]) };

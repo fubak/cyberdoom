@@ -3,7 +3,7 @@ import { lightRects } from '../../missions/levelkit';
 import type { WalkStep } from '../../missions/walkthroughs';
 import type { MissionTeaching } from '../curriculum';
 import { q } from '../arc-questions';
-import { addThreatEncounter, floorSpot, liveThreats, retex } from './campaign-map';
+import { addThreatEncounter, mixedThreatEncounter, floorSpot, liveThreats, retex } from './campaign-map';
 
 // M07 SEGMENT FAULT (SY0-701 3.2 placement, 3.1 ICS isolation, 4.5 ruleset order, 2.3 device audit)
 // The plant is one flat subnet. Survey it, audit every device, then rebuild it
@@ -29,35 +29,35 @@ export const m07: Mission = {
   loadout: ['keyboard', 'mouse', 'usb', 'badge'],
   map: {
     grid: [
-    '########################################',
-    '########################################',
-    '##................####...........SSSSS##',
-    '##.BBBB...........####.......SS..S...S##',
-    '##.B..B...........####.......SS..2...S##',
-    '##.B..B...........####..SS.......S...S##',
-    '##.BKBB...........####..SS.......SSSSS##',
-    '##................####................##',
-    '##.....##....BBBBB####................##',
-    '##...........1...B####.......SS.......##',
-    '##.......##..B...B####................##',
-    '##...........BBBBB####................##',
-    '########C####################D##########',
-    '##....................................##',
-    '##....................................##',
-    '##.............SSSSS......BBBBBBB.....##',
-    '##.............SSSSS......B.....B.....##',
-    '##.............SSSSS......B.....V.....##',
-    '##.............SSSSS......B.....B.....##',
-    '##.............SSSSS......B.....B.....##',
-    '##........................BBBBBBB.....##',
-    '########A#############X#################',
-    '##BBB...............#.................##',
-    '##...B..............#..........E......##',
-    '##...3..............#.................##',
-    '##...B..............#.................##',
-    '##BBBB..............#.................##',
-    '########################################',
-    '########################################',
+    '##############################################',
+    '##############################################',
+    '##................####...........SSSSS########',
+    '##.BBBB...........####.......SS..S...S########',
+    '##.B..B...........####.......SS..2...S##.....#',
+    '##.B..B...........####..SS.......S...S##.....#',
+    '##.BKBB...........####..SS.......SSSSS##.....#',
+    '##................####................######.#',
+    '##.....##....BBBBB####................######.#',
+    '##...........1...B####.......SS.......######.#',
+    '##.......##..B...B####................##.....#',
+    '##...........BBBBB####................##.....#',
+    '########C####################D##########.....#',
+    '##....................................######.#',
+    '##....................................######.#',
+    '##.............SSSSS......BBBBBBB.....######.#',
+    '##.............SSSSS......B.....B.....##.....#',
+    '##.............SSSSS......B.....V.....T......#',
+    '##.............SSSSS......B.....B.....##.....#',
+    '##.............SSSSS......B.....B.....######.#',
+    '##........................BBBBBBB.....######.#',
+    '########A#############X#####################.#',
+    '##BBB...............#.................##.....#',
+    '##...B..............#..........E......##.....#',
+    '##...3..............#.................##.....#',
+    '##...B..............#.................######4#',
+    '##BBBB..............#.................##.....#',
+    '##############################################',
+    '##############################################',
   ],
     legend: {
       '#': { kind: 'wall', tex: 'wall-panel' },
@@ -893,3 +893,21 @@ m07.entities.push(
   { id: 'fw-board-a', kind: 'prop', x: 9.5, y: 16.5, sprite: 'console' },
   { id: 'fw-board-b', kind: 'prop', x: 22.5, y: 16.5, sprite: 'workstation' },
 );
+
+// rF4: 46x29 silhouette — east comb of four stub corridors off one spine
+// (segmented stub zones), with a hidden fifth stub holding the last secret.
+m07.map.legend.T = { kind: 'door', tex: 'door', doorId: 'rf4-comb' };
+m07.map.legend['4'] = { kind: 'door', tex: 'wall-secret', secret: true, doorId: 'rf4-comb-cache' };
+m07.entities.push(
+  { id: 'rf4-comb-cache-item', kind: 'item', x: 42.5, y: 26.5, sprite: 'charge', tags: ['arsenal-pickup'],
+    grants: { resource: 'usb-charge', amount: 8 } },
+  { id: 'rf4-comb-prop', kind: 'prop', x: 41.5, y: 5.5, sprite: 'console' },
+);
+m07.script!.secrets!.push(
+  { id: 'rf4-comb-cache', area: [40, 26, 44, 26], label: 'Unsegmented shadow stub', grant: { resource: 'usb-charge', amount: 8 } },
+);
+mixedThreatEncounter(m07, 'comb-mix', [['worm', 3], ['trojan', 2]],
+  { id: 'comb-ambush', area: [40, 16, 44, 24], kind: 'bad',
+    message: 'Segmentation failed in the stub zone — a worm-trojan pack spills across the comb.' },
+  [40, 4, 44, 24]);
+m07.map.lights = { ...m07.map.lights, ...lightRects([[40, 4, 44, 24, 0.6], [40, 26, 44, 26, 0.85], [43, 25, 43, 25, 0.35]]) };

@@ -2,7 +2,7 @@ import type { Mission } from '../../core/types';
 import type { MissionTeaching } from '../curriculum';
 import type { WalkStep } from '../../missions/walkthroughs';
 import { lightRects } from '../../missions/levelkit';
-import { addThreatEncounter, floorSpot, liveThreats, retex, setMapCell } from './campaign-map';
+import { addThreatEncounter, mixedThreatEncounter, floorSpot, liveThreats, retex, setMapCell } from './campaign-map';
 
 /**
  * M3 "The Quiet One": insider threat, correlating data sources.
@@ -33,37 +33,44 @@ export const m03: Mission = {
   loadout: ['keyboard', 'mouse', 'usb', 'badge', 'mfa', 'tap'],
   map: {
     grid: [
-      '############################SSSSSSSSSSSS',
-      '###BBBBBBBBB################S....EE....S',
-      '###B.......B################S..........S',
-      '###B.......B################SSSSSXXSSSSS',
-      '###B.......B################S..........S',
-      '###B.......B################S..........S',
-      '###B.......B################S..........S',
-      '###BBBB2BBBB################S..SSSSSS..S',
-      'BBBB........................S..........S',
-      'B..B........................S..........S',
-      'B..1........................S..SSSSSS..S',
-      'B..B...###...###...###......S..........S',
-      'B..B....................S...V..........S',
-      'BBBB....................S...S..SSSSSS..S',
-      '####....................S...S..........S',
-      '####...###...###...###......S..........S',
-      '####........................S..SS..SS..S',
-      '####........................S..........S',
-      '####........................S..........S',
-      '####........................S..........S',
-      '###BBBBBB..BBBBBB###..######SSSSSSSSSSSS',
-      '###B............B###..#######.........##',
-      '###B............B###..#######.........##',
-      '###B..S...S.BB..B........####.........##',
-      '###B........BB..B........####.##......##',
-      '###B............d........g....##......##',
-      '###B..S...S.....B........####.........##',
-      '###B..S...S.....B........####.........##',
-      '###B............B........####.........##',
-      '###BBBBBBBBBBBBBB#######################',
-    ],
+    '############################SSSSSSSSSSSS',
+    '###BBBBBBBBB################S....EE....S',
+    '###B.......B################S..........S',
+    '###B.......B################SSSSSXXSSSSS',
+    '###B.......B################S..........S',
+    '###B.......B################S..........S',
+    '###B.......B################S..........S',
+    '###BBBB2BBBB################S..SSSSSS..S',
+    'BBBB........................S..........S',
+    'B..B........................S..........S',
+    'B..1........................S..SSSSSS..S',
+    'B..B...###...###...###......S..........S',
+    'B..B....................S...V..........S',
+    'BBBB....................S...S..SSSSSS..S',
+    '####....................S...S..........S',
+    '####...###...###...###......S..........S',
+    '####........................S..SS..SS..S',
+    '####........................S..........S',
+    '####........................S..........S',
+    '####........................S..........S',
+    '###BBBBBB..BBBBBB###..######SSSSSSSSSSSS',
+    '###B............B###..#######.........##',
+    '###B............B###..#######.........##',
+    '###B..S...S.BB..B........####.........##',
+    '###B........BB..B........####.##......##',
+    '###B............d........g....##......##',
+    '###B..S...S.....B........####.........##',
+    '###B..S...S.....B........####.........##',
+    '###B............B........####.........##',
+    '###BBBBBBBTBBBBBB#################U#####',
+    '##########.#######################.#####',
+    '##########.#######################.#####',
+    '######.............................#####',
+    '######.............................#####',
+    '###############4#########5##############',
+    '##############...#######...#############',
+    '########################################',
+  ],
     legend: {
       '#': { kind: 'wall', tex: 'wall-panel' },
       'S': { kind: 'wall', tex: 'wall-server' },
@@ -428,3 +435,29 @@ m03.entities.push(
   { id: 'pillar-stash', kind: 'item', x: 9.5, y: 11.5, sprite: 'pcap', tags: ['arsenal-pickup'],
     grants: { resource: 'pcap', amount: 6 } },
 );
+
+// rF4: 40x37 silhouette — long south mail-gallery bar with a second (locked)
+// post-objective exit back into the lobby and two secret storerooms off it.
+m03.map.legend.T = { kind: 'door', tex: 'door', doorId: 'rf4-gallery' };
+m03.map.legend.U = { kind: 'door', tex: 'door', doorId: 'rf4-gallery-back', locked: true,
+  lockText: 'The gallery return door unlocks once the insider report is filed.' };
+m03.map.legend['4'] = { kind: 'door', tex: 'wall-secret', secret: true, doorId: 'rf4-mail-cache-a' };
+m03.map.legend['5'] = { kind: 'door', tex: 'wall-secret', secret: true, doorId: 'rf4-mail-cache-b' };
+m03.entities.push(
+  { id: 'rf4-mail-cache-a-item', kind: 'item', x: 15.5, y: 35.5, sprite: 'charge', tags: ['arsenal-pickup'],
+    grants: { resource: 'usb-charge', amount: 8 } },
+  { id: 'rf4-mail-cache-b-item', kind: 'item', x: 25.5, y: 35.5, sprite: 'medkit' },
+  { id: 'rf4-gallery-prop', kind: 'prop', x: 20.5, y: 32.5, sprite: 'workstation' },
+);
+m03.script!.secrets!.push(
+  { id: 'rf4-mail-cache-a', area: [14, 35, 16, 35], label: 'Dead-letter storeroom', grant: { resource: 'usb-charge', amount: 8 } },
+  { id: 'rf4-mail-cache-b', area: [24, 35, 26, 35], label: 'Intercepted parcel cage', grant: { resource: 'integrity', amount: 20 } },
+);
+mixedThreatEncounter(m03, 'gallery-mix', [['worm', 3], ['trojan', 1]],
+  { id: 'gallery-ambush', area: [6, 32, 34, 33], kind: 'bad',
+    message: 'The mail gallery is not empty — contraband processes run the aisle.' },
+  [6, 32, 34, 33]);
+m03.script!.triggers!.push({ id: 'gallery-back-open', after: ['report'], kind: 'good',
+  message: 'Report filed — the gallery return door unlocks for a fast exit.',
+  openDoors: ['rf4-gallery-back'] });
+m03.map.lights = { ...m03.map.lights, ...lightRects([[6, 32, 34, 33, 0.5], [14, 35, 16, 35, 0.85], [24, 35, 26, 35, 0.85], [15, 33, 15, 33, 0.35], [25, 33, 25, 33, 0.35]]) };

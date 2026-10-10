@@ -3,7 +3,7 @@ import { lightRects } from '../../missions/levelkit';
 import type { WalkStep } from '../../missions/walkthroughs';
 import type { MissionTeaching } from '../curriculum';
 import { q } from '../arc-questions';
-import { addThreatEncounter, floorSpot, liveThreats, retex } from './campaign-map';
+import { addThreatEncounter, mixedThreatEncounter, floorSpot, liveThreats, retex } from './campaign-map';
 
 export const m06: Mission = {
   id: 'm06',
@@ -45,7 +45,14 @@ export const m06: Mission = {
     '######......................##....######',
     '##....................................##',
     '##....................................##',
-    '########################################',
+    '####################T#########U#########',
+    '####################.#########.#########',
+    '####################.#########.#########',
+    '####################.#########.#########',
+    '#########...###..........##....#########',
+    '#########...4..............#...#########',
+    '#########...#..............5...#########',
+    '###############..........###############',
     '########################################',
   ],
     legend: {
@@ -694,3 +701,32 @@ m06.entities.push(
   { id: 'pki-board-a', kind: 'prop', x: 12.5, y: 18.5, sprite: 'console' },
   { id: 'pki-board-b', kind: 'prop', x: 27.5, y: 18.5, sprite: 'console' },
 );
+
+// rF4: 40x37 silhouette — octagonal key-vault bulb at the south end with twin
+// shafts (entry T + locked loop U) and two secret escrow niches off its walls.
+m06.map.legend.T = { kind: 'door', tex: 'door', doorId: 'rf4-vault' };
+m06.map.legend.U = { kind: 'door', tex: 'door', doorId: 'rf4-vault-loop', locked: true,
+  lockText: 'The vault loop unlocks after the keys are rotated.' };
+m06.map.legend['4'] = { kind: 'door', tex: 'wall-secret', secret: true, doorId: 'rf4-escrow-w' };
+m06.map.legend['5'] = { kind: 'door', tex: 'wall-secret', secret: true, doorId: 'rf4-escrow-e' };
+m06.entities.push(
+  { id: 'rf4-escrow-w-item', kind: 'item', x: 10.5, y: 33.5, sprite: 'charge', tags: ['arsenal-pickup'],
+    grants: { resource: 'usb-charge', amount: 8 } },
+  { id: 'rf4-escrow-e-item', kind: 'item', x: 29.5, y: 33.5, sprite: 'medkit' },
+);
+m06.script!.secrets!.push(
+  { id: 'rf4-escrow-w', area: [9, 32, 11, 34], label: 'West escrow niche', grant: { resource: 'usb-charge', amount: 8 } },
+  { id: 'rf4-escrow-e', area: [28, 33, 30, 34], label: 'East escrow niche', grant: { resource: 'integrity', amount: 20 } },
+);
+mixedThreatEncounter(m06, 'vault-mix', [['trojan', 2], ['worm', 4]],
+  { id: 'vault-ambush', area: [14, 32, 25, 35], kind: 'bad',
+    message: 'The key vault was never clean — a trojan-worm pack guards the escrow.' },
+  [13, 32, 26, 35]);
+addThreatEncounter(m06, 'seal-alarm', 'rat', 4,
+  { id: 'seal-alarm', after: ['seal'], kind: 'warn',
+    message: 'Sealing the keystore tripped an old tripwire — rats pour into the south hall.' },
+  [2, 18, 37, 27]);
+m06.script!.triggers!.push({ id: 'vault-loop-open', after: ['rotate'], kind: 'good',
+  message: 'Keys rotated — the east vault loop opens for the exit run.',
+  openDoors: ['rf4-vault-loop'] });
+m06.map.lights = { ...m06.map.lights, ...lightRects([[13, 32, 26, 35, 0.6], [9, 32, 11, 34, 0.85], [28, 33, 30, 34, 0.85], [13, 33, 13, 33, 0.35], [26, 34, 26, 34, 0.35]]) };
