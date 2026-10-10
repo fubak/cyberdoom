@@ -155,6 +155,38 @@ export const GLOSSARY: Record<string, string> = {
     'The party that determines why and how personal data is processed — the role privacy law holds accountable. [5.4]',
   'data processor':
     'A party that processes personal data on behalf of, and under instruction from, a controller — such as a payroll provider or cloud host. [5.4]',
+
+  // --- vendor & third-party risk (5.3, 5.2, 2.2, 3.1) ---
+  'third-party risk':
+    'The risk a vendor, supplier or partner brings through its access to your data and systems. Managed with assessments, contracts and monitoring. [5.3]',
+  'right to audit':
+    'A contract clause preserving the customer\u2019s right to assess a vendor\u2019s security controls after signing, directly or via an appointed auditor. [5.3]',
+  'service-level agreement':
+    'SLA: a contract that sets measurable service levels — uptime, response time — and the remedies (credits, escalation) when they are missed. [5.3]',
+  'non-disclosure agreement':
+    'NDA: a contract that legally protects confidential information shared with another party before access or work begins. [5.3]',
+  'master service agreement':
+    'MSA: the umbrella contract that fixes legal terms (liability, indemnification, IP, termination) once for all future work; SOWs and SLAs attach under it. [5.3]',
+  'statement of work':
+    'SOW: a contract under an MSA that defines one project\u2019s deliverables, milestones, timeline and acceptance criteria. [5.3]',
+  'memorandum of understanding':
+    'MOU/MOA: a document recording mutual intent between parties. Generally non-binding, so it cannot enforce controls or audits. [5.3]',
+  'risk appetite':
+    'The amount and type of risk an organization is willing to accept to meet its goals; risk tolerance is the acceptable variance around it. Responses must fit what is stated. [5.2]',
+  'single loss expectancy':
+    'SLE = asset value x exposure factor: the expected loss from one occurrence of a threat. [5.2]',
+  'annualized loss expectancy':
+    'ALE = SLE x ARO: the expected yearly loss from a threat. Compared against control cost and risk appetite to choose a response. [5.2]',
+  'annualized rate of occurrence':
+    'ARO: how many times a threat is expected to occur per year (once in 10 years = 0.1). [5.2]',
+  'exposure factor':
+    'EF: the percentage of an asset\u2019s value lost in one occurrence of a threat, used to compute SLE. [5.2]',
+  'supply chain':
+    'A threat vector: attackers reach you through a trusted vendor, supplier or managed service provider\u2019s access or updates. [2.2]',
+  'managed service provider':
+    'MSP: a third party that manages IT for many customers. Its trusted remote-management channel is a high-value supply-chain target. [2.2]',
+  'shared responsibility model':
+    'Cloud model dividing security duties between provider and customer. In SaaS the provider runs the app; the customer always owns its data, identities and access decisions. [3.1]',
 };
 
 /** Case-insensitive glossary lookup. */
