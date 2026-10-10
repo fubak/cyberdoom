@@ -28,7 +28,7 @@ export interface EventMap {
   /** Player reached the exit. */
   'reach-exit': Record<string, never>;
   /** Player integrity hit zero. */
-  'player-down': Record<string, never>;
+  'player-down': { by?: string; threat?: string };
   /** Player picked up an item. */
   pickup: { entityId: string };
   /** A script trigger spawned a dormant enemy (telegraphing: fog + sfx). */

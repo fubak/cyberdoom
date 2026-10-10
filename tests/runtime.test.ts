@@ -192,6 +192,51 @@ describe('MissionRuntime', () => {
     expect(state.rt.lossReason).toBe('Do not plug in USB');
   });
 
+  it('records an integrity lossCause on player-down', () => {
+    const state = setup(mission({
+      missionObjectives: [{ id: 'exit', text: 'Exit', kind: 'reach-exit' }],
+    }));
+    tick(state);
+    state.bus.emit('player-down', { by: 'WORM-9', threat: 'worm' });
+    expect(state.rt.finished).toBe('lost');
+    expect(state.rt.lossCause).toEqual({ kind: 'integrity', by: 'WORM-9', threat: 'worm' });
+    expect(state.rt.lossReason).toBe('Integrity depleted by WORM-9');
+  });
+
+  it('player-down without a named attacker falls back to a generic reason', () => {
+    const state = setup(mission({
+      missionObjectives: [{ id: 'exit', text: 'Exit', kind: 'reach-exit' }],
+    }));
+    tick(state);
+    state.bus.emit('player-down', {});
+    expect(state.rt.lossCause).toEqual({ kind: 'integrity', by: undefined, threat: undefined });
+    expect(state.rt.lossReason).toBe('Player integrity depleted');
+  });
+
+  it('records an objective lossCause when a rule is broken', () => {
+    const state = setup(mission({
+      entities: [
+        {
+          id: 'trap', kind: 'console', x: 1.5, y: 1.5, sprite: 'console',
+          tags: ['found-usb'],
+        },
+        {
+          id: 'trap2', kind: 'console', x: 2.5, y: 1.5, sprite: 'console',
+          tags: ['found-usb'],
+        },
+      ],
+      missionObjectives: [{ id: 'avoid-usb', text: 'Do not plug in USB', kind: 'avoid', tag: 'found-usb', strikes: 2 }],
+    }));
+    tick(state);
+    state.bus.emit('interact', { entityId: 'trap' });
+    expect(state.rt.finished).toBeNull();
+    state.bus.emit('interact', { entityId: 'trap2' });
+    expect(state.rt.finished).toBe('lost');
+    expect(state.rt.lossCause).toEqual({
+      kind: 'objective', objectiveId: 'avoid-usb', text: 'Do not plug in USB', strikes: 2, violations: 2,
+    });
+  });
+
   it('uses strikes before losing on repeated false accusations', () => {
     const state = setup(mission({
       entities: [{

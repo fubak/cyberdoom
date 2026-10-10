@@ -17,6 +17,10 @@ import { difficultyScale } from './difficulty';
  * Loads a Mission, owns spawned entities, tracks objective progress and
  * scoring, decides win/lose, and records ScoreEvents for the debrief.
  */
+export type LossCause =
+  | { kind: 'integrity'; by?: string; threat?: string }
+  | { kind: 'objective'; objectiveId: string; text: string; strikes: number; violations: number };
+
 export interface ObjectiveStatus {
   def: MissionObjective;
   done: boolean;
@@ -47,6 +51,7 @@ export class MissionRuntime {
   visited = new Set<string>();
   elapsed = 0;
   lossReason: string | null = null;
+  lossCause: LossCause | null = null;
 
   private pendingAccusation: Entity | null = null;
   private inspected = new Set<string>();
@@ -290,6 +295,7 @@ export class MissionRuntime {
       obj.failed = true;
       this.finished = 'lost';
       this.lossReason = obj.def.text;
+      this.lossCause = { kind: 'objective', objectiveId: obj.def.id, text: obj.def.text, strikes: obj.def.strikes ?? 1, violations: obj.violations };
       this.scoreLog.push({
         text: `Mission failed: ${obj.def.text}`,
         points: 0,
@@ -560,9 +566,10 @@ export class MissionRuntime {
       this.checkWin();
     });
 
-    this.bus.on('player-down', () => {
+    this.bus.on('player-down', ({ by, threat }) => {
       this.finished = 'lost';
-      this.lossReason ??= 'Player integrity depleted';
+      this.lossCause ??= { kind: 'integrity', by, threat };
+      this.lossReason ??= by ? `Integrity depleted by ${by}` : 'Player integrity depleted';
     });
   }
 

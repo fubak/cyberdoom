@@ -8,6 +8,8 @@ import {
   recordField,
 } from '../content/curriculum';
 import { missionRegistry, teachingRegistry } from '../content/missions';
+import type { LossCause } from '../missions/runtime';
+import { failureExplanation } from './failure';
 import { objectiveById } from '../content/objectives';
 import { drawBigText, drawText, measureBig, measureText } from '../render/font';
 import { RES } from '../render/res';
@@ -198,9 +200,14 @@ export function debrief(opts: {
   evidence?: EvidenceEntry[];
   /** Intermission tallies from rt.stats() (Doom intermission parity). */
   stats?: { kills: number; killsTotal: number; secrets: number; secretsTotal: number; time: number; par: number };
+  /** Why the mission was lost (integrity vs objective breach). */
+  loss?: LossCause | null;
+  /** Restart the same mission; falls back to leaving the debrief. */
+  onRedeploy?: () => void;
   onDone: (quizScore: number) => void;
 }): HTMLElement {
   const { mission } = opts;
+  const redeploy = opts.onRedeploy ?? (() => opts.onDone(0));
   const teach = teachingRegistry.get(mission.id);
   const s = h('div', 'screen cd-inter cd-pixel');
   const canvas = document.createElement('canvas');
@@ -486,14 +493,41 @@ export function debrief(opts: {
       );
     }
     logBlocks[logBlocks.length - 1].push({ text: '', color: C.text }, ...block(`FIELD SCORE  ${opts.score}`, C.gold));
+    const failPages: Page[] = [];
+    if (!opts.won) {
+      const fx = failureExplanation(opts.loss ?? null, mission.id);
+      const failBlocks: PLine[][] = [
+        block('CAUSE OF FAILURE', C.gold),
+        block(fx.headline, C.red),
+        block('WHAT HAPPENED', C.gold),
+        block(fx.what, C.text),
+      ];
+      if (fx.why) failBlocks.push(block('WHY IT MATTERS', C.gold), block(fx.why, C.white));
+      failBlocks.push(block('NEXT TIME', C.gold));
+      for (const line of fx.next) failBlocks.push(block(line, C.text, { prefix: '>', prefixColor: C.gold }));
+      failBlocks.push(block('ENTER REDEPLOY  -  K OPTIONAL KNOWLEDGE CHECK (QUIZ)  -  ESC MISSION SELECT', C.orange));
+      failPages.push(...paginate(failBlocks).map((lines) => ({ lines })));
+    }
     show({
       kicker: `AFTER-ACTION REPORT  -  ${mission.title}`,
       title: opts.won ? 'MISSION COMPLETE' : 'MISSION FAILED',
       ramp: opts.won ? RAMP.gold : RAMP.red,
-      pages: [tally, ...paginate(blocks).map((lines) => ({ lines })), ...paginate(logBlocks).map((lines) => ({ lines }))],
-      nextLabel: 'KNOWLEDGE CHECK',
+      pages: [...failPages, tally, ...paginate(blocks).map((lines) => ({ lines })), ...paginate(logBlocks).map((lines) => ({ lines }))],
+      nextLabel: opts.won ? 'KNOWLEDGE CHECK' : 'REDEPLOY',
       canNext: () => true,
-      next: () => runCheck(buildFirstCheck(), 'first'),
+      next: opts.won ? () => runCheck(buildFirstCheck(), 'first') : redeploy,
+      extraButton: opts.won ? undefined : { label: 'QUIZ [K]', go: () => runCheck(buildFirstCheck(), 'first') },
+      onKey: opts.won ? undefined : (e) => {
+        if (e.key === 'k' || e.key === 'K') {
+          runCheck(buildFirstCheck(), 'first');
+          return true;
+        }
+        if (e.key === 'Escape') {
+          opts.onDone(0);
+          return true;
+        }
+        return false;
+      },
       animate: 900,
     });
   };
@@ -528,7 +562,7 @@ export function debrief(opts: {
         tags,
         block(q.prompt, C.white),
         ...order.map((o, j) => block(o.text, C.text, { prefix: String(j + 1), prefixColor: C.gold, hit: j })),
-        block('PRESS 1-4 OR CLICK AN ANSWER.', C.orange),
+        block(`PRESS 1-${order.length} OR CLICK AN ANSWER.`, C.orange),
       ]).map((lines) => ({ lines }));
       const feedbackPages = () => {
         const chosen = order[picked];
@@ -572,6 +606,10 @@ export function debrief(opts: {
         },
         onHit: (j) => pick(j),
         onKey: (e) => {
+          if (!opts.won && e.key === 'Escape') {
+            redeploy();
+            return true;
+          }
           const n = Number(e.key);
           if (picked < 0 && n >= 1 && n <= order.length) {
             pick(n - 1);
@@ -579,6 +617,7 @@ export function debrief(opts: {
           }
           return false;
         },
+        extraButton: opts.won ? undefined : { label: 'REDEPLOY [ESC]', go: redeploy },
       });
     };
     if (!items.length) summary(null);
@@ -637,13 +676,17 @@ export function debrief(opts: {
       title: 'MISSION GRADE',
       ramp: RAMP.gold,
       pages: [gradePage, ...paginate(notes).map((lines) => ({ lines }))],
-      nextLabel: 'CONTINUE',
+      nextLabel: opts.won ? 'CONTINUE' : 'REDEPLOY',
       canNext: () => true,
-      next: () => opts.onDone(correct),
+      next: opts.won ? () => opts.onDone(correct) : redeploy,
       extraButton: missed.length ? { label: `RETRY ${missed.length} [R]`, go: () => runCheck(missed, 'retry') } : undefined,
       onKey: (e) => {
         if ((e.key === 'r' || e.key === 'R') && missed.length) {
           runCheck(missed, 'retry');
+          return true;
+        }
+        if (!opts.won && e.key === 'Escape') {
+          opts.onDone(correct);
           return true;
         }
         return false;
