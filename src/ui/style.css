@@ -51,9 +51,15 @@ html, body {
   image-rendering: pixelated;
 }
 
-/* fractional presentation: high-quality filtered scale, no uneven texels */
-#viewport.smooth canvas.gl,
-#viewport.smooth #hud {
+/* fractional presentation: sharp-bilinear composite. The stage holds the
+   frame nearest-upscaled to an integer multiple; CSS filters it down to the
+   exact fit — even texels without browser blur of the source canvases. */
+canvas.stage {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
   image-rendering: auto;
 }
 

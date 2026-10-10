@@ -70,6 +70,8 @@ class Game {
   private paused = false;
   private prepGen = 0;
   private cross!: HTMLElement;
+  /** sharp-bilinear compositor for fractional presentation; no-op on integer fit. */
+  private composeFrame: () => void = () => {};
 
   // play-state
   private map: WorldMap | null = null;
@@ -119,7 +121,7 @@ class Game {
     const viewport = document.createElement('div');
     viewport.id = 'viewport';
     app.appendChild(viewport);
-    setupPresentation(viewport);
+    this.composeFrame = setupPresentation(viewport);
     this.renderer = new Renderer(viewport);
     // warm lazy sprite frames in idle slices from boot — the player sits on
     // title/menus for seconds before the first level render, plenty of idle
@@ -626,6 +628,7 @@ class Game {
         this.runtime ? `${this.runtime.mission.id.toUpperCase()}: ${this.runtime.mission.title}` : undefined,
       );
       this.dossier.draw();
+      this.composeFrame();
     }
   }
 
