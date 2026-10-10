@@ -834,6 +834,13 @@ export class MissionRuntime {
     }
   }
 
+  /** Debug/QA: mark every map tile visited so the automap shows the full level. */
+  revealAll(): void {
+    for (let y = 0; y < this.mission.map.grid.length; y++) {
+      for (let x = 0; x < this.mission.map.grid[y].length; x++) this.visited.add(`${x},${y}`);
+    }
+  }
+
   private updateTriggers(w: UpdateWorld): void {
     for (const trigger of this.mission.script?.triggers ?? []) {
       if (this.firedTriggers.has(trigger.id)) continue;

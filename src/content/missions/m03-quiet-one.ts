@@ -81,7 +81,7 @@ export const m03: Mission = {
       '2': { kind: 'door', tex: 'wall-brick', doorId: 'secret-mail', secret: true },
       '3': { kind: 'door', tex: 'wall-brick', doorId: 'secret-pillar-cache', secret: true },
     },
-    spawn: { x: 9.5, y: 26.5, angle: -Math.PI / 2 },
+    spawn: { x: 9.5, y: 26.5, angle: -0.2783 },
     defaultLight: 0.7,
     lights: lightRects([[4, 21, 15, 28, 0.85], [5, 22, 11, 28, 1.0], [4, 8, 27, 19, 0.7], [17, 23, 24, 28, 0.8], [29, 21, 37, 28, 0.75], [29, 4, 38, 19, 0.45], [29, 1, 38, 2, 1.0], [1, 9, 2, 12, 0.3], [4, 2, 10, 6, 0.35]]),
   },

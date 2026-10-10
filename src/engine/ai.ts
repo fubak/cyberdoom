@@ -20,6 +20,9 @@ export interface AiHooks {
   onUnseal?(e: Entity, seal: SealTarget): void;
   /** One-line mechanic explainer the first time the player meets it. */
   onNotice?(e: Entity, text: string): void;
+  /** LEVELS: shared mission budget for worm copies (see wormPropagateCap);
+   *  a copy only spawns while `remaining > 0`. Omitted = uncapped. */
+  wormCopyBudget?: { remaining: number };
 }
 
 /** Something ransomware encrypted: a map door, or an entity (e.g. a console). */
@@ -77,6 +80,12 @@ const rangedCooldown = () => 1.2 + Math.random() * 0.8;
 // Malware-type mechanics (SY0-701 2.4): timers, caps and reveal distances.
 export const WORM_PROPAGATE_DELAY = 8;
 export const WORM_PROPAGATE_MAX = 2;
+/** LEVELS: mission-wide cap on spawned worm copies — a worm snowball can no
+ *  longer decide a mission on its own. Rises with difficulty: +2 copies total
+ *  at d1 up to +8 at d12. The per-worm WORM_PROPAGATE_MAX still applies. */
+export function wormPropagateCap(difficulty: number): number {
+  return Math.min(8, 2 + Math.round(((difficulty - 1) * 6) / 11));
+}
 export const TROJAN_REVEAL_DIST = 3;
 export const ROOTKIT_SPOT_DIST = 2.5;
 export const SEAL_RADIUS = 7;
@@ -230,7 +239,7 @@ function runMalwareMechanics(
       e.state.propT = (e.state.propT as number) - dt;
       if ((e.state.propT as number) <= 0) {
         const spot = findSpawnSpot(e, map, player);
-        if (spot) {
+        if (spot && (hooks.wormCopyBudget === undefined || hooks.wormCopyBudget.remaining > 0)) {
           const n = (e.state.propN as number | undefined) ?? 0;
           const copy: Entity = {
             def: { ...e.def, id: `${e.def.id}-c${n + 1}`, tags: [] },
@@ -251,6 +260,7 @@ function runMalwareMechanics(
           entities.push(copy);
           e.state.propN = n + 1;
           e.state.propT = WORM_PROPAGATE_DELAY;
+          if (hooks.wormCopyBudget) hooks.wormCopyBudget.remaining -= 1;
           hooks.onSpawn?.(copy);
         } else {
           e.state.propT = 1;
