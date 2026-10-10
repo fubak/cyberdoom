@@ -156,6 +156,73 @@ function kickPlate(g: CanvasRenderingContext2D, trim: string): void {
   g.fillRect(0, 78, 64, 2);
 }
 
+/**
+ * Per-texel vertical shade ramp over rows [y0, y1): alpha eases a0→a1.
+ * Baked grime/shadow gradients — the 4K read of soot near the ceiling and
+ * floor-line dirt that flat noise can't give.
+ */
+function vShade(g: CanvasRenderingContext2D, y0: number, y1: number, rgb: string, a0: number, a1: number, x0 = 0, w = 64): void {
+  const u = 1 / RES;
+  for (let y = y0; y < y1 - 1e-6; y += u) {
+    const t = (y - y0) / Math.max(1e-6, y1 - y0);
+    g.fillStyle = `rgba(${rgb},${(a0 + (a1 - a0) * t).toFixed(3)})`;
+    g.fillRect(x0, y, w, u * 1.01);
+  }
+}
+
+/** Hairline panel seam: a dark 1-texel line with a light edge beside it. */
+function seam(g: CanvasRenderingContext2D, x0: number, y0: number, x1: number, y1: number): void {
+  const u = 1 / RES;
+  g.fillStyle = 'rgba(8,9,12,0.8)';
+  g.fillRect(x0, y0, Math.max(u, x1 - x0), Math.max(u, y1 - y0));
+  g.fillStyle = 'rgba(255,255,255,0.15)';
+  if (x1 - x0 <= u) g.fillRect(x0 + u, y0, u, y1 - y0);
+  else g.fillRect(x0, y0 + u, x1 - x0, u);
+}
+
+/** Tiny bolt head: dark rim, steel body, catchlight texel. */
+function bolt(g: CanvasRenderingContext2D, x: number, y: number): void {
+  const u = 1 / RES;
+  g.fillStyle = '#0c0e12';
+  g.fillRect(x - u, y - u, 4 * u, 4 * u);
+  g.fillStyle = '#6e7684';
+  g.fillRect(x, y, 2 * u, 2 * u);
+  g.fillStyle = '#ccd4e0';
+  g.fillRect(x, y, u, u);
+}
+
+/** Rust/dust drip: a jittered, fading vertical streak under a fitting. */
+function drip(g: CanvasRenderingContext2D, x: number, y0: number, len: number, rgb = '14,10,8'): void {
+  const u = 1 / RES;
+  for (let i = 0; i < len; i++) {
+    const t = i / len;
+    g.fillStyle = `rgba(${rgb},${(0.42 * (1 - t)).toFixed(3)})`;
+    g.fillRect(x + (i % 5 === 3 ? u : 0), y0 + i * u, u, u * 1.2);
+  }
+}
+
+/** Sagging cable span between two clips, then a short drop into a jack. */
+function cableDrop(g: CanvasRenderingContext2D, x0: number, x1: number, y: number, sag: number, col: string, drop: number): void {
+  const u = 1 / RES;
+  for (let x = x0; x <= x1; x += u) {
+    const t = (x - x0) / Math.max(1e-6, x1 - x0);
+    const yy = y + sag * 4 * t * (1 - t);
+    g.fillStyle = col;
+    g.fillRect(x, yy, u * 1.2, u * 1.2);
+  }
+  for (const cx of [x0, x1]) {
+    g.fillStyle = '#101318';
+    g.fillRect(cx - u, y - 2 * u, 3 * u, 3 * u);
+    g.fillStyle = '#5a6270';
+    g.fillRect(cx - u, y - 2 * u, 3 * u, u);
+  }
+  g.fillStyle = col;
+  g.fillRect(x1, y, u * 1.2, drop);
+  bevel(g, x1 - 2, y + drop, 5, 5, '#2c3038', '#5a6272', '#101218');
+  g.fillStyle = '#0c0e12';
+  g.fillRect(x1 + 0.5, y + drop + 2, 2 * u, 2 * u);
+}
+
 /** Pass jobs=true to register gen jobs only (generation-worker startup). */
 export function buildTextures(jobs = false): void {
   if (jobs ? textureJobsDone : textureRegistry.ids().length > 0) return;
@@ -207,7 +274,68 @@ export function buildTextures(jobs = false): void {
     }
     g.fillStyle = '#d8a060';
     g.fillRect(0, 52, 64, 1);
+    // fine seams + fasteners: panel split lines, bolt rows, drips under the
+    // strip, ceiling soot — reads as authored sheet-metal up close
+    seam(g, 17, 3, 17, 45);
+    seam(g, 49, 3, 49, 45);
+    seam(g, 2, 24, 30, 24);
+    seam(g, 34, 24, 62, 24);
+    for (let x = 6; x < 62; x += 7) bolt(g, x, 46.5);
+    drip(g, 9, 20, 26);
+    drip(g, 55, 27, 18, '10,8,6');
+    vShade(g, 0, 5, '6,5,4', 0.3, 0);
     grime(p, 'rgba(90,40,10,0.55)', 90, 0, 70, 64, 8);
+    g.fillStyle = '#14161c';
+    g.fillRect(0, 78, 64, 2);
+  });
+
+  // Office utility variant: one tall service plate, conduit column, SVC
+  // stencil — the alt family mixed into wall-panel runs.
+  wall('wall-panel2', (p) => {
+    const { g, glow } = p;
+    const u = 1 / p.s;
+    noiseFill(p, [46, 42, 38], 9);
+    steelPanel(p, 2, 2, 40, 50, [98, 92, 82]);
+    steelPanel(p, 2, 54, 40, 10, [84, 78, 70]);
+    seam(g, 2, 52, 42, 52);
+    // conduit column on the right: vertical raceway + junction boxes
+    noiseFill(p, [60, 58, 52], 10, 1, 46, 2, 16, 62);
+    g.fillStyle = '#2a2e36';
+    g.fillRect(49, 0, 5, 66);
+    g.fillStyle = '#6a7280';
+    g.fillRect(49, 0, u, 66);
+    g.fillStyle = '#101318';
+    g.fillRect(53, 0, u, 66);
+    for (const y of [8, 34, 58]) {
+      bevel(g, 46, y, 12, 10, '#343a44', '#6a7484', '#0e1014');
+      g.fillStyle = '#0c0e12';
+      g.fillRect(49, y + 4, 6, 3);
+      g.fillStyle = '#ffb010';
+      g.fillRect(50, y + 5, 2, 1);
+      glow.fillStyle = '#fff';
+      glow.fillRect(50, y + 5, 2, 1);
+    }
+    // stencil service tag on the big plate
+    bevel(g, 6, 8, 22, 10, '#262a32', '#545c6a', '#0e1014');
+    drawText(g, 'SVC', 12, 11, '#b8c4d8', 'tiny', null);
+    // low vent band + fasteners
+    for (let y = 56; y < 62; y += 2) {
+      g.fillStyle = '#14161c';
+      g.fillRect(5, y, 34, 1);
+      g.fillStyle = '#7a8496';
+      g.fillRect(5, y + 1, 34, u);
+    }
+    for (let x = 6; x < 42; x += 9) bolt(g, x, 4.5);
+    for (const y of [22, 40]) {
+      bolt(g, 4, y);
+      bolt(g, 40, y);
+    }
+    cableDrop(g, 8, 30, 44, 4, '#c84830', 6);
+    drip(g, 24, 19, 30);
+    vShade(g, 0, 5, '6,5,4', 0.28, 0);
+    vShade(g, 64, 68, '8,6,4', 0, 0.4);
+    kickPlate(g, '#5a5040');
+    grime(p, 'rgba(70,40,10,0.5)', 90, 0, 66, 64, 12);
     g.fillStyle = '#14161c';
     g.fillRect(0, 78, 64, 2);
   });
@@ -282,6 +410,20 @@ export function buildTextures(jobs = false): void {
         }
       }
     }
+    // stepped hairline cracks on two blocks + a patched (repointed) block
+    for (const [cx, cy] of [[10, 14], [44, 44]] as const) {
+      for (let i = 0; i < 9; i++) {
+        g.fillStyle = 'rgba(10,8,7,0.75)';
+        g.fillRect(cx + Math.floor(i / 3), cy + i, 1 / p.s, 1 / p.s);
+      }
+    }
+    noiseFill(p, [58, 52, 46], 8, 1, 33, 21, 14, 8);
+    g.fillStyle = 'rgba(255,255,255,0.1)';
+    g.fillRect(33, 21, 14, 1 / p.s);
+    drip(g, 20, 30, 30);
+    drip(g, 52, 12, 20, '10,8,6');
+    vShade(g, 0, 4, '8,6,5', 0.28, 0);
+    vShade(g, 68, 73, '8,6,4', 0, 0.35);
     // baseboard kick plate: scuffed dark strip along the floor line
     g.fillStyle = '#1c1814';
     g.fillRect(0, 73, 64, 7);
@@ -337,6 +479,14 @@ export function buildTextures(jobs = false): void {
       glow.fillStyle = '#fff';
       glow.fillRect(x + 2, 57, 3, 2);
     }
+    // deck seams + fastener rows + a cable drop from the raceway to a jack
+    seam(g, 1, 19, 63, 19);
+    seam(g, 1, 36.5, 63, 36.5);
+    seam(g, 32, 2, 32, 17);
+    for (let x = 6; x < 62; x += 11) bolt(g, x, 20.5);
+    cableDrop(g, 18, 47, 60, 5, '#30a0d8', 8);
+    drip(g, 8, 19, 22, '10,12,16');
+    vShade(g, 0, 5, '6,8,12', 0.3, 0);
     kickPlate(g, '#4a5470');
     grime(p, 'rgba(0,0,0,0.4)', 80);
   });
@@ -365,12 +515,24 @@ export function buildTextures(jobs = false): void {
       g.fillStyle = '#6a5a44';
       g.fillRect(x, 11, 3, u);
     }
+    // weld beads along every other rib seam + drip stains under the rivets
+    for (let x = 7; x < 64; x += 16) {
+      for (let y = 4; y < 52; y += 3) {
+        g.fillStyle = 'rgba(200,190,170,0.3)';
+        g.fillRect(x, y, u, u * 1.6);
+        g.fillStyle = 'rgba(20,14,8,0.4)';
+        g.fillRect(x + u, y, u, u * 1.6);
+      }
+    }
+    for (const sx of [11, 27, 43, 59]) drip(g, sx, 8, 44);
+    drip(g, 18, 18, 26, '30,18,8');
     // green conduit below the ribs
     g.fillStyle = '#1e3a26';
     g.fillRect(0, 58, 64, 4);
     g.fillStyle = '#46e07a';
     g.fillRect(0, 58, 64, u);
     g.fillRect(0, 61, 64, u);
+    vShade(g, 62, 66, '6,4,2', 0, 0.3);
     hazard(g, 0, 66, 64, 8);
     g.fillStyle = '#0c0d10';
     g.fillRect(0, 78, 64, 2);
@@ -403,6 +565,14 @@ export function buildTextures(jobs = false): void {
       g.fillStyle = 'rgba(40,42,32,0.7)';
       g.fillRect(Math.floor(p.rnd() * 64), 40 + Math.floor(p.rnd() * 4), 1, 1);
     }
+    for (const [cx, cy] of [[18, 12], [50, 52]] as const) {
+      for (let i = 0; i < 8; i++) {
+        g.fillStyle = 'rgba(8,10,6,0.7)';
+        g.fillRect(cx + Math.floor(i / 3), cy + i, 1 / p.s, 1 / p.s);
+      }
+    }
+    drip(g, 30, 45, 24, '10,10,6');
+    vShade(g, 0, 4, '6,7,4', 0.26, 0);
     g.fillStyle = '#1c1814';
     g.fillRect(0, 73, 64, 7);
     g.fillStyle = '#3c3228';
@@ -768,9 +938,9 @@ export interface WallTheme {
 
 const THEMES: Record<string, WallTheme> = {
   // warm office: beige wainscot walls, PHISH posters, OPS placards
-  office: { alts: ['wall-tech'], decals: ['decal-vent', 'decal-cable', 'decal-poster:PHISH', 'decal-sign:OPS'], tint: [1.03, 0.98, 0.9], floor: 'floor' },
+  office: { alts: ['wall-tech', 'wall-panel2'], decals: ['decal-vent', 'decal-cable', 'decal-poster:PHISH', 'decal-sign:OPS'], tint: [1.03, 0.98, 0.9], floor: 'floor' },
   // cool bullpen: bluer light, SEC placards, 2FA posters
-  bullpen: { alts: ['wall-tech'], decals: ['decal-cable', 'decal-vent', 'decal-sign:SEC', 'decal-poster:2FA'], tint: [0.93, 0.99, 1.07], floor: 'floor' },
+  bullpen: { alts: ['wall-tech', 'wall-panel2'], decals: ['decal-cable', 'decal-vent', 'decal-sign:SEC', 'decal-poster:2FA'], tint: [0.93, 0.99, 1.07], floor: 'floor' },
   // cold machine room: ribbed walls, IDC placards, raised deck floor
   datacenter: { alts: ['wall-ribs'], decals: ['decal-cable', 'decal-vent', 'decal-sign:IDC', 'decal-poster:SIEM'], tint: [0.9, 0.97, 1.08], floor: 'floor-grid' },
   // green-tinted SOC/NOC: SOC placards, SIEM posters, deck floor

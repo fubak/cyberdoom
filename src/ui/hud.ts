@@ -251,11 +251,20 @@ export class Hud {
     } else {
       if (p.lmb) lines.push({ key: 'LMB', text: p.lmb.text, ready: p.lmb.ready, hot: !!p.lmbHot, cost: p.lmb.cost });
       if (p.use) lines.push({ key: 'E', text: p.use, ready: true, hot: false });
-      if (lines.length === 0 && p.footer) lines.push({ key: '', text: p.footer, ready: false, hot: false });
     }
-    if (!lines.length) return;
     const viewH = BASE_H - BASE_STATUS;
     const shown = lines.slice(0, 2);
+    // nav strip (ESC/M/L hints): a dim corner plate at the lower left, tucked
+    // just above arsenal's prompt band so the two can never overlap; with no
+    // prompt it sits on the corner itself
+    if (p.footer) {
+      const w = measureText(p.footer, 'small');
+      const ny = viewH - 9 - (shown.length ? shown.length * 10 + 1 : 0);
+      g.fillStyle = 'rgba(6,8,12,0.6)';
+      g.fillRect(0, ny, w + 8, 9);
+      drawText(g, p.footer, 4, ny + 1, '#7a8394', 'small', null);
+    }
+    if (!lines.length) return;
     // bottom of the lowest plate sits 1px above the status bar
     let y = viewH - 9 - (shown.length - 1) * 10;
     for (const line of shown) {
