@@ -172,13 +172,13 @@ const consoles: EntityDef[] = [
   },
   {
     id: 'gateway-dmarc', kind: 'console', x: 20.5, y: 12.5, sprite: 'console', tags: ['gateway-control'],
-    log: 'MAIL GATEWAY: DMARC policy p=reject; aggregate reporting enabled.',
+    log: 'MAIL GATEWAY: DMARC policy p=reject; aggregate reporting enabled.\nProtocol selection enforced: SMTPS/STARTTLS transport method per policy; port selection locked to 587 submission.\nOUTBOUND: web filter does URL scanning, content categorization and reputation checks; DNS filtering blocks known-bad domains; block rules applied at the centralized proxy, with agent-based filtering on laptops.',
     inspect: { label: 'DMARC gateway control', detail: 'Domain-based policy enforcement configuration.', category: 'legit', objectives: ['4.5'] },
   },
   {
     id: 'signin-log', kind: 'console', x: 12.5, y: 5.5, sprite: 'console', tags: ['signin-log'],
     implicates: ['mailbox-j-ortiz'],
-    log: 'SIGN-IN AUDIT — last 24 hours\n08:14 m.chen@cyberdoom.example — Boston / managed laptop / success\n08:18 r.patel@cyberdoom.example — Boston / managed laptop / success\n09:00 j.ortiz@cyberdoom.example — Chicago / browser / success\n09:20 j.ortiz@cyberdoom.example — Singapore / browser / success\n09:21 j.ortiz@cyberdoom.example — Chicago / browser / success / session active\n09:48 a.reed@cyberdoom.example — Denver / managed laptop / success',
+    log: 'SIGN-IN AUDIT — last 24 hours\n08:14 m.chen@cyberdoom.example — Boston / managed laptop / success\n08:18 r.patel@cyberdoom.example — Boston / managed laptop / success\n09:00 j.ortiz@cyberdoom.example — Chicago / browser / success\n09:20 j.ortiz@cyberdoom.example — Singapore / browser / success\n09:21 j.ortiz@cyberdoom.example — Chicago / browser / success / session active\n09:48 a.reed@cyberdoom.example — Denver / managed laptop / success\nALERTS: impossible travel + concurrent session usage on j.ortiz; account lockout counter at 4/5; blocked content on the credential page; TLS downgrade attempt + credential replay pattern from the Singapore IP - classic on-path attacker behavior.',
     inspect: {
       label: 'Sign-in audit console',
       detail: 'Raw session records, timestamps, mailbox names, locations, device types and outcomes.',
@@ -193,7 +193,7 @@ const consoles: EntityDef[] = [
   },
   {
     id: 'mfa-walkup', kind: 'console', x: 31.5, y: 25.5, sprite: 'console', tags: ['mail-hub'],
-    log: 'MAILROOM QUEUE: incoming messages awaiting triage.',
+    log: 'MAILROOM QUEUE: incoming messages awaiting triage.\nMAILROOM POSTER: phishing = email, smishing = SMS, vishing = voice call. Business email compromise spoofs executives, pretexting invents a scenario, a watering hole compromises sites your team already visits, and brand impersonation plus typosquatting fake trusted domains. Misinformation and disinformation poison trust.\nAWARENESS: report suspicious messages - phishing campaigns train recognizing a phishing attempt and responding to reported suspicious messages, and the program runs development, execution, initial reporting then recurring reporting. TRAINING TOPICS: the policy handbook, situational awareness, insider threat, password management, removable media and cables, social engineering, operational security, and hybrid or remote work environments; anomalous behavior recognition - risky, unexpected, unintentional.',
     inspect: { label: 'Mailroom queue console', detail: 'Message queue overview.', category: 'legit', objectives: ['5.6'] },
   },
 ];

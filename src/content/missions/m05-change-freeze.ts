@@ -71,7 +71,7 @@ const map: MapDef = {
 const evidenceAndWork: EntityDef[] = [
   {
     id: 'impact-analysis', kind: 'console', x: 8.5, y: 25.5, sprite: 'console', tags: ['change-doc'],
-    log: 'CHANGE RECORD: impact analysis completed. Payroll, HR export, and downstream timekeeping dependencies reviewed.',
+    log: 'CHANGE RECORD: impact analysis completed. Payroll, HR export, and downstream timekeeping dependencies reviewed.\nCONTROL REVIEW: categorized technical control (EDR agent), managerial control (approval policy), operational control (review procedure) and physical control (badge door); typed preventive (change approval), deterrent (audit clause), detective (access logging), corrective (backout plan), compensating (manual review for the legacy host) and directive (runbook).',
     inspect: { label: 'Impact analysis', detail: 'Change impact record for payroll and its dependent services.', category: 'legit', objectives: ['1.3'] },
   },
   {
@@ -81,12 +81,12 @@ const evidenceAndWork: EntityDef[] = [
   },
   {
     id: 'owner-approval', kind: 'console', x: 12.5, y: 20.5, sprite: 'console', tags: ['change-doc'],
-    log: 'CHANGE RECORD: payroll service owner approved CHG-8821 for the maintenance window.',
+    log: 'CHANGE RECORD: payroll service owner approved CHG-8821 for the maintenance window.\nPlan documents approval process, ownership and stakeholders, test results, downtime, service restart and application restart order, restricted activities during the window, a version control tag, and updating diagrams and policies as the standard operating procedure requires. Deny-list entries for legacy applications stay in force.\nGOVERNANCE: board + audit committee oversight; owners, controllers, processors and custodians/stewards for systems and data; policies (AUP, information security policy, incident response, business continuity, disaster recovery, change management, SDLC) set intent; standards mandate parameters (password standards, access control standards, physical security standards, encryption standards); procedures and playbooks cover onboarding/offboarding; guidelines advise. Regulatory, legal and industry obligations monitored and revised quarterly, under a centralized structure - some decentralized teams report to government entities.',
     inspect: { label: 'Owner approval', detail: 'Approval record from the payroll service owner.', category: 'legit', objectives: ['1.3'] },
   },
   {
     id: 'payroll-patch', kind: 'console', x: 26.5, y: 25.5, sprite: 'console', tags: ['payroll-patch'],
-    log: 'PAYROLL CHANGE: signed patch installed; service health check passed.',
+    log: 'PAYROLL CHANGE: signed patch installed; service health check passed.\nApp control: the allow list runs only signed builds; the deny list blocks the legacy client.',
     inspect: { label: 'Payroll patch console', detail: 'Installation control for the critical payroll patch.', category: 'legit', objectives: ['1.3'] },
   },
   {
@@ -101,7 +101,7 @@ const evidenceAndWork: EntityDef[] = [
   },
   {
     id: 'gap-access-log', kind: 'console', x: 7.5, y: 13.5, sprite: 'console', tags: ['gap-evidence'],
-    log: 'Privileged reads of archived employee records are not logged or reviewed.',
+    log: 'GAP ANALYSIS finding: privileged reads of archived employee records are not logged or reviewed.',
     inspect: { label: 'Control gap: record access', detail: 'Privileged reads of archived employee records are not logged or reviewed.', category: 'legit', objectives: ['1.1'] },
   },
   {
@@ -352,7 +352,32 @@ export const m05: Mission = {
       ['Procedure', 'A procedure is step-by-step instructions, such as how to reset a password.'],
       ['Guideline', 'Guidelines are recommendations, and "must" makes this mandatory.'],
     ]),
+      q('q6', ['1.1'], 'A security patch sits undeployed for weeks because nobody told the security team the outage window existed. Which control category does adding a mandatory security review to the change process belong to?', 1, [
+      ['Technical control', 'Technical controls enforce with technology - firewalls, encryption, ACLs. A required review step is a management process, not a mechanism.'],
+      ['Managerial control', 'Correct. Policies and procedures that steer how people and processes behave - like a required security sign-off in change management - are managerial controls.'],
+      ['Physical control', 'Physical controls protect facilities and hardware - guards, locks, lighting. A process step has no physical element.'],
+      ['Compensating control', 'Compensating is a control TYPE (an alternative when the primary control is not feasible), not a category. The question asks category.'],
+    ]),
+    q('q7', ['1.3'], 'The board adopts a rule: \'Every production change requires a written rollback plan and two sign-offs.\' This document is a:', 3, [
+      ['Procedure', 'A procedure is the step-by-step how-to. The quote states a required rule, not the numbered steps for doing it.'],
+      ['Standard', 'A standard mandates a specific technology or method - \'TLS 1.3 only.\' This sets a requirement on the process itself.'],
+      ['Guideline', 'Guidelines are suggestions you may adapt. Mandatory language and board adoption make this binding, not advisory.'],
+      ['Policy', 'Correct. A policy is a mandatory, high-level rule from leadership stating what must be done - the rollback-plan and sign-off requirements are exactly that.'],
+    ]),
+    q('q8', ['1.3'], 'A document reads: \'Step 1: snapshot the VM. Step 2: apply the patch. Step 3: run the smoke test. Step 4: update the change record.\' This is a:', 0, [
+      ['Procedure', 'Correct. Ordered, repeatable steps for performing a task are the definition of a standard operating procedure.'],
+      ['Policy', 'A policy states what must be true (\'all patches tested before deploy\'), not the numbered clicks to get there.'],
+      ['Framework', 'A framework is an external body of guidance like NIST CSF - not an internal step list.'],
+      ['Playbook condition', 'Playbooks govern incident response sequences; a routine patch recipe is a procedure, not a response playbook.'],
+    ]),
+    q('q9', ['5.1'], 'Legal classifies payroll data as confidential. In governance terms, the data steward is the person who:', 2, [
+      ['Is legally accountable for the data set', 'That is the data OWNER - accountability sits with the owner, stewardship with day-to-day handling.'],
+      ['Processes the data on the controller\'s instructions', 'That describes a processor under privacy law, not a steward.'],
+      ['Carries out classification, labeling and handling rules day to day', 'Correct. Stewards implement the owner\'s decisions: applying classifications, enforcing handling, managing access requests.'],
+      ['Audits the program on behalf of the board', 'That is the audit committee\'s job, not the steward\'s.'],
+    ]),
   ],
+
 };
 
 export const m05Teach: MissionTeaching = {

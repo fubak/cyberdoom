@@ -120,7 +120,12 @@ export const m11: Mission = {
         'NAS-09 archive shelf     DECOMMISSIONED 2019\n' +
         'LT-118 laptop + dock     ASSIGNED    K. Marsh\n' +
         '(+ 6 more rows)\n' +
-        'Stale register: verify every row against the floor.',
+        'Stale register: verify every row against the floor.\n' +
+        'ASSET LIFECYCLE: every asset needs an acquisition/procurement record,\n' +
+        'assignment and accounting (a named owner + classification), monitoring/\n' +
+        'asset tracking (inventory + enumeration), and a disposal/decommissioning\n' +
+        'path - sanitization or destruction with certification, plus the data\n' +
+        'retention schedule stating what data retention law requires.'
     },
     {
       id: 'audit-signin', kind: 'console', x: 10.5, y: 18.5, sprite: 'console',
@@ -131,7 +136,7 @@ export const m11: Mission = {
         detail: 'Escorted-access register for the media vault. Signing in issues a time-boxed AUDIT role, logged to your badge — least privilege for the night.',
         category: 'legit', objectives: ['4.2'],
       },
-      log: 'Signed in: AUDIT role granted until 08:00. Media-vault reader now accepts your badge + token.',
+      log: 'Signed in: AUDIT role granted until 08:00. Media-vault reader now accepts your badge + token.\nAAA BROKER: RADIUS handles network authentication over 802.1X port control; TACACS+ covers device-admin sessions. Authentication proves who, authorization scopes what, accounting writes it down - that is non-repudiation.',
     },
     {
       id: 'attest-console', kind: 'console', x: 29.5, y: 18.5, sprite: 'console',
@@ -147,7 +152,16 @@ export const m11: Mission = {
         '- Legal-hold data preserved under LIT-88\n' +
         '- Data-subject requests answered and filed\n' +
         '- Pen-test scope issued (unknown environment)\n' +
-        'Signed: control owner, 06:12.',
+        'Signed: control owner, 06:12.\n' +
+        'COMPLIANCE DOCKET: compliance reporting splits internal reporting\n' +
+        'and external reporting; non-compliance\n' +
+        'costs fines, sanctions, reputational damage, loss of license and\n' +
+        'contractual impacts. Monitoring = due diligence and due care, attestation\n' +
+        'and acknowledgement on the record, with automation where it fits.\n' +
+        'Privacy: the data subject owns their data; the controller decides how it\n' +
+        'is used, the processor acts on the controller\u2019s behalf; ownership, a\n' +
+        'data inventory and retention schedule make the right to be forgotten\n' +
+        'executable.',
     },
     // --- War room: the three data-subject requests ---
     {
@@ -272,7 +286,7 @@ export const m11: Mission = {
         detail: 'The team starts from public information only.',
         category: 'legit', objectives: ['5.5'],
       },
-      log: 'Unknown-environment (black-box) engagement issued: the red team starts from public information only, matching the external attacker the committee wants measured.',
+      log: 'Unknown-environment (black-box) engagement issued: the red team starts from public information only, matching the external attacker the committee wants measured.\nAUDIT MAP: internal audits and audit-committee self-assessments check our own controls; external work is regulatory examinations or an independent third-party audit. Pen tests split offensive (attack), defensive (validate), integrated (purple), and physical (doors and badges); reconnaissance is passive reconnaissance (OSINT, never touching) or active reconnaissance (scanning the target). This penetration testing is how audits get teeth.',
     },
     // --- War room: the auditors themselves (5.5 evidence) ---
     {
@@ -753,7 +767,38 @@ export const m11: Mission = {
       ['The data processor', 'Processors handle data for a controller. They do not set its classification.'],
       ['The help desk', 'The help desk carries out access requests. It does not decide them.'],
     ]),
+      q('q6', ['4.2'], 'A drive holding customer records must be REUSED inside the company after reassignment. Which end-of-life action is required first?', 1, [
+      ['Delete the customer folders and empty the trash', 'Deletion only unlinks files - the data is trivially recoverable.'],
+      ['Sanitize it: cryptographic erase or secure wipe before reassignment', 'Correct. Reuse requires sanitization (secure erase) - destruction is only needed when media leaves control entirely.'],
+      ['Rename the files so they are not recognizable', 'Renaming obscures nothing; data remains fully recoverable.'],
+      ['Shred the drive', 'Destruction is correct for disposal, but this drive is being reused - sanitization is the right level.'],
+    ]),
+    q('q7', ['4.2'], 'The audit finds three laptops missing from the register even though procurement records show they were bought. Which asset-management phase failed?', 3, [
+      ['Acquisition/procurement', 'The laptops WERE bought - procurement worked.'],
+      ['Disposal/decommissioning', 'No disposal was recorded; the gap is not in the retirement path.'],
+      ['Assignment/accounting', 'Assignment records may also be wrong, but the missing-from-register symptom points to tracking.'],
+      ['Tracking: inventory and enumeration', 'Correct. Asset tracking means continuously inventorying and enumerating what exists and where - the register and reality diverged there.'],
+    ]),
+    q('q8', ['5.4'], 'Every quarter, managers must formally confirm their staff still need each access they hold. This compliance activity is called:', 0, [
+      ['Attestation', 'Correct. Attestation is the formal acknowledgement - managers attest access is still required, creating compliance evidence.'],
+      ['Right to be forgotten', 'That is a data-subject erasure right under privacy law - unrelated to access review.'],
+      ['Penetration test', 'A pen test attacks systems; it does not review entitlement lists.'],
+      ['Data inventory', 'An inventory catalogs data, not the approval of who may use it.'],
+    ]),
+    q('q9', ['5.5'], 'A red team is given no diagrams, no credentials and no inside help - they must find their own way in. This penetration test uses a(n):', 2, [
+      ['Known environment', 'A known-environment test hands the team documentation and access first - the opposite of this scenario.'],
+      ['Passive reconnaissance exercise', 'Passive reconnaissance only observes; this team will attack.'],
+      ['Unknown environment', 'Correct. Unknown-environment (black-box-style) tests measure how an outsider with no internal knowledge actually breaches.'],
+      ['Tabletop exercise', 'A tabletop is a discussion simulation in a conference room - nothing is attacked.'],
+    ]),
+    q('q10', ['5.5'], 'During the exercise, testers and defenders share information in real time so detection and response get measured alongside the attack. This is a(n):', 1, [
+      ['Offensive penetration test', 'Pure offensive work measures only the attacker\'s progress - not the defender\'s response.'],
+      ['Integrated (purple-team) penetration test', 'Correct. Integrated testing combines offense and defense so both capabilities are exercised and measured.'],
+      ['Defensive-only drill', 'If only defenders act there is no adversary - it becomes a tabletop, not a pen test.'],
+      ['External audit', 'An audit reviews controls and evidence; it does not execute adversary techniques.'],
+    ]),
   ],
+
   script: {
     par: 300,
     triggers: [

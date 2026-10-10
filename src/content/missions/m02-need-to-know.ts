@@ -120,18 +120,18 @@ export const m02: Mission = {
     {
       id: 'iam-netops', kind: 'console', x: 22.5, y: 11.5, sprite: 'console', tags: ['jit-netops'],
       grants: { resource: 'role:netops', amount: 1 },
-      log: 'IAM KIOSK: JIT request NETOPS for CHG-4471 approved.\nScope: switch room. Expires when the task closes.',
+      log: 'IAM KIOSK: JIT request NETOPS for CHG-4471 approved.\nScope: switch room. Expires when the task closes.\nJust-in-time permissions issued as ephemeral credentials - no standing privilege.\nZT GATEWAY: the control plane authenticates the subject/system first; a policy engine scores adaptive identity and posture per request; the policy administrator pushes policy-driven access control; the policy enforcement point gates every data-plane session - no implicit trust zones, and threat scope reduction throughout.',
       inspect: { label: 'IAM kiosk: request NETOPS (switch room)', detail: 'Just-in-time, ticket-scoped access request.', category: 'legit', objectives: ['4.6'] },
     },
     {
       id: 'iam-admin', kind: 'console', x: 24.5, y: 11.5, sprite: 'console', tags: ['over-provision'],
-      log: 'IAM KIOSK: request DOMAIN ADMIN (all doors, no expiry) submitted.',
+      log: 'IAM KIOSK: request DOMAIN ADMIN (all doors, no expiry) submitted.\nProvisioning this grants permanent privilege; de-provisioning removes access when the role ends. Permission assignments must match the job.',
       inspect: { label: 'IAM kiosk: request DOMAIN ADMIN (all doors)', detail: 'Standing, unscoped privileged access request.', category: 'legit', objectives: ['4.6'] },
     },
     {
       id: 'auth-log', kind: 'console', x: 26.5, y: 11.5, sprite: 'console', tags: ['auth-log'],
       implicates: ['greg'],
-      log: 'SERVER AUTH LOG (24 h)\n212 logins as "admin" from 4 different workstations\n0 logins by named accounts',
+      log: 'SERVER AUTH LOG (24 h)\n212 logins as "admin" from 4 different workstations\n0 logins by named accounts\nAAA review: authentication proves who, authorization scopes what, accounting records it. A shared "admin" account means authenticating people fails - no attribution. Authenticate people and systems separately - authenticating systems is as important as authenticating people - under an explicit authorization model. The CIA triad - confidentiality, integrity, and availability - is the frame every control defends.',
       inspect: {
         label: 'Server authentication log',
         detail: 'Per-account logins on the servers the sysadmin team manages. Named-account accountability is what shared passwords destroy.',
@@ -140,7 +140,7 @@ export const m02: Mission = {
     },
     {
       id: 'report-console', kind: 'console', x: 17.5, y: 11.5, sprite: 'console', tags: ['report-console'],
-      log: 'SOC REPORTING: press E on the person to mark them, then file here.',
+      log: 'SOC REPORTING: press E on the person to mark them, then file here.\nDeception layer: the "finance share" is a honeypot inside a honeynet; its honeyfiles and honeytoken records trip an alert the moment a snooper opens them.',
       inspect: { label: 'SOC incident console', detail: 'Files security-awareness and insider reports to the SOC.', category: 'legit', objectives: ['5.6'] },
     },
     {
@@ -189,7 +189,7 @@ export const m02: Mission = {
     },
     {
       id: 'mfa-phish', kind: 'console', x: 28.5, y: 13.5, sprite: 'console', tags: ['phish-prompt'],
-      log: 'POP-UP: "Session expired. Sign in to SW-B portal: sw-b-portal.netops-login.co. Touch your key to continue."',
+      log: 'POP-UP: "Session expired. Sign in to SW-B portal: sw-b-portal.netops-login.co. Touch your key to continue."\nReal MFA needs independent factors: something you know (password), something you have (a hard token, a soft token, or a security key), something you are (biometrics), or somewhere you are (location).',
       inspect: {
         label: 'Sign-in prompt (sw-b-portal.netops-login.co)',
         detail: 'Kiosk browser opened a sign-in page by itself. The domain is not the company IdP; it was registered 2 days ago.',

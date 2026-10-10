@@ -136,19 +136,19 @@ export const m03: Mission = {
     {
       id: 'badge-log', kind: 'console', x: 23.5, y: 27.5, sprite: 'console', tags: ['badge-log', 'evidence'],
       implicates: ['dana', 'marcus'],
-      log: 'BADGE LOG: after-hours entries, last 7 days\nSun 03:12 R.KELL (R&D lead): R&D wing (usual Mon-Fri 09-17)\nThu 23:44 D.ORTIZ (Dev): lobby exit, release week\nS.PATEL, J.LEE: none',
+      log: 'BADGE LOG: after-hours entries, last 7 days\nSun 03:12 R.KELL (R&D lead): R&D wing (usual Mon-Fri 09-17)\nThu 23:44 D.ORTIZ (Dev): lobby exit, release week\nS.PATEL, J.LEE: none\nSIEM indicators on RKELL-LT: out-of-cycle logging 03:12, impossible-travel alert (VPN from two cities 9 min apart), concurrent session usage, blocked content (2 uploads stopped at the web filter), and missing logs for the exact window above. The published/documented pattern matches the Meridian leak.',
       inspect: { label: 'Physical access control log', detail: 'Badge reader events for every door.', category: 'legit', objectives: ['4.9'] },
     },
     {
       id: 'legal', kind: 'console', x: 36.5, y: 27.5, sprite: 'console', tags: ['case'],
       grants: { resource: 'role:investigator', amount: 1 },
-      log: 'LEGAL/HR: case #883 opened on documented after-hours access.\nInvestigator access to DLP and endpoint logs approved. Legal hold: preserve all evidence.',
+      log: 'LEGAL/HR: case #883 opened on documented after-hours access.\nInvestigator access to DLP and endpoint logs approved. Legal hold: preserve all evidence.\nDIGITAL FORENSICS PROTOCOL: acquisition images first (write-blocked), a chain-of-custody form per item, preservation before analysis, and e-discovery packaging for counsel. Reporting goes to legal only.',
       inspect: { label: 'Legal / HR case desk', detail: 'Investigations into employees need a documented reason and authorization.', category: 'legit', objectives: ['4.9'] },
     },
     {
       id: 'dlp', kind: 'console', x: 37.5, y: 4.5, sprite: 'console', tags: ['evidence'],
       implicates: ['dana'],
-      log: 'DLP ALERTS: overnight\nSun 03:31 rkell: 1,284 files / 40 GB read from \\\\designs\\confidential (role share: \\\\designs\\atlas)\nspatel: ~300 HR records/day inside HRIS (no outbound transfer)',
+      log: 'DLP ALERTS: overnight\nSun 03:31 rkell: 1,284 files / 40 GB read from \\\\designs\\confidential (role share: \\\\designs\\atlas)\nspatel: ~300 HR records/day inside HRIS (no outbound transfer)\nCLASSIFICATION: \\\\designs\\confidential holds trade secrets and intellectual property - critical/restricted data, mostly non-human-readable CAD blobs. The copy onto USB is data exfiltration: data in transit leaving control.',
       inspect: { label: 'DLP console', detail: 'Data-loss-prevention alerts on outbound transfers.', category: 'legit', objectives: ['4.9'] },
     },
     {
@@ -159,7 +159,7 @@ export const m03: Mission = {
     },
     {
       id: 'report-console', kind: 'console', x: 37.5, y: 18.5, sprite: 'console', tags: ['report-console'],
-      log: 'INSIDER REPORT: press E on the employee to mark them, then file here. The case needs all three evidence sources.',
+      log: 'INSIDER REPORT: press E on the employee to mark them, then file here. The case needs all three evidence sources.\nSOURCES AVAILABLE: badge logs, endpoint logs, application logs, OS security logs, firewall logs, IPS/IDS logs, network logs, packet captures, vulnerability scans, automated reports, dashboards and metadata.\nTHREAT-ACTOR POSTER: nation-state, organized crime, hacktivist, insider threat, unskilled attacker, shadow IT. Attributes: internal vs external actor, resources and funding, level of sophistication. Motives: data exfiltration, espionage, service disruption, blackmail, financial gain, philosophical or political beliefs, ethical, revenge, disruption/chaos, even war.\nATTACK PATTERNS: physical - brute force, RFID cloning, environmental; network - distributed denial-of-service (amplified/reflected), DNS attacks, wireless, on-path, credential replay, malicious code; application - injection, buffer overflow, replay, privilege escalation, forgery, directory traversal; cryptographic - downgrade, collision, birthday; password - spraying and brute force.',
       inspect: { label: 'Case reporting console', detail: 'Files the insider report to Legal/HR and the SOC.', category: 'legit', objectives: ['4.9'] },
     },
     { id: 'trojan-floor', kind: 'enemy', x: 16.5, y: 9.5, sprite: 'trojan', ai: 'wander', hp: 3, infected: true, tags: ['malware'],
@@ -313,7 +313,30 @@ export const m03: Mission = {
         { id: 'd', text: 'Whether they are caught — actors who are caught were always insiders', correct: false, explanation: 'Attribution difficulty does not define the actor type. Each group has external and internal members and a different intent.' },
       ],
     },
+      {
+      id: 'q7',
+      prompt: 'A contractor whose engagement ended a month ago still VPNs in every few weeks \'just to check on things.\' What makes insiders fundamentally different from external threat actors?',
+      objectives: ['2.1'],
+      options: [
+        { id: 'a', text: 'Insiders always have more resources and funding than outsiders', correct: false, explanation: 'Resources and funding vary; a nation-state out-resources any employee. The difference is not money.' },
+        { id: 'b', text: 'Insiders are always more sophisticated than outsiders', correct: false, explanation: 'An unskilled insider can do damage with a flash drive. Sophistication is not what defines them.' },
+        { id: 'c', text: 'Insiders already hold authorized access inside the trust boundary', correct: true, explanation: 'An insider starts with legitimate credentials and reach - detection hinges on behavior (impossible travel, off-hours use), not perimeter alerts.' },
+        { id: 'd', text: 'Insiders are motivated only by financial gain', correct: false, explanation: 'Insider motivations span revenge, espionage, beliefs, even curiosity. Access, not motive, is the defining attribute.' },
+      ],
+    },
+    {
+      id: 'q8',
+      prompt: 'The insider case file has to hold up in a legal review. Which practice preserves the admissibility of the badge-log evidence?',
+      objectives: ['4.9'],
+      options: [
+        { id: 'a', text: 'Encrypting the workstation before anyone examines it', correct: false, explanation: 'Encryption protects confidentiality but proves nothing about who handled the evidence or when.' },
+        { id: 'b', text: 'Running a malware scan on the logs first', correct: false, explanation: 'Scanning alters nothing about provenance - and modifying files first could itself damage admissibility.' },
+        { id: 'c', text: 'Publishing the findings to the whole SOC immediately', correct: false, explanation: 'Wide distribution works against preservation and privacy. The investigation stays need-to-know.' },
+        { id: 'd', text: 'Chain of custody: documented acquisition, preservation and hand-off of each artifact', correct: true, explanation: 'A chain-of-custody record shows where the artifact was, who touched it, and that it was not altered - the basis of forensic admissibility.' },
+      ],
+    },
   ],
+
 };
 
 export const m03Walkthrough: WalkStep[] = [

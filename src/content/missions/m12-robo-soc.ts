@@ -138,7 +138,15 @@ export const m12: Mission = {
         '[ ] SOAR playbook: ticket -> contain -> resilience\n' +
         '[ ] failure modes for every automated control\n' +
         '[ ] proof the MDM push landed on every kiosk\n' +
-        'then sign off at the war-room console.',
+        'then sign off at the war-room console.\n' +
+        'ORCHESTRATION SCOPE: user provisioning and resource provisioning,\n' +
+        'guard rails on security groups, ticket creation, escalation,\n' +
+        'enabling and disabling services and access, continuous integration and\n' +
+        'testing, plus integrations over APIs. Benefits: efficiency and time\n' +
+        'savings, enforced baselines, standard infrastructure configurations,\n' +
+        'secure scaling, faster reaction time, a workforce multiplier - and\n' +
+        'employee retention when toil dies. Watch: complexity, cost, the\n' +
+        'single point of failure, technical debt and ongoing supportability.',
       inspect: { label: 'Automation war board', detail: 'Leadership\u2019s checklist for automating the SOC by Friday.', category: 'item', objectives: ['4.7'] },
     },
     // --- SIEM hall: the queue, rule evidence, tuning consoles ---
@@ -151,7 +159,22 @@ export const m12: Mission = {
         'R2 AUTH ANOMALY ..........   3/d   10.66.6.66 sweeping accounts\n' +
         'R3 DNS TUNNEL ............   1/mo  ws-fin-07 hourly TXT lookups\n' +
         'Analyst note: "we mostly just ack R1 now"\n' +
-        'SOC role granted: lab, vault and payment consoles unlocked.',
+        'SOC role granted: lab, vault and payment consoles unlocked.\n' +
+        'MONITORING STACK: the SIEM does log aggregation across systems,\n' +
+        'applications and infrastructure, plus alerting, scanning, reporting\n' +
+        'and archiving; alert response covers quarantine and alert tuning.\n' +
+        'Tools in play: SCAP benchmarks, agents and agentless collectors,\n' +
+        'antivirus, DLP, SNMP traps, NetFlow and vulnerability scanners.\n' +
+        'ENDPOINT TIER: network access control (NAC) gates admission,\n' +
+        'EDR/XDR agents correlate, file integrity monitoring watches system\n' +
+        'binaries, user behavior analytics flags impossible hours, and Group Policy\n' +
+        'plus SELinux enforce baselines - configuration enforcement\n' +
+        'at scale.\n' +
+        'MITIGATION SHELF: segmentation, ACLs and permissions, application\n' +
+        'allow lists, isolation, patching, encryption, monitoring, least\n' +
+        'privilege and decommissioning. Hardening means access lists (ACLs)\n' +
+        'on the wire, disabling ports and protocols, default password changes\n' +
+        'and removal of unnecessary software.',
       inspect: { label: 'SIEM alert queue', detail: 'Aggregated alerts from every rule, ranked by volume. Three rules account for almost all of it.', category: 'item', objectives: ['4.4'] },
     },
     {
@@ -509,7 +532,26 @@ export const m12: Mission = {
       ['Hire more analysts to read every alert', 'More people reading noise does not fix the noise.'],
       ['Raise every rule\u2019s threshold tenfold', 'A blanket change hides real attacks across every rule, not just the noisy one.'],
     ]),
+      q('q7', ['2.5'], 'The SOC runs a simulated phishing campaign as part of the awareness program. Which metric BEST shows the program is working?', 1, [
+      ['Number of employees who attended the training', 'Attendance shows reach, not behavior change.'],
+      ['Click rate falls while reported suspicious messages rise', 'Correct. The point of phishing awareness is measurable behavior: fewer clicks and more reports - recognition plus reporting is the objective.'],
+      ['The campaign budget stayed under cap', 'Cost says nothing about whether users learned.'],
+      ['More mail got blocked at the gateway', 'Gateway filtering is a technical control - it does not test what users learned.'],
+    ]),
+    q('q8', ['4.4'], 'The SIEM has firewall, endpoint and application logs but is blind to lateral movement between VLANs. Which data source most directly closes that gap?', 2, [
+      ['SNMP traps from printers', 'SNMP traps report device events, not traffic patterns between hosts.'],
+      ['SCAP benchmark results', 'SCAP checks configuration compliance - it shows misconfiguration, not movement.'],
+      ['NetFlow records from the core switch', 'Correct. NetFlow summarizes who talked to whom, how much and when - the standard feed for detecting lateral movement.'],
+      ['The DLP alert queue', 'DLP watches data exfiltration patterns, not east-west session flow.'],
+    ]),
+    q('q9', ['4.7'], 'Analysts want every critical-severity alert to auto-enrich the ticket, isolate the host and page on-call - with no human in the loop for step one. What should they build?', 0, [
+      ['A SOAR playbook', 'Correct. Security orchestration, automation and response playbooks chain enrichment, containment and escalation into one automated flow.'],
+      ['A new SIEM dashboard', 'Dashboards display; they do not act.'],
+      ['An SNMP trap rule', 'Traps raise events; they cannot orchestrate a multi-step response.'],
+      ['A Group Policy object', 'GPO configures endpoints - it cannot consume alerts or drive response.'],
+    ]),
   ],
+
 };
 
 export const m12Teach: MissionTeaching = {

@@ -107,7 +107,7 @@ briefing:
     })),
     {
       id: 'netflow', kind: 'console', x: 16.5, y: 24.5, sprite: 'console', tags: ['netflow'],
-      log: 'NETFLOW, VLAN 30 -> internet, last 6 h\n01:52 10.30.0.43 -> 203.0.113.66:443 first seen, then every 60 s\n01:58 10.30.0.12 / .27 / .51 -> 203.0.113.66:443 (each after SMB from 10.30.0.43)\nDHCP: .12 FIN-01, .27 FIN-02, .43 FIN-03, .51 FIN-04',
+      log: 'NETFLOW, VLAN 30 -> internet, last 6 h\n01:52 10.30.0.43 -> 203.0.113.66:443 first seen, then every 60 s\n01:58 10.30.0.12 / .27 / .51 -> 203.0.113.66:443 (each after SMB from 10.30.0.43)\nDHCP: .12 FIN-01, .27 FIN-02, .43 FIN-03, .51 FIN-04\nINVESTIGATION FEEDS: correlated firewall logs, endpoint logs, application logs,\nOS security logs, IPS/IDS logs and network logs; metadata first, then packet\ncaptures where tapped; automated reports feed the dashboards.',
       inspect: { label: 'Firewall / NetFlow console', detail: 'Connection records: source, destination, port, time.', category: 'legit', objectives: ['4.9'] },
     },
     // War-room decision: mark the actual patient zero (grouped pick, decoys are false positives).
@@ -146,12 +146,12 @@ briefing:
     },
     {
       id: 'restore', kind: 'console', x: 37.5, y: 1.5, sprite: 'console', tags: ['recover'],
-      log: 'BACKUP: restoring fin-share from offline immutable snapshot (02:00).\nHashes verified. Finance is back online.',
+      log: 'BACKUP: restoring fin-share from offline immutable snapshot (02:00).\nHashes verified. Finance is back online.\nBACKUP PROGRAM: onsite replicas for speed, offsite copies for disaster, snapshot frequency hourly, journaling for point-in-time recovery, replication for live shares - but replicas copied the encrypted files too, so recovery runs from the air-gapped copy. Backup media itself is encrypted. Power: generators + UPS keep the vault up during outages.\nRESILIENCE PLAN: high availability through load balancing vs clustering,\nplatform diversity and multi-cloud systems, a continuity of operations\nrunbook, capacity planning (people and tech) and geographic dispersion.\nTesting cadence: tabletop exercise, then fail over and parallel processing\nsimulation.',
       inspect: { label: 'Offline backup restore', detail: 'Air-gapped, immutable snapshots: ransomware could not reach them.', category: 'legit', objectives: ['3.4'] },
     },
     {
       id: 'lessons', kind: 'console', x: 16.5, y: 1.5, sprite: 'console', tags: ['lessons'],
-      log: 'LESSONS LEARNED filed: root cause phishing macro, add MFA + macro blocking,\nkeep offline backups, re-test the IR plan quarterly.',
+      log: 'LESSONS LEARNED filed: root cause phishing macro, add MFA + macro blocking,\nkeep offline backups, re-test the IR plan quarterly.\nIR PROCESS REVIEW: preparation -> detection -> analysis -> containment ->\neradication -> recovery -> lessons learned. Root cause analysis attached;\nthreat hunting sweep opened for siblings of the C2 domain; next test is a\ntabletop exercise, then a full simulation with the recovery team.',
       inspect: { label: 'Post-incident review', detail: 'Lessons learned: the final phase of incident response.', category: 'legit', objectives: ['4.8'] },
     },
     { id: 'rw-a', kind: 'enemy', x: 14.5, y: 18.5, sprite: 'ransomware', ai: 'wander', hp: 4, infected: true, tags: ['malware'],
@@ -327,7 +327,14 @@ debriefQuestions: [
       ['Badge access logs', 'Badge logs show people entering doors, not hosts making connections.'],
       ['The payroll application\u2019s log', 'An application log records app events, not outbound connections from every host.'],
     ]),
-  ],
+    q('q5', ['3.4'], 'Your backup program snapshots every 15 minutes (the RPO target) and a full VM restore takes 4 hours (the RTO target). Ransomware detonates at 14:00. In the worst case, what does recovery deliver?', 3, [
+    ['All data as of 14:00, restored by 14:15', 'The last snapshot is 15 minutes old at worst, and the restore takes hours - neither figure matches.'],
+    ['Data as of 13:45, back online by 14:15', '13:45 is the right worst-case data point, but a 4-hour restore finishes at 18:00, not 14:15.'],
+    ['Nothing until the next snapshot completes', 'Snapshots already exist - RPO bounds data LOSS, it does not delay the restore.'],
+    ['Data as of 13:45, service restored by 18:00', 'Correct. RPO bounds how much data you can lose (15 min), RTO bounds how long restoration may take (4 h). Expect MTTR around the RTO; MTBF describes failure frequency, not recovery.'],
+  ]),
+],
+
 };
 
 export const m09Walkthrough: WalkStep[] = [
