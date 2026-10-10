@@ -150,7 +150,7 @@ export const ARC: ArcMission[] = [
     ],
   },
   {
-    id: 'm12', title: 'ROBO SOC', difficulty: 10, built: false,
+    id: 'm12', title: 'ROBO SOC', difficulty: 10, built: true,
     briefing: 'Alert volume tripled. Leadership wants the SOC automated by Friday, and the attackers know it.',
     objectives: [
       w('4.7', 'Build the SOAR playbook: auto-ticket and auto-contain with guard rails (human approval for privileged accounts); no single point of failure.'),
