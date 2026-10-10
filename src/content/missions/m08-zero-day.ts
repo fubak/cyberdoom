@@ -3,6 +3,7 @@ import { lightRects } from '../../missions/levelkit';
 import type { WalkStep } from '../../missions/walkthroughs';
 import type { MissionTeaching } from '../curriculum';
 import { q } from '../arc-questions';
+import { addThreatEncounter, floorSpot, liveThreats } from './campaign-map';
 
 export const m08: Mission = {
   id: 'm08',
@@ -567,3 +568,51 @@ export const m08Teach: MissionTeaching = {
   },
   examTip: 'Prioritize with CVSS plus exposure, exploitation threat intelligence and impact. Confirm banner-only findings with credentialed evidence, then validate remediation with a rescan.',
 };
+
+// F1: encounter pacing — opening skirmish at the lobby, room reveals,
+// an exit-room ransomware reveal, and supplies.
+liveThreats(m08, 'open-trojan', 'trojan', 1, [14, 13, 37, 20]);
+addThreatEncounter(m08, 'office-worm', 'worm', 4, {
+  id: 'office-ambush', area: [2, 2, 17, 11], kind: 'bad',
+  message: 'Zero-day worms churn through the west office.',
+}, [2, 2, 17, 11]);
+addThreatEncounter(m08, 'server-worm', 'worm', 2, {
+  id: 'server-ambush-a', area: [22, 2, 37, 11], kind: 'bad',
+  message: 'The lab racks were seeded — worms in the server rows.',
+}, [22, 2, 37, 11]);
+addThreatEncounter(m08, 'server-rk', 'rootkit', 2, {
+  id: 'server-ambush-b', area: [22, 2, 37, 11], kind: 'bad',
+}, [22, 2, 37, 11]);
+addThreatEncounter(m08, 'hall-trojan', 'trojan', 4, {
+  id: 'hall-ambush', area: [2, 13, 37, 20], kind: 'bad',
+  message: 'Trojans spill into the central hall.',
+}, [2, 13, 37, 20]);
+addThreatEncounter(m08, 'exit-rs', 'ransomware', 2, {
+  id: 'exit-ambush', area: [18, 22, 27, 27], kind: 'bad',
+  message: 'Ransomware detonates around the exit room!',
+}, [18, 22, 27, 27]);
+addThreatEncounter(m08, 'sw-worm', 'worm', 2, {
+  id: 'lobby-ambush', area: [2, 22, 12, 27], kind: 'bad',
+  message: 'The lobby was not safe — worms behind the front desk.',
+}, [7, 22, 12, 27]);
+m08.entities.push(
+  { id: 'chg-w', kind: 'item', ...floorSpot(m08, [2, 2, 17, 11]), sprite: 'charge', tags: ['arsenal-pickup'],
+    grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
+  { id: 'chg-e', kind: 'item', ...floorSpot(m08, [22, 2, 37, 11]), sprite: 'charge', tags: ['arsenal-pickup'],
+    grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
+  { id: 'chg-c', kind: 'item', ...floorSpot(m08, [14, 13, 37, 20]), sprite: 'charge', tags: ['arsenal-pickup'],
+    grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
+  { id: 'chg-s', kind: 'item', ...floorSpot(m08, [2, 22, 12, 27]), sprite: 'charge', tags: ['arsenal-pickup'],
+    grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
+  { id: 'med-c', kind: 'item', ...floorSpot(m08, [14, 13, 37, 20]), sprite: 'medkit',
+    grants: { resource: 'integrity', amount: 25 }, inspect: { label: 'Integrity kit', detail: 'Restores 25 integrity.', category: 'item' } },
+);
+
+m08.entities.push(
+  { id: 'chg-x1', kind: 'item', ...floorSpot(m08, [2, 2, 17, 11]), sprite: 'charge', tags: ['arsenal-pickup'],
+    grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
+  { id: 'chg-x2', kind: 'item', ...floorSpot(m08, [14, 13, 37, 20]), sprite: 'charge', tags: ['arsenal-pickup'],
+    grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
+  { id: 'chg-x3', kind: 'item', ...floorSpot(m08, [22, 2, 37, 11]), sprite: 'charge', tags: ['arsenal-pickup'],
+    grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
+);

@@ -321,6 +321,47 @@ addThreatEncounter(m01, 'worm-turnin', 'worm', 1, {
   message: 'The USB turn-in triggered a second worm wave from the server floor.',
 }, [18, 10, 37, 19]);
 
+// F1: encounter pacing — opening skirmish, backtrack ambush, door reveal,
+// finale wave on quarantine lift, and supplies for the extra pressure.
+m01.entities.push({
+  id: 'worm-hall-live', kind: 'enemy', x: 23.5, y: 24.5, sprite: 'worm', ai: 'wander',
+  hp: 2, infected: true, tags: ['malware'],
+  inspect: { label: 'Worm', detail: 'Roaming the east corridor: self-replicating process.', category: 'malware', objectives: ['2.4'] },
+});
+addThreatEncounter(m01, 'hub-pack', 'worm', 2, {
+  id: 'hub-ambush',
+  area: [10, 13, 20, 15],
+  kind: 'bad',
+  message: 'Worm traffic behind you — the infection came through the north corridor!',
+}, [6, 6, 29, 12]);
+addThreatEncounter(m01, 'south-pack', 'worm', 3, {
+  id: 'south-ambush',
+  area: [22, 17, 25, 19],
+  kind: 'bad',
+  message: 'The print-room door was hiding a worm cluster — they are behind you now.',
+}, [20, 21, 38, 25]);
+addThreatEncounter(m01, 'exit-worm', 'worm', 2, {
+  id: 'exit-surge',
+  after: ['clean-all'],
+  kind: 'bad',
+  message: 'Quarantine lifted — the last of the worm traffic is loose on the floor!',
+}, [14, 13, 29, 15]);
+addThreatEncounter(m01, 'exit-trojan', 'trojan', 1, {
+  id: 'exit-trojan',
+  after: ['clean-all'],
+  kind: 'bad',
+}, [18, 10, 29, 15]);
+m01.entities.push(
+  { id: 'chg-mid', kind: 'item', x: 25.5, y: 18.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 8 },
+    inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for your write-protected scanner stick: ammo for the USB scanner.', category: 'item' } },
+  { id: 'chg-east', kind: 'item', x: 36.5, y: 22.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 8 },
+    inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for your write-protected scanner stick: ammo for the USB scanner.', category: 'item' } },
+  { id: 'chg-lobby-e', kind: 'item', x: 17.5, y: 26.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 8 },
+    inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for your write-protected scanner stick: ammo for the USB scanner.', category: 'item' } },
+  { id: 'med-hub', kind: 'item', x: 10.5, y: 13.5, sprite: 'medkit', grants: { resource: 'integrity', amount: 25 },
+    inspect: { label: 'Integrity kit', detail: 'Restores 25 integrity.', category: 'item' } },
+);
+
 export const m01Teach: MissionTeaching = {
   tagline: 'Screens are screaming and a USB stick is lying by the lifts.',
   situation:

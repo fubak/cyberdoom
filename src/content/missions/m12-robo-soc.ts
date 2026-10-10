@@ -3,7 +3,7 @@ import type { MissionTeaching } from '../curriculum';
 import { q } from '../arc-questions';
 import type { WalkStep } from '../../missions/walkthroughs';
 import { lightRects } from '../../missions/levelkit';
-import { addThreatEncounter } from './campaign-map';
+import { addThreatEncounter, floorSpot } from './campaign-map';
 
 /**
  * M12 "Robo SOC": automate the SOC by Friday — the finale (difficulty 10).
@@ -35,30 +35,30 @@ export const m12: Mission = {
   map: {
     grid: [
       '########################################',
-      '#.........#.................#..........#',
+      '#.......###.................#..........#',
+      '#.......###......EEEE.......#..........#',
       '#.........#......EEEE.......#..........#',
-      '#.........#......EEEE.......#..........#',
-      '#.........#.................#..........#',
-      '#.........#.................#..........#',
-      '#.........#.................#..........#',
+      '#.........#..B...........B..#..........#',
+      '#.........#..B...........B..###........#',
+      '#.........#.................###........#',
       '#####P#############X#############M######',
-      '#.........#.................#..........#',
-      '#.........#.................#..........#',
+      '#.........#..SSS.......SSS..#..........#',
+      '#.........#..SSS.......SSS..#..........#',
       '#.........#.................#..........#',
       '#.........#.................#..........#',
       '#.........#......SSSSS......#..........#',
       '#.........#......SSSSS......#..........#',
       '#.........W......SSSSS......L..........#',
       '#.........#......SSSSS......#..........#',
-      '#.........#.................#..........#',
-      '#.........#.................#..........#',
+      '#...B..B..#.................#..B...B...#',
+      '#...B..B..#.................#..B...B...#',
       '#.........#.................#..........#',
       '#.........#.................#..........#',
       '#####G#############s#############g######',
       '#BBB......#.................#......BBB.#',
       '#B.B......#.................#......B.B.#',
       '#B1B......#.................#......B2B.#',
-      '#.........#.................#..........#',
+      '#.........e.................n..........#',
       '#.........#.................#..........#',
       '#.........#.................#..........#',
       '########################################',
@@ -80,6 +80,8 @@ export const m12: Mission = {
       'G': { kind: 'door', tex: 'door', doorId: 'egress-door', accessRole: 'analyst' },
       's': { kind: 'door', tex: 'door', doorId: 'sc-door' },
       'g': { kind: 'door', tex: 'door', doorId: 'noc-door' },
+      'e': { kind: 'door', tex: 'door', doorId: 'egress-sc-door', accessRole: 'analyst' },
+      'n': { kind: 'door', tex: 'door', doorId: 'noc-sc-door' },
       '1': { kind: 'door', tex: 'wall-brick', doorId: 'secret-egress', secret: true },
       '2': { kind: 'door', tex: 'wall-brick', doorId: 'secret-noc', secret: true },
     },
@@ -389,11 +391,17 @@ export const m12: Mission = {
       grants: { resource: 'integrity', amount: 25 },
       inspect: { label: 'Integrity kit', detail: 'Restores 25 integrity.', category: 'item' },
     },
-    // Secret enclave contents (behind brick doors).
+    // EDR console sits on the main path in the spawn lobby — the finale's key tool.
     {
-      id: 'find-edr', kind: 'item', x: 2.5, y: 22.5, sprite: 'tool-edr', tags: ['arsenal-pickup'],
+      id: 'find-edr', kind: 'item', x: 20.5, y: 23.5, sprite: 'tool-edr', tags: ['arsenal-pickup'],
       grants: { resource: 'tool:edr', amount: 1 },
       inspect: { label: 'EDR console (found)', detail: 'Endpoint detection and response console with containment.', category: 'item', objectives: ['4.5'] },
+    },
+    // Secret enclave contents (behind brick doors).
+    {
+      id: 'edr-cache', kind: 'item', x: 2.5, y: 22.5, sprite: 'edr-cell', tags: ['arsenal-pickup'],
+      grants: { resource: 'edr-cell', amount: 2 },
+      inspect: { label: 'EDR cells', detail: 'Licence and compute for EDR containment pulses.', category: 'item', objectives: ['4.5'] },
     },
     {
       id: 'patch-secret', kind: 'item', x: 36.5, y: 22.5, sprite: 'patch-disk', tags: ['arsenal-pickup'],
@@ -580,6 +588,54 @@ addThreatEncounter(m12, 'exit-worm', 'worm', 2, {
   kind: 'bad',
 }, [11, 16, 27, 19]);
 
+// F1: encounter pacing — live skirmishers, room ambushes, objective waves,
+// signoff finale, and supplies. All six malware families appear in the capstone.
+m12.entities.push(
+  { id: 'sc-worm', kind: 'enemy', x: 14.5, y: 22.5, sprite: 'worm', ai: 'wander',
+    hp: 3, infected: true, tags: ['malware'],
+    inspect: { label: 'Worm', detail: 'Self-replicating process roaming the security centre lobby.', category: 'malware', objectives: ['2.4'] } },
+  { id: 'hall-worm-c', kind: 'enemy', x: 13.5, y: 17.5, sprite: 'worm', ai: 'wander',
+    hp: 3, infected: true, tags: ['malware'],
+    inspect: { label: 'Worm', detail: 'Self-replicating process roaming the SOC floor.', category: 'malware', objectives: ['2.4'] } },
+  { id: 'hall-rat-c', kind: 'enemy', x: 24.5, y: 18.5, sprite: 'rat', ai: 'wander',
+    hp: 2, infected: true, tags: ['malware'],
+    inspect: { label: 'RAT', detail: 'Remote-access implant beaconing out of the SOC floor.', category: 'malware', objectives: ['2.4'] } },
+);
+addThreatEncounter(m12, 'siem-rat', 'rat', 4, {
+  id: 'siem-ambush', area: [1, 9, 9, 15], kind: 'bad',
+  message: 'RAT implants surface in the SIEM hall — the noise was cover.',
+}, [1, 8, 9, 19]);
+addThreatEncounter(m12, 'noc-trojan', 'trojan', 4, {
+  id: 'noc-ambush', area: [29, 21, 38, 26], kind: 'bad',
+  message: 'Trojans drop from the NOC annex racks.',
+}, [29, 21, 38, 26]);
+addThreatEncounter(m12, 'egress-worm', 'worm', 4, {
+  id: 'egress-ambush', area: [4, 21, 9, 26], kind: 'bad',
+  message: 'Worms boil out of the life-safety egress room.',
+}, [4, 21, 9, 26]);
+addThreatEncounter(m12, 'vault-rk', 'rootkit', 2, {
+  id: 'vault-pack', area: [31, 1, 38, 6], kind: 'bad',
+  message: 'More persistence wakes inside the crypto vault.',
+}, [29, 1, 38, 6]);
+addThreatEncounter(m12, 'signoff-rs', 'ransomware', 3, {
+  id: 'signoff-surge', after: ['signoff'], kind: 'bad',
+  message: 'Sign-off triggered the attackers’ last push — ransomware on the floor!',
+}, [11, 8, 27, 19]);
+addThreatEncounter(m12, 'signoff-bomb', 'logicbomb', 2, {
+  id: 'signoff-bombs', after: ['signoff'], kind: 'bad',
+}, [11, 1, 27, 6]);
+m12.entities.push(
+  { id: 'charge-sc2', kind: 'item', x: 17.5, y: 24.5, sprite: 'charge', tags: ['arsenal-pickup'],
+    grants: { resource: 'usb-charge', amount: 8 },
+    inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
+  { id: 'charge-noc2', kind: 'item', x: 33.5, y: 21.5, sprite: 'charge', tags: ['arsenal-pickup'],
+    grants: { resource: 'usb-charge', amount: 8 },
+    inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
+  { id: 'medkit-sc', kind: 'item', x: 19.5, y: 26.5, sprite: 'medkit',
+    grants: { resource: 'integrity', amount: 25 },
+    inspect: { label: 'Integrity kit', detail: 'Restores 25 integrity.', category: 'item' } },
+);
+
 export const m12Walkthrough: WalkStep[] = [
   { goto: [19, 21] }, { use: [19, 20] },
   { goto: [12, 14] }, { badge: [10, 14] }, { goto: [8, 14] },
@@ -612,3 +668,14 @@ export const m12Walkthrough: WalkStep[] = [
   { goto: [19, 10] }, { interact: 'signoff' }, { wait: 0.5 },
   { goto: [19, 6] }, { goto: [19, 3] },
 ];
+
+m12.entities.push(
+  { id: 'chg-x1', kind: 'item', ...floorSpot(m12, [11, 21, 27, 26]), sprite: 'charge', tags: ['arsenal-pickup'],
+    grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
+  { id: 'chg-x2', kind: 'item', ...floorSpot(m12, [29, 21, 38, 26]), sprite: 'charge', tags: ['arsenal-pickup'],
+    grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
+  { id: 'chg-x3', kind: 'item', ...floorSpot(m12, [11, 8, 27, 19]), sprite: 'charge', tags: ['arsenal-pickup'],
+    grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
+  { id: 'chg-x4', kind: 'item', ...floorSpot(m12, [1, 8, 9, 19]), sprite: 'charge', tags: ['arsenal-pickup'],
+    grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
+);

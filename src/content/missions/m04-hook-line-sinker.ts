@@ -3,7 +3,7 @@ import type { MissionTeaching } from '../curriculum';
 import { q } from '../arc-questions';
 import type { WalkStep } from '../../missions/walkthroughs';
 import { lightRects } from '../../missions/levelkit';
-import { stagedThreatWave } from './campaign-map';
+import { addThreatEncounter, floorSpot, liveThreats, stagedThreatWave } from './campaign-map';
 
 const map: MapDef = {
   grid: [
@@ -399,3 +399,25 @@ export const m04Walkthrough: WalkStep[] = [
   { wait: 0.1 },
   { goto: [20, 1] },
 ];
+
+// F1: encounter pacing — the phishing floor finally bites back: live trojans,
+// an office-floor ambush and an exit surge, plus scanner supplies.
+liveThreats(m04, 'open-trojan', 'trojan', 2, [8, 4, 36, 8]);
+addThreatEncounter(m04, 'mid-trojan', 'trojan', 2, {
+  id: 'floor-ambush', area: [18, 10, 36, 15], kind: 'bad',
+  message: 'Clicked links spawn trojans across the office floor.',
+}, [4, 10, 17, 15]);
+addThreatEncounter(m04, 'exit-trojan', 'trojan', 1, {
+  id: 'exit-ambush', area: [18, 17, 36, 26], kind: 'bad',
+  message: 'One more trojan between you and the lifts.',
+}, [18, 17, 36, 26]);
+m04.entities.push(
+  { id: 'chg-n', kind: 'item', ...floorSpot(m04, [8, 4, 36, 8]), sprite: 'charge', tags: ['arsenal-pickup'],
+    grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
+  { id: 'chg-mid', kind: 'item', ...floorSpot(m04, [5, 10, 17, 15]), sprite: 'charge', tags: ['arsenal-pickup'],
+    grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
+  { id: 'chg-se', kind: 'item', ...floorSpot(m04, [18, 17, 36, 26]), sprite: 'charge', tags: ['arsenal-pickup'],
+    grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
+  { id: 'chg-se2', kind: 'item', ...floorSpot(m04, [18, 17, 36, 26]), sprite: 'charge', tags: ['arsenal-pickup'],
+    grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
+);

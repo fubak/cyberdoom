@@ -144,7 +144,9 @@ describe('MissionRuntime', () => {
     state.bus.emit('interact', { entityId: 'one' });
 
     expect(state.rt.objectiveSummary()[0].text).toContain('(1/3)');
-    expect(state.rt.hudProgress()).toEqual({ done: 1, total: 3, failed: false });
+    // The HUD counter counts objectives (matching the visible objective list),
+    // not summed progress targets.
+    expect(state.rt.hudProgress()).toEqual({ done: 0, total: 1, failed: false });
   });
 
   it('picks up carried items, accepts them, and grants a role', () => {

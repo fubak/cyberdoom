@@ -3,7 +3,7 @@ import { lightRects } from '../../missions/levelkit';
 import type { WalkStep } from '../../missions/walkthroughs';
 import type { MissionTeaching } from '../curriculum';
 import { q } from '../arc-questions';
-import { addThreatEncounter } from './campaign-map';
+import { addThreatEncounter, floorSpot, liveThreats } from './campaign-map';
 
 /**
  * M11 "Audit Night": reconcile a stale asset inventory, dispose of retired
@@ -853,3 +853,45 @@ export const m11Teach: MissionTeaching = {
   },
   examTip: 'Match sanitization to the media (degauss magnetic, crypto-erase or destroy flash), never destroy data under legal hold, and let retention obligations bound the right to be forgotten. Owner decides, custodian implements; controller determines why, processor obeys.',
 };
+
+// F1: encounter pacing — opening skirmish, vault/server reveals, hall pack,
+// exit-room logic bombs, supplies.
+liveThreats(m11, 'open-worm', 'worm', 1, [2, 13, 37, 19]);
+addThreatEncounter(m11, 'vault-bomb', 'logicbomb', 4, {
+  id: 'vault-ambush', area: [2, 2, 17, 11], kind: 'bad',
+  message: 'Audit night woke the logic bombs in the records vault.',
+}, [2, 2, 17, 11]);
+addThreatEncounter(m11, 'server-rk', 'rootkit', 4, {
+  id: 'server-ambush', area: [22, 2, 37, 11], kind: 'bad',
+  message: 'Rootkits surface in the east server rows.',
+}, [22, 2, 37, 11]);
+addThreatEncounter(m11, 'hall-worm', 'worm', 2, {
+  id: 'hall-ambush-a', area: [2, 13, 37, 19], kind: 'bad',
+  message: 'Worms sweep the audit hall.',
+}, [2, 13, 18, 19]);
+addThreatEncounter(m11, 'hall-rat', 'rat', 2, {
+  id: 'hall-ambush-b', area: [2, 13, 37, 19], kind: 'bad',
+}, [19, 13, 37, 19]);
+addThreatEncounter(m11, 'exit-bomb', 'logicbomb', 2, {
+  id: 'exit-ambush', area: [18, 21, 27, 27], kind: 'bad',
+  message: 'Logic bombs tick in the exit room — finish the audit fast.',
+}, [18, 21, 27, 27]);
+m11.entities.push(
+  { id: 'chg-w', kind: 'item', ...floorSpot(m11, [2, 2, 17, 11]), sprite: 'charge', tags: ['arsenal-pickup'],
+    grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
+  { id: 'chg-e', kind: 'item', ...floorSpot(m11, [22, 2, 37, 11]), sprite: 'charge', tags: ['arsenal-pickup'],
+    grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
+  { id: 'chg-c', kind: 'item', ...floorSpot(m11, [2, 13, 37, 19]), sprite: 'charge', tags: ['arsenal-pickup'],
+    grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
+  { id: 'chg-s', kind: 'item', ...floorSpot(m11, [18, 21, 27, 27]), sprite: 'charge', tags: ['arsenal-pickup'],
+    grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
+  { id: 'med-c', kind: 'item', ...floorSpot(m11, [2, 13, 37, 19]), sprite: 'medkit',
+    grants: { resource: 'integrity', amount: 25 }, inspect: { label: 'Integrity kit', detail: 'Restores 25 integrity.', category: 'item' } },
+);
+
+m11.entities.push(
+  { id: 'chg-x1', kind: 'item', ...floorSpot(m11, [22, 2, 37, 11]), sprite: 'charge', tags: ['arsenal-pickup'],
+    grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
+  { id: 'chg-x2', kind: 'item', ...floorSpot(m11, [2, 13, 37, 19]), sprite: 'charge', tags: ['arsenal-pickup'],
+    grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
+);

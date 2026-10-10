@@ -3,7 +3,7 @@ import type { MissionTeaching } from '../curriculum';
 import { q } from '../arc-questions';
 import type { WalkStep } from '../../missions/walkthroughs';
 import { lightRects } from '../../missions/levelkit';
-import { addThreatEncounter } from './campaign-map';
+import { addThreatEncounter, floorSpot, liveThreats } from './campaign-map';
 
 /**
  * M10 "Third Party": a SaaS vendor wants production access next week; the rep applies
@@ -655,3 +655,44 @@ addThreatEncounter(m10, 'trojan-noc', 'trojan', 3, {
   id: 'noc-wake', area: [22, 2, 37, 11], kind: 'bad',
   message: 'Hosts already hit by the earlier MSP push wake up in the racks!',
 }, [22, 2, 37, 11]);
+
+// F1: encounter pacing — opening skirmish, room reveals, exit pressure, supplies.
+liveThreats(m10, 'open-rat', 'rat', 1, [12, 13, 37, 19]);
+addThreatEncounter(m10, 'vendor-rat', 'rat', 4, {
+  id: 'vendor-ambush', area: [2, 2, 17, 11], kind: 'bad',
+  message: 'Vendor remote-access implants wake in the west office.',
+}, [2, 2, 17, 11]);
+addThreatEncounter(m10, 'risk-trojan', 'trojan', 3, {
+  id: 'risk-ambush', area: [22, 2, 37, 11], kind: 'bad',
+  message: 'Trojans ride the third-party tools in the east lab.',
+}, [22, 2, 37, 11]);
+addThreatEncounter(m10, 'hall-rat', 'rat', 2, {
+  id: 'hall-ambush-a', area: [2, 13, 37, 19], kind: 'bad',
+  message: 'RATs pivot through the central hall.',
+}, [2, 13, 21, 19]);
+addThreatEncounter(m10, 'hall-worm', 'worm', 2, {
+  id: 'hall-ambush-b', area: [2, 13, 37, 19], kind: 'bad',
+}, [22, 13, 37, 19]);
+addThreatEncounter(m10, 'exit-rat', 'rat', 3, {
+  id: 'exit-ambush', area: [18, 21, 27, 26], kind: 'bad',
+  message: 'The third-party foothold tries to cut off your exit.',
+}, [18, 21, 27, 26]);
+m10.entities.push(
+  { id: 'chg-w', kind: 'item', ...floorSpot(m10, [2, 2, 17, 11]), sprite: 'charge', tags: ['arsenal-pickup'],
+    grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
+  { id: 'chg-e', kind: 'item', ...floorSpot(m10, [22, 2, 37, 11]), sprite: 'charge', tags: ['arsenal-pickup'],
+    grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
+  { id: 'chg-c', kind: 'item', ...floorSpot(m10, [12, 13, 37, 19]), sprite: 'charge', tags: ['arsenal-pickup'],
+    grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
+  { id: 'chg-s', kind: 'item', ...floorSpot(m10, [18, 21, 27, 26]), sprite: 'charge', tags: ['arsenal-pickup'],
+    grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
+  { id: 'med-c', kind: 'item', ...floorSpot(m10, [12, 13, 37, 19]), sprite: 'medkit',
+    grants: { resource: 'integrity', amount: 25 }, inspect: { label: 'Integrity kit', detail: 'Restores 25 integrity.', category: 'item' } },
+);
+
+m10.entities.push(
+  { id: 'chg-x1', kind: 'item', ...floorSpot(m10, [12, 13, 37, 19]), sprite: 'charge', tags: ['arsenal-pickup'],
+    grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
+  { id: 'chg-x2', kind: 'item', ...floorSpot(m10, [22, 2, 37, 11]), sprite: 'charge', tags: ['arsenal-pickup'],
+    grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
+);

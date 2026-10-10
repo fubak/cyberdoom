@@ -890,10 +890,12 @@ export class MissionRuntime {
   }
 
   hudProgress(): { done: number; total: number; failed: boolean } {
+    // Count objectives, not summed progress targets, so the HUD counter
+    // matches the objective list the player can see (e.g. 0/10, not 0/18).
     const required = this.requiredObjectives();
     return {
-      done: required.reduce((sum, objective) => sum + Math.min(objective.progress, objective.target), 0),
-      total: required.reduce((sum, objective) => sum + objective.target, 0),
+      done: required.filter((objective) => objective.progress >= objective.target).length,
+      total: required.length,
       failed: this.objectives.some((objective) => objective.failed),
     };
   }
