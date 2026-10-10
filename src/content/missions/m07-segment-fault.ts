@@ -118,7 +118,21 @@ export const m07: Mission = {
         'One broadcast domain: every host can reach every host.\n' +
         'REDESIGN: screened subnet for WEB-01, an isolated DB zone,\n' +
         'a jump-server admin path, and SCADA in its own ICS zone.\n' +
-        'OT access granted for the controller cage.',
+        'OT access granted for the controller cage.\n' +
+        'ARCH BRIEF: on-premises core plus cloud burst under a responsibility matrix;\n' +
+        'hybrid considerations: third-party vendors see only their share.\n' +
+        'App tier runs infrastructure as code (IaC), serverless jobs and microservices;\n' +
+        'compute is containerization over virtualization; IoT on its own VLAN;\n' +
+        'physical isolation - the air-gapped SCADA/ICS cell runs RTOS embedded systems;\n' +
+        'logical segmentation everywhere else via software-defined networking (SDN);\n' +
+        'centralized policy, decentralized enforcement, high availability pairs.\n' +
+        'Considerations: availability, resilience, cost, responsiveness, scalability,\n' +
+        'ease of deployment, risk transference, ease of recovery, patch availability,\n' +
+        'inability to patch (OT), power and compute.\n' +
+        'WLAN NOTE: a wireless site survey was run before AP placement - the heat map\n' +
+        'shows dead zones by the server room; WPA3-Enterprise with 802.1X/EAP-TLS\n' +
+        'into RADIUS (TACACS+ covers device admin); cryptographic protocols and\n' +
+        'authentication protocols are pinned by policy.',
     },
     // --- device audit (tag: device-review) ---
     {
@@ -210,7 +224,13 @@ export const m07: Mission = {
       },
       log:
         'Wrong call: an edge firewall guards inbound internet traffic but leaves every zone-to-zone path inside the plant unfiltered. ' +
-        'The flat LAN stays flat.',
+        'The flat LAN stays flat.\n' +
+        'EDGE STACK: a next-generation firewall (NGFW) does layer 4 ports plus layer 7 app-ID;\n' +
+        'unified threat management (UTM) bundles IPS and web filtering; the web application\n' +
+        'firewall (WAF) guards the storefront; site-to-site VPN tunnels run IPSec, remote access\n' +
+        'uses TLS tunneling; SD-WAN and secure access service edge (SASE) connect the branches.\n' +
+        'Port security on every access port: 802.1X with EAP, fail-closed on auth loss -\n' +
+        'never fail-open. Active vs. passive and inline vs. tap: passive sensors and a tap/monitor feed forensics; the IPS sits inline and blocks.',
     },
     // --- IPS placement (group: ips) ---
     {
@@ -268,7 +288,10 @@ export const m07: Mission = {
         'JUMP-01 provisioned.\n' +
         'Direct admin-to-server protocols are policy-dropped; all administrative\n' +
         'sessions now bounce through the jump server with MFA and session logging.\n' +
-        'One path to harden and watch.',
+        'One path to harden and watch.\n' +
+        'Appliance map: the proxy server fronts outbound web, the load balancer spreads\n' +
+        'the API tier, and device placement follows the security zones - connectivity\n' +
+        'inside a zone is easy, between zones it crosses a control.'
     },
     {
       id: 'rdp-all', kind: 'console', x: 12, y: 24, sprite: 'console',
@@ -577,7 +600,20 @@ export const m07: Mission = {
       ['VM escape and resource reuse', 'Those are virtualization vulnerabilities, and the switch is physical hardware.'],
       ['Cross-site scripting', 'XSS is a web-application flaw. This is a network device problem.'],
     ]),
+      q('q6', ['3.1'], 'A hospital must attach an MRI scanner running a proprietary embedded OS that cannot be patched or taken offline. Which architectural consideration BEST reduces the risk?', 0, [
+      ['Physical isolation / logical segmentation of the device in a restricted zone', 'Correct. Inability to patch is a classic driver for isolation: put the device behind controls that limit who and what can reach it.'],
+      ['Installing an antivirus agent on the scanner', 'You cannot install agents on closed embedded systems - that is precisely why isolation is the answer.'],
+      ['Giving it internet access for vendor updates', 'More connectivity means more attack surface on an un-patchable device - the opposite of risk reduction.'],
+      ['Moving it to the general workstation VLAN for monitoring', 'Flattening the network exposes every workstation to an un-patchable device. Monitor it in place, segmented.'],
+    ]),
+    q('q7', ['4.5'], 'The fire marshal requires the datacenter door to unlock automatically during a power failure so staff can escape. The electronic door controller must be configured:', 1, [
+      ['Fail-closed', 'Fail-closed keeps the door locked on power loss - correct for a vault, deadly in an escape path.'],
+      ['Fail-open (fail-safe)', 'Correct. Life safety dictates fail-open for egress: on power loss the door unlocks, accepting the security trade-off.'],
+      ['Fail-secure', 'Fail-secure is another name for fail-closed - same problem.'],
+      ['Disabled entirely', 'A propped or dead door fails open all the time, not just in an emergency - an uncontrolled exposure.'],
+    ]),
   ],
+
   script: {
     par: 270,
     triggers: [

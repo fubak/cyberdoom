@@ -25,6 +25,9 @@ test('triage call: dossier closes with a call pending, clean stays gated until t
     if ((await cd(page)).dossier.entries > 0) break;
     if (attempt === 3) throw new Error('could not inspect ws1');
   }
+  // First inspect auto-opens the dossier — unless a hostile is within 6
+  // tiles, in which case it tickers instead; open ws1's file directly.
+  await page.evaluate(() => window.__cd!.openCaseFile('ws1'));
   await expect.poll(async () => (await cd(page)).dossier).toMatchObject({ open: true, mode: 'file' });
   expect((await cd(page)).callsPending).toContain('ws1');
 

@@ -99,10 +99,10 @@ export const m01: Mission = {
     {
       id: 'sec-desk', kind: 'console', x: 3.5, y: 9.5, sprite: 'console',
       tags: ['security-desk'], accepts: 'found-usb', grants: { resource: 'role:itops', amount: 1 },
-      log: 'SECURITY DESK: lost & found / unknown media drop.\nHand over found devices. Do NOT plug them in.',
+      log: 'SECURITY DESK: lost & found / unknown media drop.\nHand over found devices. Do NOT plug them in.\nTHREAT-VECTOR POSTER: watch message-based lures (email, SMS, instant messaging), image-based and file-based attachments, voice-call vishing, removable devices, vulnerable software, unsupported systems, open service ports, default credentials and unsecure networks - wireless, wired or Bluetooth.',
       inspect: {
         label: 'Security Desk',
-        detail: 'Drop point for found or suspicious devices. Security analyses them in an isolated sandbox.',
+        detail: 'Drop point for found or suspicious devices; analyses them in an isolated sandbox. Oversees the lobby physical controls: bollards and fencing outside, the access control vestibule (mantrap) at the door, lighting, video surveillance, a security guard checking access badges, and door sensors: infrared beams, pressure sensor pads, microwave sensor fields and ultrasonic sensors.',
         category: 'legit',
         objectives: ['2.2', '5.6'],
       },
@@ -110,10 +110,10 @@ export const m01: Mission = {
     {
       id: 'spare-pc', kind: 'workstation', x: 16.5, y: 7.5, sprite: 'workstation',
       tags: ['plug-usb'], accepts: 'found-usb',
-      log: 'Spare PC: nobody logged in, front USB port free.',
+      log: 'Spare PC: nobody logged in, front USB port free. Still on the vendor default credentials.',
       inspect: {
         label: 'Unlocked spare PC',
-        detail: 'Logged-in session, no owner, open USB port.',
+        detail: 'Logged-in session, no owner, open USB port. Baseline hardening was skipped: default password unchanged, unused ports/protocols enabled, no host-based firewall or HIPS, unnecessary software left installed.',
         category: 'legit',
         objectives: ['2.2'],
       },

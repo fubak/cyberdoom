@@ -27,8 +27,13 @@ async function inspectAndClean(page: Page, id: string, x: number, y: number): Pr
     if (inspected) break;
     if (attempt === 3) throw new Error(`could not inspect ${id}`);
   }
-  // The dossier is open on the case file — the "WHAT DO YOU DO?" call gates the
-  // clean. These hosts are all malicious: option 1 (quarantine + clean).
+  // The dossier should be open on the case file — the "WHAT DO YOU DO?" call
+  // gates the clean. When a hostile was within 6 tiles of the inspect the
+  // dossier only tickered instead of auto-opening, so open this entity's file
+  // directly if needed.
+  await page.evaluate((eid) => window.__cd!.openCaseFile(eid), id);
+  await expect.poll(async () => (await cd(page)).dossier).toMatchObject({ open: true, mode: 'file' });
+  // These hosts are all malicious: option 1 (quarantine + clean).
   await page.keyboard.press('1');
   await closeDossier(page);
   // USB scan at arm's length; retry in case a roaming worm eats a shot.

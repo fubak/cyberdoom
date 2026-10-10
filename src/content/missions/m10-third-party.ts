@@ -113,7 +113,7 @@ export const m10: Mission = {
     // --- VENDOR SUITE: assessment demands (interact 'assess-doc') ---
     {
       id: 'demand-questionnaire', kind: 'console', x: 7.5, y: 2.5, sprite: 'console', tags: ['assess-doc'],
-      log: 'REQUEST FILED: standardized security questionnaire issued to the vendor — control coverage, MFA for their admins, subcontractors, incident history.',
+      log: 'REQUEST FILED: standardized security questionnaire issued to the vendor — control coverage, MFA for their admins, subcontractors, incident history.\nVENDOR ASSESSMENT PACK: due-diligence questionnaire, evidence of internal audits, independent assessments, penetration testing results, supply chain analysis, and a conflict of interest disclosure; rules of engagement govern any test; vendor monitoring continues quarterly after signing.',
       inspect: { label: 'Issue security questionnaire', detail: 'First ask: the standardized questionnaire puts the vendor\u2019s controls on the record before any contract talk.', category: 'legit', objectives: ['5.3'] },
     },
     {
@@ -123,7 +123,7 @@ export const m10: Mission = {
     },
     {
       id: 'demand-assessment', kind: 'console', x: 13.5, y: 2.5, sprite: 'console', tags: ['assess-doc'],
-      log: 'DEMAND LOGGED: independent third-party assessment required — a SOC 2 / ISO review from an outside assessor, not vendor self-attestation.',
+      log: 'DEMAND LOGGED: independent third-party assessment required — a SOC 2 / ISO review from an outside assessor, not vendor self-attestation.\nAGREEMENT STACK: a master service agreement (MSA) plus statements of work (SOW) set scope, the SLA sets service levels, an NDA covers the data, an MOU governs the incident partner, an MOA the joint ops team, and a BPA the reseller.',
       inspect: { label: 'Demand independent assessment', detail: 'Self-attestation is the vendor grading its own homework. An independent assessment gives the answers weight.', category: 'legit', objectives: ['5.3'] },
     },
     {
@@ -280,7 +280,7 @@ export const m10: Mission = {
     {
       id: 'risk-intake', kind: 'console', x: 7.5, y: 13.5, sprite: 'console', tags: ['risk-intake'],
       grants: { resource: 'role:risk', amount: 1 },
-      log: 'Risk charter signed. RISK DESK access granted on your badge.',
+      log: 'Risk charter signed. RISK DESK access granted on your badge.\nRISK MODEL: risk identification feeds the risk register - key risk indicators (KRI), a named risk owner per entry, and a risk threshold per metric. Risk assessment runs ad hoc, recurring, one-time or continuous. Analysis is qualitative ranking or quantitative math: single loss expectancy (SLE) x annualized rate of occurrence (ARO) = annualized loss expectancy (ALE); probability times likelihood and impact. Appetite: expansionary, conservative or neutral - tolerance is the wiggle room inside it. Strategies: transfer (insurance), accept (exception or exemption), avoid, mitigate. Business impact analysis sets recovery time objective (RTO), recovery point objective (RPO), mean time to repair (MTTR) and mean time between failures (MTBF). Risk reporting goes to the board.',
       inspect: { label: 'Risk intake terminal', detail: 'The risk desk is restricted — sign the charter here to get the RISK role on your badge.', category: 'legit', objectives: ['5.2'] },
     },
     // --- RISK DESK: appetite + registers (inspect 'risk-evidence') ---
@@ -471,7 +471,20 @@ export const m10: Mission = {
       ['Open service ports', 'The attack used the MSP\u2019s legitimate, trusted channel, not an exposed port.'],
       ['Removable device', 'No physical media was involved.'],
     ]),
+      q('q7', ['5.2'], 'A risk workshop scores each finding as low/medium/high using expert judgment and impact descriptions - no dollar figures. Which analysis method is this?', 0, [
+      ['Qualitative', 'Correct. Judgment-based ratings like low/medium/high are qualitative analysis; numbers like SLE, ARO and ALE are quantitative.'],
+      ['Quantitative', 'Quantitative analysis computes values - single loss expectancy times annualized rate of occurrence. No math was used here.'],
+      ['Key risk indicator', 'A KRI is a monitored metric threshold, not an analysis method.'],
+      ['Exposure factor', 'Exposure factor is the percentage of asset value a loss event destroys - one input to a quantitative model.'],
+    ]),
+    q('q8', ['5.3'], 'A research partner wants a non-binding letter outlining how the two firms intend to collaborate on threat-intel sharing. Which agreement type fits?', 2, [
+      ['Service-level agreement', 'An SLA sets measurable service commitments and remedies - not a letter of intent.'],
+      ['Non-disclosure agreement', 'An NDA binds confidentiality of shared information; it says nothing about collaborating.'],
+      ['Memorandum of understanding', 'Correct. An MOU (or MOA) records mutual intent to cooperate without the obligations of a contract.'],
+      ['Business partners agreement', 'A BPA governs an ongoing commercial partnership - heavier than a letter of intent.'],
+    ]),
   ],
+
 };
 
 export const m10Walkthrough: WalkStep[] = [
