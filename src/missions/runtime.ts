@@ -676,28 +676,29 @@ export class MissionRuntime {
   }
 
   /**
-   * Refusal message that says what the case is still missing: the suspect's
-   * own file plus each evidence source that names them but has not been
-   * read yet. Names sources, never the verdict.
+   * Refusal message built ONLY from evidence the player already holds: the
+   * count of corroborating sources collected, their labels, and a generic
+   * nudge. It never names an unread source and never varies by whether
+   * anything actually implicates the suspect — the answer stays sealed.
    */
   private corroborationRefusal(e: Entity): string {
-    const missing: string[] = [];
-    if (!this.inspected.has(e.def.id)) missing.push('their own file (inspect them)');
-    for (const src of this.entities) {
-      if (!src.def.implicates?.includes(e.def.id)) continue;
-      if (!this.evidence.some((entry) => entry.entityId === src.def.id)) {
-        missing.push(src.def.inspect?.label ?? src.def.id);
-      }
+    const need = e.def.evidenceRequired ?? 2;
+    const haveLabels: string[] = [];
+    if (this.inspected.has(e.def.id)) haveLabels.push('their own file');
+    const seen = new Set<string>();
+    for (const entry of this.evidence) {
+      if (entry.entityId === e.def.id) continue;
+      if (seen.has(entry.entityId)) continue;
+      if (!this.byId(entry.entityId)?.def.implicates?.includes(e.def.id)) continue;
+      seen.add(entry.entityId);
+      haveLabels.push(entry.label);
     }
-    if (missing.length) {
-      const shown = missing.slice(0, 3).map((s) => s.toUpperCase()).join(' + ');
-      const extra = missing.length > 3 ? ` + ${missing.length - 3} MORE` : '';
-      return `Not enough corroborating evidence — still need: ${shown}${extra}`;
-    }
-    const shortfall = (e.def.evidenceRequired ?? 2) - this.corroborationCount(e);
-    return `Not enough corroborating evidence — still need ${shortfall} more source${
-      shortfall === 1 ? '' : 's'
-    }; nothing else on file names them`;
+    const label = (e.def.inspect?.label ?? e.def.id).toUpperCase();
+    const parts = [`CASE ON ${label}: ${haveLabels.length}/${need} SOURCES`];
+    if (haveLabels.length) parts.push(`HAVE: ${haveLabels.map((s) => s.toUpperCase()).join(' + ')}`);
+    if (!this.inspected.has(e.def.id)) parts.push('INSPECT THEM FIRST');
+    parts.push('find more corroborating logs or records that name them');
+    return `${parts.join(' — ')}.`;
   }
 
   private resolveAccusation(e: Entity): void {

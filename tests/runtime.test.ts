@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { EventBus } from '../src/core/events';
 import type { Mission } from '../src/core/types';
+import { m03 } from '../src/content/missions/m03-quiet-one';
 import { m08 } from '../src/content/missions/m08-zero-day';
 import { WorldMap } from '../src/engine/map';
 import { MissionRuntime } from '../src/missions/runtime';
@@ -272,9 +273,34 @@ describe('MissionRuntime', () => {
     state.bus.emit('interact', { entityId: 'insider' });
     expect(state.rt.objectives[0].done).toBe(false);
     expect(state.rt.scoreLog.some((entry) => entry.text.startsWith('Correct'))).toBe(false);
-    expect(state.messages.at(-1)?.text).toContain('corroborating evidence');
+    expect(state.messages.at(-1)?.text).toContain('CASE ON INSIDER: 0/2 SOURCES');
+    expect(state.messages.at(-1)?.text).toContain('INSPECT THEM FIRST');
     // the refusal is neutral: no verdict leak, no accusation, no violation
     expect(state.rt.objectives[0].violations).toBe(0);
+  });
+
+  it('refusal text is identical in shape for every M03 suspect before any evidence', () => {
+    // E-spam must not solve the case: with nothing collected, every
+    // reportable suspect gets the same message apart from their label.
+    const refusals = new Map<string, string>();
+    for (const def of m03.entities.filter((e) => e.reportable)) {
+      const state = setup(mission({
+        entities: m03.entities,
+        missionObjectives: [{ id: 'report', text: 'Report insider', kind: 'report' }],
+      }));
+      state.bus.emit('interact', { entityId: def.id });
+      const refusal = state.messages.at(-1)?.text ?? '';
+      expect(refusal).toContain('CASE ON');
+      refusals.set(def.id, refusal.replace((def.inspect?.label ?? def.id).toUpperCase(), '<WHO>'));
+    }
+    expect(refusals.size).toBeGreaterThan(1);
+    expect(new Set(refusals.values()).size).toBe(1);
+    // and the sealed message never names an unread evidence source
+    for (const src of m03.entities.filter((e) => e.implicates?.length)) {
+      for (const text of refusals.values()) {
+        expect(text.toUpperCase()).not.toContain((src.inspect?.label ?? src.id).toUpperCase());
+      }
+    }
   });
 
   it('marks a suspect once evidence implicating them is in the case file', () => {
