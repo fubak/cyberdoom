@@ -509,10 +509,7 @@ export class MissionRuntime {
 
       if (e.def.reportable) {
         if (!this.corroborated(e)) {
-          this.message(
-            'Not enough corroborating evidence yet — collect evidence that implicates this person first.',
-            'info',
-          );
+          this.message(this.corroborationRefusal(e), 'info');
           return;
         }
         this.pendingAccusation = e;
@@ -660,23 +657,54 @@ export class MissionRuntime {
    * counts as one more.
    */
   private corroborated(e: Entity): boolean {
-    const need = e.def.evidenceRequired ?? 2;
-    let have = 0;
+    return this.inspected.has(e.def.id) && this.corroborationCount(e) >= (e.def.evidenceRequired ?? 2);
+  }
+
+  /**
+   * Distinct corroborating sources recorded so far: the suspect's own
+   * inspection plus each evidence-source entity naming them. A source's
+   * inspect and log entries count once — a case is built from separate
+   * sources, not from reading the same record twice.
+   */
+  private corroborationCount(e: Entity): number {
+    const sources = new Set<string>();
     for (const entry of this.evidence) {
-      if (entry.entityId === e.def.id && entry.source === 'inspect') have++;
-      else if (this.byId(entry.entityId)?.def.implicates?.includes(e.def.id)) have++;
+      if (entry.entityId === e.def.id && entry.source === 'inspect') sources.add(e.def.id);
+      else if (this.byId(entry.entityId)?.def.implicates?.includes(e.def.id)) sources.add(entry.entityId);
     }
-    return this.inspected.has(e.def.id) && have >= need;
+    return sources.size;
+  }
+
+  /**
+   * Refusal message that says what the case is still missing: the suspect's
+   * own file plus each evidence source that names them but has not been
+   * read yet. Names sources, never the verdict.
+   */
+  private corroborationRefusal(e: Entity): string {
+    const missing: string[] = [];
+    if (!this.inspected.has(e.def.id)) missing.push('their own file (inspect them)');
+    for (const src of this.entities) {
+      if (!src.def.implicates?.includes(e.def.id)) continue;
+      if (!this.evidence.some((entry) => entry.entityId === src.def.id)) {
+        missing.push(src.def.inspect?.label ?? src.def.id);
+      }
+    }
+    if (missing.length) {
+      const shown = missing.slice(0, 3).map((s) => s.toUpperCase()).join(' + ');
+      const extra = missing.length > 3 ? ` + ${missing.length - 3} MORE` : '';
+      return `Not enough corroborating evidence — still need: ${shown}${extra}`;
+    }
+    const shortfall = (e.def.evidenceRequired ?? 2) - this.corroborationCount(e);
+    return `Not enough corroborating evidence — still need ${shortfall} more source${
+      shortfall === 1 ? '' : 's'
+    }; nothing else on file names them`;
   }
 
   private resolveAccusation(e: Entity): void {
     const report = this.objectives.find((o) => o.def.kind === 'report');
     if (this.rejectRequirements(report, e)) return;
     if (!this.corroborated(e)) {
-      this.message(
-        'Not enough corroborating evidence yet — collect evidence that implicates this person first.',
-        'info',
-      );
+      this.message(this.corroborationRefusal(e), 'info');
       return;
     }
     if (e.def.culprit) {

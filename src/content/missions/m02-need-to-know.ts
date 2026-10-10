@@ -26,7 +26,7 @@ export const m02: Mission = {
     'role-based access control, and every badge attempt, allowed or denied, is logged to your name. ' +
     'Word is that someone on the floor is handing out "the shared admin password". ' +
     'Your kit: BADGE (4) presents your credential to a door. MOUSE (2) inspects. ' +
-    'KEYBOARD (1) flags a person, and on the security console it files a report. ' +
+    'Press E on a person to mark them as a suspect; the security console files the report. ' +
     'Get across the floor to the exit.',
   authorizedRoles: ['analyst'],
   loadout: ['keyboard', 'mouse', 'usb', 'badge', 'mfa'],
@@ -136,7 +136,7 @@ export const m02: Mission = {
     },
     {
       id: 'report-console', kind: 'console', x: 17.5, y: 11.5, sprite: 'console', tags: ['report-console'],
-      log: 'SOC REPORTING: mark the person with the KEYBOARD, then file here.',
+      log: 'SOC REPORTING: press E on the person to mark them, then file here.',
       inspect: { label: 'SOC incident console', detail: 'Files security-awareness and insider reports to the SOC.', category: 'legit', objectives: ['5.6'] },
     },
     {

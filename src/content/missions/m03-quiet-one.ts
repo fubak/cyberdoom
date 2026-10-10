@@ -26,7 +26,7 @@ export const m03: Mission = {
     'A DLP alert fired overnight: confidential R&D designs left the network, taken with valid credentials. ' +
     'Four employees on this floor had the opportunity. MOUSE (2) pulls up what the logs hold on a person: ' +
     'badge records, file-server access, endpoint and application logs. ' +
-    'KEYBOARD (1) flags a suspect, and on the security console it files the report. ' +
+    'Press E on a suspect to mark them; the security console then files the report. ' +
     'Accuse the wrong person and an innocent colleague\'s career burns. ' +
     'Malware is also loose on the floor.',
   authorizedRoles: ['analyst'],
@@ -152,7 +152,7 @@ export const m03: Mission = {
     },
     {
       id: 'report-console', kind: 'console', x: 37.5, y: 18.5, sprite: 'console', tags: ['report-console'],
-      log: 'INSIDER REPORT: mark the employee with the KEYBOARD, then file here. The case needs all three evidence sources.',
+      log: 'INSIDER REPORT: press E on the employee to mark them, then file here. The case needs all three evidence sources.',
       inspect: { label: 'Case reporting console', detail: 'Files the insider report to Legal/HR and the SOC.', category: 'legit', objectives: ['4.9'] },
     },
     { id: 'trojan-floor', kind: 'enemy', x: 16.5, y: 9.5, sprite: 'trojan', ai: 'wander', hp: 3, infected: true, tags: ['malware'],
