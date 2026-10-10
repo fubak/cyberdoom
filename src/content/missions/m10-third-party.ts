@@ -425,7 +425,7 @@ export const m10: Mission = {
     secrets: [
       { id: 'suite-closet', area: [2, 5, 4, 9], label: 'Vendor suite supply closet', grant: { resource: 'integrity', amount: 40 } },
       { id: 'server-closet', area: [35, 5, 37, 9], label: 'Server room supply closet', grant: { resource: 'usb-charge', amount: 16 } },
-      { id: 'risk-cache', area: [2, 21, 4, 26], label: 'Risk desk cache', grant: { resource: 'usb-charge', amount: 16 } },
+      { id: 'risk-cache', area: [2, 21, 4, 26], label: 'Risk desk cache', grant: { resource: 'role:risk', amount: 1 } },
     ],
   },
   debriefQuestions: [
@@ -669,7 +669,7 @@ addThreatEncounter(m10, 'risk-trojan', 'trojan', 3, {
   id: 'risk-ambush', area: [22, 2, 37, 11], kind: 'bad',
   message: 'Trojans ride the third-party tools in the east lab.',
 }, [22, 2, 37, 11]);
-addThreatEncounter(m10, 'hall-rat', 'rat', 2, {
+addThreatEncounter(m10, 'hall-rat', 'rat', 3, {
   id: 'hall-ambush-a', area: [2, 13, 37, 19], kind: 'bad',
   message: 'RATs pivot through the central hall.',
 }, [2, 13, 21, 19]);

@@ -137,10 +137,12 @@ export function formatStatsTime(seconds: number): string {
   return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`;
 }
 
+/** Doom intermission parity: percentages for kills/secrets, time vs par. */
 export function statsSegments(stats: IntermissionStats): { text: string; overPar: boolean }[] {
+  const pct = (n: number, total: number) => (total > 0 ? Math.round((n / total) * 100) : 0);
   return [
-    { text: `KILLS ${stats.kills}/${stats.killsTotal}`, overPar: false },
-    { text: `SECRETS ${stats.secrets}/${stats.secretsTotal}`, overPar: false },
+    { text: `KILLS ${pct(stats.kills, stats.killsTotal)}%`, overPar: false },
+    { text: `SECRETS ${pct(stats.secrets, stats.secretsTotal)}%`, overPar: false },
     { text: `TIME ${formatStatsTime(stats.time)} / PAR ${formatStatsTime(stats.par)}`, overPar: stats.time > stats.par },
   ];
 }

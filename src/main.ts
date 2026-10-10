@@ -4,7 +4,7 @@ import type { Entity, Gender, Mission, Projectile, Screen } from './core/types';
 import { WorldMap } from './engine/map';
 import { Input } from './engine/input';
 import { EYE_HEIGHT, Player } from './engine/player';
-import { alertNear, damageEntity, hurtEntity, traceShot, updateEntities, updateProjectiles } from './engine/ai';
+import { alertNear, damageEntity, hurtEntity, traceShot, updateEntities, updateProjectiles, wormPropagateCap } from './engine/ai';
 import { enemyInTheWay, exitEdge } from './engine/interact';
 import { doorUseHint, resolveUse, type UseTargetContext } from './engine/useTarget';
 import { Audio } from './engine/audio';
@@ -147,6 +147,8 @@ class Game {
   private noticedThreats = new Set<string>();
   /** attacker id -> {label, simT until it counts as actively draining}. */
   private drainers = new Map<string, { label: string; until: number }>();
+  /** LEVELS: mission-wide worm-copy budget (reset per mission, shared into ai hooks). */
+  private wormBudget = { remaining: 0 };
 
   constructor(app: HTMLElement) {
     const viewport = document.createElement('div');
@@ -618,6 +620,7 @@ class Game {
     this.sealedDoors.clear();
     this.noticedThreats.clear();
     this.drainers.clear();
+    this.wormBudget.remaining = wormPropagateCap(mission.difficulty);
     if (!prep?.built) this.renderer.buildLevel(this.map, mission.map, mission.id, mission.entities);
     this.audio.setVoice(this.gender);
     this.audio.setListener(this.player.x, this.player.y, this.player.angle);
@@ -863,6 +866,7 @@ class Game {
         this.noticedThreats.add(key);
         this.hud.pushMessage(text, 'warn');
       },
+      wormCopyBudget: this.wormBudget,
     });
 
     for (const e of runtime.entities) {
@@ -1252,6 +1256,10 @@ class Game {
       },
       toggleLog() {
         g.dossier.toggleLog();
+      },
+      /** LEVELS: reveal every tile on the automap (screenshot/QA aid). */
+      revealMap() {
+        g.runtime?.revealAll();
       },
       call(entityId: string, action: string) {
         g.bus.emit('call-pick', { entityId, action: action as 'quarantine' });

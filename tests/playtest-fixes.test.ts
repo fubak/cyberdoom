@@ -244,7 +244,7 @@ describe('debrief intermission tallies', () => {
   const stats = { kills: 7, killsTotal: 9, secrets: 0, secretsTotal: 3, time: 184, par: 150 };
 
   it('statsLine renders the Doom-style compact line', () => {
-    expect(statsLine(stats)).toBe('KILLS 7/9   SECRETS 0/3   TIME 3:04 / PAR 2:30');
+    expect(statsLine(stats)).toBe('KILLS 78%   SECRETS 0%   TIME 3:04 / PAR 2:30');
   });
 
   it('flags over-par time red vs under-par green', () => {
