@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { hurtEntity, updateEntities, type AiHooks } from '../src/engine/ai';
+import { ENEMY_PROFILES, WORM_PROPAGATE_MAX, hurtEntity, updateEntities, type AiHooks } from '../src/engine/ai';
 import { WorldMap } from '../src/engine/map';
 import { Player } from '../src/engine/player';
 import type { Entity, MapDef } from '../src/core/types';
@@ -113,6 +113,47 @@ describe('new threat profiles', () => {
     }
     expect(onWindup).toHaveBeenCalledWith(rootkit, 0.5);
     expect(onMelee).toHaveBeenCalledWith(rootkit, 12);
+  });
+});
+
+describe('combat telegraph and drain floors', () => {
+  it('every melee telegraph lasts at least 0.5s (Doom 0.51-0.69s attack frames)', () => {
+    for (const [kind, profile] of Object.entries(ENEMY_PROFILES)) {
+      if (!profile.ranged) {
+        expect(profile.windup, kind).toBeGreaterThanOrEqual(0.5);
+      }
+    }
+  });
+
+  it.each([
+    ['M01', 1.0, 20],
+    ['M12', 1.44, 12],
+  ])('two adjacent worms take >=%ds to drain a full-integrity player at %s difficulty', (_label, speedMul, floor) => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    const map = new WorldMap(mapDef);
+    const player = new Player(4.5, 2.5, 0);
+    const worm = (id: string, x: number): Entity => {
+      const w = enemy(id, 'worm', x, 2.5, 99);
+      w.state.propN = WORM_PROPAGATE_MAX; // freeze propagation: measure 2-worm DPS only
+      w.state.speedMul = speedMul; // runtime's difficultyScale dial
+      return w;
+    };
+    const entities = [worm('w-a', 3.7), worm('w-b', 5.3)];
+    let t = 0;
+    let firstHitT = -1;
+    const h = hooks({
+      onMelee: (_e, dmg) => {
+        if (firstHitT < 0) firstHitT = t;
+        player.damage(dmg);
+      },
+    });
+    while (player.integrity > 0 && t < 60) {
+      updateEntities(entities, map, player, 0.025, h);
+      t += 0.025;
+    }
+    expect(player.integrity).toBe(0);
+    expect(t - firstHitT).toBeGreaterThanOrEqual(floor);
+    vi.restoreAllMocks();
   });
 });
 

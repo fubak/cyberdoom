@@ -146,13 +146,17 @@ export function playTool(s: ToolSound): void {
   switch (s) {
     case 'kb-swing': S.noise(0.12, 0.35, 900, 0.7); break;
     case 'kb-impact':
+      S.noise(0.018, 1.0, 7200, 1, 0, 'highpass'); // attack transient: hard crack
       S.noise(0.08, 0.9, 2600, 2);
       for (let i = 0; i < 5; i++) S.tone(1900 + i * 140, 1500, 0.025, 'square', 0.22, i * 0.018);
       S.tone(140, 60, 0.12, 'triangle', 0.7);
       break;
-    case 'mouse-click': S.tone(3200, 2400, 0.018, 'square', 0.35); S.tone(1200, 900, 0.03, 'square', 0.2, 0.06); break;
+    case 'mouse-click':
+      S.noise(0.012, 0.5, 7500, 1, 0, 'highpass');
+      S.tone(3200, 2400, 0.018, 'square', 0.35); S.tone(1200, 900, 0.03, 'square', 0.2, 0.06); break;
     case 'mouse-flag': S.tone(880, 880, 0.07, 'square', 0.3); S.tone(1320, 1320, 0.1, 'square', 0.3, 0.08); break;
     case 'usb-fire':
+      S.noise(0.022, 0.9, 5200, 1, 0, 'highpass'); // attack transient: scan crack
       S.tone(220, 1400, 0.09, 'sawtooth', 0.45);
       S.noise(0.18, 0.6, 3000, 0.8);
       S.tone(90, 40, 0.2, 'square', 0.6);
@@ -162,11 +166,13 @@ export function playTool(s: ToolSound): void {
     case 'badge-ok': S.tone(988, 988, 0.08, 'square', 0.28, 0.08); S.tone(1319, 1319, 0.14, 'square', 0.28, 0.17); break;
     case 'badge-deny': S.tone(180, 170, 0.32, 'sawtooth', 0.45, 0.08); S.tone(186, 176, 0.32, 'square', 0.3, 0.08); break;
     case 'tap-sweep':
+      S.noise(0.02, 0.55, 6200, 1, 0, 'highpass');
       for (let i = 0; i < 6; i++) S.tone(700 + i * 260, 900 + i * 260, 0.03, 'square', 0.16, i * 0.035);
       S.noise(0.25, 0.25, 6000, 0.5, 0, 'highpass');
       break;
     case 'edr-charge': S.tone(120, 1600, 0.45, 'sawtooth', 0.35); S.tone(60, 800, 0.45, 'sine', 0.4); break;
     case 'edr-blast':
+      S.noise(0.03, 1.0, 3800, 1, 0, 'highpass'); // attack transient: discharge crack
       S.noise(0.6, 1.0, 400, 0.6, 0, 'lowpass');
       S.tone(1600, 60, 0.5, 'sawtooth', 0.6);
       S.tone(55, 30, 0.6, 'sine', 0.9);
@@ -184,7 +190,9 @@ export function playTool(s: ToolSound): void {
     case 'menu-back': S.tone(300, 200, 0.08, 'square', 0.25); break;
     case 'fizzle': S.tone(600, 150, 0.2, 'sawtooth', 0.2); S.noise(0.15, 0.2, 2500, 1); break;
     case 'mfa-beep': S.tone(1760, 1760, 0.04, 'square', 0.22); S.tone(2349, 2349, 0.07, 'square', 0.2, 0.06); break;
-    case 'patch-insert': S.noise(0.07, 0.35, 1100, 2); S.tone(320, 180, 0.04, 'square', 0.3, 0.06); S.tone(700, 1400, 0.1, 'triangle', 0.2, 0.12); break;
+    case 'patch-insert':
+      S.noise(0.018, 0.5, 5600, 1, 0, 'highpass');
+      S.noise(0.07, 0.35, 1100, 2); S.tone(320, 180, 0.04, 'square', 0.3, 0.06); S.tone(700, 1400, 0.1, 'triangle', 0.2, 0.12); break;
     case 'confirm': S.tone(1046, 1046, 0.06, 'square', 0.25); S.tone(1568, 1568, 0.12, 'square', 0.22, 0.06); break;
   }
 }

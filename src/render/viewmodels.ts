@@ -371,8 +371,8 @@ export function drawToolViewmodel(
 /** Per-tool viewmodel size multiplier (keyboard art runs ~25% of view width at 1). */
 const SIZE: Record<string, number> = { keyboard: 0.8 };
 
-/** Muzzle-flash tint per tool (rgb for edgeFlash). */
-const TOOL_FLASH: Record<string, string> = {
+/** Muzzle-flash tint per tool (rgb for edgeFlash); also feeds the world light flood. */
+export const TOOL_FLASH: Record<string, string> = {
   keyboard: '255,200,90',
   mouse: '255,230,120',
   usb: '120,240,255',

@@ -82,6 +82,15 @@ export class ParticleSystem {
   }
 
   /**
+   * Brief bright core at an impact point — reads as a light burst
+   * (~120 ms). White-hot center inside a tool-coloured halo.
+   */
+  flash(x: number, y: number, z: number, color: Color = [1, 0.88, 0.55]): void {
+    this.add(x, y, z + 0.04, 0, 0, 0.35, 0, 0.09, [1, 1, 0.95], 0.95, 12);
+    this.add(x, y, z, 0, 0, 0.18, 0, 0.13, color, 0.6, 9);
+  }
+
+  /**
    * Per-tool impact signature at a hit point (<=32 particles per call).
    * `tx`,`ty` (optional) aim packets back toward the player for 'tap';
    * `good` tints the badge/mfa reader sparkle.
