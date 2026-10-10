@@ -28,6 +28,8 @@ import { toolForSlot } from './tools';
 import { Arsenal } from './tools/arsenal';
 import { USB_PLUG_RANGE } from './tools/usb';
 import { characterSelect } from './ui/characterSelect';
+import { applyBack, LOOK_HINT, MENU_HINT } from './ui/nav';
+import { pauseMenu } from './ui/pause';
 import { markCompleted } from './missions/progress';
 import { registerThreatSprites } from './missions/threatSprites';
 
@@ -62,6 +64,10 @@ class Game {
   private gender: Gender = 'male';
   private role = 'analyst';
   private overlay: HTMLElement | null = null;
+  private pauseNode: HTMLElement | null = null;
+  private paused = false;
+  private prepGen = 0;
+  private cross!: HTMLElement;
 
   // play-state
   private map: WorldMap | null = null;
@@ -117,13 +123,28 @@ class Game {
     this.hud = new Hud(viewport);
     this.automap = new Automap(this.hud.canvas);
     window.addEventListener('keydown', (event) => {
-      if (event.code !== 'KeyM' || event.repeat || this.screen !== 'play' || this.dossier?.isOpen) return;
-      this.automap.toggle();
+      if (event.repeat || this.screen !== 'play') return;
+      if (event.code === 'KeyM') {
+        if (this.paused || this.dossier.isOpen) return;
+        event.preventDefault();
+        this.automap.toggle();
+        return;
+      }
+      if (event.code !== 'Escape') return;
+      // The dossier listener runs first and closes itself on Escape.
+      if (this.dossier.isOpen) return;
+      event.preventDefault();
+      const overlay = this.paused ? 'pause' : this.automap.isOpen ? 'automap' : 'none';
+      const next = applyBack({ screen: 'play', overlay });
+      if (next.overlay === 'pause') this.showPause();
+      else if (overlay === 'pause') this.hidePause(true);
+      else if (overlay === 'automap') this.automap.close();
     });
     window.addEventListener('blur', () => this.automap.close());
     const cross = document.createElement('div');
     cross.id = 'crosshair';
     viewport.appendChild(cross);
+    this.cross = cross;
     this.dossier = new Dossier(() => this.runtime?.evidence ?? []);
     viewport.appendChild(this.dossier.canvas);
 
@@ -208,10 +229,14 @@ class Game {
 
   private setScreen(s: Screen, node: HTMLElement | null): void {
     this.screen = s;
+    this.paused = false;
+    this.pauseNode?.remove();
+    this.pauseNode = null;
     this.dossier.enabled = s === 'play';
     if (this.overlay) this.overlay.remove();
     this.overlay = node;
     if (node) document.getElementById('viewport')!.appendChild(node);
+    this.syncChrome();
   }
 
   private showTitle(): void {
@@ -223,17 +248,54 @@ class Game {
       this.gender = g;
       this.audio.sfx('click');
       this.showMissionSelect();
-    }));
+    }, () => this.showTitle(), this.gender));
   }
 
   private showMissionSelect(): void {
-    this.setScreen('mission-select', screens.missionSelect((id) => this.showBriefing(id)));
+    this.audio.stopAmbience();
+    document.exitPointerLock?.();
+    this.automap.close();
+    this.setScreen('mission-select', screens.missionSelect((id) => this.showBriefing(id), () => this.showCharSelect()));
   }
 
   private showBriefing(id: string): void {
     const m = missionRegistry.require(id);
     this.prepareMission(id);
-    this.setScreen('briefing', screens.briefing(m, () => this.deploy(id)));
+    this.setScreen('briefing', screens.briefing(m, () => this.deploy(id), () => this.showMissionSelect()));
+  }
+
+  private showPause(): void {
+    if (this.paused || this.screen !== 'play' || !this.runtime) return;
+    this.paused = true;
+    this.automap.close();
+    this.dossier.enabled = false;
+    document.exitPointerLock?.();
+    this.pauseNode = pauseMenu({
+      onResume: () => this.hidePause(true),
+      onRestart: () => {
+        const id = this.runtime?.mission.id;
+        if (id) this.startMission(id);
+        else this.showMissionSelect();
+      },
+      onQuit: () => this.showMissionSelect(),
+    });
+    document.getElementById('viewport')!.appendChild(this.pauseNode);
+    this.syncChrome();
+  }
+
+  private hidePause(relock: boolean): void {
+    this.paused = false;
+    this.pauseNode?.remove();
+    this.pauseNode = null;
+    if (this.screen === 'play') this.dossier.enabled = true;
+    this.syncChrome();
+    if (relock && this.screen === 'play') this.input.requestLock();
+  }
+
+  /** Crosshair only while actively looking around a mission. */
+  private syncChrome(): void {
+    const live = this.screen === 'play' && !this.paused && !this.automap.isOpen && !this.dossier.isOpen;
+    this.cross.style.visibility = live ? 'visible' : 'hidden';
   }
 
   // ---------- mission prep (background work while the briefing is up) ----------
@@ -376,16 +438,36 @@ class Game {
     this.hud.clearMessages();
   }
 
+  /** Leave the loading plate and return to the briefing for this mission. */
+  private abortLoad(id: string, gen: number): void {
+    if (this.prepGen !== gen) return;
+    this.prepGen += 1;
+    this.prepared = null;
+    this.showBriefing(id);
+  }
+
   /** DEPLOY: enter immediately if prep is done; otherwise plate up and finish it off-screen. */
   private deploy(id: string): void {
     const p = this.prepared;
     if (p && p.id === id && !p.ready) {
-      this.setScreen('loading', screens.loadingScreen());
+      const gen = this.prepGen;
+      this.setScreen('loading', screens.loadingScreen(() => this.abortLoad(id, gen)));
       // two rAFs: let the plate paint, then finish remaining prep synchronously
       requestAnimationFrame(() =>
         requestAnimationFrame(() => {
-          while (!p.ready) this.prepStep(p);
-          this.startMission(id);
+          if (this.prepGen !== gen || this.screen !== 'loading') return;
+          try {
+            let steps = 0;
+            while (!p.ready) {
+              this.prepStep(p);
+              if (++steps > 400) throw new Error('mission prep did not finish');
+            }
+            if (this.prepGen !== gen || this.screen !== 'loading') return;
+            this.startMission(id);
+          } catch (err) {
+            console.error(err);
+            this.abortLoad(id, gen);
+          }
         }),
       );
       return;
@@ -473,9 +555,10 @@ class Game {
       this.tick(FIXED_DT);
       this.acc -= FIXED_DT;
     }
+    this.syncChrome();
     if (this.screen === 'play' && this.map && this.player && this.runtime) {
       const mouseDX = this.input.consumeMouseDX();
-      if (!this.dossier.isOpen && this.runtime.finished === null) {
+      if (!this.paused && !this.dossier.isOpen && this.runtime.finished === null) {
         this.player.angle += mouseDX * 0.0028;
       }
       this.audio.setListener(this.player.x, this.player.y, this.player.angle);
@@ -541,6 +624,10 @@ class Game {
 
   private tick(dt: number): void {
     if (this.screen !== 'play' || !this.map || !this.player || !this.runtime) return;
+    if (this.paused) {
+      this.consumeDossierInput();
+      return;
+    }
     if (this.dossier.isOpen) {
       this.consumeDossierInput();
       return;
@@ -813,15 +900,23 @@ class Game {
   /**
    * Action prompt (~15 Hz): what LMB does (current tool's hint(), with the
    * ammo-0 override) and what E does (resolveUse -> interactHint/doorUseHint).
-   * Hidden while switching tools, in dossier/automap, at mission end, and
-   * when the pointer isn't locked.
+   * Hidden while switching tools, in dossier/automap, or at mission end.
+   * With the pointer free, a click-to-look line replaces the action prompt.
    */
   private updatePrompt(ending: boolean): void {
     this.prompt.lmbHot = this.simT - this.lastFireT < 0.25;
+    const unlockedLook = !this.input.pointerLocked && !DEBUG;
+    if (unlockedLook && !ending && !this.dossier.isOpen && !this.automap.isOpen) {
+      this.prompt.lmb = null;
+      this.prompt.use = null;
+      this.prompt.banner = null;
+      this.prompt.footer = LOOK_HINT;
+      return;
+    }
     this.prompt.banner = this.simT < this.bannerUntil
       ? { title: `${this.arsenal.current.slot} ${this.arsenal.current.name}`, blurb: this.arsenal.current.blurb ?? '' }
       : null;
-    this.prompt.footer = !this.switchedTool && this.simT < 25 ? '1-8 / WHEEL / Q: SWITCH TOOL' : null;
+    this.prompt.footer = !ending && !this.switchedTool && this.simT < 25 ? MENU_HINT : null;
     const hidden =
       ending ||
       this.arsenal.switching ||
@@ -929,6 +1024,7 @@ class Game {
       state() {
         return {
           screen: g.screen,
+          paused: g.paused,
           mission: g.runtime?.mission.id ?? null,
           x: g.player?.x ?? null,
           y: g.player?.y ?? null,

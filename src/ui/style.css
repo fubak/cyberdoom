@@ -138,6 +138,28 @@ html, body {
 .char-card .name { color: #fff; font-size: 18px; margin-top: 8px; }
 .char-card .role { color: #888; font-size: 12px; }
 
+.menu-bar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: min(640px, 92vw);
+  background: #0a0a10;
+  padding: 8px 0 10px;
+}
+.menu-bar h2 { margin: 0; }
+.menu-bar .playable-coverage { margin: 0; }
+.menu-bar .btn {
+  position: absolute;
+  left: 0;
+  top: 10px;
+  margin: 0;
+  min-width: 0;
+}
+
 .mission-row {
   display: flex;
   align-items: center;
@@ -149,6 +171,16 @@ html, body {
   border: 2px solid var(--border);
   cursor: pointer;
   text-align: left;
+  font: inherit;
+  color: inherit;
+}
+button.mission-row:focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: 2px;
+}
+button.mission-row:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 .mission-row:hover { border-color: var(--red); }
 .mission-row.locked { opacity: 0.5; cursor: not-allowed; }
@@ -211,4 +243,8 @@ html, body {
   image-rendering: pixelated;
   image-rendering: crisp-edges;
   cursor: pointer;
+}
+button.menu-hit:focus-visible {
+  outline: 3px solid #ffd040;
+  outline-offset: -3px;
 }

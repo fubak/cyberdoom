@@ -11,6 +11,11 @@ export const DOSSIER_X = 12;
 export const DOSSIER_Y = 44;
 export const DOSSIER_W = 296;
 export const DOSSIER_H = 118;
+/** Escape always closes, from either mode, so the log is not a second screen. */
+export const DOSSIER_HINT = {
+  file: 'A/D PAGE  L LOG  ESC CLOSE',
+  log: 'W/S SELECT  ENTER OPEN  ESC CLOSE',
+} as const;
 
 export type DossierMode = 'file' | 'log';
 
@@ -181,7 +186,7 @@ export class Dossier {
     } else {
       this.drawFile(entries);
     }
-    const hint = this.mode === 'log' ? 'W/S SELECT  ENTER OPEN  ESC BACK' : 'A/D PAGE  L LOG  ESC CLOSE';
+    const hint = DOSSIER_HINT[this.mode];
     drawText(g, hint, DOSSIER_X + 9, DOSSIER_Y + DOSSIER_H - 11, '#8a7868', 'small', null);
   }
 
@@ -251,8 +256,7 @@ export class Dossier {
 
     const key = event.key.toLowerCase();
     if (event.key === 'Escape') {
-      if (this.mode === 'log') this.toggleLog();
-      else this.close();
+      this.close();
     } else if (key === 'arrowleft' || key === 'a') {
       this.previousPage();
     } else if (key === 'arrowright' || key === 'd') {
