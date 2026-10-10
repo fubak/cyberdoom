@@ -130,7 +130,7 @@ export const ARC: ArcMission[] = [
     ],
   },
   {
-    id: 'm10', title: 'THIRD PARTY', difficulty: 9, built: false,
+    id: 'm10', title: 'THIRD PARTY', difficulty: 9, built: true,
     briefing: 'A new SaaS vendor wants remote access to production next week. Their sales rep is very persuasive.',
     objectives: [
       w('5.3', 'Vendor assessment: demand the questionnaire, right-to-audit clause and independent assessment; choose the correct agreement (SLA, NDA, MSA, SOW).'),

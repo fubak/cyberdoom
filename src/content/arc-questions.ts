@@ -55,44 +55,6 @@ export const ARC_QUESTIONS: Record<string, Question[]> = {
       ['Cross-site scripting', 'XSS is a web-application flaw. This is a network device problem.'],
     ]),
   ],
-  m10: [
-    q('q1', ['5.3'], 'Before signing, you want the contractual right to inspect the vendor\u2019s security controls yourself. Which clause do you need?', 2, [
-      ['Non-disclosure agreement', 'An NDA protects confidential information. It gives you no right to inspect anything.'],
-      ['Service-level agreement', 'An SLA sets performance targets like uptime, not audit access.'],
-      ['Right-to-audit clause', 'It contractually allows you (or your auditor) to assess the vendor\u2019s controls.'],
-      ['Memorandum of understanding', 'An MOU records intent and is generally not binding, so it cannot enforce audits.'],
-    ]),
-    q('q2', ['5.3'], 'An agreement guarantees 99.9% monthly uptime and gives service credits when it is missed. What type is it?', 0, [
-      ['SLA', 'A service-level agreement defines measurable service levels and the remedies when they are missed.'],
-      ['MSA', 'A master service agreement sets general terms for future work. Specific metrics usually sit in SLAs or SOWs under it.'],
-      ['SOW / work order', 'A statement of work defines a project\u2019s deliverables and timeline, not ongoing uptime.'],
-      ['BPA', 'A business partners agreement covers partnership roles, profit and decision-making.'],
-    ]),
-    q('q3', ['5.2'], 'An asset worth $200,000 would lose 25% of its value in a flood (exposure factor), and floods are expected once every 10 years. What is the ALE?', 3, [
-      ['$50,000', 'That is the SLE (asset value x exposure factor), the loss from ONE flood. ALE multiplies it by the yearly rate.'],
-      ['$20,000', 'That multiplies the asset value by the ARO and skips the exposure factor.'],
-      ['$500,000', 'That multiplies the SLE by 10 years instead of by the ARO (0.1).'],
-      ['$5,000', 'SLE = $200,000 x 0.25 = $50,000. ARO = 1/10 = 0.1. ALE = SLE x ARO = $5,000.'],
-    ]),
-    q('q4', ['5.2'], 'Leadership buys a cyber-insurance policy to cover breach costs. Which risk strategy is this?', 1, [
-      ['Mitigate', 'Mitigation reduces likelihood or impact with controls. Insurance changes neither.'],
-      ['Transfer', 'Insurance shifts the financial impact to a third party. The risk is transferred, not removed.'],
-      ['Accept', 'Accepting means bearing the loss yourself. Here someone else pays.'],
-      ['Avoid', 'Avoidance means stopping the risky activity altogether.'],
-    ]),
-    q('q5', ['3.1'], 'Your company uses a SaaS CRM. Under the shared-responsibility model, who is responsible for configuring user access and for the data users enter?', 2, [
-      ['The provider, for everything', 'SaaS shifts the infrastructure and application to the provider, but never your data or your user access decisions.'],
-      ['The provider for the data, the customer for the servers', 'Reversed. In SaaS the provider runs the servers and the customer owns its data.'],
-      ['The customer', 'In every cloud model the customer stays responsible for its data, identities and access configuration.'],
-      ['The customer, including patching the application\u2019s OS', 'In SaaS the provider patches the platform. Patching the OS is the customer\u2019s job only in IaaS.'],
-    ]),
-    q('q6', ['2.2'], 'Attackers breach a managed service provider and use its remote-management tool to push ransomware to every customer. What is the threat vector?', 0, [
-      ['Supply chain (MSP)', 'The attack arrived through a trusted third party\u2019s access. SY0-701 lists MSPs, vendors and suppliers as supply-chain vectors.'],
-      ['Watering hole', 'Watering-hole attacks compromise a website the victims visit.'],
-      ['Open service ports', 'The attack used the MSP\u2019s legitimate, trusted channel, not an exposed port.'],
-      ['Removable device', 'No physical media was involved.'],
-    ]),
-  ],
   m12: [
     q('q1', ['4.7'], 'A SOAR playbook disables any account that shows impossible travel. A false positive could lock the CEO out mid-deal. What design is BEST?', 3, [
       ['Turn the automation off and handle everything manually', 'This throws away the reaction-time benefit, and attackers act in minutes.'],
