@@ -3,7 +3,7 @@ import { lightRects } from '../../missions/levelkit';
 import type { WalkStep } from '../../missions/walkthroughs';
 import type { MissionTeaching } from '../curriculum';
 import { q } from '../arc-questions';
-import { addThreatEncounter, floorSpot, liveThreats, retex } from './campaign-map';
+import { addThreatEncounter, mixedThreatEncounter, floorSpot, liveThreats, retex } from './campaign-map';
 
 export const m08: Mission = {
   id: 'm08',
@@ -18,36 +18,36 @@ export const m08: Mission = {
   loadout: ['keyboard', 'mouse', 'usb', 'badge'],
   map: {
     grid: [
-    '########################################',
-    '########################################',
-    '##................####................##',
-    '##................####................##',
-    '##BBBB..B.........####..SS..SS.SS.SSSS##',
-    '##...B..B.........####............S...##',
-    '##...B..B.........####..SS..SS.SS.S...##',
-    '##...1..B.........####............2...##',
-    '##...B............####..SS..SS.SS.S...##',
-    '##...B............####............S...##',
-    '##BBBB............####............SSSS##',
-    '##................####................##',
-    '########D#####################V#########',
-    '##....................................##',
-    '##.......BB...B............B..........##',
-    '##.......BB...........................##',
-    '##....................B...............##',
-    '##............................B.......##',
-    '##....................................##',
-    '##....................................##',
-    '##....................................##',
-    '#######.###############X################',
-    '##...........#######........############',
-    '##...........#######........############',
-    '##...........#######...E....############',
-    '##...........#######........############',
-    '##...........#######........############',
-    '##...........#######........############',
-    '########################################',
-    '########################################',
+    '##############################################',
+    '##############################################',
+    '##................####................########',
+    '##................####................########',
+    '##BBBB..B.........####..SS..SS.SS.SSSS########',
+    '##...B..B.........####............S...########',
+    '##...B..B.........####..SS..SS.SS.S...########',
+    '##...1..B.........####............2...########',
+    '##...B............####..SS..SS.SS.S...########',
+    '##...B............####............S...########',
+    '##BBBB............####............SSSS########',
+    '##................####................##..####',
+    '########D#####################V#########4#####',
+    '##....................................##.#####',
+    '##.......BB...B............B..........T...####',
+    '##.......BB...........................###..###',
+    '##....................B...............####..##',
+    '##............................B.......#####.##',
+    '##....................................##....##',
+    '##...................................U......##',
+    '##....................................##....##',
+    '#######.###############X################....##',
+    '##...........#######........##############5###',
+    '##...........#######........##############...#',
+    '##...........#######...E....##############...#',
+    '##...........#######........##################',
+    '##...........#######........##################',
+    '##...........#######........##################',
+    '##############################################',
+    '##############################################',
   ],
     legend: {
       '#': { kind: 'wall', tex: 'wall-panel' },
@@ -630,3 +630,33 @@ m08.entities.push(
   { id: 'noc-wall-b', kind: 'prop', x: 36.5, y: 7.5, sprite: 'console' },
   { id: 'dmz-desk', kind: 'prop', x: 6.5, y: 6.5, sprite: 'workstation' },
 );
+
+// rF4: 46x30 silhouette — east staircase lab (descending step cells into a
+// sample-analysis room) with a locked post-remediation shortcut back into the
+// main hall and two secret sample lockers.
+m08.map.legend.T = { kind: 'door', tex: 'door', doorId: 'rf4-stair' };
+m08.map.legend.U = { kind: 'door', tex: 'door', doorId: 'rf4-stair-loop', locked: true,
+  lockText: 'The lab shortcut unlocks once the zero-day is remediated.' };
+m08.map.legend['4'] = { kind: 'door', tex: 'wall-secret', secret: true, doorId: 'rf4-sample-locker' };
+m08.map.legend['5'] = { kind: 'door', tex: 'wall-secret', secret: true, doorId: 'rf4-cold-locker' };
+m08.entities.push(
+  { id: 'rf4-sample-item', kind: 'item', x: 40.5, y: 11.5, sprite: 'charge', tags: ['arsenal-pickup'],
+    grants: { resource: 'usb-charge', amount: 8 } },
+  { id: 'rf4-cold-item', kind: 'item', x: 43.5, y: 23.5, sprite: 'medkit' },
+);
+m08.script!.secrets!.push(
+  { id: 'rf4-sample-locker', area: [40, 11, 41, 11], label: 'Sample quarantine locker', grant: { resource: 'usb-charge', amount: 8 } },
+  { id: 'rf4-cold-locker', area: [42, 23, 44, 24], label: 'Cold-room evidence store', grant: { resource: 'integrity', amount: 20 } },
+);
+mixedThreatEncounter(m08, 'stair-mix', [['worm', 3], ['rat', 2]],
+  { id: 'stair-ambush', area: [40, 18, 43, 21], kind: 'bad',
+    message: 'The analysis room is still infected — variants crawl up the stair.' },
+  [40, 13, 43, 21]);
+addThreatEncounter(m08, 'rescan-wave', 'worm', 4,
+  { id: 'rescan-wave', after: ['rescan'], kind: 'warn',
+    message: 'Rescan triggered a dormant variant — fresh signatures dropping into the hall.' },
+  [2, 13, 36, 20]);
+m08.script!.triggers!.push({ id: 'stair-loop-open', after: ['remediate'], kind: 'good',
+  message: 'Remediation applied — the lab shortcut back to the hall is open.',
+  openDoors: ['rf4-stair-loop'] });
+m08.map.lights = { ...m08.map.lights, ...lightRects([[40, 13, 43, 21, 0.6], [40, 11, 41, 11, 0.85], [42, 23, 44, 24, 0.85], [40, 13, 40, 13, 0.35], [42, 21, 42, 21, 0.35]]) };

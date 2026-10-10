@@ -3,7 +3,7 @@ import type { MissionTeaching } from '../curriculum';
 import { q } from '../arc-questions';
 import type { WalkStep } from '../../missions/walkthroughs';
 import { lightRects } from '../../missions/levelkit';
-import { addThreatEncounter, floorSpot, liveThreats, retex } from './campaign-map';
+import { addThreatEncounter, mixedThreatEncounter, floorSpot, liveThreats, retex } from './campaign-map';
 
 /**
  * M10 "Third Party": a SaaS vendor wants production access next week; the rep applies
@@ -40,35 +40,41 @@ export const m10: Mission = {
   loadout: ['keyboard', 'mouse', 'usb', 'badge', 'mfa'],
   map: {
     grid: [
-      '########################################',
-      '########################################',
-      '##................####................##',
-      '##................####................##',
-      '##BBBB............####..SS..SS.SS.SSSS##',
-      '##...B............####............S...##',
-      '##...B............####..SS..SS.SS.S...##',
-      '##...1............####............2...##',
-      '##...B............####..SS..SS.SS.S...##',
-      '##...B............####............S...##',
-      '##BBBB............####............SSSS##',
-      '##................####................##',
-      '########A#####################N#########',
-      '##....................................##',
-      '##....................................##',
-      '##......BBBBB..........BBBBB..........##',
-      '##......BBBBB..........BBBBB..........##',
-      '##....................................##',
-      '##....................................##',
-      '##....................................##',
-      '#######R############XV##################',
-      '##...#.............#.........###########',
-      '##...#.............#.........###########',
-      '##...3.............#.........###########',
-      '##...#.............#....E....###########',
-      '##...#.............#.........###########',
-      '##...#.............#.........###########',
-      '########################################',
-    ],
+    '########################################',
+    '########################################',
+    '##................####................##',
+    '##................####................##',
+    '##BBBB............####..SS..SS.SS.SSSS##',
+    '##...B............####............S...##',
+    '##...B............####..SS..SS.SS.S...##',
+    '##...1............####............2...##',
+    '##...B............####..SS..SS.SS.S...##',
+    '##...B............####............S...##',
+    '##BBBB............####............SSSS##',
+    '##................####................##',
+    '########A#####################N#########',
+    '##....................................##',
+    '##....................................##',
+    '##......BBBBB..........BBBBB..........##',
+    '##......BBBBB..........BBBBB..........##',
+    '##....................................##',
+    '##....................................##',
+    '##....................................##',
+    '#######R############XV##################',
+    '##...#.............#.........###########',
+    '##...#.............#.........###########',
+    '##...3.............#.........###########',
+    '##...#.............#....E....###########',
+    '##...#.............#.........###########',
+    '##...#.............#.........###########',
+    '###############U#########T##############',
+    '###############.#########.##############',
+    '###############.#########.##############',
+    '####...#.......................#########',
+    '####...4.......................#########',
+    '####...#..#########..#######..##########',
+    '########################################',
+  ],
     legend: {
       '#': { kind: 'wall', tex: 'wall-panel' },
       S: { kind: 'wall', tex: 'wall-server' },
@@ -713,3 +719,26 @@ m10.entities.push(
   { id: 'noc-wall-b', kind: 'prop', x: 36.5, y: 7.5, sprite: 'console' },
   { id: 'vendor-desk', kind: 'prop', x: 7.5, y: 7.5, sprite: 'workstation' },
 );
+
+// rF4: 40x34 silhouette — south trident bar (three prongs for vendor intake)
+// with a locked post-report return door and a secret escrow cell at the west end.
+m10.map.legend.T = { kind: 'door', tex: 'door', doorId: 'rf4-trident' };
+m10.map.legend.U = { kind: 'door', tex: 'door', doorId: 'rf4-trident-back', locked: true,
+  lockText: 'The vendor-bar return door unlocks once the risk report is filed.' };
+m10.map.legend['4'] = { kind: 'door', tex: 'wall-secret', secret: true, doorId: 'rf4-vendor-escrow' };
+m10.entities.push(
+  { id: 'rf4-vendor-item', kind: 'item', x: 5.5, y: 31.5, sprite: 'charge', tags: ['arsenal-pickup'],
+    grants: { resource: 'usb-charge', amount: 8 } },
+  { id: 'rf4-trident-prop', kind: 'prop', x: 19.5, y: 30.5, sprite: 'workstation' },
+);
+m10.script!.secrets!.push(
+  { id: 'rf4-vendor-escrow', area: [4, 30, 6, 32], label: 'Vendor escrow cell', grant: { resource: 'usb-charge', amount: 8 } },
+);
+mixedThreatEncounter(m10, 'trident-mix', [['worm', 3], ['rootkit', 2]],
+  { id: 'trident-ambush', area: [8, 30, 30, 31], kind: 'bad',
+    message: 'Untrusted vendor code nests in the intake bar — rootkits ride the worms.' },
+  [8, 30, 30, 32]);
+m10.script!.triggers!.push({ id: 'trident-back-open', after: ['report'], kind: 'good',
+  message: 'Risk report filed — the vendor-bar return door releases.',
+  openDoors: ['rf4-trident-back'] });
+m10.map.lights = { ...m10.map.lights, ...lightRects([[8, 30, 30, 32, 0.55], [4, 30, 6, 32, 0.85], [8, 31, 8, 31, 0.35]]) };

@@ -155,6 +155,34 @@ export function addThreatEncounter(
   mission.script.triggers.push({ ...trigger, spawn: wave.map((enemy) => enemy.id) });
 }
 
+/** LEVELS rF4: a mixed-type ambush pack — several sprite waves sharing one
+ *  region under ONE trigger, so the player meets a combined pack (e.g. a worm
+ *  swarm screening a ranged trojan) instead of single-type groups. */
+export function mixedThreatEncounter(
+  mission: Mission,
+  prefix: string,
+  sprites: [sprite: string, count: number][],
+  trigger: Omit<MissionTrigger, 'spawn'>,
+  region?: [number, number, number, number],
+): void {
+  const spawn: string[] = [];
+  for (const [sprite, count] of sprites) {
+    const wave = threatWave(
+      mission.map,
+      `${prefix}-${sprite}`,
+      sprite,
+      mission.entities.map(({ x, y }) => ({ x, y })),
+      count,
+      region,
+    );
+    mission.entities.push(...wave);
+    spawn.push(...wave.map((enemy) => enemy.id));
+  }
+  if (!mission.script) mission.script = { par: 0 };
+  mission.script.triggers ??= [];
+  mission.script.triggers.push({ ...trigger, spawn });
+}
+
 export function stagedThreatWave(
   map: MapDef,
   prefix: string,

@@ -2,7 +2,7 @@ import type { Mission } from '../../core/types';
 import type { MissionTeaching } from '../curriculum';
 import type { WalkStep } from '../../missions/walkthroughs';
 import { lightRects } from '../../missions/levelkit';
-import { addThreatEncounter, retex, setMapCell } from './campaign-map';
+import { addThreatEncounter, mixedThreatEncounter, retex, setMapCell } from './campaign-map';
 
 /**
  * M1 "Patch Tuesday" — antimalware, endpoint hygiene, removable media.
@@ -30,36 +30,36 @@ export const m01: Mission = {
   loadout: ['keyboard', 'mouse', 'usb', 'badge'],
   map: {
     grid: [
-    '###############################SSSSSSSSS',
-    '################...EE...#######S.......S',
-    '################........#######S.......S',
-    '################........######SSSSSSS2SS',
-    '################........######S........S',
-    '###################QQ#########S........S',
-    '##.......#....................S..SSSS..S',
-    '##.......#....................S........S',
-    '##.......#...##..........##...S........S',
-    '##.......d....................S..SSSS..S',
-    '##.......#.........SS.........I........S',
-    '##.......#...##....SS....##...S........S',
-    '##.......#...##..........##...S..SSSS..S',
-    '##########....................S........S',
-    '######........................S........S',
-    '######........................SSSSJSSSSS',
-    '######..##############oo##########.#####',
-    '######..##############..##########.#####',
-    '######..##############...............###',
-    '######..##############...............###',
-    '###BBB..BBBBBBB###############rr########',
-    '###B..........B###############..########',
-    'BBBB..........B#......................##',
-    'B..B..........B#......................##',
-    'B..1........S.B#....##.....##.........##',
-    'B..B.......S.Sp.....##.....##.........##',
-    'BBBB..........B#......................##',
-    '###B.......S.SB#......................##',
-    '###B........S.B#########################',
-    '###BBBBBBBBBBBB#########################',
+    '###############################SSSSSSSSS########',
+    '################...EE...#######S.......S########',
+    '################........#######S.......S########',
+    '################........######SSSSSSS2SS#####..#',
+    '################........######S........S#####..#',
+    '###################QQ#########S........S#####..#',
+    '##.......#....................S..SSSS..S#####5##',
+    '##.......#....................S........S#......#',
+    '##.......#...##..........##...S........S#......#',
+    '##.......d....................S..SSSS..S#......#',
+    '##.......#.........SS.........I........S#..##..#',
+    '##.......#...##....SS....##...S........S#..##..#',
+    '##.......#...##..........##...S..SSSS..S#..##..#',
+    '##########....................S........S#..##..#',
+    '######........................S........S#..##..#',
+    '######........................SSSSJSSSSS#......#',
+    '######..##############oo##########.######.4....#',
+    '######..##############..##########.######..##..#',
+    '######..##############...............####..##..#',
+    '######..##############...............####..##..#',
+    '###BBB..BBBBBBB###############rr#########..##..#',
+    '###B..........B###############..#########..##..#',
+    'BBBB..........B#......................###..##..#',
+    'B..B..........B#......................###......#',
+    'B..1........S.B#....##.....##.........###......#',
+    'B..B.......S.Sp.....##.....##..........T.......#',
+    'BBBB..........B#......................##########',
+    '###B.......S.SB#......................##########',
+    '###B........S.B#################################',
+    '###BBBBBBBBBBBB#################################',
   ],
     legend: {
       '#': { kind: 'wall', tex: 'wall-panel' },
@@ -428,3 +428,26 @@ m01.entities.push(
   { id: 'core-cache', kind: 'item', x: 30.5, y: 4.5, sprite: 'charge', tags: ['arsenal-pickup'],
     grants: { resource: 'usb-charge', amount: 8 } },
 );
+
+// rF4: 48x30 silhouette — east maintenance-ring annex (ring of corridors around
+// a sealed pillar) joined by door 'T'; two secret caches off the ring, cued by
+// wall-secret texture + light dips, and a mixed worm+trojan ambush in the ring.
+m01.map.legend.T = { kind: 'door', tex: 'door', doorId: 'annex-door' };
+m01.map.legend['4'] = { kind: 'door', tex: 'wall-secret', secret: true, doorId: 'annex-cache-a' };
+m01.map.legend['5'] = { kind: 'door', tex: 'wall-secret', secret: true, doorId: 'annex-cache-b' };
+m01.entities.push(
+  { id: 'annex-cache-a-item', kind: 'item', x: 43.5, y: 15.5, sprite: 'charge', tags: ['arsenal-pickup'],
+    grants: { resource: 'usb-charge', amount: 8 } },
+  { id: 'annex-cache-a-item-b', kind: 'item', x: 44.5, y: 16.5, sprite: 'medkit' },
+  { id: 'annex-cache-b-item', kind: 'item', x: 45.5, y: 4.5, sprite: 'charge', tags: ['arsenal-pickup'],
+    grants: { resource: 'usb-charge', amount: 8 } },
+);
+m01.script!.secrets!.push(
+  { id: 'annex-cache-a', area: [43, 15, 44, 16], label: 'Cold-site cache', grant: { resource: 'usb-charge', amount: 8 } },
+  { id: 'annex-cache-b', area: [45, 3, 46, 5], label: 'Roof relay stash', grant: { resource: 'integrity', amount: 25 } },
+);
+mixedThreatEncounter(m01, 'ring-mix', [['worm', 3], ['trojan', 2]],
+  { id: 'ring-ambush', area: [40, 23, 46, 25], kind: 'bad',
+    message: 'Dormant processes stirred in the maintenance ring — the annex sweep was not clean.' },
+  [41, 7, 46, 25]);
+m01.map.lights = { ...m01.map.lights, ...lightRects([[41, 7, 46, 25, 0.55], [43, 15, 44, 16, 0.85], [45, 3, 46, 5, 0.85], [41, 16, 41, 16, 0.35], [44, 7, 44, 7, 0.35]]) };

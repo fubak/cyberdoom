@@ -2,7 +2,7 @@ import type { Mission } from '../../core/types';
 import type { MissionTeaching } from '../curriculum';
 import type { WalkStep } from '../../missions/walkthroughs';
 import { lightRects } from '../../missions/levelkit';
-import { addThreatEncounter, floorSpot, liveThreats, retex, setMapCell } from './campaign-map';
+import { addThreatEncounter, mixedThreatEncounter, floorSpot, liveThreats, retex, setMapCell } from './campaign-map';
 
 /**
  * M2 "Need to Know": least privilege, just-in-time access, shared credentials.
@@ -32,36 +32,40 @@ export const m02: Mission = {
   loadout: ['keyboard', 'mouse', 'usb', 'badge', 'mfa'],
   map: {
     grid: [
-    '##############SSSSSSSSSSSS##############',
-    '##############S....EE....S##############',
-    '##############S..........S##############',
-    '##############S..........S##############',
-    '##############S..........S##############',
-    '##############SSSS....SSSS##############',
-    '##################....##################',
-    '##################....##################',
-    '##################....########SSSSSSSSSS',
-    '##################....########S........S',
-    '###################XX#########S........S',
-    '####BBBBBB....................S........S',
-    '####B....B..........SS........S..SSSS..S',
-    '####B....2.........SS.........S........S',
-    '####B....B...###...SS...###...S........S',
-    '####B....B.........SS.........N..SSSS..S',
-    '####BBBBBB.........SS.........S........S',
-    '##########...###....SS..###...S........S',
-    '##########....................S..SSSS..S',
-    '##########....................S........S',
-    '###################AA######l##S........S',
-    '####SSSSSSSSSS............#.##SSSSmmSSSS',
-    '####S........S............#.........####',
-    '####S........S..#......#..#.........####',
-    '####S........R..#......#..BBBBBBB#######',
-    '####S........SSSSSS.......B.....B#######',
-    '####S........S............1.....B#######',
-    '####S........S............B.....B#######',
-    '####SSSSSSSSSS............B.....B#######',
-    '##########################BBBBBBB#######',
+    '##############SSSSSSSSSSSS####################',
+    '##############S....EE....S####################',
+    '##############S..........S####################',
+    '##############S..........S####################',
+    '##############S..........S####################',
+    '##############SSSS....SSSS################...#',
+    '##################....####################...#',
+    '##################....####################...#',
+    '##################....########SSSSSSSSSS####4#',
+    '##################....########S........S.....#',
+    '###################XX#########S........S.#####',
+    '####BBBBBB....................S........S.#####',
+    '####B....B..........SS........S..SSSS..S.....#',
+    '####B....2.........SS.........S........S####.#',
+    '####B....B...###...SS...###...S........S####.#',
+    '####B....B.........SS.........N..SSSS..T.....#',
+    '####BBBBBB.........SS.........S........S##5###',
+    '##########...###....SS..###...S........S##...#',
+    '##########....................S..SSSS..S##...#',
+    '##########....................S........S##...#',
+    '###################AA######l##S........S######',
+    '####SSSSSSSSSS............#.##SSSSmmSSSS######',
+    '####S........S............#.........##########',
+    '####S........S..#......#..#.........##########',
+    '####S........R..#......#..BBBBBBB#############',
+    '####S........SSSSSS.......B.....B#############',
+    '####S........S............1.....B#############',
+    '####S........S............B.....B#############',
+    '####SSSSSSSSSS............B.....B#############',
+    '##############v###########BBBBBBB#############',
+    '##############.###############################',
+    '########.......................###############',
+    '########.......................###############',
+    '##############################################',
   ],
     legend: {
       '#': { kind: 'wall', tex: 'wall-panel' },
@@ -465,3 +469,29 @@ m02.entities.push(
   { id: 'srv-cache', kind: 'item', x: 36.5, y: 23.5, sprite: 'charge', tags: ['arsenal-pickup'],
     grants: { resource: 'usb-charge', amount: 8 } },
 );
+
+// rF4: 46x34 silhouette — NE zigzag server aisles (three stacked halls) plus a
+// long south records gallery; two secret caches cued by wall-secret + light dips.
+m02.map.legend.T = { kind: 'door', tex: 'door', doorId: 'rf4-zigzag' };
+m02.map.legend.v = { kind: 'door', tex: 'door', doorId: 'rf4-gallery' };
+m02.map.legend['4'] = { kind: 'door', tex: 'wall-secret', secret: true, doorId: 'rf4-zigzag-cache-n' };
+m02.map.legend['5'] = { kind: 'door', tex: 'wall-secret', secret: true, doorId: 'rf4-zigzag-cache-s' };
+m02.entities.push(
+  { id: 'rf4-cache-n-item', kind: 'item', x: 43.5, y: 6.5, sprite: 'charge', tags: ['arsenal-pickup'],
+    grants: { resource: 'usb-charge', amount: 8 } },
+  { id: 'rf4-cache-s-item', kind: 'item', x: 43.5, y: 18.5, sprite: 'medkit' },
+  { id: 'rf4-gallery-prop', kind: 'prop', x: 19.5, y: 31.5, sprite: 'console' },
+);
+m02.script!.secrets!.push(
+  { id: 'rf4-zigzag-cache-n', area: [42, 5, 44, 7], label: 'Cold-aisle conduit', grant: { resource: 'usb-charge', amount: 8 } },
+  { id: 'rf4-zigzag-cache-s', area: [42, 17, 44, 19], label: 'Raised-floor plenum', grant: { resource: 'integrity', amount: 20 } },
+);
+mixedThreatEncounter(m02, 'zigzag-mix', [['rat', 2], ['worm', 3]],
+  { id: 'zigzag-ambush', area: [40, 15, 44, 15], kind: 'bad',
+    message: 'Rodent processes nest in the zigzag aisles — sweep every bend.' },
+  [40, 9, 44, 15]);
+addThreatEncounter(m02, 'gallery-worms', 'worm', 4,
+  { id: 'gallery-ambush', area: [8, 31, 30, 32], kind: 'bad',
+    message: 'Archive worms surface between the record shelves.' },
+  [8, 31, 30, 32]);
+m02.map.lights = { ...m02.map.lights, ...lightRects([[40, 9, 44, 15, 0.6], [8, 31, 30, 32, 0.5], [42, 5, 44, 7, 0.85], [42, 17, 44, 19, 0.85], [43, 8, 43, 8, 0.35], [41, 16, 41, 16, 0.35]]) };

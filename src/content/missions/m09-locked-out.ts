@@ -3,7 +3,7 @@ import type { MissionTeaching } from '../curriculum';
 import { q } from '../arc-questions';
 import type { WalkStep } from '../../missions/walkthroughs';
 import { lightRects } from '../../missions/levelkit';
-import { addThreatEncounter, retex, setMapCell } from './campaign-map';
+import { addThreatEncounter, mixedThreatEncounter, retex, setMapCell } from './campaign-map';
 
 /**
  * M9 "Locked Out": ransomware incident response, run in the right order.
@@ -31,36 +31,36 @@ briefing:
   loadout: ['keyboard', 'mouse', 'usb', 'badge', 'mfa', 'tap', 'patch'],
   map: {
     grid: [
-    'SSSSSSSSSS#####SSSSSSSSSS#####SSSSSSSSSS',
-    'S........S#####S...EE...S#####S........S',
-    'S........S#####S........S#####S........S',
-    'S..SSS...S#####S........S#####S........S',
-    'S........S#####S........S#####S........S',
-    'S........S#####S........S#####S........S',
-    'S........S#####SSSSXXSSSS#####S........S',
-    'SSSSSSSNNS#########..#########S........S',
-    '#######..##########..#########SSSVSSSSSS',
-    '#######..##########..############.######',
-    '######............................######',
-    '######............................######',
-    '######............................######',
-    '######....###..............###....######',
-    '######...........SSSSSS...........######',
-    '######...........SSSSSS...........BBBBBB',
-    '######...........SSSSSS...........B....B',
-    '######....###..............###....B....B',
-    '######............................2....B',
-    '######............................B....B',
-    '######............................B....B',
-    '###################..########..###BBBBBB',
-    '###################..########..#########',
-    '##########BBBBB..........####..#########',
-    '##########B...B..........####..#########',
-    '##########B...1..#SS..#..e.....#########',
-    '##########B...B..#SS..#..###############',
-    '##########B...B..........###############',
-    '##########BBBBB..........###############',
-    '########################################',
+    'SSSSSSSSSS#####SSSSSSSSSS#####SSSSSSSSSS########',
+    'S........S#####S...EE...S#####S........S########',
+    'S........S#####S........S#####S........S########',
+    'S..SSS...S#####S........S#####S........S########',
+    'S........S#####S........S#####S........S########',
+    'S........S#####S........S#####S........S########',
+    'S........S#####SSSSXXSSSS#####S........S.......#',
+    'SSSSSSSNNS#########..#########S........S.......#',
+    '#######..##########..#########SSSVSSSSSS.......#',
+    '#######..##########..############.######..###..#',
+    '######............................######..###..#',
+    '######............................######..###..#',
+    '######............................######..###..#',
+    '######....###..............###....######..###..#',
+    '######...........SSSSSS...........######..###..#',
+    '######...........SSSSSS...........BBBBT...###..#',
+    '######...........SSSSSS...........B....B..###..#',
+    '######....###..............###....B....B..###..#',
+    '######............................2....B..###..#',
+    '######............................B....B..###..#',
+    '######............................B....B..###..#',
+    '###################..########..###BBBBBB..###..#',
+    '###################..########..#########.......#',
+    '##########BBBBB..........####..#########.......#',
+    '##########B...B..........####..#########.......#',
+    '##########B...1..#SS..#..e.....############4####',
+    '##########B...B..#SS..#..#################...###',
+    '##########B...B..........#################...###',
+    '##########BBBBB..........#################...###',
+    '################################################',
   ],
     legend: {
       '#': { kind: 'wall', tex: 'wall-panel' },
@@ -297,7 +297,7 @@ briefing:
         message: 'Finance restored from backup. Exit open. File lessons learned on the way out.' },
     ],
     secrets: [
-      { id: 'store', area: [11, 24, 13, 27], label: 'IR storeroom', grant: { resource: 'usb-charge', amount: 16 } },
+      { id: 'store', area: [11, 24, 13, 27], label: 'IR storeroom', grant: { resource: 'usb-charge', amount: 8 } },
       { id: 'closet', area: [35, 16, 38, 20], label: 'Finance closet', grant: { resource: 'integrity', amount: 40 } },
       { id: 'warroom-cache', area: [18, 15, 18, 15], label: 'War-room cache', grant: { resource: 'patch-disk', amount: 3 } },
     ],
@@ -467,3 +467,23 @@ m09.entities.push(
   { id: 'store-chg-a', kind: 'item', x: 12.5, y: 25.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 8 } },
   { id: 'store-chg-b', kind: 'item', x: 11.5, y: 26.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 8 } },
 );
+
+// rF4: 48x30 silhouette — east ring of corridors around a sealed ransom vault;
+// a secret evidence cache under the south arc.
+m09.map.legend.T = { kind: 'door', tex: 'door', doorId: 'rf4-ring' };
+m09.map.legend['4'] = { kind: 'door', tex: 'wall-secret', secret: true, doorId: 'rf4-ring-cache' };
+m09.entities.push(
+  { id: 'rf4-ring-cache-item', kind: 'item', x: 43.5, y: 27.5, sprite: 'charge', tags: ['arsenal-pickup'],
+    grants: { resource: 'usb-charge', amount: 8 } },
+  { id: 'rf4-ring-cache-item-b', kind: 'item', x: 42.5, y: 27.5, sprite: 'charge', tags: ['arsenal-pickup'],
+    grants: { resource: 'usb-charge', amount: 8 } },
+  { id: 'rf4-ring-prop', kind: 'prop', x: 45.5, y: 7.5, sprite: 'console' },
+);
+m09.script!.secrets!.push(
+  { id: 'rf4-ring-cache', area: [42, 26, 44, 28], label: 'Ransom-evidence cache', grant: { resource: 'usb-charge', amount: 8 } },
+);
+mixedThreatEncounter(m09, 'ring-mix', [['ransomware', 1], ['worm', 2]],
+  { id: 'ring-ambush', area: [40, 14, 41, 20], kind: 'bad',
+    message: 'Ransomware still prowls the vault ring — worms ride with it.' },
+  [40, 6, 46, 24]);
+m09.map.lights = { ...m09.map.lights, ...lightRects([[40, 6, 46, 24, 0.55], [42, 26, 44, 28, 0.85], [43, 24, 43, 24, 0.35]]) };

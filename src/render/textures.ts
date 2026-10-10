@@ -363,6 +363,58 @@ export function buildTextures(jobs = false): void {
     g.fillRect(0, 78, 64, 2);
   });
 
+  // LEVELS rF4: secret-door tell — the same office panels as 'wall-panel' but
+  // deliberately MISALIGNED (right plate slipped 7 px, plate edges don't meet,
+  // hairline shadow under the slip and one amber seam marker). At a glance it
+  // reads as the wall around it; staring at it, the seam is wrong. Doom's
+  // classic "odd texture" secret cue.
+  wall('wall-secret', (p) => {
+    const { g, glow } = p;
+    const u = 1 / p.s;
+    noiseFill(p, [52, 46, 40], 10);
+    steelPanel(p, 1, 2, 30, 44, [104, 98, 88]);
+    steelPanel(p, 33, 9, 30, 44, [98, 92, 84]);
+    // exposed slip edge where the right plate dropped
+    g.fillStyle = '#0a0c10';
+    g.fillRect(33, 2, 30, 7);
+    for (let x = 34; x < 62; x += 3) {
+      g.fillStyle = '#565e6c';
+      g.fillRect(x, 3 + ((x / 3) % 2), 2, u);
+    }
+    g.fillStyle = '#1c1f26';
+    g.fillRect(38, 17, 20, 1);
+    g.fillStyle = '#a4acbc';
+    g.fillRect(38, 18, 20, 1);
+    bevel(g, 6, 10, 20, 9, '#2a2e38', '#5a6070', '#101218', true);
+    drawText(g, 'NET', 10, 12, '#9ab0c8', 'tiny', null);
+    for (const [x, y] of [[3, 4], [27, 4], [3, 42], [27, 42], [35, 11], [59, 11], [35, 49], [59, 49]]) rivet(g, x, y);
+    // status strip: right half dips with the slipped plate, one amber segment
+    g.fillStyle = '#0a0c10';
+    g.fillRect(0, 47, 64, 5);
+    g.fillStyle = '#18d8f0';
+    g.fillRect(2, 48, 29, 3);
+    g.fillStyle = '#ffb010';
+    g.fillRect(33, 55, 29, 3);
+    glow.fillStyle = '#fff';
+    glow.fillRect(2, 48, 29, 3);
+    glow.fillRect(33, 55, 29, 3);
+    for (let x = 0; x < 64; x += 16) {
+      noiseFill(p, [96, 60, 32], 14, 1, x, 58, 16, 20);
+      bevel(g, x + 2, 60, 12, 15, 'rgba(0,0,0,0)', '#c08a52', '#2e1a0a', true);
+      g.fillStyle = '#2e1a0a';
+      g.fillRect(x, 58, 1, 20);
+    }
+    seam(g, 17, 3, 17, 45);
+    seam(g, 49, 10, 49, 52);
+    seam(g, 32, 2, 32, 45);
+    for (let x = 6; x < 62; x += 7) bolt(g, x, 46.5);
+    drip(g, 9, 20, 26);
+    vShade(g, 0, 5, '6,5,4', 0.3, 0);
+    grime(p, 'rgba(90,40,10,0.55)', 90, 0, 70, 64, 8);
+    g.fillStyle = '#14161c';
+    g.fillRect(0, 78, 64, 2);
+  });
+
   // Server rack: dark chassis, 2U units, drive bays, fullbright blinkenlights.
   wall('wall-server', (p) => {
     const { g, glow } = p;
