@@ -60,9 +60,21 @@ test('win: M01 driven to the debrief screen via debug hooks', async ({ page }) =
   await page.waitForTimeout(300);
 
   // Hand the USB in at the security desk console → grants the itops role.
+  // E is a single-tick edge eaten by the 0.3 s use cooldown from the door E
+  // just above: press again until the grant lands (same retry pattern as
+  // inspectAndClean — the interact itself is deterministic once E registers).
   await teleport(page, 4.5, 9.5, Math.PI);
-  await page.keyboard.press('e');
-  await expect.poll(async () => (await cd(page)).roles).toContain('itops');
+  for (let attempt = 0; attempt < 6; attempt++) {
+    await page.keyboard.press('e');
+    const granted = await expect
+      .poll(async () => (await cd(page)).roles, { timeout: 2500 })
+      .toContain('itops')
+      .then(() => true)
+      .catch(() => false);
+    if (granted) break;
+    if (attempt === 5) throw new Error('could not hand over the USB at the security desk');
+    await teleport(page, 4.5, 9.5, Math.PI);
+  }
 
   // Clean WS-07 (infected workstation at 12.5,10.5).
   await inspectAndClean(page, 'ws1', 13.5, 10.5);
