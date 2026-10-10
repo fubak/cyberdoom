@@ -59,10 +59,38 @@ function getTickerPattern(g: CanvasRenderingContext2D): CanvasPattern | null {
 type ResRow = { id: string; label: string; cur: number; max: number; owned: boolean; active: boolean };
 type GotFx = { k: number; slot: number; blink: boolean } | null;
 
+/**
+ * Ticker layout (pure, unit-tested): newest message first, each wrapped to
+ * at most 3 tiny lines, at most 4 rows in total. The "xN" collapse count is
+ * appended before wrapping so it lands on the last wrapped line. A message
+ * that does not fully fit in the remaining rows (only possible for older
+ * entries) is cut with an ellipsis on its last shown line.
+ */
+export function tickerRows(
+  messages: { text: string; kind: string; t: number; n: number }[],
+  maxRows = 4,
+): { line: string; kind: string; t: number }[] {
+  const blocks: { lines: string[]; kind: string; t: number }[] = [];
+  let rows = 0;
+  for (let i = messages.length - 1; i >= 0 && rows < maxRows; i--) {
+    const m = messages[i];
+    const text = m.n > 1 ? `${m.text.toUpperCase()} X${m.n}` : m.text.toUpperCase();
+    const lines = wrapText(text, 52, 3);
+    const take = Math.min(lines.length, maxRows - rows);
+    const shown = lines.slice(0, take);
+    if (lines.length > take) shown[shown.length - 1] = `${shown[shown.length - 1].slice(0, -1)}…`;
+    blocks.unshift({ lines: shown, kind: m.kind, t: m.t });
+    rows += take;
+  }
+  const out: { line: string; kind: string; t: number }[] = [];
+  for (const b of blocks) for (const line of b.lines) out.push({ line, kind: b.kind, t: b.t });
+  return out;
+}
+
 export class Hud {
   readonly canvas: HTMLCanvasElement;
   private g: CanvasRenderingContext2D;
-  private messages: { text: string; kind: string; t: number }[] = [];
+  private messages: { text: string; kind: string; t: number; n: number }[] = [];
   private bar: HTMLCanvasElement;
   private time = 0;
   private lastIntegrity = 100;
@@ -96,12 +124,15 @@ export class Hud {
   }
 
   pushMessage(text: string, kind = 'info'): void {
+    // a repeat inside the visible window collapses into an "xN" count on the
+    // same line instead of re-firing (sustained-drain spam reads once)
     const dup = this.messages.find((m) => m.text === text);
     if (dup) {
       dup.t = 5;
+      dup.n = Math.min(dup.n + 1, 99);
       return;
     }
-    this.messages.push({ text, kind, t: 5 });
+    this.messages.push({ text, kind, t: 5, n: 1 });
     if (kind === 'good') this.grinT = 1.4;
     if (this.messages.length > 3) this.messages.shift();
   }
@@ -221,13 +252,28 @@ export class Hud {
     this.drawBar(opts);
   }
 
-  /** Doom-style ticker, top-left, in the chunky HUD font (newest message; wraps to 2 lines). */
+  /**
+   * Compact Doom-style message ticker: tiny glyphs (about half the old
+   * chunky height) at the top-left on a dark backing strip. The newest
+   * message wraps to up to 3 lines so long pickup/refusal/corroboration
+   * text is never cut; at most 4 rows total keeps the whole block in the
+   * top band, clear of the view centre. Collapsed repeats show "xN" on
+   * the last wrapped line.
+   */
   private drawTicker(): void {
-    const m = this.messages[this.messages.length - 1];
-    if (!m) return;
-    if (m.t < 0.4 && Math.floor(m.t * 20) % 2 === 0) return;
-    const ramp = MSG_RAMP[m.kind] ?? MSG_RAMP.info;
-    wrapText(m.text.toUpperCase(), 45, 2).forEach((line, i) => drawChunky(this.g, line, 2, 2 + i * 9, ramp));
+    let y = 1;
+    for (const row of tickerRows(this.messages)) {
+      if (row.t < 0.4 && Math.floor(row.t * 20) % 2 === 0) {
+        y += 7;
+        continue;
+      }
+      const ramp = MSG_RAMP[row.kind] ?? MSG_RAMP.info;
+      const w = measureText(row.line, 'tiny');
+      this.g.fillStyle = 'rgba(4,6,10,0.55)';
+      this.g.fillRect(1, y, w + 3, 6);
+      drawText(this.g, row.line, 2, y + 1, ramp[ramp.length - 2], 'tiny', null);
+      y += 7;
+    }
   }
 
   /**

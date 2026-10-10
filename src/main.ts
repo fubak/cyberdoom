@@ -1420,6 +1420,10 @@ class Game {
       fireLevel() {
         return g.renderer.fireLevel();
       },
+      /** LOOK: raw RGBA bytes of the next rendered 3D view (post-palette). */
+      captureView() {
+        return g.renderer.captureView();
+      },
       /** FEEL: median luma of the next rendered frame's centre band. */
       viewLuma() {
         return g.renderer.captureView().then((v) => {

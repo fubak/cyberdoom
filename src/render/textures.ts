@@ -65,6 +65,136 @@ function ensureTexture(t: THREE.Texture): THREE.Texture {
 const wall = (id: string, p: Painter) => makeTexture(id, TEX.wallW / RES, TEX.wallH / RES, p, true);
 const flat = (id: string, p: Painter) => makeTexture(id, TEX.flat / RES, TEX.flat / RES, p);
 
+/**
+ * Per-tile variants: the dominant walls/flats get `VARIANTS` extra baked
+ * copies (`<id>:v1..v4`), each repainted with a different seed and one or two
+ * mid-frequency wear features on top (patch plates, grime streaks, scuffs,
+ * cracks) plus a small hue/brightness wash. The renderer picks a variant per
+ * cell/face by hash, so no two adjacent tiles are pixel-identical — the
+ * shader cost stays flat (same draw shape, just more texture ids).
+ */
+const VARIANTS = 4;
+const variantWall = new Set<string>();
+const variantFlat = new Set<string>();
+const wallV = (id: string, p: Painter) => {
+  wall(id, p);
+  for (let v = 1; v <= VARIANTS; v++) wall(`${id}:v${v}`, (ctx) => { p(ctx); wallWear(ctx); });
+  variantWall.add(id);
+};
+const flatV = (id: string, p: Painter) => {
+  flat(id, p);
+  for (let v = 1; v <= VARIANTS; v++) flat(`${id}:v${v}`, (ctx) => { p(ctx); flatWear(ctx); });
+  variantFlat.add(id);
+};
+/** How many baked looks a base texture id has (base + variants), 0 if none. */
+export function variantCount(id: string): number {
+  return variantWall.has(id) || variantFlat.has(id) ? VARIANTS + 1 : 0;
+}
+
+/** Mid-frequency wear features layered on a wall variant (64x80 space). */
+function wallWear(p: PaintCtx): void {
+  const { g } = p;
+  const pick = p.rnd();
+  if (pick < 0.3) {
+    // riveted patch plate: a replaced panel, slightly off the base tone
+    const x = 4 + Math.floor(p.rnd() * 32);
+    const y = 6 + Math.floor(p.rnd() * 44);
+    const w = 14 + Math.floor(p.rnd() * 18);
+    const h = 10 + Math.floor(p.rnd() * 20);
+    noiseFill(p, [84, 78, 68], 12, 1, x, y, w, h);
+    seam(g, x - 1, y - 1, x + w + 1, y - 1);
+    seam(g, x - 1, y + h + 1, x + w + 1, y + h + 1);
+    seam(g, x - 1, y, x - 1, y + h);
+    seam(g, x + w + 1, y, x + w + 1, y + h);
+    bolt(g, x + 1, y + 1);
+    bolt(g, x + w - 3, y + 1);
+    bolt(g, x + 1, y + h - 3);
+    bolt(g, x + w - 3, y + h - 3);
+  } else if (pick < 0.6) {
+    // wide grime streak bleeding down from the top edge
+    const x = 6 + Math.floor(p.rnd() * 46);
+    vShade(g, 0, 34 + Math.floor(p.rnd() * 26), '12,9,6', 0.42, 0, x, 7 + Math.floor(p.rnd() * 6));
+    drip(g, x + 3, 4, 20 + Math.floor(p.rnd() * 30), '10,8,6');
+  } else if (pick < 0.85) {
+    // impact scuff: dark blot with chipped pale edges
+    const cx = 8 + Math.floor(p.rnd() * 48);
+    const cy = 12 + Math.floor(p.rnd() * 50);
+    for (let i = 0; i < 14; i++) {
+      g.fillStyle = `rgba(10,8,6,${0.35 + p.rnd() * 0.3})`;
+      g.fillRect(cx + Math.floor(p.rnd() * 10 - 5), cy + Math.floor(p.rnd() * 8 - 4), 2, 1);
+    }
+    for (let i = 0; i < 8; i++) {
+      g.fillStyle = 'rgba(225,215,200,0.5)';
+      g.fillRect(cx + Math.floor(p.rnd() * 12 - 6), cy + Math.floor(p.rnd() * 8 - 4), 1 / p.s, 1 / p.s);
+    }
+  } else {
+    // long stepped crack
+    const cx = 10 + Math.floor(p.rnd() * 44);
+    let x = cx;
+    for (let y = 8 + Math.floor(p.rnd() * 10); y < 74; y++) {
+      if (p.rnd() < 0.25) x += p.rnd() < 0.5 ? -1 : 1;
+      g.fillStyle = 'rgba(8,7,6,0.7)';
+      g.fillRect(x, y, 1 / p.s, 1 / p.s);
+    }
+  }
+  // faint per-variant hue/brightness wash so same-feature tiles still differ
+  const warm = p.rnd() < 0.5;
+  g.fillStyle = warm ? `rgba(255,214,170,${0.03 + p.rnd() * 0.05})` : `rgba(170,200,255,${0.03 + p.rnd() * 0.05})`;
+  g.fillRect(0, 0, 64, 80);
+}
+
+/** Mid-frequency wear features layered on a flat variant (64x64 space). */
+function flatWear(p: PaintCtx): void {
+  const { g } = p;
+  const pick = p.rnd();
+  if (pick < 0.35) {
+    // spill stain: irregular dark pool with a dried ring
+    const cx = 12 + p.rnd() * 40;
+    const cy = 12 + p.rnd() * 40;
+    for (let i = 0; i < 26; i++) {
+      const a = p.rnd() * Math.PI * 2;
+      const r = p.rnd() * (4 + p.rnd() * 8);
+      g.fillStyle = `rgba(12,9,5,${0.3 + p.rnd() * 0.25})`;
+      g.fillRect(cx + Math.cos(a) * r, cy + Math.sin(a) * r * 0.7, 2, 1);
+    }
+    g.fillStyle = 'rgba(30,22,10,0.5)';
+    for (let i = 0; i < 18; i++) {
+      const a = (i / 18) * Math.PI * 2;
+      g.fillRect(cx + Math.cos(a) * 9, cy + Math.sin(a) * 6.5, 1, 1);
+    }
+  } else if (pick < 0.65) {
+    // dragged-equipment scuff: two parallel worn lines with chipped edges
+    const y = 8 + p.rnd() * 46;
+    const x0 = 4 + p.rnd() * 20;
+    const len = 14 + p.rnd() * 30;
+    for (let i = 0; i < len; i++) {
+      g.fillStyle = `rgba(14,11,8,${0.4 - i / (len * 3)})`;
+      g.fillRect(x0 + i, y + (i % 5 === 4 ? 1 : 0), 1, 1);
+      g.fillRect(x0 + i, y + 4 + (i % 7 === 5 ? 1 : 0), 1, 1);
+    }
+  } else if (pick < 0.9) {
+    // pale cleaned/repoured patch breaking the tile pattern
+    const x = 6 + Math.floor(p.rnd() * 32);
+    const y = 6 + Math.floor(p.rnd() * 32);
+    const w = 12 + Math.floor(p.rnd() * 16);
+    const h = 10 + Math.floor(p.rnd() * 16);
+    noiseFill(p, [96, 90, 78], 10, 1, x, y, w, h);
+    seam(g, x - 1, y - 1, x + w + 1, y - 1);
+    seam(g, x - 1, y + h + 1, x + w + 1, y + h + 1);
+  } else {
+    // hairline crack across the tile
+    let x = 4 + Math.floor(p.rnd() * 20);
+    for (let y = 4 + Math.floor(p.rnd() * 8); y < 60; y++) {
+      if (p.rnd() < 0.3) x += p.rnd() < 0.5 ? -1 : 1;
+      g.fillStyle = 'rgba(8,7,6,0.6)';
+      g.fillRect(x, y, 1 / p.s, 1 / p.s);
+    }
+  }
+  const warm = p.rnd() < 0.5;
+  g.fillStyle = warm ? `rgba(255,210,165,${0.03 + p.rnd() * 0.05})` : `rgba(165,195,255,${0.03 + p.rnd() * 0.05})`;
+  g.fillRect(0, 0, 64, 64);
+}
+
 const ROLE_COLORS: Record<string, { stripe: string; dark: string; light: string }> = {
   admin: { stripe: '#c81e14', dark: '#4a0a06', light: '#ff7a5a' },
   analyst: { stripe: '#2458d8', dark: '#0a1a48', light: '#8ab4ff' },
@@ -241,7 +371,7 @@ export function buildTextures(jobs = false): void {
   textureJobsDone ||= jobs;
 
   // Office tech-panel wall: two steel plates, cable tray, cyan status strip.
-  wall('wall-panel', (p) => {
+  wallV('wall-panel', (p) => {
     const { g } = p;
     noiseFill(p, [52, 46, 40], 10);
     steelPanel(p, 1, 2, 30, 44, [104, 98, 88]);
@@ -257,9 +387,9 @@ export function buildTextures(jobs = false): void {
         g.fillRect(x, y, 1 / p.s, 1 / p.s);
       }
     }
-    // label plate on the left plate
-    bevel(g, 6, 10, 20, 9, '#2a2e38', '#5a6070', '#101218', true);
-    drawText(g, 'NET', 10, 12, '#9ab0c8', 'tiny', null);
+    // label plate on the left plate: etched network id tag
+    bevel(g, 6, 10, 24, 9, '#2a2e38', '#5a6070', '#101218', true);
+    drawText(g, 'NET-04', 8, 12, '#9ab0c8', 'tiny', null);
     for (const [x, y] of [[3, 4], [27, 4], [3, 42], [27, 42], [35, 4], [59, 4], [35, 42], [59, 42]]) rivet(g, x, y);
     // status light strip (fullbright)
     g.fillStyle = '#0a0c10';
@@ -294,8 +424,8 @@ export function buildTextures(jobs = false): void {
     seam(g, 32, 2, 32, 45);
     for (let x = 6; x < 62; x += 7) bolt(g, x, 46.5);
     // inspection tag + pin LEDs: colour accents that read at 4K point-blank
-    bevel(g, 52, 12, 8, 6, '#7a5a10', '#ffd040', '#241a04');
-    drawText(g, 'QA', 53, 13, '#181004', 'tiny', null);
+    bevel(g, 50, 12, 11, 6, '#7a5a10', '#ffd040', '#241a04');
+    drawText(g, 'QA-1', 51, 13, '#181004', 'tiny', null);
     for (const [lx, lc] of [[22, '#ffb010'], [25, '#2cff5a']] as const) {
       g.fillStyle = '#0a0c10';
       g.fillRect(lx - 1, 34, 3, 3);
@@ -314,7 +444,7 @@ export function buildTextures(jobs = false): void {
 
   // Office utility variant: one tall service plate, conduit column, SVC
   // stencil — the alt family mixed into wall-panel runs.
-  wall('wall-panel2', (p) => {
+  wallV('wall-panel2', (p) => {
     const { g, glow } = p;
     const u = 1 / p.s;
     noiseFill(p, [46, 42, 38], 9);
@@ -339,8 +469,8 @@ export function buildTextures(jobs = false): void {
       glow.fillRect(50, y + 5, 2, 1);
     }
     // stencil service tag on the big plate
-    bevel(g, 6, 8, 22, 10, '#262a32', '#545c6a', '#0e1014');
-    drawText(g, 'SVC', 12, 11, '#b8c4d8', 'tiny', null);
+    bevel(g, 6, 8, 24, 10, '#262a32', '#545c6a', '#0e1014');
+    drawText(g, 'SVC-2', 9, 11, '#b8c4d8', 'tiny', null);
     // low vent band + fasteners
     for (let y = 56; y < 62; y += 2) {
       g.fillStyle = '#14161c';
@@ -416,7 +546,7 @@ export function buildTextures(jobs = false): void {
   });
 
   // Server rack: dark chassis, 2U units, drive bays, fullbright blinkenlights.
-  wall('wall-server', (p) => {
+  wallV('wall-server', (p) => {
     const { g, glow } = p;
     noiseFill(p, [22, 24, 30], 8);
     // rails
@@ -470,7 +600,7 @@ export function buildTextures(jobs = false): void {
   });
 
   // Concrete block corridor wall with a painted stripe.
-  wall('wall-brick', (p) => {
+  wallV('wall-brick', (p) => {
     const { g } = p;
     noiseFill(p, [34, 30, 28], 8);
     for (let row = 0; row < 8; row++) {
@@ -544,7 +674,7 @@ export function buildTextures(jobs = false): void {
   });
 
   // Second office family: long horizontal deck plates, cable raceway, kick.
-  wall('wall-tech', (p) => {
+  wallV('wall-tech', (p) => {
     const { g, glow } = p;
     const u = 1 / p.s;
     noiseFill(p, [44, 48, 56], 10);
@@ -576,9 +706,9 @@ export function buildTextures(jobs = false): void {
     seam(g, 48, 21, 48, 36);
     for (let x = 6; x < 62; x += 11) bolt(g, x, 20.5);
     for (let x = 9; x < 62; x += 14) bolt(g, x, 37.5);
-    // rack id tag on the middle deck
-    bevel(g, 26, 39, 12, 7, '#1d232e', '#4a586e', '#0a0c10');
-    drawText(g, 'R7', 29, 41, '#8fd0ff', 'tiny', null);
+    // rack id tag on the middle deck: etched asset plate
+    bevel(g, 23, 39, 19, 7, '#1d232e', '#4a586e', '#0a0c10');
+    drawText(g, 'RK-07', 25, 41, '#8fd0ff', 'tiny', null);
     cableDrop(g, 18, 47, 60, 5, '#30a0d8', 8);
     drip(g, 8, 19, 22, '10,12,16');
     vShade(g, 0, 5, '6,8,12', 0.3, 0);
@@ -587,7 +717,7 @@ export function buildTextures(jobs = false): void {
   });
 
   // Industrial family: vertical ribbed plating, conduit run, hazard kick.
-  wall('wall-ribs', (p) => {
+  wallV('wall-ribs', (p) => {
     const { g } = p;
     const u = 1 / p.s;
     noiseFill(p, [38, 34, 28], 10);
@@ -640,7 +770,7 @@ export function buildTextures(jobs = false): void {
   });
 
   // Olive utility-brick variant with a painted wayfinding stripe.
-  wall('wall-brick2', (p) => {
+  wallV('wall-brick2', (p) => {
     const { g } = p;
     noiseFill(p, [30, 32, 26], 8);
     for (let row = 0; row < 8; row++) {
@@ -687,7 +817,7 @@ export function buildTextures(jobs = false): void {
   for (const role of Object.keys(ROLE_COLORS)) doorTexture(`door:${role}`, role);
 
   // Raised data-centre floor tiles (2x2 per cell) with perforated panels.
-  flat('floor', (p) => {
+  flatV('floor', (p) => {
     const { g } = p;
     noiseFill(p, [40, 32, 26], 6);
     for (const [x, y] of [[0, 0], [32, 0], [0, 32], [32, 32]]) {
@@ -721,7 +851,7 @@ export function buildTextures(jobs = false): void {
   });
 
   // Cold machine-room deck: dark steel plates, perforation rows, cable cuts.
-  flat('floor-grid', (p) => {
+  flatV('floor-grid', (p) => {
     const { g } = p;
     noiseFill(p, [26, 30, 38], 8);
     for (const [x, y] of [[0, 0], [32, 0], [0, 32], [32, 32]]) {
@@ -757,7 +887,7 @@ export function buildTextures(jobs = false): void {
   });
 
   // Worn industrial concrete: warm brown, expansion joints, oil stains.
-  flat('floor-rust', (p) => {
+  flatV('floor-rust', (p) => {
     const { g } = p;
     noiseFill(p, [72, 54, 36], 14);
     for (let i = 0; i < 60; i++) {
@@ -801,8 +931,8 @@ export function buildTextures(jobs = false): void {
     g.fillRect(0, 31, 64, 2);
     grime(p, 'rgba(0,0,0,0.35)', 160);
   };
-  flat('ceil', ceilBase);
-  flat('ceil-light', (p) => {
+  flatV('ceil', ceilBase);
+  flatV('ceil-light', (p) => {
     ceilBase(p);
     const { g, glow } = p;
     g.fillStyle = '#9aa0a8';
@@ -815,8 +945,36 @@ export function buildTextures(jobs = false): void {
     glow.fillRect(14, 8, 36, 48);
   });
 
+  // Cable tray / duct access cell: mixed into plain ceilings so large
+  // overhead runs read as authored infrastructure, not a tile wallpaper.
+  flat('ceil-duct', (p) => {
+    ceilBase(p);
+    const { g } = p;
+    // recessed tray crossing the cell, with cable bundles and hanger straps
+    g.fillStyle = '#12151c';
+    g.fillRect(0, 20, 64, 24);
+    g.fillStyle = '#2e3540';
+    g.fillRect(0, 20, 64, 2);
+    g.fillRect(0, 42, 64, 2);
+    const cols = ['#c84830', '#30a0d8', '#d8b018', '#40a050', '#8a8f9c'];
+    for (let k = 0; k < 5; k++) {
+      g.fillStyle = cols[k];
+      g.fillRect(0, 24 + k * 3, 64, 2);
+      g.fillStyle = 'rgba(0,0,0,0.4)';
+      g.fillRect(0, 25 + k * 3, 64, 1);
+    }
+    for (const x of [10, 32, 54]) {
+      g.fillStyle = '#0a0c10';
+      g.fillRect(x, 19, 3, 26);
+      g.fillStyle = '#5a6474';
+      g.fillRect(x, 19, 3, 1);
+      rivet(g, x + 1, 21);
+    }
+    grime(p, 'rgba(0,0,0,0.4)', 60);
+  });
+
   // Dead fluorescent panel: dusty diffuser, no glow.
-  flat('ceil-light-off', (p) => {
+  flatV('ceil-light-off', (p) => {
     ceilBase(p);
     const { g } = p;
     g.fillStyle = '#3a3c40';
@@ -970,19 +1128,53 @@ export function doorTextureFor(tex: string, accessRole: string | undefined): THR
   return textureOr(tex, 'door');
 }
 
-/** Zone wayfinding placard decal: plate + word, painted lazily per word. */
+/**
+ * Zone wayfinding placard decal, painted lazily per word. Authored like a
+ * real directory sign: a mounted plate with a lit header band carrying the
+ * zone code, a room number and a direction chevron, plus the mounting
+ * shadow line that throws it off the wall.
+ */
 function signDecal(word: string): void {
   makeTexture(`decal-sign:${word}`, TEX.wallW / RES, TEX.wallH / RES, (p) => {
     const { g } = p;
-    bevel(g, 8, 15, 48, 17, '#16202c', '#4a6a90', '#080c12');
-    g.fillStyle = '#24507e';
-    g.fillRect(10, 17, 44, 13);
-    g.fillStyle = '#0e2236';
-    g.fillRect(10, 28, 44, 2);
+    const room = 100 + (hashStr(word) % 400);
+    // drop shadow then the plate itself
+    g.fillStyle = 'rgba(4,5,8,0.55)';
+    g.fillRect(9, 16, 48, 21);
+    bevel(g, 8, 14, 48, 21, '#11161e', '#3a4a62', '#05070a');
+    // header band: zone code on a lit stripe
+    g.fillStyle = '#2a5a94';
+    g.fillRect(9, 15, 46, 9);
+    g.fillStyle = '#4a8ac8';
+    g.fillRect(9, 15, 46, 1);
     const w = measureText(word, 'small');
-    if (w <= 42) drawText(g, word, 32 - Math.floor(w / 2), 19, '#d8ecff', 'small', null);
-    else drawText(g, word, 32 - Math.floor(measureText(word, 'tiny') / 2), 21, '#d8ecff', 'tiny', null);
-    for (const [x, y] of [[10, 17], [53, 17], [10, 30], [53, 30]]) rivet(g, x, y);
+    if (w <= 44) drawText(g, word, 32 - Math.floor(w / 2), 16, '#e8f2ff', 'small', '#122030');
+    else drawText(g, word, 32 - Math.floor(measureText(word, 'tiny') / 2), 17, '#e8f2ff', 'tiny', '#122030');
+    // room number row with a direction chevron — reads as a directory plate
+    g.fillStyle = '#1a2430';
+    g.fillRect(9, 25, 46, 9);
+    drawText(g, `RM-${room}`, 12, 26, '#8fb4d8', 'tiny', null);
+    const ax = 32 + Math.floor(measureText(`RM-${room}`, 'tiny') / 2) + 8;
+    g.fillStyle = '#d8b018';
+    for (let i = 0; i < 5; i++) g.fillRect(ax + i, 28 - Math.abs(i - 2), 1, 1 + Math.abs(i - 2) * 2);
+    for (const [x, y] of [[9, 15], [54, 15], [9, 33], [54, 33]]) rivet(g, x, y);
+  }, false);
+}
+
+/**
+ * Door jamb number plate, painted lazily per door id so every doorway gets
+ * its own deliberate number ('D-214') instead of generic hazard stripes.
+ */
+function doorPlateDecal(doorId: string): void {
+  const num = 100 + (hashStr(doorId) % 800);
+  makeTexture(`decal-door:${doorId}`, TEX.wallW / RES, TEX.wallH / RES, (p) => {
+    const { g } = p;
+    g.fillStyle = 'rgba(4,5,8,0.5)';
+    g.fillRect(20, 7, 25, 10);
+    bevel(g, 19, 6, 25, 10, '#10141a', '#4a5468', '#05070a');
+    drawText(g, `D-${num}`, 22, 8, '#c8d8ec', 'tiny', null);
+    rivet(g, 20, 7);
+    rivet(g, 42, 7);
   }, false);
 }
 
@@ -1021,6 +1213,10 @@ export function decalTexture(id: string): THREE.Texture | null {
     else if (id.startsWith('decal-poster:')) posterDecal(id.slice(13));
     t = textureRegistry.get(id);
   }
+  if (!t && id.startsWith('decal-door:')) {
+    doorPlateDecal(id.slice(11));
+    t = textureRegistry.get(id);
+  }
   return t ? ensureTexture(t) : null;
 }
 
@@ -1037,18 +1233,18 @@ export interface WallTheme {
 }
 
 const THEMES: Record<string, WallTheme> = {
-  // warm office: beige wainscot walls, PHISH posters, OPS placards
-  office: { alts: ['wall-tech', 'wall-panel2'], decals: ['decal-vent', 'decal-cable', 'decal-poster:PHISH', 'decal-sign:OPS'], tint: [1.03, 0.98, 0.9], floor: 'floor' },
-  // cool bullpen: bluer light, SEC placards, 2FA posters
-  bullpen: { alts: ['wall-tech', 'wall-panel2'], decals: ['decal-cable', 'decal-vent', 'decal-sign:SEC', 'decal-poster:2FA'], tint: [0.93, 0.99, 1.07], floor: 'floor' },
-  // cold machine room: ribbed walls, IDC placards, raised deck floor
-  datacenter: { alts: ['wall-ribs'], decals: ['decal-cable', 'decal-vent', 'decal-sign:IDC', 'decal-poster:SIEM'], tint: [0.9, 0.97, 1.08], floor: 'floor-grid' },
-  // green-tinted SOC/NOC: SOC placards, SIEM posters, deck floor
-  noc: { alts: ['wall-tech'], decals: ['decal-cable', 'decal-sign:SOC', 'decal-poster:SIEM', 'decal-vent'], tint: [0.9, 1.03, 0.94], floor: 'floor-grid' },
-  // rusty plant: ribbed + utility brick walls, CAUTION placards, worn concrete
-  industrial: { alts: ['wall-ribs', 'wall-brick2'], decals: ['decal-haz', 'decal-vent', 'decal-sign:SUB', 'decal-poster:LOCK'], tint: [1.07, 0.95, 0.84], floor: 'floor-rust' },
-  // red-lit secure enclave: AUTH placards, hazard warnings
-  vault: { alts: ['wall-ribs'], decals: ['decal-haz', 'decal-sign:AUTH', 'decal-poster:LOCK', 'decal-vent'], tint: [1.07, 0.92, 0.92], floor: 'floor-grid' },
+  // warm office (early tier): beige wainscot walls, PHISH posters, OPS placards
+  office: { alts: ['wall-tech', 'wall-panel2'], decals: ['decal-vent', 'decal-cable', 'decal-poster:PHISH', 'decal-sign:OPS'], tint: [1.14, 1.0, 0.84], floor: 'floor' },
+  // green bullpen (early tier): olive utility brick, SEC placards, 2FA posters
+  bullpen: { alts: ['wall-tech', 'wall-panel2', 'wall-brick2'], decals: ['decal-cable', 'decal-vent', 'decal-sign:SEC', 'decal-poster:2FA'], tint: [0.94, 1.08, 0.85], floor: 'floor' },
+  // cold machine room (mid tier): ribbed walls, IDC placards, raised deck floor
+  datacenter: { alts: ['wall-ribs'], decals: ['decal-cable', 'decal-vent', 'decal-sign:IDC', 'decal-poster:SIEM'], tint: [0.82, 0.97, 1.18], floor: 'floor-grid' },
+  // violet-tinted SOC/NOC (late tier): SOC placards, SIEM posters, deck floor
+  noc: { alts: ['wall-tech', 'wall-panel2'], decals: ['decal-cable', 'decal-sign:SOC', 'decal-poster:SIEM', 'decal-vent'], tint: [0.94, 0.9, 1.16], floor: 'floor-grid' },
+  // rust-amber plant (mid/late tier): ribbed + utility brick walls, CAUTION placards, worn concrete
+  industrial: { alts: ['wall-ribs', 'wall-brick2'], decals: ['decal-haz', 'decal-vent', 'decal-sign:SUB', 'decal-poster:LOCK'], tint: [1.16, 0.95, 0.74], floor: 'floor-rust' },
+  // red-lit secure enclave (late tier): AUTH placards, hazard warnings
+  vault: { alts: ['wall-ribs'], decals: ['decal-haz', 'decal-sign:AUTH', 'decal-poster:LOCK', 'decal-vent'], tint: [1.2, 0.88, 0.9], floor: 'floor-grid' },
 };
 
 const THEME_NAMES = Object.keys(THEMES);

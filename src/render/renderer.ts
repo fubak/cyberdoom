@@ -8,7 +8,7 @@ import { buildPaletteLut } from './palette';
 import { genWorkerCount } from './genpool';
 import { buildSprites, prewarmLazySpriteFrames, spriteSets, type SpriteSet } from './sprites';
 import { LOOM_CAP_FRAC, LOOM_MAX_SCALE, RISE_MAX_DIST, loomTargetH, riseBase } from './melee';
-import { WALL_H, buildTextures, decalTexture, doorTextureFor, hashStr, lookTheme, textureOr, textureRegistry } from './textures';
+import { WALL_H, buildTextures, decalTexture, doorTextureFor, hashStr, lookTheme, textureOr, textureRegistry, variantCount } from './textures';
 import { RES, STATUS_H, VIEW3D_H, VIEW_H, VIEW_W } from './res';
 
 export { VIEW_W, VIEW_H, STATUS_H, VIEW3D_H } from './res';
@@ -34,16 +34,19 @@ const EYE_H = 0.6;
 const WORLD_VS = /* glsl */ `
 attribute float shade;
 attribute float strobe;
+attribute vec3 tintv;
 varying vec2 vUv;
 varying float vShade;
 varying float vDist;
 varying vec2 vWorld;
 varying float vStrobe;
+varying vec3 vTint;
 void main() {
   vUv = uv;
   vWorld = (modelMatrix * vec4(position, 1.0)).xz;
   vShade = shade;
   vStrobe = strobe;
+  vTint = tintv;
   vec4 mv = modelViewMatrix * vec4(position, 1.0);
   vDist = -mv.z;
   gl_Position = projectionMatrix * mv;
@@ -66,6 +69,7 @@ varying vec2 vUv;
 varying float vShade;
 varying float vDist;
 varying float vStrobe;
+varying vec3 vTint;
 void main() {
   vec4 t = texture2D(map, vUv * uUvScale + uUvOffset);
   if (t.a < 0.25) discard;
@@ -102,7 +106,11 @@ void main() {
     // while lit faces still carry most of their light to ~10. uFloor is the
     // only minimum — sprites keep their own readability floors while
     // walls/flats may fall to real darkness.
-    float fade = 0.115 + max(0.0, 0.62 - s) * 2.6;
+    // past ~8 tiles the falloff steepens into Doom's stepped colormap crush:
+    // lit faces carry ~68% at 8 tiles then drop to near-black before 10, so
+    // long corridors end in darkness instead of grey haze. Gameplay-critical
+    // sprites keep their own uFloor readability minimums.
+    float fade = 0.115 + max(0.0, 0.62 - s) * 2.6 + max(0.0, vDist - 8.0) * 0.04;
     float dim = s * (1.6 - vDist * fade);
     L = max(dim, uFloor);
     L = clamp(L, 0.0, 1.0);
@@ -114,7 +122,7 @@ void main() {
   // distance (overrides banding like Doom's fullbright muzzle-flash frame)
   float reach = (1.0 - clamp(vDist / 14.0, 0.0, 0.92)) * uFire.a;
   L = min(L + reach, 1.5);
-  vec3 c = mix(min(t.rgb * uTint * L * uGain, vec3(1.0)), vec3(1.0), uFlash);
+  vec3 c = mix(min(t.rgb * uTint * vTint * L * uGain, vec3(1.0)), vec3(1.0), uFlash);
   c = min(c + uFire.rgb * reach * 0.4, vec3(1.0));
   c *= sfl;
   gl_FragColor = vec4(c, 1.0);
@@ -205,16 +213,18 @@ class GeoBuilder {
   uv: number[] = [];
   shade: number[] = [];
   strobe: number[] = [];
+  tint: number[] = [];
   idx: number[] = [];
 
-  /** Quad from 4 corners (CCW from front) with uvs + per-corner shade. `st` = strobe phase id. */
-  quad(p: number[][], uv: number[][], s: number[], st = 0): void {
+  /** Quad from 4 corners (CCW from front) with uvs + per-corner shade. `st` = strobe phase id, `tv` = per-face hue jitter. */
+  quad(p: number[][], uv: number[][], s: number[], st = 0, tv: [number, number, number] = [1, 1, 1]): void {
     const b = this.pos.length / 3;
     for (let i = 0; i < 4; i++) {
       this.pos.push(p[i][0], p[i][1], p[i][2]);
       this.uv.push(uv[i][0], uv[i][1]);
       this.shade.push(s[i]);
       this.strobe.push(st);
+      this.tint.push(tv[0], tv[1], tv[2]);
     }
     this.idx.push(b, b + 1, b + 2, b, b + 2, b + 3);
   }
@@ -225,10 +235,42 @@ class GeoBuilder {
     g.setAttribute('uv', new THREE.Float32BufferAttribute(this.uv, 2));
     g.setAttribute('shade', new THREE.Float32BufferAttribute(this.shade, 1));
     g.setAttribute('strobe', new THREE.Float32BufferAttribute(this.strobe, 1));
+    g.setAttribute('tintv', new THREE.Float32BufferAttribute(this.tint, 3));
     g.setIndex(this.idx);
     g.computeBoundingSphere();
     return g;
   }
+}
+
+/** Deterministic per-cell hash shared by every per-tile pick. */
+const cellHash = (tx: number, ty: number, salt: number, seed: number) =>
+  (Math.imul(tx * 2 + 1, 73856093) ^ Math.imul(ty * 2 + 1, 19349663) ^ Math.imul(salt, 83492791) ^ seed) >>> 0;
+
+/**
+ * Small deterministic per-face hue/brightness jitter (±5%) so two adjacent
+ * tiles that drew the same texture variant still aren't pixel-identical.
+ */
+const faceTint = (h: number): [number, number, number] => [
+  0.96 + ((h >>> 5) % 9) / 100,
+  0.96 + ((h >>> 11) % 9) / 100,
+  0.96 + ((h >>> 17) % 9) / 100,
+];
+
+/** Per-face brightness jitter (±7%), applied through the shade attribute. */
+const faceShade = (h: number) => 0.93 + ((h >>> 23) % 15) / 100;
+
+/** Flats have no lettering, so the 8 dihedral transforms are all safe —
+ *  each tile can draw the same texture rotated/mirrored for free variety. */
+function flatUv(rot: number, mirror: boolean): number[][] {
+  let uvs = [
+    [0, 1],
+    [1, 1],
+    [1, 0],
+    [0, 0],
+  ];
+  if (mirror) uvs = uvs.map(([u, v]) => [1 - u, v]);
+  for (let k = 0; k < rot; k++) uvs = uvs.map(([u, v]) => [1 - v, u]);
+  return uvs;
 }
 
 const DIRS: [number, number][] = [[1, 0], [-1, 0], [0, 1], [0, -1]];
@@ -460,7 +502,7 @@ export class Renderer {
     };
 
     const H = WALL_H;
-    const wallFace = (b: GeoBuilder, tx: number, ty: number, nx: number, nz: number, shade: number, st = 0) => {
+    const wallFace = (b: GeoBuilder, tx: number, ty: number, nx: number, nz: number, shade: number, st = 0, tv?: [number, number, number]) => {
       const cx = tx + 0.5 + nx * 0.5;
       const cz = ty + 0.5 + nz * 0.5;
       const rx = nz;
@@ -474,10 +516,11 @@ export class Renderer {
         [[0, 0], [1, 0], [1, 1], [0, 1]],
         [s * 0.8, s * 0.8, s, s],
         st,
+        tv,
       );
     };
     // decal overlays sit a hair off the wall face so they never z-fight
-    const decalFace = (b: GeoBuilder, tx: number, ty: number, nx: number, nz: number, shade: number, st = 0) => {
+    const decalFace = (b: GeoBuilder, tx: number, ty: number, nx: number, nz: number, shade: number, st = 0, tv?: [number, number, number]) => {
       const cx = tx + 0.5 + nx * (0.5 + 0.014);
       const cz = ty + 0.5 + nz * (0.5 + 0.014);
       const rx = nz;
@@ -490,6 +533,7 @@ export class Renderer {
         [[0, 0], [1, 0], [1, 1], [0, 1]],
         [s * 0.8, s * 0.8, s, s],
         st,
+        tv,
       );
     };
 
@@ -509,19 +553,32 @@ export class Renderer {
             const st = strobeAt(tx + dx, ty + dz);
             if (isTrack) {
               wallFace(builder('doortrak', textureOr('doortrak')), tx, ty, dx, dz, shade, st);
+              // door number plate on one jamb of each doorway (authored
+              // signage, keyed to the door so both its tracks agree)
+              if (dx + dz > 0 && n.doorId) {
+                const dp = decalTexture(`decal-door:${n.doorId}`);
+                if (dp) decalFace(builder(`d:door:${n.doorId}`, dp), tx, ty, dx, dz, shade, st);
+              }
               continue;
             }
             // deterministic per-face variant: mix in the theme's alt wall
-            // family, and overlay a themed decal plate on ~1/3 of faces
+            // family, then pick one of the baked per-tile variants and a
+            // small hue/brightness jitter so no two adjacent tiles match
             const h = (Math.imul(tx * 2 + dx + 1, 73856093) ^ Math.imul(ty * 2 + dz + 1, 19349663) ^ seed) >>> 0;
             let texId = cell.tex;
             if (texId === 'wall-panel' && h % 4 === 0) texId = theme.alts[(h >>> 4) % theme.alts.length];
             else if (texId === 'wall-brick' && h % 6 === 0) texId = 'wall-brick2';
-            wallFace(builder(`w:${texId}`, textureOr(texId)), tx, ty, dx, dz, shade, st);
-            if (DECALABLE.has(texId) && (h >>> 8) % 3 === 0) {
+            const nv = variantCount(texId);
+            if (nv > 1 && (h >>> 16) % nv > 0) texId = `${texId}:v${(h >>> 16) % nv}`;
+            // wall-secret keeps the sector shade but no variant/jitter/tint:
+            // the misaligned panel IS the secret-door tell and must stay legible
+            const secret = texId === 'wall-secret';
+            const jit = secret ? shade : shade * faceShade(h);
+            wallFace(builder(`w:${texId}`, textureOr(texId)), tx, ty, dx, dz, jit, st, secret ? [1, 1, 1] : faceTint(h));
+            if (DECALABLE.has(texId.split(':')[0]) && (h >>> 8) % 3 === 0) {
               const did = theme.decals[(h >>> 12) % theme.decals.length];
               const dt = decalTexture(did);
-              if (dt) decalFace(builder(`d:${did}`, dt), tx, ty, dx, dz, shade, st);
+              if (dt) decalFace(builder(`d:${did}`, dt), tx, ty, dx, dz, jit, st, faceTint(h));
             }
           }
           continue;
@@ -533,8 +590,11 @@ export class Renderer {
           for (const [dx, dz] of DIRS) {
             const n = map.cellAt(tx + dx, ty + dz);
             if (!n || n.kind === 'wall' || n.kind === 'door') continue;
-            // door faces are inset slightly so the jamb tracks show
-            wallFace(b, tx, ty, dx, dz, lightAt(tx + dx, ty + dz), strobeAt(tx + dx, ty + dz));
+            // door faces are inset slightly so the jamb tracks show; secret
+            // doors skip jitter/tint so the misaligned tell stays legible
+            const dh = cellHash(tx, ty, dx * 3 + dz * 5 + 7, seed);
+            const dl = lightAt(tx + dx, ty + dz);
+            wallFace(b, tx, ty, dx, dz, cell.secret ? dl : dl * faceShade(dh), strobeAt(tx + dx, ty + dz), cell.secret ? [1, 1, 1] : faceTint(dh));
           }
           b.quad(
             [[tx, 0.002, ty], [tx + 1, 0.002, ty], [tx + 1, 0.002, ty + 1], [tx, 0.002, ty + 1]],
@@ -558,19 +618,42 @@ export class Renderer {
         const cellFloor = cell.kind === 'exit' ? 'exit' : textureRegistry.get(cell.tex) && cell.kind === 'floor' ? cell.tex : 'floor';
         const floorTex = cellFloor === 'floor' ? theme.floor : cellFloor;
         const st = strobeAt(tx, ty);
-        builder(`f:${floorTex}`, textureOr(floorTex, 'floor')).quad(
+        const fh = cellHash(tx, ty, 11, seed);
+        let fTex = floorTex;
+        const nfv = variantCount(fTex);
+        if (nfv > 1 && fh % nfv > 0) fTex = `${fTex}:v${fh % nfv}`;
+        const fshade = s.map((v) => v * faceShade(fh));
+        builder(`f:${fTex}`, textureOr(fTex, 'floor')).quad(
           [[tx, 0, ty], [tx + 1, 0, ty], [tx + 1, 0, ty + 1], [tx, 0, ty + 1]],
-          [[0, 1], [1, 1], [1, 0], [0, 0]],
-          s,
+          flatUv((fh >>> 3) % 4, ((fh >>> 5) & 1) === 1),
+          fshade,
           st,
+          faceTint(fh),
         );
         const key = `${tx},${ty}`;
-        const ceilTex = this.lamps.has(key) ? 'ceil-light' : this.deadLamps.has(key) ? 'ceil-light-off' : 'ceil';
+        const ch = cellHash(tx, ty, 23, seed);
+        // occasional cable-tray cell keeps big ceilings authored, not tiled
+        let ceilTex = this.lamps.has(key)
+          ? 'ceil-light'
+          : this.deadLamps.has(key)
+            ? 'ceil-light-off'
+            : ch % 9 === 0
+              ? 'ceil-duct'
+              : 'ceil';
+        const ncv = variantCount(ceilTex);
+        if (ncv > 1 && (ch >>> 6) % ncv > 0) ceilTex = `${ceilTex}:v${(ch >>> 6) % ncv}`;
+        // Ceiling shade tapers with sector light: dim corridors keep a
+        // slightly deeper ceiling than before (shadows, not grey rooms),
+        // while lit halls get a brighter, visibly authored ceiling — this is
+        // what keeps start-view/main-hall ceilings off flat black without
+        // lifting the readability floor in dark pockets.
+        const ceilFactor = (v: number) => (v < 0.55 ? 0.74 : 0.74 + (v - 0.55) * 0.5);
         builder(`c:${ceilTex}`, textureOr(ceilTex, 'ceil')).quad(
           [[tx, H, ty], [tx + 1, H, ty], [tx + 1, H, ty + 1], [tx, H, ty + 1]],
-          [[0, 1], [1, 1], [1, 0], [0, 0]],
-          s.map((v) => v * 0.78),
+          flatUv((ch >>> 3) % 4, ((ch >>> 5) & 1) === 1),
+          s.map((v) => v * ceilFactor(v) * faceShade(ch)),
           st,
+          faceTint(ch),
         );
         if (cell.kind === 'exit') this.addStatic('fx-exit', tx + 0.5, ty + 0.5, H - 0.26, L);
       }
@@ -590,6 +673,8 @@ export class Renderer {
     if (!this.planeGeo.getAttribute('shade')) this.planeGeo.setAttribute('shade', shade);
     if (!this.planeGeo.getAttribute('strobe'))
       this.planeGeo.setAttribute('strobe', new THREE.Float32BufferAttribute(new Float32Array(this.planeGeo.attributes.position.count), 1));
+    if (!this.planeGeo.getAttribute('tintv'))
+      this.planeGeo.setAttribute('tintv', new THREE.Float32BufferAttribute(new Float32Array(this.planeGeo.attributes.position.count * 3).fill(1), 3));
     this.spriteGroup.add(mesh);
     return { mesh, mat };
   }
