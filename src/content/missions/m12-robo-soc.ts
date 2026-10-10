@@ -133,13 +133,13 @@ export const m12: Mission = {
       id: 'rule-svc', kind: 'console', x: 2.5, y: 11.5, sprite: 'console',
       tags: ['rule-evidence'],
       log: 'R1 RULE CARD\nFires on >3 failed logins / 10 min / source.\n412 alerts/day, all svc-scan.',
-      inspect: { label: 'Rule R1: failed-login storm', detail: 'Every alert: svc-scan vs DC-02, exactly every 90 s, 24/7 since a config push. Metronome-steady against one target — the stored password is stale. This is a misconfigured service account, not an attack.', category: 'item', objectives: ['4.4'] },
+      inspect: { label: 'Rule R1: failed-login storm', detail: 'Every alert: svc-scan vs DC-02, exactly every 90 s, 24/7, starting right after a config push.', category: 'item', objectives: ['4.4'] },
     },
     {
       id: 'rule-spray', kind: 'console', x: 5.5, y: 11.5, sprite: 'console',
       tags: ['rule-evidence'],
       log: 'R2 RULE CARD\nFires on auth failures across >=10 accounts / source.\n3 alerts today, still rising.',
-      inspect: { label: 'Rule R2: auth anomaly', detail: 'TODAY: 10.66.6.66 failed exactly once per account across 41 accounts in 20 min — password spraying, still in progress. Per-account counts stay tiny; the breadth is the tell.', category: 'item', objectives: ['4.4'] },
+      inspect: { label: 'Rule R2: auth anomaly', detail: 'TODAY: 10.66.6.66 failed exactly once per account across 41 accounts in 20 min.', category: 'item', objectives: ['4.4'] },
     },
     {
       id: 'rule-beacon', kind: 'console', x: 7.5, y: 11.5, sprite: 'console',
@@ -152,43 +152,43 @@ export const m12: Mission = {
       id: 'tune-r1', kind: 'console', x: 2.5, y: 13.5, sprite: 'console',
       tags: ['tune'], group: 'r1',
       log: 'R1 kept. svc-scan re-credentialed; exception scoped to svc-scan@DC-02 only. Noise gone, coverage kept.',
-      inspect: { label: 'R1: fix the account, narrow exception', detail: 'Re-credential svc-scan and add an exception for that account/target pair only. The rule still catches real brute force everywhere else.', category: 'item', objectives: ['4.4'] },
+      inspect: { label: 'R1: fix the account, narrow exception', detail: 'Re-credential svc-scan and add an exception for that account/target pair only.', category: 'item', objectives: ['4.4'] },
     },
     {
       id: 'kill-r1', kind: 'console', x: 4.5, y: 13.5, sprite: 'console',
       tags: ['wrong'], group: 'r1',
       log: 'Wrong call: R1 disabled outright. Tomorrow\u2019s brute-force attempt has no failed-login coverage — the fix was the stale account, not silence.',
-      inspect: { label: 'R1: disable the rule', detail: 'Kills all 412 alerts — and every future failed-login alert, real ones included.', category: 'item', objectives: ['4.4'] },
+      inspect: { label: 'R1: disable the rule', detail: 'Disables the rule and stops all failed-login alerts from it.', category: 'item', objectives: ['4.4'] },
     },
     {
       id: 'tune-r2', kind: 'console', x: 6.5, y: 13.5, sprite: 'console',
       tags: ['tune'], group: 'r2',
       log: 'R2 re-written as a correlation rule: one source failing on >15 distinct accounts in 30 min pages the on-call. Today\u2019s 41-account sweep still trips it.',
-      inspect: { label: 'R2: correlate across accounts', detail: 'Re-write to fire on breadth — one source, many accounts — and page the on-call. Sharpens the spray signal instead of chasing per-account noise.', category: 'item', objectives: ['4.4'] },
+      inspect: { label: 'R2: correlate across accounts', detail: 'Re-write to fire on one source failing across many accounts, and page the on-call.', category: 'item', objectives: ['4.4'] },
     },
     {
       id: 'silence-r2', kind: 'console', x: 8.5, y: 13.5, sprite: 'console',
       tags: ['tune', 'silence'], group: 'r2',
       log: 'R2 threshold raised to 200 failures/source.',
-      inspect: { label: 'R2: raise threshold to 200/source', detail: 'Quiets the rule. A spray fails once per account by design — 41 failures in 20 min would never reach 200 from one source.', category: 'item', objectives: ['4.4'] },
+      inspect: { label: 'R2: raise threshold to 200/source', detail: 'Raises the firing threshold to 200 failures per source.', category: 'item', objectives: ['4.4'] },
     },
     {
       id: 'keep-r3', kind: 'console', x: 3.5, y: 15.5, sprite: 'console',
       tags: ['tune'], group: 'r3',
       log: 'R3 untouched: one true positive a month beats forty false ones. Routed to the threat-hunt queue for periodic review.',
-      inspect: { label: 'R3: keep as-is, route to threat hunt', detail: 'Precision rules with near-zero volume are not the noise problem. Route them to the hunt queue and leave the detection alone.', category: 'item', objectives: ['4.4'] },
+      inspect: { label: 'R3: keep as-is, route to threat hunt', detail: 'Leaves the rule unchanged and routes its alerts to the threat-hunt queue.', category: 'item', objectives: ['4.4'] },
     },
     {
       id: 'raise-r3', kind: 'console', x: 5.5, y: 15.5, sprite: 'console',
       tags: ['wrong'], group: 'r3',
       log: 'Wrong call: R3 now needs three correlated hits before firing, so a single confirmed exfiltration no longer pages anyone.',
-      inspect: { label: 'R3: triple the hit threshold', detail: 'Cuts the volume of a rule that only fires once a month — and only when a tunnel is real.', category: 'item', objectives: ['4.4'] },
+      inspect: { label: 'R3: triple the hit threshold', detail: 'Requires three correlated hits before the rule fires.', category: 'item', objectives: ['4.4'] },
     },
     {
       id: 'blanket-x10', kind: 'console', x: 7.5, y: 15.5, sprite: 'console',
       tags: ['tune', 'silence'],
       log: 'Emergency quiet hours: every threshold x10.',
-      inspect: { label: 'All rules: raise every threshold x10', detail: 'Cuts all alert volume at once — including the live spray on R2 and the DNS beacon on R3. Quiet is not the same as tuned.', category: 'item', objectives: ['4.4'] },
+      inspect: { label: 'All rules: raise every threshold x10', detail: 'Multiplies every rule\u2019s firing threshold by ten.', category: 'item', objectives: ['4.4'] },
     },
     // --- Mid hall: sign-off, kiosks under management, tap rack ---
     {
@@ -242,25 +242,25 @@ export const m12: Mission = {
       id: 'pb-contain', kind: 'console', x: 36.5, y: 9.5, sprite: 'console',
       tags: ['soar-step'], group: 'soar-b', priority: 2,
       log: 'Step 2 wired: isolate the host and disable the account on confirmed high-sev — STANDARD accounts only. Privileged identities queue for human approval with a 5-min timer.',
-      inspect: { label: 'Step: auto-contain, approval gate on privileged', detail: 'Machine speed where mistakes are cheap; a human in the loop where a wrong call locks out the responders.', category: 'item', objectives: ['4.7'] },
+      inspect: { label: 'Step: auto-contain, approval gate on privileged', detail: 'Isolates the host and disables the account on confirmed high-sev; privileged identities queue for human approval with a 5-min timer.', category: 'item', objectives: ['4.7'] },
     },
     {
       id: 'pb-contain-all', kind: 'console', x: 30.5, y: 11.5, sprite: 'console',
       tags: ['soar-step', 'admin-lockout'], group: 'soar-b',
       log: 'Contain-all armed.',
-      inspect: { label: 'Step: auto-contain EVERY account, no approval', detail: 'Disables any flagged identity including DOMAIN ADMIN and the on-call team, instantly, with no human review. One false positive removes the incident responders.', category: 'item', objectives: ['4.7'] },
+      inspect: { label: 'Step: auto-contain all accounts, no approval', detail: 'Disables every flagged identity, privileged accounts included, immediately without human review.', category: 'item', objectives: ['4.7'] },
     },
     {
       id: 'pb-ha', kind: 'console', x: 33.5, y: 11.5, sprite: 'console',
       tags: ['soar-step'], group: 'soar-c', priority: 3,
       log: 'Step 3 wired: second SOAR node in the DR room, playbook state replicated, manual runbooks printed and drilled. One engine dying mid-incident stops nothing.',
-      inspect: { label: 'Step: redundant node + maintained runbooks', detail: 'Automation everything depends on is itself a critical system: redundancy plus a manual fallback that people actually practice.', category: 'item', objectives: ['4.7'] },
+      inspect: { label: 'Step: redundant node + maintained runbooks', detail: 'Adds a second SOAR node in the DR room with replicated playbook state and maintained manual runbooks.', category: 'item', objectives: ['4.7'] },
     },
     {
       id: 'pb-single', kind: 'console', x: 35.5, y: 11.5, sprite: 'console',
       tags: ['wrong'], group: 'soar-c',
       log: 'Wrong call: shipped on one SOAR server, "redundancy later". One crashed engine mid-incident and every playbook halts — a single point of failure.',
-      inspect: { label: 'Step: single SOAR node now, HA later', detail: 'Ships faster. All playbooks run on one engine.', category: 'item', objectives: ['4.7'] },
+      inspect: { label: 'Step: single SOAR node now, HA later', detail: 'Runs every playbook on a single SOAR engine to ship sooner.', category: 'item', objectives: ['4.7'] },
     },
     // --- Payment segment: fail-closed vs fail-open ---
     {
@@ -272,7 +272,7 @@ export const m12: Mission = {
       id: 'pay-closed', kind: 'console', x: 4.5, y: 4.5, sprite: 'console',
       tags: ['failmode'], group: 'fm-pay',
       log: 'Payment firewall set FAIL-CLOSED: if it dies, all segment traffic stops. Checkout queues, card data stays sealed.',
-      inspect: { label: 'Set fail-CLOSED', detail: 'On failure the firewall denies all traffic. Availability sacrificed, confidentiality kept — matching the policy.', category: 'item', objectives: ['3.2'] },
+      inspect: { label: 'Set fail-CLOSED', detail: 'On failure the firewall denies all traffic until it recovers.', category: 'item', objectives: ['3.2'] },
     },
     {
       id: 'pay-open', kind: 'console', x: 6.5, y: 4.5, sprite: 'console',
@@ -296,7 +296,7 @@ export const m12: Mission = {
       id: 'vault-closed', kind: 'console', x: 33.5, y: 4.5, sprite: 'console',
       tags: ['failmode'], group: 'fm-vault',
       log: 'Crypto gateway set FAIL-CLOSED: dead gateway means denied requests. Signing queues until failover, keys stay sealed.',
-      inspect: { label: 'Set fail-CLOSED', detail: 'On failure the gateway denies every request. Keys are never exposed by a dead control.', category: 'item', objectives: ['3.2'] },
+      inspect: { label: 'Set fail-CLOSED', detail: 'On failure the gateway denies every request until it recovers.', category: 'item', objectives: ['3.2'] },
     },
     {
       id: 'vault-open', kind: 'console', x: 35.5, y: 4.5, sprite: 'console',
@@ -320,7 +320,7 @@ export const m12: Mission = {
       id: 'egress-open', kind: 'console', x: 4.5, y: 24.5, sprite: 'console',
       tags: ['failmode'], group: 'fm-egress',
       log: 'Egress locks set FAIL-OPEN: on alarm or control failure every door releases. People evacuate; the badge system logs the openings for review.',
-      inspect: { label: 'Set fail-OPEN', detail: 'On failure the magnet locks release. Containment lost, evacuation guaranteed — the trade life safety requires.', category: 'item', objectives: ['3.2'] },
+      inspect: { label: 'Set fail-OPEN', detail: 'On failure the magnet locks release so every door opens.', category: 'item', objectives: ['3.2'] },
     },
     {
       id: 'egress-closed', kind: 'console', x: 6.5, y: 24.5, sprite: 'console',
@@ -341,7 +341,7 @@ export const m12: Mission = {
     },
     {
       id: 'kiosk-user', kind: 'npc', x: 36.5, y: 24.5, sprite: 'npc-f', ai: 'stand',
-      inspect: { label: 'Mara, front-desk staff', detail: 'Tried to install a game on her kiosk at lunch. The allow list blocked it and logged the attempt. Annoyed, not malicious.', category: 'person', objectives: ['2.5'] },
+      inspect: { label: 'Mara, front-desk staff', detail: 'Tried to install a game on her kiosk at lunch. The allow list blocked it and logged the attempt.', category: 'person', objectives: ['2.5'] },
     },
     // --- Pickups: scanner charges, pcap, patch disks, EDR ---
     {
