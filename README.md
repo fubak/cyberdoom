@@ -64,8 +64,22 @@ Deep link: `/?mission=m01&gender=female` jumps straight into a mission
 WASD move · mouse look · ←→ turn · Shift run · LMB use tool ·
 E/Space interact · 1-4 / mouse wheel select tool · L — evidence log (case files).
 
-## Tests
+## Testing
 
 `tests/` covers content validation (valid objective refs, exactly one correct
 answer per question with per-option explanations, rectangular wall-enclosed
 maps with BFS-reachable exits), movement/collision, and the tool registry.
+
+Browser end-to-end smoke tests live in `tests/e2e/` (Playwright, Chromium on
+SwiftShader — no GPU needed). Run them with:
+
+```sh
+npx playwright install --with-deps chromium   # once
+npm run e2e
+```
+
+`npm run e2e` builds the production bundle with `BASE_PATH=/cyberdoom/` (the
+GitHub Pages base), serves it via `vite preview`, and drives boot, menu
+navigation, deploy→play, the pause menu, and a full M01 win through
+`?debug=1` hooks. Vitest only picks up `tests/**/*.test.ts`, so the specs
+never run under `npm run test`.
