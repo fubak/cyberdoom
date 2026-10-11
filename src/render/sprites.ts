@@ -1190,6 +1190,33 @@ export function buildSprites(jobs = false): void {
       p.glow.fillRect(0, 0, 32, 32);
     },
   })));
+  // EGGS: the rubber duck — debugging mascot AND the removable media you
+  // plug in last. Pixel-blocky bath duck with a bob animation.
+  makeSet('duck', 32, 32, 0.55, 'flicker', [0, 1].map((f) => ({
+    key: `f${f}`,
+    draw: (p: PaintCtx) => {
+      const { g } = p;
+      const dy = f ? 1 : 0;
+      // body
+      lit(p, '#f8c820', 8, 16 + dy, 16, 8);
+      lit(p, '#e0a810', 8, 22 + dy, 16, 3);
+      // head + neck
+      lit(p, '#f8c820', 10, 8 + dy, 8, 8);
+      lit(p, '#ffd840', 11, 9 + dy, 5, 4);
+      // beak
+      lit(p, '#ff8020', 7, 11 + dy, 4, 3);
+      // eye
+      g.fillStyle = '#101014';
+      g.fillRect(14, 10 + dy, 2, 2);
+      // wing
+      lit(p, '#d8a018', 14, 18 + dy, 7, 4);
+      // waterline sparkle
+      lit(p, '#7af8ff', 4, 26, 24, 1);
+      lit(p, '#38c8e0', 8, 27, 16, 1);
+      p.glow.fillStyle = '#fff';
+      p.glow.fillRect(6, 8, 20, 20);
+    },
+  })));
   // ARSENAL pickups: resources (small, flicker) and found tools (gold-ringed, bigger)
   makeSet('pcap', 32, 32, 0.5, 'flicker', [0, 1].map((f) => ({
     key: `f${f}`,

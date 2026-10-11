@@ -38,7 +38,7 @@ const map: MapDef = {
     '##################.......#####################',
     '#####################v########################',
     '#####################.########################',
-    '################...........###################',
+    '##############jh...........###################',
     '################...........###################',
     '##############################################',
   ],
@@ -492,3 +492,44 @@ addThreatEncounter(m04, 'signin-alarm', 'worm', 3,
     message: 'The fake sign-in tripped a silent alarm — worms flood the spine.' },
   [41, 8, 41, 27]);
 m04.map.lights = { ...m04.map.lights, ...lightRects([[41, 8, 41, 27, 0.6], [40, 17, 44, 19, 0.65], [16, 31, 26, 32, 0.55], [43, 10, 44, 12, 0.85], [43, 24, 44, 26, 0.85], [41, 11, 41, 11, 0.35], [41, 25, 41, 25, 0.35]]) };
+
+// EGGS F5: a wall-tell door on the west end of the south cage corridor hides a
+// one-cell exit pad — the secret exit to m13 (the E1M9 egg). The cage console
+// nearby logs the lure-domain note that hints at it. The archive tell door
+// gets a duck-print wall (wall-quack) and the rubber duck sits inside.
+// Wall-tell door needing the analyst badge: keeps the exit pad gated to the
+// mission's role progression (the content test's "critical path is gated" BFS
+// treats roled non-secret doors as blocked) while still reading as wall.
+m04.map.legend.h = { kind: 'door', tex: 'wall-secret', accessRole: 'analyst', doorId: 'egg-link' };
+m04.map.legend.j = { kind: 'exit', tex: 'exit', secretExit: 'm13' };
+m04.map.legend['1'].tex = 'wall-quack';
+m04.entities.push(
+  { id: 'egg-duck', kind: 'prop', x: 3.5, y: 7.5, sprite: 'duck', egg: 'quack',
+    inspect: {
+      label: 'A rubber duck on a USB lanyard',
+      detail:
+        'For debugging: explain the bug to the duck. For security: it is also ' +
+        'removable media — the kind you plug in last, if ever. (It quacks about HUNTER2.)',
+      category: 'item',
+    } },
+  { id: 'egg-ledger', kind: 'console', x: 24.5, y: 31.5, sprite: 'console', egg: 'link-report',
+    inspect: {
+      label: 'Cage console',
+      detail: 'A netsec notepad pinned to the cage wall.',
+      category: 'item',
+    },
+    log:
+      'NETSEC NOTE > lure domains\n' +
+      'one lure hostname keeps resolving to an internal annex.\n' +
+      'if a link looks too easy, it probably is.\n' +
+      'the west wall of this corridor is not all wall. — netsec',
+  },
+);
+m04.script!.secrets!.push(
+  { id: 'egg-exit', area: [14, 31, 14, 31], label: 'A link too good to be true' },
+);
+m04.script!.eggs = [
+  { id: 'quack', label: 'A fowl payload' },
+  { id: 'link-report', label: 'The lure ledger' },
+];
+m04.map.lights = { ...m04.map.lights, ...lightRects([[14, 31, 15, 31, 0.85], [3, 7, 3, 7, 0.7]]) };

@@ -25,8 +25,8 @@ export interface EventMap {
   'badge-door': { doorId: string; accessRole?: string; allowed: boolean };
   /** Player plugged in a suspicious found USB. */
   'plugged-usb': { entityId: string };
-  /** Player reached the exit. */
-  'reach-exit': Record<string, never>;
+  /** Player reached the exit. `secretTo` routes to a hidden bonus mission. */
+  'reach-exit': { secretTo?: string };
   /** Player integrity hit zero. */
   'player-down': { by?: string; threat?: string };
   /** Player picked up an item. */

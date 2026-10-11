@@ -13,6 +13,7 @@ import { m09, m09Teach } from './m09-locked-out';
 import { m10, m10Teach } from './m10-third-party';
 import { m11, m11Teach } from './m11-audit-night';
 import { m12, m12Teach } from './m12-robo-soc';
+import { m13, m13Teach } from './m13-honeypot';
 
 /** CURRICULUM: all missions, keyed by id (arc order). */
 export const missionRegistry = new Registry<Mission>();
@@ -33,3 +34,20 @@ teachingRegistry.register('m09', m09Teach);
 teachingRegistry.register('m10', m10Teach);
 teachingRegistry.register('m11', m11Teach);
 teachingRegistry.register('m12', m12Teach);
+teachingRegistry.register('m13', m13Teach);
+
+/** EGGS: hidden bonus missions, off the campaign arc. They are deliberately
+ *  NOT registered in missionRegistry: the arc list, mission select, coverage
+ *  weights, and walkthrough/pickup contracts all key off the registry. They
+ *  are reachable through secret exits, deep links, and __cd.startMission. */
+export const bonusMissions: Record<string, Mission> = { m13 };
+
+export function missionById(id: string): Mission | undefined {
+  return missionRegistry.get(id) ?? bonusMissions[id];
+}
+
+export function requireMission(id: string): Mission {
+  const m = missionById(id);
+  if (!m) throw new Error(`unknown mission ${id}`);
+  return m;
+}

@@ -70,7 +70,7 @@ export function voiceCapFor(name: string): number {
 }
 
 /** Background-score intensity, picked from the mission's difficulty. */
-export type MusicTier = 'early' | 'mid' | 'late';
+export type MusicTier = 'early' | 'mid' | 'late' | 'rick';
 
 interface MusicSpec {
   bpm: number;
@@ -118,6 +118,20 @@ const MUSIC: Record<MusicTier, MusicSpec> = {
     stab: [0, 8],
     chord: [0, 3, 7],
     lead: [12, null, 12, null, 15, null, 14, null, 12, null, 10, null, 7, null, 10, null],
+  },
+  // EGGS (RICKROLL): the jingle tier — a bright, jaunty major-key bounce
+  // with an annoyingly catchy triplet-ish lead. Still 100% original synth.
+  rick: {
+    bpm: 120,
+    root: 60,
+    dark: 1400,
+    bass: [0, null, 4, null, 7, null, 4, null, 0, null, 4, null, 7, null, 9, null],
+    kick: [0, 8],
+    hat: [4, 12],
+    snare: [4, 12],
+    stab: [0, 8],
+    chord: [0, 4, 7],
+    lead: [12, null, 16, null, 19, 16, null, 12, null, 14, null, 16, 19, null, 21, null],
   },
   // late missions: fast, dissonant, relentless — full 16th hats and a
   // double-kick push under an aggressive semitone lead line

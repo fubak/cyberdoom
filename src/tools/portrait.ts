@@ -22,6 +22,8 @@ export interface FaceState {
 export const FACE_SIZE = 24;
 
 export class Face {
+  /** EGGS: while the SUDO cheat is active the face holds its Doom grin. */
+  god = false;
   private hurtT = 9;
   private grinT = 9;
   private dir = 0;
@@ -58,7 +60,13 @@ export class Face {
       const c = Math.floor(this.time / 1.6) % 4;
       look = c === 1 ? -1 : c === 3 ? 1 : 0;
     }
-    return { integrity, look, ouch: this.hurtT < 0.35, grin: this.grinT < 1.2 && this.hurtT > 0.35, dead };
+    return {
+      integrity,
+      look,
+      ouch: !this.god && this.hurtT < 0.35,
+      grin: this.god || (this.grinT < 1.2 && this.hurtT > 0.35),
+      dead,
+    };
   }
 }
 

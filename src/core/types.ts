@@ -41,6 +41,9 @@ export interface CellDef {
    * Use (E) or the badge like any unrestricted door. LEVELS-owned.
    */
   secret?: boolean;
+  /** For exits: the mission completes and routes to this hidden bonus
+   *  mission id instead of mission select (EGGS, the E1M9 pattern). */
+  secretExit?: string;
   /** For doors: opened only by a MissionTrigger (`openDoors`), never by
    *  Use or the badge. `lockText` is shown when the player tries it. */
   locked?: boolean;
@@ -173,6 +176,9 @@ export interface EntityDef {
   accepts?: string;
   /** Raw evidence shown when the Keyboard reads this console (logs, alerts). */
   log?: string;
+  /** Easter egg: first inspect/interact reveals this `script.eggs` id
+   *  (counts toward the debrief Secrets tally). EGGS-owned. */
+  egg?: string;
   /** Option-group id; successfully resolving one option deactivates its siblings. */
   group?: string;
 }
@@ -273,6 +279,9 @@ export interface MissionScript {
   /** Secret areas; entering one counts it once ("A secret is revealed!").
    *  `grant` is the guaranteed payoff awarded on reveal (same resources as item pickups). */
   secrets?: { id: string; area: TileRect; label: string; grant?: { resource: string; amount: number } }[];
+  /** Easter eggs revealed by inspecting/interacting an entity flagged
+   *  `egg`. Counts toward the Secrets tally like area secrets. EGGS-owned. */
+  eggs?: { id: string; label: string }[];
   /** Reinfection: while objective `until` is not done, every `every`
    *  seconds one cleaned entity tagged `tag` is re-infected. */
   outbreak?: { tag: string; every: number; until: string; message: string };
