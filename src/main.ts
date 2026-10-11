@@ -132,6 +132,8 @@ class Game {
   private konamiBuf = new KonamiBuffer();
   private god = false;
   private bossStung = false;
+  private deathStung = false;
+  private lastAmbushAlarm = -Infinity;
   private gender: Gender = 'male';
   private role = 'analyst';
   private overlay: HTMLElement | null = null;
@@ -417,10 +419,15 @@ class Game {
       this.particles.spawn(e.x, e.y);
       this.renderer.spawnTeleport(e.x, e.y);
       this.audio.sfx('spawn', { x: e.x, y: e.y });
-      // ambushes get the klaxon; the FIRST one on a boss-tier mission gets
-      // the reveal stinger (there is no literal boss entity — the ambush
-      // IS the boss moment)
-      this.audio.sfx('alarm', { gain: 0.45 });
+      // ambushes get the klaxon — once per ambush trigger, not once per
+      // spawned entity (ambush-spawn emits per entity)
+      const now = performance.now();
+      if (now - this.lastAmbushAlarm > 500) {
+        this.lastAmbushAlarm = now;
+        this.audio.sfx('alarm', { gain: 0.45 });
+      }
+      // the FIRST ambush on a boss-tier mission gets the reveal stinger
+      // (there is no literal boss entity — the ambush IS the boss moment)
       if (!this.bossStung && (this.runtime?.mission.difficulty ?? 0) >= 9) {
         this.bossStung = true;
         this.audio.playSting('sting-boss');
@@ -497,6 +504,8 @@ class Game {
     const m = requireMission(id);
     this.prepareMission(id);
     this.audio.startMusic('briefing');
+    // warm the mission's tier on the worker so Deploy hits a cached buffer
+    this.audio.prefetchMusic(musicTierFor(m.difficulty));
     this.setScreen('briefing', screens.briefing(m, () => this.deploy(id), () => this.showMissionSelect()));
   }
 
@@ -823,6 +832,7 @@ class Game {
     const cells = Math.max(1, mission.map.grid.length * (mission.map.grid[0]?.length ?? 0));
     this.audio.setRoomSize(Math.max(0.15, Math.min(1, (open / cells) * 1.9)));
     this.bossStung = false;
+    this.deathStung = false;
     this.audio.startMusic(musicTierFor(mission.difficulty));
     this.setScreen('play', null);
     if (!DEBUG) this.input.requestLock();
@@ -835,7 +845,9 @@ class Game {
     this.endCalled = true;
     this.audio.stopAmbience();
     this.audio.stopMusic();
-    this.audio.playSting(this.runtime?.finished === 'won' ? 'sting-win' : 'sting-lose');
+    // death already played sting-death; sting-lose is for non-death failures
+    const endSting = this.runtime?.finished === 'won' ? 'sting-win' : this.deathStung ? null : 'sting-lose';
+    if (endSting) this.audio.playSting(endSting);
     this.showDebrief();
   }
 
@@ -1322,6 +1334,7 @@ class Game {
     }
     if (!p.alive) {
       this.audio.sfx('death');
+      this.deathStung = true;
       this.audio.playSting('sting-death');
       this.hud.pushMessage(`INTEGRITY DEPLETED${by ? ` - ${by}` : ''}`, 'bad');
       this.bus.emit('player-down', { by: source?.def.inspect?.label, threat: source?.def.sprite });

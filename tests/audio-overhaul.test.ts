@@ -1,9 +1,15 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { Audio } from '../src/engine/audio';
 import { loudnessLufs, peakOf, rmsOf, softClip } from '../src/engine/audio/dsp';
 import { renderSfx, SFX_DEFS, sfxVariantCount } from '../src/engine/audio/sfxdef';
 import { renderSong, renderSting } from '../src/engine/audio/render';
 import { scheduleSong, songLength } from '../src/engine/audio/sequencer';
 import { SONGS, STINGS } from '../src/engine/audio/songs';
+
+vi.mock('../src/engine/audio/render', async (importOriginal) => {
+  const mod = await importOriginal<typeof import('../src/engine/audio/render')>();
+  return { ...mod, renderSong: vi.fn(mod.renderSong), renderSting: vi.fn(mod.renderSting) };
+});
 
 const SR = 44100;
 const THREATS = ['worm', 'trojan', 'ransomware', 'logicbomb', 'rat', 'rootkit'];
@@ -123,6 +129,139 @@ describe('audio overhaul: mix safety', () => {
       const buf = renderSting(name, SR, 1)!;
       expect(rmsOf(buf), name).toBeGreaterThan(0.001);
       expect(peakOf(buf), name).toBeLessThanOrEqual(1.6);
+    }
+  });
+});
+
+describe('audio overhaul: main-thread rendering', () => {
+  class FakeParam {
+    value = 0;
+    setValueAtTime(): void {}
+    setTargetAtTime(): void {}
+    linearRampToValueAtTime(): void {}
+    cancelScheduledValues(): void {}
+  }
+  const fakeNode = () => ({
+    gain: new FakeParam(),
+    pan: new FakeParam(),
+    frequency: new FakeParam(),
+    Q: new FakeParam(),
+    detune: new FakeParam(),
+    threshold: new FakeParam(),
+    knee: new FakeParam(),
+    ratio: new FakeParam(),
+    attack: new FakeParam(),
+    release: new FakeParam(),
+    playbackRate: new FakeParam(),
+    type: '',
+    curve: null as Float32Array | null,
+    buffer: null as unknown,
+    loop: false,
+    fftSize: 0,
+    smoothingTimeConstant: 0,
+    onended: null as unknown,
+    connect(node: unknown) {
+      return node;
+    },
+    disconnect(): void {},
+    start(): void {},
+    stop(): void {},
+    getFloatTimeDomainData(): void {},
+  });
+  class FakeAudioContext {
+    sampleRate = 8000;
+    currentTime = 0;
+    state = 'running';
+    destination = {};
+    createGain() {
+      return fakeNode();
+    }
+    createWaveShaper() {
+      return fakeNode();
+    }
+    createBiquadFilter() {
+      return fakeNode();
+    }
+    createDynamicsCompressor() {
+      return fakeNode();
+    }
+    createConvolver() {
+      return fakeNode();
+    }
+    createStereoPanner() {
+      return fakeNode();
+    }
+    createOscillator() {
+      return fakeNode();
+    }
+    createAnalyser() {
+      return fakeNode();
+    }
+    createBufferSource() {
+      return fakeNode();
+    }
+    createBuffer(ch: number, len: number, sr: number) {
+      const data = Array.from({ length: ch }, () => new Float32Array(len));
+      return {
+        length: len,
+        sampleRate: sr,
+        duration: len / sr,
+        copyToChannel(): void {},
+        getChannelData(c: number) {
+          return data[c];
+        },
+      };
+    }
+    resume() {
+      return Promise.resolve();
+    }
+  }
+
+  it('startMusic renders songs on the worker, never synchronously', async () => {
+    const posts: { t?: string; id?: number; tier?: string }[] = [];
+    vi.stubGlobal(
+      'Worker',
+      class {
+        onmessage: ((e: { data: unknown }) => void) | null = null;
+        onerror: unknown = null;
+        onmessageerror: unknown = null;
+        constructor(_url: unknown, _opts?: unknown) {}
+        postMessage(msg: { t?: string; id?: number; tier?: string }): void {
+          posts.push(msg);
+          // answer each job a microtask later so the pool drains its queue
+          queueMicrotask(() => {
+            const res =
+              msg.t === 'song'
+                ? {
+                    t: 'result',
+                    id: msg.id,
+                    song: {
+                      bed: new Float32Array(16),
+                      threat: new Float32Array(16),
+                      combat: new Float32Array(16),
+                    },
+                  }
+                : { t: 'result', id: msg.id, data: new Float32Array(16) };
+            this.onmessage?.({ data: res });
+          });
+        }
+        terminate(): void {}
+      },
+    );
+    vi.stubGlobal('AudioContext', FakeAudioContext);
+    try {
+      const audio = new Audio();
+      audio.unlock();
+      vi.mocked(renderSong).mockClear();
+      audio.startMusic('early');
+      expect(renderSong, 'renderSong must not run on the main thread').not.toHaveBeenCalled();
+      await vi.waitFor(() => {
+        expect(posts.some((m) => m.t === 'song' && m.tier === 'early')).toBe(true);
+      });
+      // the deferred tier actually started once its buffers landed
+      expect((audio as unknown as { musicPlaying?: string }).musicPlaying).toBe('early');
+    } finally {
+      vi.unstubAllGlobals();
     }
   });
 });

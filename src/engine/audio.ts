@@ -20,6 +20,7 @@
 import { mulberry32 } from './audio/dsp';
 import { renderSfx, SFX_DEFS, sfxVariantCount, type SfxVariant } from './audio/sfxdef';
 import { renderSong, renderSting } from './audio/render';
+import { audioPoolActive, requestSfx, requestSong, requestSting } from './audio/audiopool';
 import { SONGS, STINGS } from './audio/songs';
 import type { MusicLayer } from './audio/sequencer';
 
@@ -135,6 +136,10 @@ export class Audio {
   private stingCache = new Map<string, AudioBuffer>();
   private variantPick = new Map<string, number>();
   private voices = new Map<string, Voice[]>();
+  /** Render jobs in flight on the worker (cache keys / tier / sting names). */
+  private sfxInflight = new Set<string>();
+  private songInflight = new Set<MusicTier>();
+  private stingInflight = new Set<string>();
 
   private ensure(): AudioContext | null {
     if (!this.unlocked || this.muted) return null;
@@ -208,8 +213,34 @@ export class Audio {
     this.unlocked = true;
     const ctx = this.ensure();
     if (ctx?.state === 'suspended') void ctx.resume().catch(() => {});
+    if (ctx) this.prefetch();
     if (this.ambienceRequested) this.startAmbience();
     if (this.musicRequested) this.startMusic(this.musicRequested);
+  }
+
+  /**
+   * Warm the worker queue at unlock so no first-play render lands on the
+   * main thread: the two screen themes the player hears first, every sting
+   * (death can hit at any moment), then all SFX variants for the gender.
+   */
+  private prefetch(): void {
+    this.requestSongRender('title');
+    this.requestSongRender('briefing');
+    for (const name of Object.keys(STINGS)) this.requestStingRender(name);
+    this.prewarmSfx();
+  }
+
+  /** Queue an off-thread render of a mission tier (called from the briefing so Deploy hits a warm cache). */
+  prefetchMusic(tier: MusicTier): void {
+    this.requestSongRender(tier);
+  }
+
+  /** Every SFX variant for the current gender, rendered on the worker — no first-play stall in combat. */
+  private prewarmSfx(): void {
+    if (!this.ctx || !audioPoolActive()) return;
+    for (const name of Object.keys(SFX_DEFS)) {
+      for (let v = 0; v < Math.max(1, sfxVariantCount(name)); v++) this.queueSfx(name, v);
+    }
   }
 
   /** tools/sfx.ts mute flag (menu sounds off while tests drive the game). */
@@ -302,7 +333,10 @@ export class Audio {
   }
 
   setVoice(gender: 'male' | 'female'): void {
-    this.gender = gender;
+    if (this.gender !== gender) {
+      this.gender = gender;
+      this.prewarmSfx();
+    }
   }
 
   // ---------- sfx buffers ----------
@@ -330,6 +364,12 @@ export class Audio {
     const key = spec.gendered ? `${name}|${this.gender}` : variants > 1 ? `${name}|${pick}` : name;
     let buf = this.sfxCache.get(key);
     if (!buf) {
+      if (audioPoolActive()) {
+        // covered by the unlock prewarm; a miss queues the render and the
+        // sound plays next time rather than stalling this frame
+        this.queueSfx(name, pick);
+        return null;
+      }
       const data = renderSfx(name, ctx.sampleRate, this.gender, pick);
       if (!data) return null;
       buf = ctx.createBuffer(1, data.length, ctx.sampleRate);
@@ -337,6 +377,27 @@ export class Audio {
       this.sfxCache.set(key, buf);
     }
     return buf;
+  }
+
+  /** Queue one SFX recipe variant on the worker; installs into sfxCache on arrival. */
+  private queueSfx(name: string, variant: number): void {
+    const ctx = this.ctx;
+    const spec = SFX_DEFS[name];
+    if (!ctx || !spec) return;
+    const variants = sfxVariantCount(name);
+    const key = spec.gendered ? `${name}|${this.gender}` : variants > 1 ? `${name}|${variant}` : name;
+    if (this.sfxCache.has(key) || this.sfxInflight.has(key)) return;
+    this.sfxInflight.add(key);
+    requestSfx(name, ctx.sampleRate, this.gender, variant)
+      .then((data) => {
+        this.sfxInflight.delete(key);
+        const c = this.ctx;
+        if (!c) return;
+        const buf = c.createBuffer(1, data.length, c.sampleRate);
+        buf.copyToChannel(data as Float32Array<ArrayBuffer>, 0);
+        this.sfxCache.set(key, buf);
+      })
+      .catch(() => this.sfxInflight.delete(key));
   }
 
   private allow(name: string, ctx: AudioContext): boolean {
@@ -496,20 +557,73 @@ export class Audio {
     const ctx = this.ensure();
     if (!ctx) return;
     if (this.musicPlaying === tier && this.musicSources.length > 0) return;
-    const song = SONGS[tier];
-    if (!song) return;
-    this.stopMusicSources();
+    if (!SONGS[tier]) return;
 
-    let layers = this.songCache.get(tier);
+    const layers = this.songCache.get(tier);
     if (!layers) {
-      const rendered = renderSong(song, ctx.sampleRate, 0xdec0de + tier.length * 131);
-      layers = MUSIC_LAYERS.map((l) => {
+      // render runs on the worker; this call returns immediately and the
+      // tier fades in when its buffers land (stale requests self-cancel —
+      // installSongLayers only starts what is still musicRequested)
+      this.requestSongRender(tier);
+      return;
+    }
+    this.startMusicLayers(tier, layers);
+  }
+
+  private requestStingRender(name: string): void {
+    const ctx = this.ctx;
+    if (!ctx || this.stingCache.has(name) || this.stingInflight.has(name) || !audioPoolActive()) return;
+    this.stingInflight.add(name);
+    requestSting(name, ctx.sampleRate, 0x5711a + name.length * 137)
+      .then((data) => {
+        this.stingInflight.delete(name);
+        const c = this.ctx;
+        if (!c) return;
+        const buf = c.createBuffer(1, data.length, c.sampleRate);
+        buf.copyToChannel(data as Float32Array<ArrayBuffer>, 0);
+        this.stingCache.set(name, buf);
+      })
+      .catch(() => this.stingInflight.delete(name));
+  }
+
+  private requestSongRender(tier: MusicTier): void {
+    const ctx = this.ctx;
+    const song = SONGS[tier];
+    if (!ctx || !song || this.songCache.has(tier) || this.songInflight.has(tier)) return;
+    const sr = ctx.sampleRate;
+    const seed = 0xdec0de + tier.length * 131;
+    if (!audioPoolActive()) {
+      // synchronous fallback: vitest or a failed worker
+      this.installSongLayers(tier, renderSong(song, sr, seed));
+      return;
+    }
+    this.songInflight.add(tier);
+    requestSong(tier, sr, seed)
+      .then((rendered) => {
+        this.songInflight.delete(tier);
+        this.installSongLayers(tier, rendered);
+      })
+      .catch(() => this.songInflight.delete(tier));
+  }
+
+  private installSongLayers(tier: MusicTier, rendered: Record<MusicLayer, Float32Array>): void {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    this.songCache.set(
+      tier,
+      MUSIC_LAYERS.map((l) => {
         const buf = ctx.createBuffer(1, rendered[l].length, ctx.sampleRate);
         buf.copyToChannel(rendered[l] as Float32Array<ArrayBuffer>, 0);
         return buf;
-      });
-      this.songCache.set(tier, layers);
-    }
+      }),
+    );
+    if (this.musicRequested === tier) this.startMusic(tier);
+  }
+
+  private startMusicLayers(tier: MusicTier, layers: AudioBuffer[]): void {
+    const ctx = this.ctx;
+    if (!ctx || !this.musicDuck) return;
+    this.stopMusicSources();
     if (!this.layerGains) {
       this.layerGains = {
         bed: ctx.createGain(),
@@ -524,13 +638,15 @@ export class Audio {
     this.layerGains.combat.gain.setValueAtTime(0, now);
     this.musicSources = MUSIC_LAYERS.map((l, i) => {
       const src = ctx.createBufferSource();
-      src.buffer = layers![i];
+      src.buffer = layers[i];
       src.loop = true;
       src.connect(this.layerGains![l]);
       src.start();
       return src;
     });
     this.musicPlaying = tier;
+    // ~0.3 s fade-in so a deferred (worker-rendered) start doesn't slam in
+    this.layerGains.bed.gain.setTargetAtTime(1, now, 0.12);
     this.applyLayerTargets();
   }
 
@@ -581,6 +697,12 @@ export class Audio {
     if (!ctx || !this.musicDuck || !STINGS[name]) return;
     let buf = this.stingCache.get(name);
     if (!buf) {
+      if (audioPoolActive()) {
+        // stings are prefetched at unlock; a miss queues the render and
+        // drops this play rather than stalling the frame it fired on
+        this.requestStingRender(name);
+        return;
+      }
       const data = renderSting(name, ctx.sampleRate, 0x5711a + name.length * 137);
       if (!data) return;
       buf = ctx.createBuffer(1, data.length, ctx.sampleRate);

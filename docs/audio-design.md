@@ -60,6 +60,17 @@ audio.ts facade: AudioBuffer cache → bus graph → limiter → out
   `AudioBufferSourceNode` + gain + stereo panner — flat cost, no per-call
   oscillator storms. `tools/sfx.ts` delegates to the same engine
   (`bindAudio`), retiring its second context.
+- **Off-thread renders** (`audiopool.ts` + `audioworker.ts`): every render —
+  song layers, stings, SFX recipes — runs in a module Worker (same
+  `new Worker(new URL(...))` pattern as `render/genpool.ts`), transferring
+  `Float32Array`s back; the main thread only wraps them in `AudioBuffer`s.
+  `startMusic`/`playSting` never block: a missing buffer queues the render
+  and the tier fades in ~0.3 s when it lands (a newer request supersedes a
+  pending start). At unlock the worker prefetches `title` + `briefing`,
+  all four stings, then every SFX variant for the current gender; the
+  briefing prefetches the mission's tier so Deploy hits a warm cache.
+  `audioPoolActive()` is false without `Worker` (Vitest) — the old
+  synchronous render is kept only as that fallback and for a dead worker.
 
 ## Adaptive layering
 
