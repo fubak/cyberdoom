@@ -648,21 +648,6 @@ export class MissionRuntime {
     this.bus.on('reach-exit', ({ secretTo }) => {
       const exit = this.objectives.find((o) => o.def.kind === 'reach-exit');
       if (!exit) return;
-      // EGGS: a secret-exit pad wins outright and routes onward, like E1M9.
-      if (secretTo) {
-        this.nextMission = secretTo;
-        exit.done = true;
-        exit.progress = exit.target;
-        this.scoreLog.push({
-          text: `SECRET ROUTE — ${secretTo.toUpperCase()} unlocked`,
-          points: 0,
-          good: true,
-          objectives: [],
-        });
-        this.finished = 'won';
-        this.appendWinTally();
-        return;
-      }
       const unfinished = this.requiredObjectives().find(
         (objective) => objective !== exit && !objective.done,
       );
@@ -672,6 +657,16 @@ export class MissionRuntime {
           this.message(`Exit locked: ${unfinished.def.text}`, 'warn');
         }
         return;
+      }
+      // EGGS: a secret-exit pad routes onward to a bonus mission, like E1M9.
+      if (secretTo) {
+        this.nextMission = secretTo;
+        this.scoreLog.push({
+          text: `SECRET ROUTE — ${secretTo.toUpperCase()} unlocked`,
+          points: 0,
+          good: true,
+          objectives: [],
+        });
       }
       exit.done = true;
       exit.progress = exit.target;

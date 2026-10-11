@@ -193,9 +193,13 @@ describe('runtime plumbing', () => {
     expect(rt.stats().secrets).toBe(1);
   });
 
-  it('a secret exit wins the mission and routes onward', () => {
+  it('a secret exit needs the same objectives as the normal exit, then routes onward', () => {
     const bus = new EventBus();
     const rt = new MissionRuntime(m04, bus);
+    bus.emit('reach-exit', { secretTo: 'm13' });
+    expect(rt.finished).toBeNull();
+    expect(rt.nextMission).toBeUndefined();
+    for (const o of rt.objectives) if (o.def.kind !== 'reach-exit') o.done = true;
     bus.emit('reach-exit', { secretTo: 'm13' });
     expect(rt.finished).toBe('won');
     expect(rt.nextMission).toBe('m13');

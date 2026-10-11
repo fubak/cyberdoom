@@ -119,7 +119,7 @@ Doom); movement/fire keys are never swallowed.
 | Egg | Hint | Trigger | Payoff |
 | --- | --- | --- | --- |
 | SUDO / HUNTER2 / WIRESHARK / RICKROLL / ITSDNS | m13 build-notes console lists them; duck inspect jokes about `HUNTER2` | Type the code in play | Effect + "CHEAT ACTIVE … run unscored" + face grin |
-| Secret exit | m04 cage-console log about lure domains; `wall-secret` tell at the corridor's dead end | Push door, step on pad | Mission completes → `m13` briefing; counts in Secrets tally |
+| Secret exit | m04 cage-console log about lure domains; `wall-secret` tell at the corridor's dead end | Push door, step on pad once the mission objectives are done | Mission completes → `m13` briefing; counts in Secrets tally |
 | m13 honeypot | Reach it via the m04 secret exit (or `__cd.startMission('m13')` / `?mission=m13`) | Inspect the honeypot server + trigger the ambush + exit | Egg log about deception tech; Secrets tally |
 | Dev room | `wall-secret` door inside m13 | Enter the closet | Credits mural, build-notes console, Bobby T., rickroll + DNS consoles |
 | Rubber duck | `wall-quack` door + duck silhouette visible through it | Inspect the duck | Egg log + USB-hygiene wink |
