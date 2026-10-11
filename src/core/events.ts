@@ -47,6 +47,8 @@ export interface EventMap {
   'entity-hurt': { entityId: string; fromX: number; fromY: number; applied?: boolean };
   /** HUD ticker message. */
   message: { text: string; kind?: 'info' | 'warn' | 'good' | 'bad' };
+  /** A progress objective flipped to done (clean/inspect/etc.). */
+  'objective-done': { id: string };
 }
 
 type Handler<T> = (payload: T) => void;
