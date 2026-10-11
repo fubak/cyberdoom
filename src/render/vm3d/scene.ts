@@ -4,7 +4,7 @@ import { VM_CLEAR } from '../../tools/anim';
 import { TOOL_FLASH } from '../viewmodels';
 import { CLIPS, KBD_ACTION_CLIP, type KbdAction, type VmClip } from './clips';
 import { Vm3dRig } from './rig';
-import { HAND_FINGERS, LiveHand, type HandSpec } from './hand3d';
+import { ensureHandAssets, HAND_FINGERS, LiveHand, type HandSpec } from './hand3d';
 import type { Curl, FingerName } from '../handrig';
 
 /** base-px → viewmodel-space metres at the board's working distance (~0.45 m). */
@@ -97,11 +97,12 @@ export class Vm3d {
     this.flashLight = new THREE.PointLight('#ffc85a', 0, 2.5, 2);
     this.flashLight.position.set(0, -0.05, -0.3);
     this.scene.add(this.key, this.fill, this.hemi, this.flashLight);
+    ensureHandAssets(); // kick the glb fetch at startup; hands join when ready
   }
 
   /** Tool id the vm3d layer draws this frame ('keyboard' or null → sprite path). */
   handles(): string | null {
-    return this.toolId;
+    return this.toolId && this.rig.ready ? this.toolId : null;
   }
 
   onToolUsed(toolId: string, action?: string): void {
@@ -126,6 +127,13 @@ export class Vm3d {
     this.forced = action;
   }
 
+  /** Capture/debug: start a clip immediately, bypassing the arsenal's
+   *  cooldown so capture frames are deterministic. */
+  play(action: KbdAction): void {
+    this.clip = CLIPS[KBD_ACTION_CLIP[action] ?? KBD_ACTION_CLIP.type];
+    this.clipT = 0;
+  }
+
   /** Capture/debug: pin the clip at time t (null → live). */
   freeze(t: number | null): void {
     this.freezeT = t;
@@ -142,7 +150,7 @@ export class Vm3d {
    */
   study(pose: string | null, view = 'back'): void {
     if (this.studyHand) { this.scene.remove(this.studyHand.group); this.studyHand = null; }
-    if (!pose || !STUDY_POSES[pose]) return;
+    if (!pose || !STUDY_POSES[pose] || !this.rig.ready) return;
     this.studyView = view === 'palm' || view === 'side' ? view : 'back';
     const h = new LiveHand('R', this.spec);
     const p = STUDY_POSES[pose];
@@ -155,7 +163,8 @@ export class Vm3d {
 
   frame(f: Vm3dFrame): void {
     this.toolId = f.toolId === 'keyboard' ? 'keyboard' : null;
-    if (!this.toolId) return;
+    this.rig.ensureHands(); // cheap once loaded; builds hands the frame they arrive
+    if (!this.toolId || !this.rig.ready) return;
     if (this.freezeT === null) this.clipT += f.dt;
     const t = this.freezeT ?? this.clipT;
     if (this.clipT > this.clip.duration && !this.clip.loop) {

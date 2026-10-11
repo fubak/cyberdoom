@@ -63,8 +63,7 @@ for (const gender of ['male', 'female']) {
     for (let i = 0; i < c.stills.length; i++) {
       const t = c.stills[i];
       await p4k.evaluate(([a, tt]) => {
-        window.__cd.vm3d.force(a);
-        window.__cd.fire();
+        window.__cd.vm3d.play(a);
         window.__cd.vm3d.freeze(tt);
       }, [action, t]);
       await p4k.waitForTimeout(300);
@@ -93,8 +92,7 @@ for (const gender of ['male', 'female']) {
   await p10.waitForTimeout(600);
   await p10.screenshot({ path: `${OUT}/1080-${gender}-idle.png` });
   await p10.evaluate(() => {
-    window.__cd.vm3d.force('swing');
-    window.__cd.fire();
+    window.__cd.vm3d.play('swing');
     window.__cd.vm3d.freeze(0.105);
   });
   await p10.waitForTimeout(300);
@@ -106,8 +104,7 @@ for (const gender of ['male', 'female']) {
     for (let i = 0; i < n; i++) {
       const t = (i / 60).toFixed(4);
       await p10.evaluate(([a, tt]) => {
-        window.__cd.vm3d.force(a);
-        window.__cd.fire();
+        window.__cd.vm3d.play(a);
         window.__cd.vm3d.freeze(tt);
       }, [action, t]);
       await p10.waitForTimeout(120);

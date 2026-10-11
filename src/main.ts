@@ -1836,6 +1836,10 @@ class Game {
         freeze(t: number | null) {
           g.vm3d?.freeze(t);
         },
+        /** start a clip immediately, bypassing the arsenal cooldown */
+        play(a: string) {
+          g.vm3d?.play(a === 'swing' ? 'swing' : 'type');
+        },
         /** anatomy study: pose 'open'|'relaxed'|'typing'|'fist'|'bat', view 'palm'|'back'|'side' */
         study(pose: string | null, view?: string) {
           g.vm3d?.study(pose, view);

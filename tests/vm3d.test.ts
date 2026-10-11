@@ -1,14 +1,32 @@
 import * as THREE from 'three';
-import { describe, expect, it } from 'vitest';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { JOINT_LIMITS, type FingerName } from '../src/render/handrig';
 import { CLIPS, resolveClip } from '../src/render/vm3d/clips';
 import { Vm3dRig } from '../src/render/vm3d/rig';
 import { keyTopWorld } from '../src/render/vm3d/keyboard3d';
-import { HAND_FINGERS } from '../src/render/vm3d/hand3d';
+import { HAND_FINGERS, setHandAsset } from '../src/render/vm3d/hand3d';
 import { SKIN_TONES } from '../src/tools/look';
 
 const spec = { gender: 'male' as const, skin: SKIN_TONES[1] };
 const MM = 0.001;
+
+/** Parse the real glb files and register them — no mocked skeleton.
+ *  (node builtins have no types here — the tsconfig ships DOM types only) */
+beforeAll(async () => {
+  // 'node:fs' has no types here (DOM-only tsconfig); keep the specifier
+  // dynamic so tsc doesn't try to resolve it.
+  const fsSpecifier = 'node:fs';
+  const { readFileSync } = await import(fsSpecifier) as { readFileSync(p: string): Uint8Array };
+  const loader = new GLTFLoader();
+  for (const [side, file] of [['L', 'left.glb'], ['R', 'right.glb']] as const) {
+    const buf = readFileSync(`public/models/hands/${file}`);
+    const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
+    const gltf = await new Promise<{ scene: THREE.Object3D }>((res, rej) =>
+      loader.parse(ab, '', res, rej));
+    setHandAsset(side, gltf.scene);
+  }
+});
 
 const LIMITS: Record<FingerName, { mcp: readonly [number, number]; pip: readonly [number, number]; dip?: readonly [number, number]; abd?: readonly [number, number] }> = {
   index: JOINT_LIMITS,
@@ -129,6 +147,74 @@ describe('vm3d clip contacts (plan §5)', () => {
     expect(r600.rootPos[0]).toBeCloseTo(0.012, 3);
     expect(r600.rootPos[1]).toBeCloseTo(-0.148, 3);
     expect(r600.rootRot[0]).toBeCloseTo(24, 3);
+  });
+
+  it('SWING: each palm centre stays within 1 cm of its board-end grip socket', () => {
+    const rig = new Vm3dRig(spec);
+    const clip = CLIPS['kbd.swing'];
+    const dt = 1 / 240;
+    for (let t = 0; t <= clip.duration + 1e-9; t += dt) {
+      const r = rig.solve(clip, t);
+      for (const side of ['L', 'R'] as const) {
+        for (const w of r.hands[side].wrists) {
+          // mid-blend frames interpolate between sockets legitimately;
+          // only assert rigidity when the grip socket dominates (≥0.9)
+          if (!w.socket || !w.socket.startsWith('grip') || w.weight < 0.9) continue;
+          const socket = rig.board.socketWorld(w.socket);
+          const palm = rig.hands[side].group.getWorldPosition(new THREE.Vector3());
+          expect(
+            palm.distanceTo(socket),
+            `swing@${t.toFixed(4)} ${side} palm → ${w.socket}`,
+          ).toBeLessThan(10 * MM);
+        }
+      }
+    }
+  });
+
+  it('IDLE/TYPE: right-hand fingertips rest within 3 mm of a keycap top', () => {
+    const rig = new Vm3dRig(spec);
+    // resting contact keys: home row under the four fingers
+    const restKeys: Partial<Record<FingerName, string>> = {
+      index: 'j', middle: 'k', ring: 'l', pinky: 'enter',
+    };
+    for (const t of [0, 0.62]) {
+      rig.solve(CLIPS['kbd.type'], t);
+      for (const [f, key] of Object.entries(restKeys) as [FingerName, string][]) {
+        const tip = rig.hands.R.tipWorld(f);
+        // nearest keycap top surface in the home row area
+        let best = Infinity;
+        for (const k of rig.board.keys) {
+          const top = keyTopWorld(rig.board, k.name);
+          const dxz = Math.hypot(top.x - tip.x, top.z - tip.z);
+          if (dxz < 0.012) best = Math.min(best, Math.abs(top.y - tip.y));
+          void key;
+        }
+        expect(best, `type@${t} R.${f} tip → keycap top`).toBeLessThan(3 * MM);
+      }
+    }
+  });
+
+  it('IDLE/TYPE: no right-hand fingertip points above its MCP joint', () => {
+    const rig = new Vm3dRig(spec);
+    for (const clipName of ['kbd.idle', 'kbd.type'] as const) {
+      const clip = CLIPS[clipName];
+      const steps = 60;
+      for (let i = 0; i <= steps; i++) {
+        const t = (i / steps) * clip.duration;
+        rig.solve(clip, t);
+        for (const f of ['index', 'middle', 'ring', 'pinky'] as const) {
+          const joints = rig.hands.R.fingerJointsWorld(f);
+          const mcp = joints[0];
+          const tip = joints[joints.length - 1];
+          // camera-space "up" is +y in vm space; a tip may rise at most a
+          // fingertip's height (5 mm) above its knuckle — never above it
+          expect(
+            tip.y - mcp.y,
+            `${clipName}@${t.toFixed(3)} R.${f} tip above MCP`,
+          ).toBeLessThan(5 * MM);
+        }
+      }
+    }
   });
 
   it('works on the female spec (slimmer hand, all clips)', () => {

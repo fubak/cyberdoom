@@ -127,7 +127,7 @@ const HAND_ORDER: FingerName[] = ['index', 'middle', 'ring', 'pinky', 'thumb'];
  * the silhouette — the thumb reads as wrapping the object's side/front
  * instead of hooking over the hand's top contour.
  */
-export function thumbGeom(p: Place, palmW: number, palmL: number, mx: number, mcp: number, pip: number): {
+function thumbGeom(p: Place, palmW: number, palmL: number, mx: number, mcp: number, pip: number): {
   base: V3; d0: THREE.Vector3; d1: THREE.Vector3; d2: THREE.Vector3;
 } {
   const tout = Math.max(0, Math.min(1, p.thumbOut ?? 1));
@@ -152,13 +152,13 @@ export function thumbGeom(p: Place, palmW: number, palmL: number, mx: number, mc
   }
   const base: V3 = [
     THUMB_BASE[0] * palmW * mx * (1 + 0.3 * (1 - tout)),
-    palmL * (THUMB_BASE[1] - 0.07 * tout - 0.34 * (1 - tout)),
+    palmL * (THUMB_BASE[1] - 0.34 * (1 - tout)),
     THUMB_BASE[2] * palmW,
   ];
   const d0 = new THREE.Vector3(
     -0.72 * mx,
-    -0.32 * tout - 0.12 * (1 - tout),
-    -0.32 * tout,
+    0.18 * tout - 0.12 * (1 - tout),
+    0.66 * tout,
   ).normalize();
   const d1 = new THREE.Vector3(
     d0.x + (mcp / 60) * 0.85 * mx,

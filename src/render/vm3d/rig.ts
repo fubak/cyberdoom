@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import type { FingerName } from '../handrig';
 import { resolveClip, type Resolved, type ResolvedHand, type VmClip } from './clips';
 import { KeyboardRig, keyTopWorld } from './keyboard3d';
-import { LiveArm, LiveHand, type HandSpec } from './hand3d';
+import { ensureHandAssets, handAssetsReady, LiveArm, LiveHand, type HandSpec } from './hand3d';
 
 const D2R = Math.PI / 180;
 const _p = new THREE.Vector3();
@@ -19,21 +19,47 @@ export class Vm3dRig {
   readonly root = new THREE.Group();
   readonly stage = new THREE.Group();
   readonly board = new KeyboardRig();
-  readonly hands: Record<'L' | 'R', LiveHand>;
-  readonly arms: Record<'L' | 'R', LiveArm>;
+  private _hands: Record<'L' | 'R', LiveHand> | null = null;
+  private _arms: Record<'L' | 'R', LiveArm> | null = null;
   readonly spec: HandSpec;
 
   constructor(spec: HandSpec) {
     this.spec = spec;
-    this.hands = { L: new LiveHand('L', spec), R: new LiveHand('R', spec) };
-    this.hands.L.thumbOut = 0.35; // gripping hand wraps its thumb around the board end
-    this.hands.R.thumbOut = 0.6; // typing/backup hand keeps the thumb tucked
-    this.arms = {
-      L: new LiveArm('L', spec, this.hands.L.palmW),
-      R: new LiveArm('R', spec, this.hands.R.palmW),
-    };
+    ensureHandAssets();
     this.root.add(this.board.group);
-    this.stage.add(this.hands.L.group, this.hands.R.group, this.arms.L.group, this.arms.R.group);
+    this.ensureHands();
+  }
+
+  /**
+   * Hands exist only once both glbs have loaded; call every frame — cheap.
+   * Until then the rig solves the board only and the sprite path draws.
+   */
+  ensureHands(): boolean {
+    if (this._hands) return true;
+    if (!handAssetsReady()) return false;
+    this._hands = { L: new LiveHand('L', this.spec), R: new LiveHand('R', this.spec) };
+    this._hands.L.thumbOut = 0.9; // gripping hand wraps its thumb around the board end
+    this._hands.R.thumbOut = 0.6; // typing/backup hand keeps the thumb tucked
+    this._arms = {
+      L: new LiveArm('L', this.spec, this._hands.L.palmW),
+      R: new LiveArm('R', this.spec, this._hands.R.palmW),
+    };
+    this.stage.add(this._hands.L.group, this._hands.R.group, this._arms.L.group, this._arms.R.group);
+    return true;
+  }
+
+  get ready(): boolean {
+    return this._hands !== null;
+  }
+
+  get hands(): Record<'L' | 'R', LiveHand> {
+    if (!this._hands) throw new Error('vm3d: hands not loaded yet');
+    return this._hands;
+  }
+
+  get arms(): Record<'L' | 'R', LiveArm> {
+    if (!this._arms) throw new Error('vm3d: hands not loaded yet');
+    return this._arms;
   }
 
   /** Pose everything at clip time t. Returns the resolved frame for tests. */
@@ -51,8 +77,10 @@ export class Vm3dRig {
     }
     this.board.update(0);
     this.root.updateMatrixWorld(true);
-    this.solveHand('L', r.hands.L);
-    this.solveHand('R', r.hands.R);
+    if (this.ensureHands()) {
+      this.solveHand('L', r.hands.L);
+      this.solveHand('R', r.hands.R);
+    }
     return r;
   }
 

@@ -271,26 +271,38 @@ export class KeyboardRig {
     const d = Math.PI / 180;
     // left grip: wrist just left of the board's left end, palm wrapping the end
     // fingers point forward under the lip, thumb over the top edge
-    this.addSocket('gripL.wrist', [-KBD_W / 2 - 0.023, -0.015, 0.004], [70, -80, -12]);
-    this.addSocket('gripL.tip.thumb', [-KBD_W / 2 - 0.001, -0.030, -0.015]);
-    this.addSocket('gripL.tip.index', [-KBD_W / 2 + 0.021, -0.016, 0.054]);
-    this.addSocket('gripL.tip.middle', [-KBD_W / 2 + 0.024, 0.002, 0.049]);
-    this.addSocket('gripL.tip.ring', [-KBD_W / 2 + 0.013, 0.018, 0.045]);
-    this.addSocket('gripL.tip.pinky', [-KBD_W / 2 + 0.009, 0.032, 0.047]);
+    this.addSocket('gripL.wrist', [-0.155, 0.045, 0.000], [0, 90, -180]);
+    this.addSocket('gripL.tip.thumb', [-0.135, -0.002, 0.050]);
+    this.addSocket('gripL.tip.index', [-0.106, -0.029, 0.028]);
+    this.addSocket('gripL.tip.middle', [-0.097, -0.025, 0.011]);
+    this.addSocket('gripL.tip.ring', [-0.107, -0.022, -0.002]);
+    this.addSocket('gripL.tip.pinky', [-0.117, -0.019, -0.032]);
     // swing grip (right hand stacks on top of the left at the same end)
-    this.addSocket('gripR.wrist', [-KBD_W / 2 - 0.026, 0.016, -0.002], [70, -80, -10]);
-    this.addSocket('gripR.tip.thumb', [-KBD_W / 2 - 0.003, -0.020, 0.015]);
-    this.addSocket('gripR.tip.index', [-KBD_W / 2 + 0.030, 0.056, 0.038]);
-    this.addSocket('gripR.tip.middle', [-KBD_W / 2 + 0.002, 0.041, 0.049]);
-    this.addSocket('gripR.tip.ring', [-KBD_W / 2 + 0.000, 0.022, 0.054]);
-    this.addSocket('gripR.tip.pinky', [-KBD_W / 2 + 0.025, 0.011, 0.068]);
+    this.addSocket('gripR.wrist', [-0.170, 0.062, 0.008], [0, 90, -180]);
+    this.addSocket('gripR.tip.thumb', [-0.150, -0.002, 0.050]);
+    this.addSocket('gripR.tip.index', [-0.112, -0.030, 0.044]);
+    this.addSocket('gripR.tip.middle', [-0.102, -0.026, 0.020]);
+    this.addSocket('gripR.tip.ring', [-0.113, -0.023, 0.006]);
+    this.addSocket('gripR.tip.pinky', [-0.123, -0.020, -0.016]);
+    // mid-air waypoint above the grip end: swing grab/release routes the
+    // hand over the board so finger joints never cross the case
+    this.addSocket('wayR.wrist', [-0.175, 0.130, 0.020], [0, 90, -180]);
+    // low pull-back point: fingertips slide off the board to the left of
+    // the end face before the hand rises, so they never cross the case
+    this.addSocket('wayR2.wrist', [-0.205, 0.012, 0.012], [0, 90, -180]);
+    // high point above the right-hand side of the deck: regrip finishes by
+    // dropping straight down onto the home row, not swooping under the lip
+    this.addSocket('wayR3.wrist', [0.060, 0.150, 0.050], [0, 90, -180]);
+    // raised tuck in the typing orientation: first leg of the grab and last
+    // leg of the regrip, so the hand lifts/turns before sweeping sideways
+    this.addSocket('liftR3.wrist', [0.110, 0.115, 0.090], [-80, 15, 0]);
     // right-hand hover over the home row (rides the board)
-    this.addSocket('hoverR.wrist', [0.050, 0.058, 0.100], [-80, -20, 0]);
+    this.addSocket('hoverR.wrist', [0.110, 0.045, 0.095], [-80, 15, 0]);
     // wrist dips when a finger actually strikes a key
-    this.addSocket('pressR.wrist', [0.055, 0.050, 0.090], [-80, -20, 0]);
-    this.addSocket('pressR.wristM', [0.062, 0.045, 0.092], [-75, -25, -10]);
-    this.addSocket('pressR.wristR', [0.072, 0.048, 0.093], [-85, -15, 5]);
-    this.addSocket('pressR.wristP', [0.085, 0.046, 0.100], [-85, -15, 5]);
+    this.addSocket('pressR.wrist', [0.098, 0.040, 0.090], [-80, 15, 0]);
+    this.addSocket('pressR.wristM', [0.105, 0.040, 0.090], [-80, 15, 0]);
+    this.addSocket('pressR.wristR', [0.112, 0.040, 0.092], [-80, 15, 0]);
+    this.addSocket('pressR.wristP', [0.125, 0.045, 0.095], [-80, 15, 0]);
     // press targets on keycaps (world y tracks the depression)
     for (const name of ['j', 'k', 'l', 'f', 'enter', 'space']) {
       const i = this.keyIndex(name);

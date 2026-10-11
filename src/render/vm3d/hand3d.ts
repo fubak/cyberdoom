@@ -1,247 +1,376 @@
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { clone as skClone } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import type { Gender } from '../../core/types';
 import type { SkinTone } from '../../tools/look';
 import { ANALYSTS } from '../../tools/look';
 import { shade } from '../../tools/pixel';
 import {
-  clampCurl, defaultCurl, FINGER_LEN, JOINT_LIMITS, MCP_X, PALM_LEN,
-  PHALANX, THUMB_BASE, THUMB_LEN,
+  clampCurl, defaultCurl, JOINT_LIMITS, PALM_LEN,
   type Curl, type FingerName,
 } from '../handrig';
-import { thumbGeom } from '../handmesh';
 
 /**
- * LIVE HAND (vm3d): the handrig skeleton and anthropometrics as a persistent
- * Object3D joint hierarchy — wrist → palm → MCP/PIP/DIP (CMC/MCP/IP on the
- * thumb) — re-posed from joint angles EVERY frame, never baked. Joint limits
- * and the 2/3 DIP coupling come straight from handrig.clampCurl so tests can
- * verify limits on the same numbers the renderer uses.
+ * LIVE HAND (vm3d): the MIT generic WebXR hand meshes
+ * (@webxr-input-profiles/assets, left.glb / right.glb) driven by the same
+ * curl solver the old procedural mesh used. Bone map (25 joints):
+ *   wrist → <f>-finger-metacarpal → phalanx-proximal → -intermediate
+ *         → -distal → -tip        (thumb: metacarpal/proximal/distal/tip)
+ * MCP → phalanx-proximal, PIP → phalanx-intermediate, DIP → phalanx-distal,
+ * abduction twists phalanx-proximal around its own axis; the thumb maps
+ * CMC/MCP/IP onto metacarpal/proximal/distal.
  *
- * Scene units are metres: `size` is the middle-finger length (~0.09 m).
- * Hand-local axes match the rig: +y along the fingers, -z out of the palm,
- * +z the dorsal (nail) side; mx=-1 mirrors the right-hand layout for lefts.
+ * The glb is re-framed at load so the hand-local axes match the rig's
+ * convention: wrist at the origin, +y along the fingers, −z the palm side,
+ * +z dorsal, −x the thumb side for a right hand. Flexion axes are found
+ * empirically from the bind pose: rotating joint J around
+ * normalize(d × palmIn) — d = direction to the next bone — carries the
+ * child toward the palm; the palm-in normal itself is picked by trying a
+ * +40° index flexion with each candidate and keeping the sign that moves
+ * the tip closer to the palm centre.
+ *
+ * Units are metres; `size` is the middle-finger length (~0.09 m).
  */
 
 const D2R = Math.PI / 180;
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
-const X_AXIS = new THREE.Vector3(1, 0, 0);
-const Z_AXIS = new THREE.Vector3(0, 0, 1);
-
-const matCache = new Map<string, THREE.MeshStandardMaterial>();
-function std(col: string, rough = 0.6): THREE.MeshStandardMaterial {
-  const key = `${col}/${rough}`;
-  let m = matCache.get(key);
-  if (!m) {
-    m = new THREE.MeshStandardMaterial({ color: new THREE.Color(col), roughness: Math.max(rough, 0.78), metalness: 0, side: THREE.DoubleSide });
-    matCache.set(key, m);
-  }
-  return m;
-}
-
-const geoCache = new Map<string, THREE.BufferGeometry>();
-function geo<T extends THREE.BufferGeometry>(key: string, make: () => T): T {
-  let g = geoCache.get(key) as T | undefined;
-  if (!g) { g = make(); geoCache.set(key, g); }
-  return g;
-}
-
-function ellipsoid(c: [number, number, number], r: [number, number, number], col: string): THREE.Mesh {
-  const m = new THREE.Mesh(geo('sph', () => new THREE.SphereGeometry(1, 12, 9)), std(col));
-  m.position.set(c[0], c[1], c[2]);
-  m.scale.set(r[0], r[1], r[2]);
-  return m;
-}
-
-/**
- * Rounded-trapezoid palm slab: a rounded-rect outline (wider at the MCP
- * line, tapering toward the wrist) extruded through the palm thickness with
- * a bevel, so the hand reads as a slab with a dorsal side and a palm side —
- * not a blob. Palm-local: +y toward the fingers, +z dorsal, x across.
- */
-function palmSlabGeo(w: number, l: number, t: number): THREE.BufferGeometry {
-  const topW = w * 0.47;       // half-width at the MCP line
-  const botW = w * 0.34;       // half-width at the wrist
-  const r = w * 0.085;
-  const s = new THREE.Shape();
-  s.moveTo(-botW + r, 0);
-  s.lineTo(botW - r, 0);
-  s.quadraticCurveTo(botW, 0, botW, r);
-  s.lineTo(topW, l - r * 1.7);
-  s.quadraticCurveTo(topW, l - r * 0.15, topW - r * 1.5, l);
-  s.lineTo(-topW + r * 1.5, l);
-  s.quadraticCurveTo(-topW, l - r * 0.15, -topW, l - r * 1.7);
-  s.lineTo(-botW, r);
-  s.quadraticCurveTo(-botW, 0, -botW + r, 0);
-  const depth = Math.max(0.002, t - r * 1.6);
-  const g = new THREE.ExtrudeGeometry(s, {
-    depth, bevelEnabled: true, bevelThickness: r * 0.8, bevelSize: r * 0.72,
-    bevelSegments: 3, curveSegments: 10, steps: 1,
-  });
-  g.translate(0, 0, -depth / 2);
-  g.computeVertexNormals();
-  return g;
-}
-
-/**
- * Phalanx segment along +y, joint at y=0. Lathe profile thicker near both
- * ends (condyles) and slimmer mid-shaft — reads as a finger, not a tube.
- * r0 = radius at this joint, r1 = radius at the next joint.
- */
-function phalanxGeo(len: number, r0: number, r1: number): THREE.BufferGeometry {
-  const key = `ph:${len.toFixed(4)}:${r0.toFixed(4)}:${r1.toFixed(4)}`;
-  return geo(key, () => {
-    const pts: THREE.Vector2[] = [];
-    const prof: [number, number][] = [
-      [0.55, 0.0], [0.98, 0.05], [1.0, 0.18], [0.9, 0.5],
-      [0.86, 0.78], [0.94, 0.94], [0.6, 1.0], [0.15, 1.01],
-    ];
-    for (const [rf, ty] of prof) {
-      pts.push(new THREE.Vector2(Math.max(0.0008, (r0 + (r1 - r0) * ty) * rf), ty * len));
-    }
-    const g = new THREE.LatheGeometry(pts, 10);
-    g.computeVertexNormals();
-    return g;
-  });
-}
-
-/** Unit-length lathe tube (tapered, rounded ends) along +y; caller scales y. */
-function unitTube(): THREE.BufferGeometry {
-  const pts: THREE.Vector2[] = [new THREE.Vector2(0.001, -0.55)];
-  const steps = 5;
-  for (let i = 0; i <= steps; i++) {
-    const t = i / steps;
-    const r = 0.75 + (1.0 - 0.75) * t;
-    pts.push(new THREE.Vector2(Math.max(0.001, r - 0.25 * Math.cos((t - 0.5) * Math.PI)), t * 1.1 - 0.55));
-  }
-  pts.push(new THREE.Vector2(0.001, 0.55));
-  return geo('unitTube', () => new THREE.LatheGeometry(pts, 10));
-}
 
 export interface HandSpec {
   gender: Gender;
   skin: SkinTone;
 }
 
-interface Seg { joint: THREE.Group; child: THREE.Group }
-interface Chain { base: THREE.Group; segs: Seg[]; tip: THREE.Object3D }
-
 export const HAND_FINGERS: FingerName[] = ['index', 'middle', 'ring', 'pinky', 'thumb'];
+
+/** glb joint names for a finger: [flex joints..., tip]. */
+const FINGER_BONES: Record<FingerName, { flex: string[]; tip: string }> = {
+  index: { flex: ['index-finger-phalanx-proximal', 'index-finger-phalanx-intermediate', 'index-finger-phalanx-distal'], tip: 'index-finger-tip' },
+  middle: { flex: ['middle-finger-phalanx-proximal', 'middle-finger-phalanx-intermediate', 'middle-finger-phalanx-distal'], tip: 'middle-finger-tip' },
+  ring: { flex: ['ring-finger-phalanx-proximal', 'ring-finger-phalanx-intermediate', 'ring-finger-phalanx-distal'], tip: 'ring-finger-tip' },
+  pinky: { flex: ['pinky-finger-phalanx-proximal', 'pinky-finger-phalanx-intermediate', 'pinky-finger-phalanx-distal'], tip: 'pinky-finger-tip' },
+  thumb: { flex: ['thumb-metacarpal', 'thumb-phalanx-proximal', 'thumb-phalanx-distal'], tip: 'thumb-tip' },
+};
+
+/* ------------------------------------------------------------------ */
+/* Asset loading: both glbs must arrive before LiveHand can be built.   */
+/* ------------------------------------------------------------------ */
+
+type LoadState = 'idle' | 'loading' | 'ready' | 'failed';
+let loadState: LoadState = 'idle';
+const sources: Partial<Record<'L' | 'R', THREE.Object3D>> = {};
+
+export function handAssetsReady(): boolean {
+  return !!sources.L && !!sources.R;
+}
+export function handAssetsFailed(): boolean {
+  return loadState === 'failed';
+}
+
+/** Start fetching both glbs (idempotent). Failures warn once and fall back
+ *  to the sprite viewmodel permanently — never throw. */
+export function ensureHandAssets(): void {
+  if (loadState !== 'idle') return;
+  loadState = 'loading';
+  const loader = new GLTFLoader();
+  const base = import.meta.env?.BASE_URL ?? '/';
+  const one = (side: 'L' | 'R', file: string) =>
+    new Promise<void>((resolve, reject) => {
+      loader.load(`${base}models/hands/${file}`, (g) => {
+        sources[side] = g.scene;
+        resolve();
+      }, undefined, reject);
+    });
+  Promise.all([one('L', 'left.glb'), one('R', 'right.glb')])
+    .then(() => { loadState = 'ready'; })
+    .catch((e) => {
+      loadState = 'failed';
+      console.warn('[vm3d] hand model load failed; using sprite viewmodel', e);
+    });
+}
+
+/** Test hook: inject a parsed glb scene directly (Node has no fetch path). */
+export function setHandAsset(side: 'L' | 'R', scene: THREE.Object3D): void {
+  sources[side] = scene;
+  if (sources.L && sources.R) loadState = 'ready';
+}
+
+/* ------------------------------------------------------------------ */
+
+interface Joint {
+  bone: THREE.Bone;
+  /** bind-pose local rotation. */
+  q0: THREE.Quaternion;
+  /** flexion axis in bone-local space (+ = toward the palm). */
+  flexAxis: THREE.Vector3;
+  /** abduction/twist axis in bone-local space + sign for +abd → spread. */
+  abdAxis: THREE.Vector3;
+  abdSign: number;
+}
+
+interface Chain {
+  /** [MCP-ish, PIP-ish, DIP-ish] joints. */
+  joints: Joint[];
+  tip: THREE.Bone;
+}
+
+const _v2 = new THREE.Vector3();
 
 export class LiveHand {
   /** wrist frame: position = wrist centre, quaternion = palm orientation. */
   readonly group = new THREE.Group();
-  /** L hands are a true mirror of R geometry (scale.x = -1) so the thumb
-   *  lands on the correct side with consistent curl chirality. */
-  private readonly core = new THREE.Group();
-  readonly palm = new THREE.Group();
   readonly side: 'L' | 'R';
   readonly size: number;
   readonly palmW: number;
   readonly palmL: number;
-  private readonly mx: number;
   private readonly spec: HandSpec;
   private readonly chains = {} as Record<FingerName, Chain>;
   private readonly curls = {} as Record<FingerName, Required<Curl>>;
+  /** extra CMC rotation pulling the thumb across the palm (deg at thumbOut=0). */
   thumbOut = 1;
-  private readonly lens = {} as Record<FingerName, number[]>;
-  /** nail darkening per gender (fem: painted). */
-  private readonly nailCol: string;
-  private readonly skinCol: string;
-  private readonly creaseCol: string;
+  private readonly thumbTuckAxis: THREE.Vector3;
+  private readonly thumbOutAxis: THREE.Vector3;
+  private readonly thumbOutSign: number;
+  private readonly wristBone: THREE.Bone;
 
   constructor(side: 'L' | 'R', spec: HandSpec, size?: number) {
+    const src = sources[side];
+    if (!src) throw new Error('vm3d: hand glb not loaded (call ensureHandAssets first)');
     this.side = side;
     this.spec = spec;
-    this.mx = 1; // geometry is always built right-handed; L mirrors via `core`
-    this.core.scale.x = side === 'L' ? -1 : 1;
     const fem = spec.gender === 'female';
     this.size = size ?? (fem ? 0.082 : 0.09);
     this.palmW = this.size * (fem ? 0.84 : 0.95);
     this.palmL = this.size * PALM_LEN;
-    this.skinCol = spec.skin.base;
-    this.creaseCol = shade(spec.skin.shadow, 0.8);
-    this.nailCol = fem ? '#c83a6a' : shade(spec.skin.highlight, 0.98);
-    this.group.add(this.core);
-    this.core.add(this.palm);
-    this.buildPalm();
+
+    // ---- clone + index the skeleton ----
+    const inner = skClone(src) as THREE.Group;
+    inner.updateMatrixWorld(true);
+    const bones = new Map<string, THREE.Bone>();
+    inner.traverse((o) => { if ((o as THREE.Bone).isBone) bones.set(o.name, o as THREE.Bone); });
+    const wrist = bones.get('wrist');
+    if (!wrist) throw new Error('vm3d: glb missing wrist bone');
+    this.wristBone = wrist;
+
+    // The glb skeleton is FLAT — every bone is a sibling under Armature, so
+    // rotating a joint moves nothing. Rebuild the real chain hierarchy with
+    // attach() (preserves each bone's bind world transform):
+    //   wrist → metacarpal → proximal → intermediate → distal → tip
     for (const f of HAND_FINGERS) {
-      this.curls[f] = clampCurl(f, defaultCurl(f));
-      this.chains[f] = this.buildFinger(f);
-    }
-  }
-
-  private buildPalm(): void {
-    const { palmW, palmL, mx } = this;
-    const fem = this.spec.gender === 'female';
-    const palmT = this.size * (fem ? 0.26 : 0.32);
-    const skin = this.skinCol;
-    // the slab itself: rounded trapezoid, dorsal dome slightly fuller than the palm side
-    const slab = new THREE.Mesh(palmSlabGeo(palmW * 0.96, palmL * 0.97, palmT), std(skin, 0.84));
-    this.palm.add(slab);
-    // dorsal dome: a shallow swell over the back so the top surface catches the key light
-    this.palm.add(ellipsoid([0, palmL * 0.5, palmT * 0.3], [palmW * 0.4, palmL * 0.36, palmT * 0.2], shade(skin, 1.04)));
-    // palm-side hollow pads: heel pads frame a shallow centre
-    this.palm.add(ellipsoid([palmW * 0.2 * mx, palmL * 0.5, -palmT * 0.28], [palmW * 0.24, palmL * 0.3, palmT * 0.16], shade(skin, 0.97)));
-    // thenar mass (thumb side, lower radial) — big, merges into the thumb root
-    this.palm.add(ellipsoid(
-      [THUMB_BASE[0] * palmW * mx, palmL * 0.26, palmT * 0.05],
-      [palmW * 0.21, palmL * 0.3, palmT * 0.56], shade(skin, 1.02)));
-    // hypothenar mass (ulnar edge, smaller)
-    this.palm.add(ellipsoid([palmW * 0.36 * mx, palmL * 0.28, -palmT * 0.02], [palmW * 0.15, palmL * 0.26, palmT * 0.5], skin));
-    // knuckle line bulge along the MCP edge on the dorsal side
-    this.palm.add(ellipsoid([0, palmL * 0.92, palmT * 0.22], [palmW * 0.42, palmL * 0.1, palmT * 0.34], skin));
-    // wrist: tapers narrower and thinner than the palm
-    this.palm.add(ellipsoid([0, -this.size * 0.03, 0], [palmW * 0.33, this.size * 0.15, palmT * 0.42], skin));
-    this.palm.add(ellipsoid([0, -this.size * 0.12, 0], [palmW * 0.3, this.size * 0.12, palmT * 0.38], shade(skin, 0.99)));
-    // interdigital webs: thin skin filling the gaps between finger roots
-    const webX = [-0.215, 0, 0.2]; // between index/middle, middle/ring, ring/pinky
-    for (const wx of webX) {
-      this.palm.add(ellipsoid([wx * palmW * mx, palmL * 0.95, -palmT * 0.1],
-        [palmW * 0.09, palmL * 0.12, palmT * 0.34], skin));
-    }
-  }
-
-  private buildFinger(f: FingerName): Chain {
-    const fem = this.spec.gender === 'female';
-    const size = this.size;
-    const isThumb = f === 'thumb';
-    const len = (isThumb ? THUMB_LEN : FINGER_LEN[f as keyof typeof FINGER_LEN]) * size;
-    const ls = [len * PHALANX[0], len * PHALANX[1], len * PHALANX[2]];
-    this.lens[f] = ls;
-    const r0 = Math.max(0.0036, size * (fem ? 0.062 : 0.075)); // slimmer on the female hand
-    const fr = isThumb ? r0 * 1.24 : r0;
-    // proximal > middle > distal, tip narrows fastest
-    const radii = [fr, fr * 0.9, fr * 0.8, fr * 0.55];
-    const base = new THREE.Group();
-    const chain: Chain = { base, segs: [], tip: new THREE.Object3D() };
-    let parent = base;
-    for (let s = 0; s < 3; s++) {
-      const joint = new THREE.Group();
-      joint.add(new THREE.Mesh(phalanxGeo(ls[s], radii[s], radii[s + 1]), std(this.skinCol, 0.8)));
-      const child = new THREE.Group();
-      child.position.y = ls[s];
-      if (s < 2) {
-        // knuckle: flattened bump on the dorsal side only
-        child.add(ellipsoid([0, radii[s + 1] * 0.1, radii[s + 1] * 0.45],
-          [radii[s + 1] * 1.15, radii[s + 1] * 0.62, radii[s + 1] * 0.55], this.skinCol));
-        // flexion crease tucked under the joint on the palm side
-        child.add(ellipsoid([0, radii[s + 1] * 0.08, -radii[s + 1] * 0.6],
-          [radii[s + 1] * 0.6, radii[s + 1] * 0.14, radii[s + 1] * 0.42], this.creaseCol));
+      const names = FINGER_BONES[f];
+      let parent: THREE.Object3D = wrist;
+      for (const n of [...names.flex, names.tip]) {
+        const b = bones.get(n);
+        if (!b) throw new Error(`vm3d: glb missing bone ${n}`);
+        parent.attach(b);
+        parent = b;
       }
-      joint.add(child);
-      parent.add(joint);
-      chain.segs.push({ joint, child });
-      parent = child;
     }
-    chain.tip.position.y = 0;
-    chain.segs[2].child.add(chain.tip);
-    // nail: flat plate on the distal dorsal side
-    const nail = ellipsoid([0, ls[2] * 0.6, radii[3] * 0.62],
-      [radii[3] * 0.8, radii[3] * 0.55, radii[3] * 0.2], this.nailCol);
-    nail.material = std(this.nailCol, 0.45);
-    chain.segs[2].joint.add(nail);
-    this.palm.add(base);
-    return chain;
+    inner.updateMatrixWorld(true);
+
+    const pos = (n: string) => {
+      const b = bones.get(n);
+      if (!b) throw new Error(`vm3d: glb missing bone ${n}`);
+      return b.getWorldPosition(new THREE.Vector3());
+    };
+    const midProx = pos('middle-finger-phalanx-proximal');
+    const midInter = pos('middle-finger-phalanx-intermediate');
+    const wristPos = wrist.getWorldPosition(new THREE.Vector3());
+
+    // ---- reframe: wrist → origin, fingers → +y, index side → −x ----
+    const fy = midInter.clone().sub(midProx).normalize();           // along fingers
+    const sxRaw = pos('index-finger-metacarpal').sub(pos('pinky-finger-metacarpal')); // thumb→pinky
+    const sx = sxRaw.clone().addScaledVector(fy, -sxRaw.dot(fy)).normalize();
+    const y = fy.clone();
+    const x = sx.clone().negate();                                   // −x = thumb side (right-hand conv)
+    const z = new THREE.Vector3().crossVectors(x, y).normalize();
+    // rows of the world→local rotation
+    const R = new THREE.Matrix4().makeBasis(x, y, z).invert();
+    const Rinv = new THREE.Matrix4().copy(R).invert();               // local → clone-world
+    // R maps world→frame-local: local = R * (p - wristPos)
+    const toLocal = (p: THREE.Vector3) => p.clone().sub(wristPos).applyMatrix4(R);
+    const toWorldDir = (vLocal: THREE.Vector3) => vLocal.clone().applyMatrix4(Rinv).normalize();
+
+    // ---- bind quaternions (needed before any bone-local conversion) ----
+    const bindQuat = new Map<string, THREE.Quaternion>();
+    for (const [n, b] of bones) bindQuat.set(n, b.getWorldQuaternion(new THREE.Quaternion()));
+    const toBoneLocal = (boneName: string, vLocal: THREE.Vector3) => {
+      // world(axis) = Rinv·vLocal ; boneLocal = bindWorldQuat⁻¹·world
+      const world = vLocal.clone().applyMatrix4(Rinv);
+      return world.applyQuaternion(bindQuat.get(boneName)!.clone().invert()).normalize();
+    };
+
+    // ---- palm-in normal (local): the sign that curls toward the palm ----
+    const mcpC = ['index', 'middle', 'ring', 'pinky'].map((f) => toLocal(pos(`${f}-finger-metacarpal`)));
+    const palmCentre = mcpC.reduce((a, p) => a.add(p), new THREE.Vector3())
+      .divideScalar(4).add(new THREE.Vector3(0, -this.size * 0.45, 0));
+    // candidates are ±z in FRAME-LOCAL space (palm in = −z by convention);
+    // the empirical probe picks the sign that actually bends toward the palm
+    const palmIn = this.pickPalmIn(bones, pos, toLocal, toBoneLocal, new THREE.Vector3(0, 0, -1), palmCentre);
+
+    // ---- per-joint flexion axes (bone-local) ----
+    const childOf = new Map<string, string>();
+    for (const f of HAND_FINGERS) {
+      const names = FINGER_BONES[f];
+      const seq = [...names.flex, names.tip];
+      for (let i = 0; i + 1 < seq.length; i++) childOf.set(seq[i], seq[i + 1]);
+    }
+    const flexLocal = (jn: string): THREE.Vector3 => {
+      const d = toLocal(pos(childOf.get(jn)!)).sub(toLocal(pos(jn))).normalize();
+      return new THREE.Vector3().copy(d).cross(palmIn).normalize();
+    };
+
+    for (const f of HAND_FINGERS) {
+      const names = FINGER_BONES[f];
+      const joints: Joint[] = names.flex.map((jn) => {
+        const bone = bones.get(jn)!;
+        const dL = toLocal(pos(childOf.get(jn)!)).sub(toLocal(pos(jn))).normalize();
+        // abduction twists about the bone axis; sign picks +abd = spread
+        const abdAxis = dL.clone();
+        return {
+          bone,
+          q0: bone.quaternion.clone(),
+          flexAxis: toBoneLocal(jn, flexLocal(jn)),
+          abdAxis: toBoneLocal(jn, abdAxis),
+          abdSign: 1,
+        };
+      });
+      this.chains[f] = { joints, tip: bones.get(names.tip)! };
+    }
+
+    // abduction sign: +abd should move the tip away from the middle finger
+    for (const f of ['index', 'ring', 'pinky', 'middle'] as const) {
+      const j = this.chains[f].joints[0];
+      const s_i = toLocal(pos(`${f}-finger-metacarpal`)).sub(toLocal(pos('middle-finger-metacarpal')));
+      s_i.y = 0;
+      if (s_i.lengthSq() < 1e-8) s_i.set(f === 'middle' ? -1 : 0, 0, 0);
+      s_i.normalize();
+      j.abdSign = this.abdSignFor(j, this.chains[f].tip, s_i, toWorldDir);
+    }
+
+    // thumb: CMC gets an extra "tuck" axis (toward the palm centre) plus an
+    // out axis (thumbOut: 1 = extended sideways, 0 = wrapped around a grip)
+    const tMeta = this.chains.thumb.joints[0];
+    const tMetaPos = toLocal(pos('thumb-metacarpal'));
+    const tChild = toLocal(pos('thumb-phalanx-proximal'));
+    const dT = tChild.clone().sub(tMetaPos).normalize();
+    const dirPalm = palmCentre.clone().sub(tMetaPos).normalize();
+    this.thumbTuckAxis = toBoneLocal('thumb-metacarpal', _v2.copy(dT).cross(dirPalm).normalize().clone());
+    this.thumbOutAxis = tMeta.abdAxis.clone();
+    // +thumbOut should rotate the tip AWAY from the palm centre: measure it
+    this.thumbOutSign = this.abdSignFor(tMeta, this.chains.thumb.tip, palmCentre.clone().sub(tMetaPos).normalize().negate(), toWorldDir);
+
+    // ---- mount: scale → reframe inside `group` (the wrist frame) ----
+    const scaleWrap = new THREE.Group();
+    const frame = new THREE.Group();
+    frame.quaternion.setFromRotationMatrix(R);
+    frame.position.copy(wristPos).applyMatrix4(R).negate();
+    scaleWrap.add(frame);
+    frame.add(inner);
+    this.group.add(scaleWrap);
+    // match the rig's `size` (middle-finger length) in metres
+    inner.updateMatrixWorld(true);
+    const midLen = pos('middle-finger-phalanx-proximal').distanceTo(pos('middle-finger-tip'));
+    const s = this.size / Math.max(1e-4, midLen);
+    scaleWrap.scale.set(s * (fem ? 0.92 : 1), s * (fem ? 0.92 : 1), s * (fem ? 0.92 : 1));
+    if (fem) wrist.scale.x *= 0.94; // slimmer palm across the metacarpal fan
+
+    // ---- materials ----
+    const skinMat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(spec.skin.base), roughness: 0.7, metalness: 0,
+    });
+    inner.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if ((m as THREE.SkinnedMesh).isSkinnedMesh || m.isMesh) {
+        m.material = skinMat;
+        m.frustumCulled = false;
+      }
+    });
+
+    // ---- forearm + sleeve cuff parented to the wrist bone ----
+    this.buildWristTail(toWorldDir, skinMat);
+
+    for (const f of HAND_FINGERS) this.curls[f] = clampCurl(f, defaultCurl(f));
+    this.setCurls({});
+  }
+
+  /**
+   * Choose the palm-in sign empirically: flex the index MCP ±40° with each
+   * candidate normal and keep whichever moves the tip closer to the palm
+   * centre. Runs once per hand at construction.
+   */
+  private pickPalmIn(
+    bones: Map<string, THREE.Bone>,
+    pos: (n: string) => THREE.Vector3,
+    toLocal: (p: THREE.Vector3) => THREE.Vector3,
+    toBoneLocal: (boneName: string, vLocal: THREE.Vector3) => THREE.Vector3,
+    n0: THREE.Vector3,
+    palmCentre: THREE.Vector3,
+  ): THREE.Vector3 {
+    const jn = 'index-finger-phalanx-proximal';
+    const bone = bones.get(jn)!;
+    const q0 = bone.quaternion.clone();
+    const jPos = toLocal(pos(jn));
+    const d = toLocal(pos('index-finger-phalanx-intermediate')).sub(jPos).normalize();
+    let best = n0;
+    let bestDist = Infinity;
+    for (const cand of [n0, n0.clone().negate()]) {
+      const axisL = new THREE.Vector3().copy(d).cross(cand).normalize();
+      bone.quaternion.copy(q0).multiply(new THREE.Quaternion().setFromAxisAngle(toBoneLocal(jn, axisL), 40 * D2R));
+      bone.updateMatrixWorld(true);
+      const tip = toLocal(bones.get('index-finger-tip')!.getWorldPosition(new THREE.Vector3()));
+      const dist = tip.distanceTo(palmCentre);
+      if (dist < bestDist) { bestDist = dist; best = cand; }
+      bone.quaternion.copy(q0);
+      bone.updateMatrixWorld(true);
+    }
+    void pos;
+    return best.normalize();
+  }
+
+  /** Sign for a twist axis so +angle moves the tip along `wantLocal`. */
+  private abdSignFor(
+    j: Joint, tip: THREE.Bone, wantLocal: THREE.Vector3,
+    toWorldDir: (v: THREE.Vector3) => THREE.Vector3,
+  ): number {
+    const want = toWorldDir(wantLocal);
+    j.bone.quaternion.copy(j.q0);
+    const t0 = tip.getWorldPosition(new THREE.Vector3());
+    j.bone.quaternion.copy(j.q0).multiply(new THREE.Quaternion().setFromAxisAngle(j.abdAxis, 8 * D2R));
+    j.bone.updateMatrixWorld(true);
+    const t1 = tip.getWorldPosition(new THREE.Vector3());
+    j.bone.quaternion.copy(j.q0);
+    j.bone.updateMatrixWorld(true);
+    return t1.sub(t0).dot(want) >= 0 ? 1 : -1;
+  }
+
+  /**
+   * Wrist tail: a tapered forearm continuing past the wrist plus a dark
+   * sleeve cuff over its outer half, so no bare wrist cut is ever visible.
+   * Parented to the wrist bone — rides every hand pose.
+   */
+  private buildWristTail(
+    toWorldDir: (v: THREE.Vector3) => THREE.Vector3,
+    skinMat: THREE.Material,
+  ): void {
+    // forearm direction in frame-local space: opposite the finger direction
+    // blended toward −z (arms exit behind/below the hand, not through it)
+    const dirL = new THREE.Vector3(0, -1, -0.35).normalize();
+    const bindQ = this.wristBone.getWorldQuaternion(new THREE.Quaternion());
+    const boneDir = toWorldDir(dirL).applyQuaternion(bindQ.clone().invert()).normalize();
+    const s0 = this.size / 0.086; // roughly metres; tuned visually anyway
+    const len = 0.10 * s0;
+    const rw = this.palmW * 0.36;
+
+    const foreGeo = new THREE.CylinderGeometry(rw * 0.82, rw * 1.15, len, 12, 1);
+    foreGeo.translate(0, len / 2, 0);
+    const fore = new THREE.Mesh(foreGeo, skinMat);
+    fore.quaternion.setFromUnitVectors(Y_AXIS, boneDir);
+    const cuffGeo = new THREE.CylinderGeometry(rw * 1.22, rw * 1.32, len * 0.45, 12, 1);
+    cuffGeo.translate(0, len * 0.45 / 2 + len * 0.42, 0);
+    const jacket = ANALYSTS[this.spec.gender].jacket;
+    const cuff = new THREE.Mesh(cuffGeo, new THREE.MeshStandardMaterial({ color: shade(jacket, 0.7), roughness: 0.85, metalness: 0 }));
+    cuff.quaternion.copy(fore.quaternion);
+    this.wristBone.add(fore, cuff);
   }
 
   /** Apply joint angles for one finger (clamped + DIP coupling). */
@@ -250,44 +379,34 @@ export class LiveHand {
     this.curls[f] = cc;
     const ch = this.chains[f];
     if (f === 'thumb') {
-      const tg = thumbGeom(
-        { wrist: [0, 0, 0], size: this.size, mirror: false, thumbOut: this.thumbOut },
-        this.palmW, this.palmL, this.mx, cc.mcp, cc.pip,
-      );
-      ch.base.position.set(tg.base[0], tg.base[1], tg.base[2]);
-      const qs = [
-        new THREE.Quaternion().setFromUnitVectors(Y_AXIS, tg.d0),
-        new THREE.Quaternion().setFromUnitVectors(tg.d0, tg.d1),
-        new THREE.Quaternion().setFromUnitVectors(tg.d1, tg.d2),
-      ];
-      for (let s = 0; s < 3; s++) ch.segs[s].joint.quaternion.copy(qs[s]);
+      // CMC: out-twist (thumbOut) + tuck toward palm + share of mcp flexion
+      const m = ch.joints[0];
+      m.bone.quaternion.copy(m.q0)
+        .multiply(new THREE.Quaternion().setFromAxisAngle(this.thumbOutAxis, this.thumbOutSign * (this.thumbOut - 1) * 45 * D2R))
+        .multiply(new THREE.Quaternion().setFromAxisAngle(this.thumbTuckAxis, (1 - this.thumbOut) * 30 * D2R))
+        .multiply(new THREE.Quaternion().setFromAxisAngle(m.flexAxis, cc.mcp * 0.55 * D2R));
+      ch.joints[1].bone.quaternion.copy(ch.joints[1].q0)
+        .multiply(new THREE.Quaternion().setFromAxisAngle(ch.joints[1].flexAxis, cc.mcp * D2R));
+      ch.joints[2].bone.quaternion.copy(ch.joints[2].q0)
+        .multiply(new THREE.Quaternion().setFromAxisAngle(ch.joints[2].flexAxis, cc.pip * D2R));
       return cc;
     }
-    const base = this.fingerBase(f);
-    ch.base.position.set(base[0], base[1], base[2]);
-    const abdQ = new THREE.Quaternion().setFromAxisAngle(Z_AXIS, cc.abd * this.mx * D2R);
-    const fq = new THREE.Quaternion().setFromAxisAngle(X_AXIS, -cc.mcp * D2R);
-    ch.segs[0].joint.quaternion.copy(abdQ.multiply(fq));
-    ch.segs[1].joint.quaternion.setFromAxisAngle(X_AXIS, -cc.pip * D2R);
-    ch.segs[2].joint.quaternion.setFromAxisAngle(X_AXIS, -cc.dip * D2R);
+    const [mcp, pip, dip] = ch.joints;
+    mcp.bone.quaternion.copy(mcp.q0)
+      .multiply(new THREE.Quaternion().setFromAxisAngle(mcp.abdAxis, mcp.abdSign * cc.abd * D2R))
+      .multiply(new THREE.Quaternion().setFromAxisAngle(mcp.flexAxis, cc.mcp * D2R));
+    pip.bone.quaternion.copy(pip.q0)
+      .multiply(new THREE.Quaternion().setFromAxisAngle(pip.flexAxis, cc.pip * D2R));
+    dip.bone.quaternion.copy(dip.q0)
+      .multiply(new THREE.Quaternion().setFromAxisAngle(dip.flexAxis, cc.dip * D2R));
     return cc;
-  }
-
-  /**
-   * MCP (knuckle) line: arched — middle sits highest, pinky lowest, and the
-   * outer fingers wrap a little toward the palm side; roots sink into the
-   * slab so no gap shows between finger and palm.
-   */
-  private fingerBase(f: Exclude<FingerName, 'thumb'>): [number, number, number] {
-    const x = MCP_X[f] * this.palmW * this.mx;
-    const archY = { index: -0.003, middle: 0, ring: -0.004, pinky: -0.012 }[f];
-    const wrap = -Math.abs(MCP_X[f]) * this.palmW * 0.05; // slight curl toward -z at the edges
-    return [x, this.palmL * 0.93 + archY, wrap];
   }
 
   /** Apply a full per-finger curl set (missing fingers keep their angles). */
   setCurls(curls: Partial<Record<FingerName, Curl>>): void {
-    for (const f of HAND_FINGERS) this.setCurl(f, { ...this.curls[f], ...curls[f] });
+    // an unspecified dip is re-derived from pip (the coupling), so a stale
+    // dip from a previous pose can never leak into the merge
+    for (const f of HAND_FINGERS) this.setCurl(f, { ...this.curls[f], ...curls[f], dip: curls[f]?.dip });
   }
 
   getCurl(f: FingerName): Required<Curl> {
@@ -300,12 +419,20 @@ export class LiveHand {
     return this.chains[f].tip.getWorldPosition(out);
   }
 
-  /** All joint positions of finger f in world space: [base, j1, j2, tip]. */
+  /** Joint positions of finger f in world space: [MCP, PIP, DIP, tip]. */
   fingerJointsWorld(f: FingerName): THREE.Vector3[] {
     const ch = this.chains[f];
     this.group.updateWorldMatrix(true, true);
-    const pts = [ch.base, ch.segs[0].child, ch.segs[1].child, ch.segs[2].child];
+    const pts = [...ch.joints.map((j) => j.bone as THREE.Object3D), ch.tip];
     return pts.map((p) => p.getWorldPosition(new THREE.Vector3()));
+  }
+
+  /** Palm-centre world position (used by grip tests). */
+  palmCentreWorld(out = new THREE.Vector3()): THREE.Vector3 {
+    this.group.updateWorldMatrix(true, true);
+    // wrist + a bit along +y (toward the MCPs) is the palm's working centre
+    return out.copy(this.group.getWorldPosition(new THREE.Vector3()))
+      .add(new THREE.Vector3(0, this.palmL * 0.45, 0).applyQuaternion(this.group.getWorldQuaternion(new THREE.Quaternion())));
   }
 
   /**
@@ -327,35 +454,53 @@ export class LiveHand {
     const jac = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
     const h = 0.5; // degrees for the finite difference
     const read = () => ({ mcp: this.curls[f].mcp, pip: this.curls[f].pip, abd: this.curls[f].abd ?? 0 });
-    for (let iter = 0; iter < 24; iter++) {
-      const c0 = read();
-      this.tipWorld(f, base);
-      err.copy(target).sub(base);
-      if (err.length() <= 0.0015) return err.length();
-      for (let i = 0; i < n; i++) {
+    // DLS is start-state sensitive (it can stall at a joint limit from a
+    // strongly curled start), so run it from up to two seeds and keep the
+    // better end state: the current curl, then a half-extended fallback.
+    let best = Infinity;
+    let bestCurl: Required<Curl> | null = null;
+    for (let seed = 0; seed < 2; seed++) {
+      if (seed === 1) {
+        const d = defaultCurl(f);
+        this.setCurl(f, { mcp: d.mcp * 0.4, pip: d.pip * 0.4, abd: 0 });
+      }
+      let converged = false;
+      for (let iter = 0; iter < 24; iter++) {
+        const c0 = read();
+        this.tipWorld(f, base);
+        err.copy(target).sub(base);
+        if (err.length() <= 0.0015) { converged = true; best = err.length(); bestCurl = this.curls[f]; break; }
+        for (let i = 0; i < n; i++) {
+          const c = { ...c0 };
+          c[params[i]] += h;
+          this.setCurl(f, c);
+          this.tipWorld(f, tip);
+          jac[i].copy(tip).sub(base).divideScalar(h);
+        }
+        this.setCurl(f, c0);
+        // damped least squares via the normal equations (≤3×3)
+        const A: number[][] = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+        const b: number[] = [0, 0, 0];
+        for (let i = 0; i < n; i++) {
+          for (let j = 0; j < n; j++) A[i][j] = jac[i].dot(jac[j]);
+          b[i] = jac[i].dot(err);
+        }
+        const lam = Math.max(1e-9, (A[0][0] + A[1][1] + A[2][2]) * 1e-3);
+        for (let i = 0; i < n; i++) A[i][i] += lam;
+        const dx = solve3(A, b);
         const c = { ...c0 };
-        c[params[i]] += h;
+        for (let i = 0; i < n; i++) {
+          c[params[i]] = clampN(c0[params[i]] + clampN(dx[i] * weight, -40, 40), lims[params[i]][0], lims[params[i]][1]);
+        }
         this.setCurl(f, c);
-        this.tipWorld(f, tip);
-        jac[i].copy(tip).sub(base).divideScalar(h);
       }
-      this.setCurl(f, c0);
-      // damped least squares via the normal equations (≤3×3)
-      const A: number[][] = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
-      const b: number[] = [0, 0, 0];
-      for (let i = 0; i < n; i++) {
-        for (let j = 0; j < n; j++) A[i][j] = jac[i].dot(jac[j]);
-        b[i] = jac[i].dot(err);
-      }
-      const lam = Math.max(1e-9, (A[0][0] + A[1][1] + A[2][2]) * 1e-3);
-      for (let i = 0; i < n; i++) A[i][i] += lam;
-      const dx = solve3(A, b);
-      const c = { ...c0 };
-      for (let i = 0; i < n; i++) {
-        c[params[i]] = clampN(c0[params[i]] + clampN(dx[i] * weight, -40, 40), lims[params[i]][0], lims[params[i]][1]);
-      }
-      this.setCurl(f, c);
+      this.tipWorld(f, tip);
+      const d = tip.distanceTo(target);
+      if (d < best) { best = d; bestCurl = this.curls[f]; }
+      // good enough — no need to burn the fallback seed
+      if (converged || d <= 0.008) break;
     }
+    if (bestCurl) this.setCurl(f, bestCurl);
     this.tipWorld(f, tip);
     return tip.distanceTo(target);
   }
@@ -387,6 +532,38 @@ function solve3(A: number[][], b: number[]): number[] {
     }
   }
   return m.map((row) => row[n]);
+}
+
+/* ------------------------------------------------------------------ */
+
+const geoCache = new Map<string, THREE.BufferGeometry>();
+function geo<T extends THREE.BufferGeometry>(key: string, make: () => T): T {
+  let g = geoCache.get(key) as T | undefined;
+  if (!g) { g = make(); geoCache.set(key, g); }
+  return g;
+}
+const matCache = new Map<string, THREE.MeshStandardMaterial>();
+function std(col: string, rough = 0.6): THREE.MeshStandardMaterial {
+  const key = `${col}/${rough}`;
+  let m = matCache.get(key);
+  if (!m) {
+    m = new THREE.MeshStandardMaterial({ color: new THREE.Color(col), roughness: Math.max(rough, 0.78), metalness: 0, side: THREE.DoubleSide });
+    matCache.set(key, m);
+  }
+  return m;
+}
+
+/** Unit-length lathe tube (tapered, rounded ends) along +y; caller scales y. */
+function unitTube(): THREE.BufferGeometry {
+  const pts: THREE.Vector2[] = [new THREE.Vector2(0.001, -0.55)];
+  const steps = 5;
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    const r = 0.75 + (1.0 - 0.75) * t;
+    pts.push(new THREE.Vector2(Math.max(0.001, r - 0.25 * Math.cos((t - 0.5) * Math.PI)), t * 1.1 - 0.55));
+  }
+  pts.push(new THREE.Vector2(0.001, 0.55));
+  return geo('unitTube', () => new THREE.LatheGeometry(pts, 10));
 }
 
 /**
