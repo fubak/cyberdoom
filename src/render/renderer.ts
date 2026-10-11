@@ -7,7 +7,7 @@ import type { ViewPose } from '../engine/feel';
 import { buildPaletteLut } from './palette';
 import { genWorkerCount } from './genpool';
 import { buildSprites, prewarmLazySpriteFrames, spriteSets, type SpriteSet } from './sprites';
-import { LOOM_CAP_FRAC, LOOM_MAX_SCALE, loomK, loomTargetH, loomT, riseBase } from './melee';
+import { LOOM_CAP_FRAC, LOOM_MAX_SCALE, farScale, loomK, loomTargetH, loomT, riseBase } from './melee';
 import { ENEMY_PROFILES } from '../engine/ai';
 import { WALL_H, buildTextures, decalTexture, doorTextureFor, hashStr, lookTheme, textureOr, textureRegistry, variantCount } from './textures';
 import { RES, STATUS_H, VIEW3D_H, VIEW_H, VIEW_W } from './res';
@@ -1062,11 +1062,13 @@ export class Renderer {
       const lit = this.lightAt(e.x, e.y);
       // threats stay readable even in black sectors (Doom's monsters are rarely pure silhouette)
       const enemy = e.def.kind === 'enemy';
-      st.mat.uniforms.uLight.value = enemy ? 1 : e.def.kind === 'item' ? Math.max(0.7, lit) : lit;
+      // a still-disguised trojan lit exactly like the real pickup it imitates
+      const disguised = enemy && threatKind === 'trojan' && !e.state.revealedTrojan;
+      st.mat.uniforms.uLight.value = disguised ? Math.max(0.7, lit) : enemy ? 1 : e.def.kind === 'item' ? Math.max(0.7, lit) : lit;
       // monsters keep a much higher floor than walls (and a slight gain) so
       // they read against dark sectors at any range, like Doom's
-      st.mat.uniforms.uFloor.value = enemy ? (set.floor ?? 0.85) : e.def.kind === 'item' ? 0.45 : 0.2;
-      st.mat.uniforms.uGain.value = enemy ? (set.gain ?? 1.9) : 1;
+      st.mat.uniforms.uFloor.value = disguised ? 0.45 : enemy ? (set.floor ?? 0.85) : e.def.kind === 'item' ? 0.45 : 0.2;
+      st.mat.uniforms.uGain.value = disguised ? 1 : enemy ? (set.gain ?? 1.9) : 1;
       // engine emits state.tint (red during pain/flash) — apply it to the sprite
       const tint = (e.state.tint as number | undefined) ?? 0xffffff;
       (st.mat.uniforms.uTint.value as THREE.Vector3).set(
@@ -1354,8 +1356,14 @@ export class Renderer {
         const span = 2 * d * Math.tan((this.camera.fov * Math.PI) / 360);
         const maxH = (0.65 + (LOOM_CAP_FRAC - 0.65) * loom) * span;
         const swell = melee && !attacking ? 0.5 * loomT(d) : 0;
+        // ENEMIES F5: distance-compensating scale — past ~6 tiles a threat's
+        // sprite grows so it never collapses into a speck (visual only).
+        // A still-disguised trojan is exempt: it must stay the size of the
+        // real USB pickups it imitates or the disguise gives itself away.
+        const disguisedFar = threatKind === 'trojan' && !st.entity.state.revealedTrojan;
+        const far = enemy && !disguisedFar && !attacking ? farScale(d) : 1;
         const want = Math.max(
-          st.scale * (1 + swell),
+          st.scale * far * (1 + swell),
           attacking ? Math.min(loomTargetH(d, this.camera.fov) / st.set.h, LOOM_MAX_SCALE) : 0,
         );
         const sc = Math.min(want, maxH / st.set.h);

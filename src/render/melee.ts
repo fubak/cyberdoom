@@ -52,6 +52,18 @@ export const loomK = (dist: number, attacking: boolean, melee: boolean): number 
   attacking ? loomT(dist) : melee ? CHASE_BOOST * loomT(dist) : 0;
 
 /**
+ * ENEMIES F5 range compensation: past FAR0 a threat's drawn sprite grows
+ * with distance so its silhouette keeps a Doom-like share of the view
+ * (~12%+ at 10 tiles) instead of collapsing into a speck. Purely visual —
+ * collision radii, AI and hit tests are unchanged; the melee loom handles
+ * the near end, so the two boosts never stack.
+ */
+export const FAR0 = 5.5;
+export const FAR_SCALE_CAP = 1.45;
+export const farScale = (dist: number): number =>
+  Math.min(FAR_SCALE_CAP, 1 + 0.035 * Math.max(0, dist - FAR0));
+
+/**
  * Drawn world height a lunging attacker wants at `dist` so that, once the
  * rise pushes `RISE_ABOVE_FRAC` of it over the viewmodel line, the visible
  * loom is ~LOOM_FILL_FRAC of the view. The renderer clamps this to
