@@ -10,7 +10,7 @@ import { SKIN_TONES } from '../src/tools/look';
 const spec = { gender: 'male' as const, skin: SKIN_TONES[1] };
 const MM = 0.001;
 
-const LIMITS: Record<FingerName, { mcp: [number, number]; pip: [number, number]; dip?: [number, number]; abd?: [number, number] }> = {
+const LIMITS: Record<FingerName, { mcp: readonly [number, number]; pip: readonly [number, number]; dip?: readonly [number, number]; abd?: readonly [number, number] }> = {
   index: JOINT_LIMITS,
   middle: JOINT_LIMITS,
   ring: JOINT_LIMITS,

@@ -4,7 +4,8 @@ import { VM_CLEAR } from '../../tools/anim';
 import { TOOL_FLASH } from '../viewmodels';
 import { CLIPS, KBD_ACTION_CLIP, type KbdAction, type VmClip } from './clips';
 import { Vm3dRig } from './rig';
-import { HAND_FINGERS, type HandSpec } from './hand3d';
+import { HAND_FINGERS, LiveHand, type HandSpec } from './hand3d';
+import type { Curl, FingerName } from '../handrig';
 
 /** base-px → viewmodel-space metres at the board's working distance (~0.45 m). */
 const PX2M = (2 * Math.tan((54 / 2) * Math.PI / 180) * 0.45) / 168 * 0.6;
@@ -36,6 +37,35 @@ export interface Vm3dFrame {
  * pass (palette LUT) gives it the same pixel grain. A GL scissor keeps it
  * under VM_CLEAR except during the swing's 150 ms centre-crossing window.
  */
+/** Hand-study poses for the debug anatomy sheet. */
+const STUDY_POSES: Record<string, { curls: Partial<Record<FingerName, Curl>>; thumbOut?: number }> = {
+  open: { curls: {
+    index: { mcp: 4, pip: 6, abd: -9 }, middle: { mcp: 4, pip: 6, abd: 0 },
+    ring: { mcp: 4, pip: 6, abd: 8 }, pinky: { mcp: 6, pip: 8, abd: 14 },
+    thumb: { mcp: 6, pip: 8 },
+  }, thumbOut: 1 },
+  relaxed: { curls: {
+    index: { mcp: 24, pip: 28, abd: -5 }, middle: { mcp: 26, pip: 30, abd: 0 },
+    ring: { mcp: 28, pip: 32, abd: 5 }, pinky: { mcp: 34, pip: 38, abd: 10 },
+    thumb: { mcp: 12, pip: 18 },
+  }, thumbOut: 0.85 },
+  typing: { curls: {
+    index: { mcp: 48, pip: 54, abd: -4 }, middle: { mcp: 50, pip: 56, abd: 0 },
+    ring: { mcp: 52, pip: 58, abd: 5 }, pinky: { mcp: 56, pip: 62, abd: 10 },
+    thumb: { mcp: 14, pip: 20 },
+  }, thumbOut: 0.7 },
+  fist: { curls: {
+    index: { mcp: 88, pip: 104, abd: -4 }, middle: { mcp: 90, pip: 106, abd: 0 },
+    ring: { mcp: 90, pip: 104, abd: 5 }, pinky: { mcp: 88, pip: 100, abd: 9 },
+    thumb: { mcp: 38, pip: 45 },
+  }, thumbOut: 0.3 },
+  bat: { curls: {
+    index: { mcp: 62, pip: 70, abd: -5 }, middle: { mcp: 66, pip: 74, abd: 0 },
+    ring: { mcp: 70, pip: 78, abd: 5 }, pinky: { mcp: 60, pip: 66, abd: 9 },
+    thumb: { mcp: 22, pip: 30 },
+  }, thumbOut: 0.4 },
+};
+
 export class Vm3d {
   readonly scene = new THREE.Scene();
   readonly cam = new THREE.PerspectiveCamera(54, 1, 0.01, 5);
@@ -52,6 +82,8 @@ export class Vm3d {
   private hemi: THREE.HemisphereLight;
   private flashLight: THREE.PointLight;
   private flickT = 0;
+  private studyHand: LiveHand | null = null;
+  private studyView: 'palm' | 'back' | 'side' = 'back';
 
   constructor(spec: HandSpec) {
     this.spec = spec;
@@ -102,6 +134,23 @@ export class Vm3d {
   /** Current clip time (debug state). */
   clipTime(): number {
     return this.clipT;
+  }
+
+  /**
+   * Anatomy study (debug): pose a lone right hand on a neutral background,
+   * `view` in 'palm' | 'back' | 'side'. null pose returns to the viewmodel.
+   */
+  study(pose: string | null, view = 'back'): void {
+    if (this.studyHand) { this.scene.remove(this.studyHand.group); this.studyHand = null; }
+    if (!pose || !STUDY_POSES[pose]) return;
+    this.studyView = view === 'palm' || view === 'side' ? view : 'back';
+    const h = new LiveHand('R', this.spec);
+    const p = STUDY_POSES[pose];
+    h.thumbOut = p.thumbOut ?? 1;
+    h.setCurls(p.curls);
+    h.group.updateMatrixWorld(true);
+    this.studyHand = h;
+    this.scene.add(h.group);
   }
 
   frame(f: Vm3dFrame): void {
@@ -175,6 +224,33 @@ export class Vm3d {
 
   /** Render into the bound world RT; caller keeps the viewport/scissor state. */
   renderInto(r: THREE.WebGLRenderer, w: number, h: number): void {
+    if (this.studyHand) {
+      const l = this.studyHand.palmL;
+      this.cam.aspect = w / h;
+      this.cam.updateProjectionMatrix();
+      const d = 0.30;
+      const cy = l * 0.55;
+      if (this.studyView === 'palm') this.cam.position.set(0, cy, -d);
+      else if (this.studyView === 'side') this.cam.position.set(-d, cy, 0);
+      else this.cam.position.set(0, cy, d);
+      this.cam.lookAt(0, cy, 0);
+      this.key.intensity = 0.45;
+      this.hemi.intensity = 0.9;
+      const keyPos = this.key.position.clone();
+      this.key.position.copy(this.cam.position).multiplyScalar(1.3);
+      const prev = new THREE.Color();
+      r.getClearColor(prev);
+      const prevA = r.getClearAlpha();
+      r.setClearColor('#3a4150', 1);
+      this.rig.root.visible = this.rig.stage.visible = false;
+      r.render(this.scene, this.cam);
+      this.rig.root.visible = this.rig.stage.visible = true;
+      this.key.position.copy(keyPos);
+      r.setClearColor(prev, prevA);
+      this.cam.position.set(0, 0, 0);
+      this.cam.lookAt(0, 0, -1);
+      return;
+    }
     if (!this.toolId) return;
     const crossing = this.clip === CLIPS['kbd.swing'] && this.clipT < 0.16;
     const bandH = crossing ? Math.floor(h * 0.58) : Math.floor(h * (1 - VM_CLEAR));

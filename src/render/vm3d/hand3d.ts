@@ -32,7 +32,7 @@ function std(col: string, rough = 0.6): THREE.MeshStandardMaterial {
   const key = `${col}/${rough}`;
   let m = matCache.get(key);
   if (!m) {
-    m = new THREE.MeshStandardMaterial({ color: new THREE.Color(col), roughness: rough, metalness: 0, side: THREE.DoubleSide });
+    m = new THREE.MeshStandardMaterial({ color: new THREE.Color(col), roughness: Math.max(rough, 0.78), metalness: 0, side: THREE.DoubleSide });
     matCache.set(key, m);
   }
   return m;
@@ -52,28 +52,59 @@ function ellipsoid(c: [number, number, number], r: [number, number, number], col
   return m;
 }
 
-/** Tapered phalanx capsule along +y, joint at y=0. */
-function phalanx(len: number, r0: number, r1: number, col: string): THREE.Group {
-  const g = new THREE.Group();
-  const cyl = new THREE.Mesh(
-    geo(`cap:${r0.toFixed(4)}:${len.toFixed(4)}`, () => new THREE.CapsuleGeometry(r0, len + r0 * 0.55, 3, 9)),
-    std(col),
-  );
-  cyl.position.y = len / 2;
-  g.add(cyl);
-  if (r1 < r0 * 0.97) {
-    const tip = new THREE.Mesh(
-      geo(`tip:${r1.toFixed(4)}:${len.toFixed(4)}`, () => new THREE.SphereGeometry(1, 8, 6)),
-      std(col),
-    );
-    tip.position.y = len * 0.86;
-    tip.scale.set(r1, len * 0.16, r1);
-    g.add(tip);
-  }
+/**
+ * Rounded-trapezoid palm slab: a rounded-rect outline (wider at the MCP
+ * line, tapering toward the wrist) extruded through the palm thickness with
+ * a bevel, so the hand reads as a slab with a dorsal side and a palm side —
+ * not a blob. Palm-local: +y toward the fingers, +z dorsal, x across.
+ */
+function palmSlabGeo(w: number, l: number, t: number): THREE.BufferGeometry {
+  const topW = w * 0.47;       // half-width at the MCP line
+  const botW = w * 0.34;       // half-width at the wrist
+  const r = w * 0.085;
+  const s = new THREE.Shape();
+  s.moveTo(-botW + r, 0);
+  s.lineTo(botW - r, 0);
+  s.quadraticCurveTo(botW, 0, botW, r);
+  s.lineTo(topW, l - r * 1.7);
+  s.quadraticCurveTo(topW, l - r * 0.15, topW - r * 1.5, l);
+  s.lineTo(-topW + r * 1.5, l);
+  s.quadraticCurveTo(-topW, l - r * 0.15, -topW, l - r * 1.7);
+  s.lineTo(-botW, r);
+  s.quadraticCurveTo(-botW, 0, -botW + r, 0);
+  const depth = Math.max(0.002, t - r * 1.6);
+  const g = new THREE.ExtrudeGeometry(s, {
+    depth, bevelEnabled: true, bevelThickness: r * 0.8, bevelSize: r * 0.72,
+    bevelSegments: 3, curveSegments: 10, steps: 1,
+  });
+  g.translate(0, 0, -depth / 2);
+  g.computeVertexNormals();
   return g;
 }
 
-/** Unit-length lathe tube (taper r0→r1, rounded ends) along +y; scale y to len. */
+/**
+ * Phalanx segment along +y, joint at y=0. Lathe profile thicker near both
+ * ends (condyles) and slimmer mid-shaft — reads as a finger, not a tube.
+ * r0 = radius at this joint, r1 = radius at the next joint.
+ */
+function phalanxGeo(len: number, r0: number, r1: number): THREE.BufferGeometry {
+  const key = `ph:${len.toFixed(4)}:${r0.toFixed(4)}:${r1.toFixed(4)}`;
+  return geo(key, () => {
+    const pts: THREE.Vector2[] = [];
+    const prof: [number, number][] = [
+      [0.55, 0.0], [0.98, 0.05], [1.0, 0.18], [0.9, 0.5],
+      [0.86, 0.78], [0.94, 0.94], [0.6, 1.0], [0.15, 1.01],
+    ];
+    for (const [rf, ty] of prof) {
+      pts.push(new THREE.Vector2(Math.max(0.0008, (r0 + (r1 - r0) * ty) * rf), ty * len));
+    }
+    const g = new THREE.LatheGeometry(pts, 10);
+    g.computeVertexNormals();
+    return g;
+  });
+}
+
+/** Unit-length lathe tube (tapered, rounded ends) along +y; caller scales y. */
 function unitTube(): THREE.BufferGeometry {
   const pts: THREE.Vector2[] = [new THREE.Vector2(0.001, -0.55)];
   const steps = 5;
@@ -142,18 +173,32 @@ export class LiveHand {
   private buildPalm(): void {
     const { palmW, palmL, mx } = this;
     const fem = this.spec.gender === 'female';
-    const palmT = this.size * (fem ? 0.24 : 0.3);
+    const palmT = this.size * (fem ? 0.26 : 0.32);
     const skin = this.skinCol;
-    this.palm.add(ellipsoid([0, palmL * 0.44, 0], [palmW / 2, palmL * 0.46, palmT / 2], skin));
+    // the slab itself: rounded trapezoid, dorsal dome slightly fuller than the palm side
+    const slab = new THREE.Mesh(palmSlabGeo(palmW * 0.96, palmL * 0.97, palmT), std(skin, 0.84));
+    this.palm.add(slab);
+    // dorsal dome: a shallow swell over the back so the top surface catches the key light
+    this.palm.add(ellipsoid([0, palmL * 0.5, palmT * 0.3], [palmW * 0.4, palmL * 0.36, palmT * 0.2], shade(skin, 1.04)));
+    // palm-side hollow pads: heel pads frame a shallow centre
+    this.palm.add(ellipsoid([palmW * 0.2 * mx, palmL * 0.5, -palmT * 0.28], [palmW * 0.24, palmL * 0.3, palmT * 0.16], shade(skin, 0.97)));
+    // thenar mass (thumb side, lower radial) — big, merges into the thumb root
     this.palm.add(ellipsoid(
-      [THUMB_BASE[0] * palmW * mx * 0.9, palmL * 0.22, palmT * 0.18],
-      [palmW * 0.24, palmL * 0.3, palmT * 0.62], skin));
-    this.palm.add(ellipsoid([palmW * 0.36 * mx, palmL * 0.3, 0], [palmW * 0.2, palmL * 0.3, palmT * 0.52], skin));
-    // knuckle ridge (two stacked ellipsoids — the second catches the key light)
-    this.palm.add(ellipsoid([0, palmL * 0.84, 0], [palmW * 0.44, palmL * 0.14, palmT * 0.52], skin));
-    this.palm.add(ellipsoid([0, palmL * 0.86, palmT * 0.14], [palmW * 0.4, palmL * 0.1, palmT * 0.44], shade(skin, 1.08)));
-    // wrist: narrower than the palm, slight step down
-    this.palm.add(ellipsoid([0, -this.size * 0.04, 0], [palmW * 0.4, this.size * 0.13, palmT * 0.5], skin));
+      [THUMB_BASE[0] * palmW * mx, palmL * 0.26, palmT * 0.05],
+      [palmW * 0.21, palmL * 0.3, palmT * 0.56], shade(skin, 1.02)));
+    // hypothenar mass (ulnar edge, smaller)
+    this.palm.add(ellipsoid([palmW * 0.36 * mx, palmL * 0.28, -palmT * 0.02], [palmW * 0.15, palmL * 0.26, palmT * 0.5], skin));
+    // knuckle line bulge along the MCP edge on the dorsal side
+    this.palm.add(ellipsoid([0, palmL * 0.92, palmT * 0.22], [palmW * 0.42, palmL * 0.1, palmT * 0.34], skin));
+    // wrist: tapers narrower and thinner than the palm
+    this.palm.add(ellipsoid([0, -this.size * 0.03, 0], [palmW * 0.33, this.size * 0.15, palmT * 0.42], skin));
+    this.palm.add(ellipsoid([0, -this.size * 0.12, 0], [palmW * 0.3, this.size * 0.12, palmT * 0.38], shade(skin, 0.99)));
+    // interdigital webs: thin skin filling the gaps between finger roots
+    const webX = [-0.215, 0, 0.2]; // between index/middle, middle/ring, ring/pinky
+    for (const wx of webX) {
+      this.palm.add(ellipsoid([wx * palmW * mx, palmL * 0.95, -palmT * 0.1],
+        [palmW * 0.09, palmL * 0.12, palmT * 0.34], skin));
+    }
   }
 
   private buildFinger(f: FingerName): Chain {
@@ -163,23 +208,25 @@ export class LiveHand {
     const len = (isThumb ? THUMB_LEN : FINGER_LEN[f as keyof typeof FINGER_LEN]) * size;
     const ls = [len * PHALANX[0], len * PHALANX[1], len * PHALANX[2]];
     this.lens[f] = ls;
-    const r0 = Math.max(0.0034, size * (fem ? 0.06 : 0.072)); // slimmer on the female hand
-    const fr = isThumb ? r0 * 1.22 : r0;
-    const radii = [fr, fr * 0.93, fr * 0.85, fr * 0.62];
+    const r0 = Math.max(0.0036, size * (fem ? 0.062 : 0.075)); // slimmer on the female hand
+    const fr = isThumb ? r0 * 1.24 : r0;
+    // proximal > middle > distal, tip narrows fastest
+    const radii = [fr, fr * 0.9, fr * 0.8, fr * 0.55];
     const base = new THREE.Group();
     const chain: Chain = { base, segs: [], tip: new THREE.Object3D() };
     let parent = base;
     for (let s = 0; s < 3; s++) {
       const joint = new THREE.Group();
-      joint.add(phalanx(ls[s], radii[s], radii[s + 1], this.skinCol));
-      // knuckle bump + flexion crease at the far end of this phalanx
+      joint.add(new THREE.Mesh(phalanxGeo(ls[s], radii[s], radii[s + 1]), std(this.skinCol, 0.8)));
       const child = new THREE.Group();
       child.position.y = ls[s];
       if (s < 2) {
-        child.add(ellipsoid([0, 0, radii[s + 1] * 0.12], [radii[s + 1] * 1.05, radii[s + 1] * 1.0, radii[s + 1] * 1.02], this.skinCol));
-        // crease: thin dark band tucked under the joint on the palm side
-        child.add(ellipsoid([0, radii[s + 1] * 0.1, -radii[s + 1] * 0.62],
-          [radii[s + 1] * 0.62, radii[s + 1] * 0.16, radii[s + 1] * 0.5], this.creaseCol));
+        // knuckle: flattened bump on the dorsal side only
+        child.add(ellipsoid([0, radii[s + 1] * 0.1, radii[s + 1] * 0.45],
+          [radii[s + 1] * 1.15, radii[s + 1] * 0.62, radii[s + 1] * 0.55], this.skinCol));
+        // flexion crease tucked under the joint on the palm side
+        child.add(ellipsoid([0, radii[s + 1] * 0.08, -radii[s + 1] * 0.6],
+          [radii[s + 1] * 0.6, radii[s + 1] * 0.14, radii[s + 1] * 0.42], this.creaseCol));
       }
       joint.add(child);
       parent.add(joint);
@@ -188,8 +235,10 @@ export class LiveHand {
     }
     chain.tip.position.y = 0;
     chain.segs[2].child.add(chain.tip);
-    // nail on the distal phalanx (dorsal +z)
-    const nail = ellipsoid([0, ls[2] * 0.6, radii[3] * 0.52], [radii[3] * 0.56, radii[3] * 0.42, radii[3] * 0.24], this.nailCol);
+    // nail: flat plate on the distal dorsal side
+    const nail = ellipsoid([0, ls[2] * 0.6, radii[3] * 0.62],
+      [radii[3] * 0.8, radii[3] * 0.55, radii[3] * 0.2], this.nailCol);
+    nail.material = std(this.nailCol, 0.45);
     chain.segs[2].joint.add(nail);
     this.palm.add(base);
     return chain;
@@ -224,8 +273,16 @@ export class LiveHand {
     return cc;
   }
 
+  /**
+   * MCP (knuckle) line: arched — middle sits highest, pinky lowest, and the
+   * outer fingers wrap a little toward the palm side; roots sink into the
+   * slab so no gap shows between finger and palm.
+   */
   private fingerBase(f: Exclude<FingerName, 'thumb'>): [number, number, number] {
-    return [MCP_X[f] * this.palmW * this.mx, this.palmL * 0.88, 0];
+    const x = MCP_X[f] * this.palmW * this.mx;
+    const archY = { index: -0.003, middle: 0, ring: -0.004, pinky: -0.012 }[f];
+    const wrap = -Math.abs(MCP_X[f]) * this.palmW * 0.05; // slight curl toward -z at the edges
+    return [x, this.palmL * 0.93 + archY, wrap];
   }
 
   /** Apply a full per-finger curl set (missing fingers keep their angles). */
@@ -262,7 +319,7 @@ export class LiveHand {
       ? { mcp: JOINT_LIMITS.thumbMcp, pip: JOINT_LIMITS.thumbIp, abd: [0, 0] as [number, number] }
       : { mcp: JOINT_LIMITS.mcp, pip: JOINT_LIMITS.pip, abd: JOINT_LIMITS.abd };
     const params = (f === 'thumb' ? ['mcp', 'pip'] : ['mcp', 'pip', 'abd']) as ('mcp' | 'pip' | 'abd')[];
-    const lims: Record<string, [number, number]> = { mcp: lim.mcp, pip: lim.pip, abd: lim.abd };
+    const lims: Record<string, readonly [number, number]> = { mcp: lim.mcp, pip: lim.pip, abd: lim.abd };
     const n = params.length;
     const base = new THREE.Vector3();
     const tip = new THREE.Vector3();

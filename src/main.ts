@@ -1836,6 +1836,10 @@ class Game {
         freeze(t: number | null) {
           g.vm3d?.freeze(t);
         },
+        /** anatomy study: pose 'open'|'relaxed'|'typing'|'fist'|'bat', view 'palm'|'back'|'side' */
+        study(pose: string | null, view?: string) {
+          g.vm3d?.study(pose, view);
+        },
         state() {
           return { active: g.vm3d?.handles() ?? null, clipT: g.vm3d?.clipTime() ?? null };
         },

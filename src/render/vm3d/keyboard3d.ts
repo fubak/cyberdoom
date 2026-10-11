@@ -273,17 +273,17 @@ export class KeyboardRig {
     // fingers point forward under the lip, thumb over the top edge
     this.addSocket('gripL.wrist', [-KBD_W / 2 - 0.023, -0.015, 0.004], [70, -80, -12]);
     this.addSocket('gripL.tip.thumb', [-KBD_W / 2 - 0.001, -0.030, -0.015]);
-    this.addSocket('gripL.tip.index', [-KBD_W / 2 + 0.021, -0.017, 0.052]);
-    this.addSocket('gripL.tip.middle', [-KBD_W / 2 + 0.023, -0.001, 0.045]);
+    this.addSocket('gripL.tip.index', [-KBD_W / 2 + 0.021, -0.016, 0.054]);
+    this.addSocket('gripL.tip.middle', [-KBD_W / 2 + 0.024, 0.002, 0.049]);
     this.addSocket('gripL.tip.ring', [-KBD_W / 2 + 0.013, 0.018, 0.045]);
     this.addSocket('gripL.tip.pinky', [-KBD_W / 2 + 0.009, 0.032, 0.047]);
     // swing grip (right hand stacks on top of the left at the same end)
     this.addSocket('gripR.wrist', [-KBD_W / 2 - 0.026, 0.016, -0.002], [70, -80, -10]);
     this.addSocket('gripR.tip.thumb', [-KBD_W / 2 - 0.003, -0.020, 0.015]);
     this.addSocket('gripR.tip.index', [-KBD_W / 2 + 0.030, 0.056, 0.038]);
-    this.addSocket('gripR.tip.middle', [-KBD_W / 2 - 0.002, 0.039, 0.045]);
+    this.addSocket('gripR.tip.middle', [-KBD_W / 2 + 0.002, 0.041, 0.049]);
     this.addSocket('gripR.tip.ring', [-KBD_W / 2 + 0.000, 0.022, 0.054]);
-    this.addSocket('gripR.tip.pinky', [-KBD_W / 2 + 0.025, 0.014, 0.066]);
+    this.addSocket('gripR.tip.pinky', [-KBD_W / 2 + 0.025, 0.011, 0.068]);
     // right-hand hover over the home row (rides the board)
     this.addSocket('hoverR.wrist', [0.050, 0.058, 0.100], [-80, -20, 0]);
     // wrist dips when a finger actually strikes a key
