@@ -12,7 +12,7 @@ const POSES = ['open', 'relaxed', 'typing', 'fist', 'bat'];
 const VIEWS = ['palm', 'back', 'side'];
 const CLIPS = {
   type: { dur: 0.62, stills: [0, 0.06, 0.17, 0.3, 0.46, 0.52, 0.58, 0.62] },
-  swing: { dur: 0.6, stills: [0, 0.03, 0.06, 0.105, 0.17, 0.3, 0.45, 0.6] },
+  swing: { dur: 0.6, stills: [0, 0.05, 0.10, 0.13, 0.15, 0.18, 0.24, 0.30, 0.45, 0.60] },
 };
 const SIDES = ['L', 'R'];
 const errors = [];
@@ -76,11 +76,12 @@ for (const gender of ['male', 'female']) {
     }
     try {
       const frames = c.stills.map((_, i) => `${OUT}/4k-${gender}-${action}-${i}.png`);
-      // downscale tiles to 1920 wide for a 4x2 sheet
-      execFileSync('montage', [...frames, '-tile', '4x2', '-geometry', '1920x1080+2+2',
+      const cols = c.stills.length > 8 ? 5 : 4;
+      // downscale tiles to 1920 wide for the sheet
+      execFileSync('montage', [...frames, '-tile', `${cols}x2`, '-geometry', '1920x1080+2+2',
         '-background', '#111', `${OUT}/sheet-4k-${gender}-${action}.png`]);
-      // review montage: same 8 frames downscaled to 960x540 each
-      execFileSync('montage', [...frames, '-tile', '4x2', '-geometry', '960x540+2+2',
+      // review montage: same frames downscaled to 960x540 each
+      execFileSync('montage', [...frames, '-tile', `${cols}x2`, '-geometry', '960x540+2+2',
         '-background', '#111', `${OUT}/montage-${gender}-${action}.png`]);
     } catch (e) { errors.push(`montage ${action}: ${e.message.slice(0, 200)}`); }
   }
@@ -93,7 +94,7 @@ for (const gender of ['male', 'female']) {
   for (const view of ['dorsal', 'side', 'under']) {
     await p4k.evaluate((v) => {
       window.__cd.vm3d.play('swing');
-      window.__cd.vm3d.freeze(0.08);
+      window.__cd.vm3d.freeze(0.10);
       window.__cd.vm3d.gripView(v);
     }, view);
     await p4k.waitForTimeout(300);
@@ -143,6 +144,13 @@ for (const gender of ['male', 'female']) {
   });
   await p10.waitForTimeout(300);
   await p10.screenshot({ path: `${OUT}/1080-${gender}-swing.png` });
+  await p10.evaluate(() => {
+    window.__cd.vm3d.play('type');
+    window.__cd.vm3d.freeze(0.17);
+  });
+  await p10.waitForTimeout(300);
+  await p10.screenshot({ path: `${OUT}/1080-${gender}-type.png` });
+  await p10.evaluate(() => window.__cd.vm3d.freeze(null));
 
   // ---------- 60fps MP4 of each clip ----------
   for (const [action, c] of Object.entries(CLIPS)) {

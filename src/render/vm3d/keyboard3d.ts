@@ -269,27 +269,35 @@ export class KeyboardRig {
 
   private buildSockets(): void {
     const d = Math.PI / 180;
-    // bat grip: two fists stacked along the board's left short end. The
-    // left hand wraps over the top corner: wrist outboard of the end face,
-    // bat grip: palm against the board's left end face (palm-in +x), fingers
-    // run down the face and curl under the bottom; hands stacked along the
-    // edge — L at the front corner (z+0.05), R at the back corner (z-0.05).
+    // idle hold: the left hand supports the board's left end — palm against
+    // the end face (palm-in +x), fingers running down the face and curling
+    // under the bottom (the approved idle pose — do not retune here).
     this.addSocket('gripL.wrist', [-0.177, -0.006, 0.050], [-70, 90, -180]);
-    this.addSocket('gripR.wrist', [-0.184, -0.003, -0.050], [-70, 90, -180]);
-    // mid-air waypoint above the grip end, in the same palm-down grip
-    // orientation: the hand lifts off the end without twisting so its
-    // joints never sweep through the case
-    this.addSocket('wayR.wrist', [-0.190, 0.130, -0.010], [-155, -90, 0]);
-    // low pull-back beside the end face, in the same cup-grip
-    // orientation: the tucked hand slides off behind the end without
-    // twisting so its joints never sweep the case
-    this.addSocket('wayR2.wrist', [-0.210, 0.100, -0.050], [-155, -90, 0]);
+    // bat grip (swing): two fists stacked along the board's left end like a
+    // bat handle — L keeps its end-face hold (nearer the end, never lets
+    // go), R wraps the top face directly inboard of it, fists touching.
+    // R lies dorsum-up on the top face: fingers run to the back edge (-z),
+    // curl down the back face and under the bottom, thumb wraps over the
+    // top, wrist on the front of the deck so the forearm exits toward the
+    // player. It rides 4 mm higher than L would: its thumb base sits
+    // lower in the palm and would otherwise dip inside the case's top face
+    this.addSocket('batR.wrist', [-0.085, 0.018, 0.030], [-90, 0, 0]);
+    // grab waypoint: mid-air above the left end in the bat-grip orientation
+    // — the hand lifts off the keys, travels over the deck and drops
+    // vertically onto the wrap without dragging joints through the case
+    this.addSocket('wayR.wrist', [-0.040, 0.135, 0.010], [-90, 0, 0]);
+    // release waypoint: straight up off the wrap, same orientation
+    this.addSocket('wayR2.wrist', [-0.050, 0.120, 0.010], [-90, 0, 0]);
     // high point above the right-hand side of the deck: regrip finishes by
     // dropping straight down onto the home row, not swooping under the lip
-    this.addSocket('wayR3.wrist', [0.060, 0.150, 0.050], [0, 90, -180]);
+    this.addSocket('wayR3.wrist', [0.060, 0.150, 0.050], [-60, 40, 0]);
     // raised tuck in the typing orientation: first leg of the grab and last
     // leg of the regrip, so the hand lifts/turns before sweeping sideways
     this.addSocket('liftR3.wrist', [0.110, 0.115, 0.090], [-80, 15, 0]);
+    // regrip waypoint: wrist held 4 cm above the home row in landing shape
+    // — the finger-curl blend finishes here so the tip never dips below
+    // the deck top; the last leg is a straight drop onto the keys
+    this.addSocket('hoverH.wrist', [0.110, 0.085, 0.095], [-80, 15, 0]);
     // right-hand hover over the home row (rides the board)
     this.addSocket('hoverR.wrist', [0.110, 0.045, 0.095], [-80, 15, 0]);
     // wrist dips when a finger actually strikes a key

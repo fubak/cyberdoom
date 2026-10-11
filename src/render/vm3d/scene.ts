@@ -323,7 +323,9 @@ export class Vm3d {
       this.cam.lookAt(0, 0, -1);
       return;
     }
-    const crossing = this.clip === CLIPS['kbd.swing'] && this.clipT < 0.16;
+    // the swing's strike is the only time the board may reach above
+    // VM_CLEAR: the taller band applies exactly inside 0.10–0.25 s
+    const crossing = this.clip === CLIPS['kbd.swing'] && this.clipT >= 0.10 && this.clipT <= 0.25;
     const bandH = crossing ? Math.floor(h * 0.58) : Math.floor(h * (1 - VM_CLEAR));
     this.cam.aspect = w / h;
     this.cam.updateProjectionMatrix();

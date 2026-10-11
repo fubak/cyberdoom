@@ -170,17 +170,19 @@ const HOVER_CURLS: Partial<Record<FingerName, Curl>> = {
   pinky: { mcp: 55, pip: 70, abd: 10 },
   thumb: { mcp: 12, pip: 18 },
 };
-// full fist: the study 'fist' curls that visibly close the hand. Used by
-// BOTH hands for the swing's bat grip — no fingertip IK, the fixed curls
-// wrap the fingers around the board's left end on their own.
-const FIST_CURLS: Partial<Record<FingerName, Curl>> = {
-  index: { mcp: 62, pip: 104, abd: -4 },
-  middle: { mcp: 64, pip: 106, abd: 0 },
-  ring: { mcp: 64, pip: 104, abd: 5 },
-  pinky: { mcp: 64, pip: 106, abd: 9 },
-  // thumb.abd = CMC opposition wrap: lays the distal pad across the
-  // flexed index/middle phalanges (power grip) instead of an OK loop
-  thumb: { mcp: 40, pip: 50, abd: 90 },
+// bat wrap: fingers drape over the board's back edge — the mcp dips the
+// proximal past the edge, the pip runs the intermediate down the back
+// face, and the coupled dip pulls the tip under the bottom. The thumb
+// wraps across the top over the curled fingers (power grip, not a fist
+// hovering beside the case). Used by BOTH hands for the swing's bat grip.
+const WRAP_CURLS: Partial<Record<FingerName, Curl>> = {
+  index: { mcp: 52, pip: 90, abd: -5 },
+  middle: { mcp: 54, pip: 92, abd: 0 },
+  ring: { mcp: 54, pip: 90, abd: 5 },
+  // pinky is too short to fold under like the others — a deeper mcp dip
+  // swings its tip below the case instead of resting inside the edge
+  pinky: { mcp: 74, pip: 78, abd: 9 },
+  thumb: { mcp: 44, pip: 52, abd: 88 },
 };
 // the left hand's permanent end-grip hold: same closed-grip geometry as the
 // fist relaxed ~18% (support grip, thumb over the top edge)
@@ -193,21 +195,21 @@ const HOLD_L_CURLS: Partial<Record<FingerName, Curl>> = {
 };
 
 const ikc = (finger: FingerName, socket: string, weight?: number): IkContact => ({ finger, socket, weight });
-// arm exits toward a bottom screen corner (stage space, +z = viewer)
-const TAIL_R: V3 = [0.15, -0.7, 0.68];
 // grip poses roll the metacarpals toward -z, so the anatomical forearm
 // direction is +z (toward the viewer) — tilted laterally so the tube
 // exits the nearer screen edge instead of pointing at the camera
 const TAIL_GRIP_L: V3 = [-0.15, -0.2, 0.93];
-const TAIL_GRIP_R: V3 = [0.12, -0.2, 0.94];
 // support grip for idle/type — relaxed closed hand on the board's left end
 const L_GRIP = { wristSocket: 'gripL.wrist', curls: HOLD_L_CURLS, thumbOut: 0.3, tail: TAIL_GRIP_L };
-// swing grip: both fists stacked along the board's left end
-const L_FIST = { wristSocket: 'gripL.wrist', curls: FIST_CURLS, thumbOut: 0.2, tail: TAIL_GRIP_L };
-// right hand cups the end face: thumb wrapped flat against the palm
-const R_GRIP = { wristSocket: 'gripR.wrist', thumbOut: 0.2, tail: TAIL_GRIP_R, curls: {
-  ...FIST_CURLS,
-  thumb: { mcp: 55, pip: 65, abd: 105 },
+// bat grip: L keeps the same end-face hold all through the swing (nearer
+// the end, never lets go) and R wraps the top face directly inboard of
+// it, fists touching. L_BAT drops the idle clip's fixed tail direction —
+// the wrist yaws too far for a fixed stage vector, so the forearm follows
+// the wrist axis through the arc.
+const L_BAT = { wristSocket: 'gripL.wrist', curls: HOLD_L_CURLS, thumbOut: 0.3 };
+const R_GRIP = { wristSocket: 'batR.wrist', thumbOut: 0.25, curls: {
+  ...WRAP_CURLS,
+  thumb: { mcp: 44, pip: 52, abd: 135 },
 } };
 // home pose: palm down over the home row, all four fingertips resting on
 // J K L ; (the board's home row ends at ENT), thumb near the space bar.
@@ -231,19 +233,16 @@ const R_LIFT = { wristSocket: 'hoverR.wrist', curls: LIFT_CURLS, thumbOut: 0.6 }
 // mid-air waypoint above the grip end: the hand arcs up over the board
 // between the home-row hover and the bat grip instead of dragging its
 // fingers through the case
-const R_WAY = { wristSocket: 'wayR.wrist', thumbOut: 0.5, tail: TAIL_R, curls: {
+const R_WAY = { wristSocket: 'wayR.wrist', thumbOut: 0.5, curls: {
   index: { mcp: 80, pip: 92, abd: -5 },
   middle: { mcp: 82, pip: 94, abd: 0 },
   ring: { mcp: 82, pip: 94, abd: 5 },
   pinky: { mcp: 80, pip: 90, abd: 9 },
   thumb: { mcp: 30, pip: 35 },
 } };
-// low pull-back beside the end face: near-fist tuck keeps every joint
-// outboard of the case while the hand slides out behind the end
-// tucked regrip waypoints hold the fingers pointing down, so the
-// anatomical arm direction is up-right for this brief transition
-const TAIL_TUCK_R: V3 = [0.15, 0.9, 0.4];
-const R_WAY2 = { wristSocket: 'wayR2.wrist', thumbOut: 0.5, tail: TAIL_TUCK_R, curls: {
+// release waypoint: straight up off the wrap in the same orientation —
+// the fingers uncurl as the hand rises instead of dragging the case
+const R_WAY2 = { wristSocket: 'wayR2.wrist', thumbOut: 0.5, curls: {
   index: { mcp: 80, pip: 92, abd: -5 },
   middle: { mcp: 82, pip: 94, abd: 0 },
   ring: { mcp: 82, pip: 94, abd: 5 },
@@ -252,7 +251,7 @@ const R_WAY2 = { wristSocket: 'wayR2.wrist', thumbOut: 0.5, tail: TAIL_TUCK_R, c
 } };
 // high hover above the home row: final approach of the regrip drops
 // vertically onto the keys instead of swooping under the front lip
-const R_WAY3 = { wristSocket: 'wayR3.wrist', thumbOut: 0.6, tail: TAIL_TUCK_R, curls: {
+const R_WAY3 = { wristSocket: 'wayR3.wrist', thumbOut: 0.6, curls: {
   index: { mcp: 60, pip: 72, abd: -4 },
   middle: { mcp: 62, pip: 74, abd: 0 },
   ring: { mcp: 64, pip: 76, abd: 5 },
@@ -261,12 +260,26 @@ const R_WAY3 = { wristSocket: 'wayR3.wrist', thumbOut: 0.6, tail: TAIL_TUCK_R, c
 } };
 // raised tuck still in the typing pose: the hand lifts and rolls before
 // sweeping sideways, so no joint sweeps through the keywell
-const R_LIFT3 = { wristSocket: 'liftR3.wrist', thumbOut: 0.35, tail: TAIL_R, curls: {
+const R_LIFT3 = { wristSocket: 'liftR3.wrist', thumbOut: 0.35, curls: {
   index: { mcp: 56, pip: 66, abd: -4 },
   middle: { mcp: 58, pip: 68, abd: 0 },
   ring: { mcp: 60, pip: 70, abd: 5 },
   pinky: { mcp: 58, pip: 68, abd: 9 },
-  thumb: { mcp: 32, pip: 38 },
+  thumb: { mcp: 12, pip: 18 },
+} };
+// landing waypoint: hover shape held 4 cm above the home row — the curl
+// blend finishes here so the final drop is straight down onto the keys
+const R_HIGH = { wristSocket: 'hoverH.wrist', thumbOut: 0.6, curls: {
+  ...HOVER_CURLS,
+  // a flatter thumb rests on the keycap instead of dipping inside the case
+  thumb: { mcp: 5, pip: 10 },
+} };
+// swing's settled home pose: same hover shape WITHOUT the ik contacts —
+// during the descent blend an ik weight would drag the thumb tip down
+// through the deck before the wrist arrives
+const R_HOME = { wristSocket: 'hoverR.wrist', thumbOut: 0.6, curls: {
+  ...HOVER_CURLS,
+  thumb: { mcp: 5, pip: 10 },
 } };
 // during a strike the other fingers stay lifted clear of the deck
 const PRESS_CURLS: Partial<Record<FingerName, Curl>> = { ...LIFT_CURLS };
@@ -341,31 +354,41 @@ export const CLIPS: Record<string, VmClip> = {
   'kbd.swing': {
     name: 'kbd.swing',
     duration: 0.6,
+    // two-handed diagonal bat swing at the crosshair. Wind-up 0–0.10: both
+    // fists lift to the lower-right, board tipped up-right behind them.
+    // Strike 0.10–0.18: hands sweep right-to-left across the lower third;
+    // at ~0.15 the free end reaches the crosshair, long axis into the
+    // screen, keycaps camera-left. Follow-through to ~0.30 carries
+    // lower-left. Recover to 0.60: R releases, arcs over the deck and
+    // lands palm-down on the home row; L never lets go. The board only
+    // crosses the VM_CLEAR band between 0.10 and 0.25.
     keys: [
-      // trigger: right hand drops onto the grip, board starts up-right
-      { t: 0, root: { pos: HOME_POS, rot: HOME_ROT }, L: L_GRIP, R: R_HOVER },
-      { t: 0.008, root: { pos: [0.022, -0.144, -0.439], rot: [25, 2, -11] }, L: L_FIST, R: R_LIFT3 },
-      { t: 0.016, root: { pos: [0.03, -0.140, -0.437], rot: [25, -1, -14] }, L: L_FIST, R: R_WAY },
-      { t: 0.024, root: { pos: [0.042, -0.137, -0.436], rot: [26, -4, -16] }, L: L_FIST, R: R_WAY2 },
-      { t: 0.03, root: { pos: [0.05, -0.135, -0.435], rot: [26, -6, -18] }, L: L_FIST, R: R_GRIP },
-      // wind-up peak at the 60 ms windup: held end high right, rolled back
-      { t: 0.06, root: { pos: [0.13, -0.10, -0.41], rot: [30, -20, -36] }, L: L_FIST, R: R_GRIP },
-      // impact: board whips across to the lower left but the stacked grip
-      // stays in frame (never leaves the view)
-      { t: 0.105, root: { pos: [-0.08, 0.005, -0.36], rot: [14, 30, 22] }, L: L_FIST, R: R_GRIP },
-      // follow-through: carried left and up, grip still visible
-      { t: 0.17, root: { pos: [-0.11, -0.03, -0.40], rot: [8, 34, 12] }, L: L_FIST, R: R_GRIP },
-      // recover and regrip: the right hand lifts straight up off the end,
-      // arcs high over the deck, and drops back onto the home row
-      { t: 0.30, root: { pos: [-0.06, -0.14, -0.44], rot: [18, 16, -2] }, L: L_FIST, R: R_GRIP },
-      { t: 0.335, root: { pos: [-0.034, -0.141, -0.431], rot: [21, 13, -3] }, L: L_FIST, R: R_WAY2 },
-      { t: 0.37, root: { pos: [-0.025, -0.143, -0.432], rot: [21, 12, -4] }, L: L_FIST, R: R_WAY3 },
-      { t: 0.41, root: { pos: [-0.012, -0.145, -0.436], rot: [22, 10, -6] }, L: L_FIST, R: R_LIFT3 },
-      // hold the tuck high until the last 20 ms, then settle onto the keys
-      // — a slow diagonal descent drags the thumb tip through the keywell
-      { t: 0.43, root: { pos: [0.0, -0.146, -0.438], rot: [22, 8, -7] }, L: L_FIST, R: R_LIFT3 },
-      { t: 0.45, root: { pos: [0.005, -0.147, -0.44], rot: [23, 7, -7] }, L: L_GRIP, R: R_HOVER },
-      { t: 0.6, root: { pos: HOME_POS, rot: HOME_ROT }, L: L_GRIP, R: R_HOVER },
+      // trigger: R lifts off the home row and arcs over the deck onto the
+      // bat grip while L re-wraps the end (L never leaves the board)
+      { t: 0, root: { pos: HOME_POS, rot: HOME_ROT }, L: L_BAT, R: R_HOVER },
+      { t: 0.008, root: { pos: [0.02, -0.146, -0.442], rot: [25, 5, -8] }, L: L_BAT, R: R_LIFT3 },
+      { t: 0.016, root: { pos: [0.035, -0.142, -0.448], rot: [27, 6, -6] }, L: L_BAT, R: R_WAY },
+      { t: 0.024, root: { pos: [0.06, -0.137, -0.455], rot: [30, 8, -3] }, L: L_BAT, R: R_WAY },
+      { t: 0.036, root: { pos: [0.08, -0.131, -0.46], rot: [26, 10, 1] }, L: L_BAT, R: R_GRIP },
+      // wind-up: fists carry the end down-right, board tips up-right
+      { t: 0.06, root: { pos: [0.1300, -0.0944, -0.4662], rot: [24.1, 15.2, 7.9] }, L: L_BAT, R: R_GRIP },
+      { t: 0.10, root: { pos: [0.2213, -0.1011, -0.4952], rot: [25.6, 25.7, 5.7] }, L: L_BAT, R: R_GRIP },
+      // strike: hands whip right-to-left across the lower third
+      { t: 0.115, root: { pos: [0.1051, -0.0795, -0.5280], rot: [26.9, 63.6, 5.9] }, L: L_BAT, R: R_GRIP },
+      // impact: free end reaches the crosshair
+      { t: 0.15, root: { pos: [-0.0309, -0.0642, -0.5151], rot: [29.4, 77.9, 40.4] }, L: L_BAT, R: R_GRIP },
+      { t: 0.18, root: { pos: [-0.1369, -0.1005, -0.5337], rot: [30.9, 100.3, 36.8] }, L: L_BAT, R: R_GRIP },
+      // follow-through: carries lower-left, tip back under the clear band
+      { t: 0.24, root: { pos: [-0.1976, -0.1264, -0.5449], rot: [30.2, 115.6, 29.7] }, L: L_BAT, R: R_GRIP },
+      { t: 0.30, root: { pos: [-0.1790, -0.1568, -0.5743], rot: [4.2, 116.5, 5.9] }, L: L_BAT, R: R_GRIP },
+      // recover: R releases straight up off the wrap, arcs over the deck,
+      // and drops palm-down onto the home row; L never lets go
+      { t: 0.32, root: { pos: [-0.1174, -0.1473, -0.5824], rot: [-1.9, 101.4, -3.7] }, L: L_BAT, R: R_WAY2 },
+      { t: 0.38, root: { pos: [0.0295, -0.1491, -0.5670], rot: [5.2, 66.4, -18.8] }, L: L_BAT, R: R_WAY3 },
+      { t: 0.44, root: { pos: [-0.02, -0.152, -0.47], rot: [18, 25, -10] }, L: L_BAT, R: R_LIFT3 },
+      { t: 0.48, root: { pos: [0.0, -0.150, -0.455], rot: [21, 12, -9] }, L: L_BAT, R: R_HIGH },
+      { t: 0.54, root: { pos: [0.005, -0.148, -0.44], rot: [23, 7, -8] }, L: L_GRIP, R: R_HOME },
+      { t: 0.6, root: { pos: HOME_POS, rot: HOME_ROT }, L: L_GRIP, R: R_HOME },
     ],
   },
 };

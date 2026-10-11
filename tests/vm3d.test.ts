@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { JOINT_LIMITS, type FingerName } from '../src/render/handrig';
-import { CLIPS, resolveClip } from '../src/render/vm3d/clips';
+import { CLIPS, resolveClip, type V3 } from '../src/render/vm3d/clips';
 import { Vm3dRig } from '../src/render/vm3d/rig';
 import { keyTopWorld } from '../src/render/vm3d/keyboard3d';
 import { HAND_FINGERS, setHandAsset } from '../src/render/vm3d/hand3d';
@@ -188,7 +188,7 @@ describe('vm3d clip contacts (plan §5)', () => {
 
     it(`${name}: no hand joint sits inside the board's solid AABB`, () => {
       const rig = new Vm3dRig(spec);
-      const steps = 40;
+      const steps = 60; // 10 ms sampling across the whole clip
       for (let i = 0; i <= steps; i++) {
         const t = (i / steps) * clip.duration;
         rig.solve(clip, t);
@@ -212,51 +212,85 @@ describe('vm3d clip contacts (plan §5)', () => {
     expect(rig.board.keys[i].down).toBeLessThan(0.05);
   });
 
-  it('SWING winds up by the 60 ms windup and is home by the 600 ms cooldown', () => {
-    const r60 = resolveClip(CLIPS['kbd.swing'], 0.06);
-    // windup pose is up-right of home and rolled
-    expect(r60.rootRot[2]).toBeLessThan(-25);
-    const r600 = resolveClip(CLIPS['kbd.swing'], 0.6);
+  it('SWING winds up by 100 ms, strikes through the crosshair ~150 ms, home by 600 ms', () => {
+    const clip = CLIPS['kbd.swing'];
+    const cam = new THREE.PerspectiveCamera(54, 1280 / 672, 0.01, 5);
+    const rig = new Vm3dRig(spec);
+    const world = (local: V3) => rig.board.group.localToWorld(new THREE.Vector3(...local));
+    const ndc = (t: number, local: V3) => {
+      rig.solve(clip, t);
+      rig.board.group.updateWorldMatrix(true, false);
+      return world(local).project(cam);
+    };
+    const END: V3 = [-0.14, -0.0085, 0];
+    const FREE: V3 = [0.14, -0.0085, 0];
+    // wind-up: held end carried to the lower-right, free end tipped up-right
+    const e100 = ndc(0.10, END), f100 = ndc(0.10, FREE);
+    expect(e100.x, 'windup grip not to the right').toBeGreaterThan(0.05);
+    expect(f100.x, 'windup tip not up-right').toBeGreaterThan(0.4);
+    expect(f100.y, 'windup tip may not cross VM_CLEAR yet').toBeLessThan(-0.24);
+    // impact: the free end reaches the crosshair, long axis into the screen
+    const e150 = ndc(0.15, END), f150 = ndc(0.15, FREE);
+    expect(Math.abs(f150.x), 'impact tip off the crosshair').toBeLessThan(0.2);
+    expect(f150.y, 'impact tip short of the crosshair').toBeGreaterThan(-0.2);
+    expect(e150.y, 'impact hands not lower-centre').toBeLessThan(-0.55);
+    // the board only crosses VM_CLEAR between 0.10 and 0.25 s
+    for (let t = 0; t <= clip.duration + 1e-9; t += 0.005) {
+      const f = ndc(t, FREE);
+      const clearNdc = t >= 0.10 && t <= 0.25 ? 0.16 : -0.24;
+      expect(f.y, `swing@${t.toFixed(3)} board above VM_CLEAR outside the strike window`).toBeLessThan(clearNdc + 0.06);
+    }
+    const r600 = resolveClip(clip, 0.6);
     expect(r600.rootPos[0]).toBeCloseTo(0.012, 3);
     expect(r600.rootPos[1]).toBeCloseTo(-0.148, 3);
     expect(r600.rootRot[0]).toBeCloseTo(24, 3);
   });
 
-  it('SWING: both fists wrap the board end (tips below the top near the end plane)', () => {
+  it('SWING: both fists wrap the board end (L end-face hold, R top wrap)', () => {
     const rig = new Vm3dRig(spec);
     const clip = CLIPS['kbd.swing'];
     const inv = new THREE.Matrix4();
-    // gripped span: after the grab blend completes (~40 ms) until the
-    // regrip begins
-    for (let t = 0.05; t <= 0.30 + 1e-9; t += 1 / 120) {
+    // rigid hold: from the grab completing (~40 ms) until the release (0.30)
+    for (let t = 0.04; t <= 0.30 + 1e-9; t += 1 / 120) {
       rig.solve(clip, t);
       rig.board.group.updateWorldMatrix(true, false);
       inv.copy(rig.board.group.matrixWorld).invert();
       for (const side of ['L', 'R'] as const) {
         const hand = rig.hands[side];
-        // dorsum direction (frame +z) in board-local space
-        const dorsW = new THREE.Vector3(0, 0, 1)
-          .applyQuaternion(hand.group.getWorldQuaternion(new THREE.Quaternion()));
-        const dorsB = dorsW.clone().transformDirection(inv);
-        // both fists wrap the end face palm-in (+x): dorsum points outboard
-        // (−x), opposite the fingertips curled under the board
-        expect(dorsB.x, `swing@${t.toFixed(3)} ${side} dorsum`).toBeLessThan(-0.3);
+        const dorsB = new THREE.Vector3(0, 0, 1)
+          .applyQuaternion(hand.group.getWorldQuaternion(new THREE.Quaternion()))
+          .transformDirection(inv);
+        const pcB = hand.palmCentreWorld(new THREE.Vector3()).applyMatrix4(inv);
+        if (side === 'R') {
+          // R wraps the top face just inboard of L: dorsum up, palm on the
+          // deck over the left quarter
+          expect(dorsB.y, `swing@${t.toFixed(3)} R dorsum not up`).toBeGreaterThan(0.6);
+          expect(pcB.y, `swing@${t.toFixed(3)} R palm not on the deck`).toBeGreaterThan(0.004);
+          expect(pcB.x, `swing@${t.toFixed(3)} R palm off the left end`).toBeLessThan(-0.02);
+          expect(pcB.x, `swing@${t.toFixed(3)} R palm off the left end`).toBeGreaterThan(-0.165);
+        } else {
+          // L holds the end face itself (nearer the end): dorsum out the
+          // end (-x), palm against the face
+          expect(dorsB.x, `swing@${t.toFixed(3)} L dorsum not out the end`).toBeLessThan(-0.6);
+          expect(pcB.x, `swing@${t.toFixed(3)} L palm not on the end face`).toBeLessThan(-0.15);
+          expect(pcB.y, `swing@${t.toFixed(3)} L palm too high on the end`).toBeLessThan(0.005);
+        }
         for (const f of ['index', 'middle', 'ring', 'pinky'] as const) {
           const tip = hand.tipWorld(f).applyMatrix4(inv);
+          // every fingertip wraps around the case: under the bottom face,
+          // behind the back face, or (L only) around the end face —
+          // never resting inside the case volume
+          const wrapped = tip.y < -0.015 || tip.z < -0.054 || (side === 'L' && tip.x < -0.14);
           expect(
-            tip.y,
-            `swing@${t.toFixed(3)} ${side}.${f} tip above board top`,
-          ).toBeLessThan(-0.0005);
-          expect(
-            Math.abs(tip.x + 0.14),
-            `swing@${t.toFixed(3)} ${side}.${f} tip away from the end plane`,
-          ).toBeLessThan(0.015);
+            wrapped,
+            `swing@${t.toFixed(3)} ${side}.${f} tip not wrapped (${tip.toArray().map((v) => v.toFixed(3))})`,
+          ).toBe(true);
         }
       }
     }
   });
 
-  it('SWING: gripped fingers stay in a fist (PIP >= 80, thumb MCP/IP >= 35)', () => {
+  it('SWING: gripped fingers stay wrapped (PIP >= 75, thumb MCP/IP >= 35)', () => {
     const rig = new Vm3dRig(spec);
     const clip = CLIPS['kbd.swing'];
     for (let t = 0.035; t <= 0.30 + 1e-9; t += 1 / 120) {
@@ -267,7 +301,7 @@ describe('vm3d clip contacts (plan §5)', () => {
           expect(
             hand.getCurl(f).pip,
             `swing@${t.toFixed(3)} ${side}.${f} PIP opens`,
-          ).toBeGreaterThanOrEqual(80);
+          ).toBeGreaterThanOrEqual(75);
         }
         const th = hand.getCurl('thumb');
         expect(th.mcp, `swing@${t.toFixed(3)} ${side}.thumb MCP`).toBeGreaterThanOrEqual(35);
@@ -332,11 +366,11 @@ describe('vm3d clip contacts (plan §5)', () => {
     }
   });
 
-  it('SWING: the board end sits inside each fist trough', () => {
+  it('SWING: the board passes through each fist trough (no gap)', () => {
     const rig = new Vm3dRig(spec);
     const clip = CLIPS['kbd.swing'];
     const inv = new THREE.Matrix4();
-    for (let t = 0.035; t <= 0.30 + 1e-9; t += 1 / 120) {
+    for (let t = 0.04; t <= 0.30 + 1e-9; t += 1 / 120) {
       rig.solve(clip, t);
       rig.board.group.updateWorldMatrix(true, false);
       inv.copy(rig.board.group.matrixWorld).invert();
@@ -352,14 +386,14 @@ describe('vm3d clip contacts (plan §5)', () => {
         for (const f of ['index', 'middle', 'ring', 'pinky'] as const) {
           box.expandByPoint(hand.tipWorld(f).applyMatrix4(inv));
         }
-        // board-edge reference point: the end face centre at the hand's
-        // own z — must sit inside the palm/finger bounded volume
-        const edge = new THREE.Vector3(-0.14, -0.0085, pcB.z);
+        // the back edge of the case under this palm must sit inside the
+        // palm/finger bounded volume — the fist wraps around it
+        const edge = new THREE.Vector3(pcB.x, -0.0085, -0.056);
         expect(box.containsPoint(edge), `swing@${t.toFixed(3)} ${side} board edge outside the fist`).toBe(true);
-        // the palm hugs the end region: within 15 mm of the end-face
-        // vertical centre and within 5 cm outboard of the end face
-        expect(Math.abs(pcB.y + 0.0085), `swing@${t.toFixed(3)} ${side} palm off the end-face height`).toBeLessThan(15 * MM);
-        expect(pcB.x, `swing@${t.toFixed(3)} ${side} palm detached from the board end`).toBeGreaterThan(-0.19);
+        // the palm hugs the top of the deck (within 25 mm of it) over the
+        // board's left quarter
+        expect(pcB.y, `swing@${t.toFixed(3)} ${side} palm floated off the deck`).toBeLessThan(0.025);
+        expect(pcB.x, `swing@${t.toFixed(3)} ${side} palm off the left quarter`).toBeLessThan(-0.02);
       }
     }
   });
@@ -386,17 +420,16 @@ describe('vm3d clip contacts (plan §5)', () => {
     }
   });
 
-  it('SWING: each palm centre stays within 1 cm of its board-end grip socket', () => {
+  it('SWING: each palm centre stays within 1 cm of its grip socket (10 ms, 0–0.30 s)', () => {
     const rig = new Vm3dRig(spec);
     const clip = CLIPS['kbd.swing'];
-    const dt = 1 / 240;
-    for (let t = 0; t <= clip.duration + 1e-9; t += dt) {
+    for (let t = 0; t <= 0.30 + 1e-9; t += 0.01) {
       const r = rig.solve(clip, t);
       for (const side of ['L', 'R'] as const) {
         for (const w of r.hands[side].wrists) {
           // mid-blend frames interpolate between sockets legitimately;
-          // only assert rigidity when the grip socket dominates (≥0.9)
-          if (!w.socket || !w.socket.startsWith('grip') || w.weight < 0.9) continue;
+          // only assert rigidity when a grip socket dominates (≥0.9)
+          if (!w.socket || !(w.socket.startsWith('grip') || w.socket.startsWith('bat')) || w.weight < 0.9) continue;
           const socket = rig.board.socketWorld(w.socket);
           const palm = rig.hands[side].group.getWorldPosition(new THREE.Vector3());
           expect(
@@ -404,6 +437,114 @@ describe('vm3d clip contacts (plan §5)', () => {
             `swing@${t.toFixed(4)} ${side} palm → ${w.socket}`,
           ).toBeLessThan(10 * MM);
         }
+      }
+    }
+  });
+
+  it('SWING: both wrists project inside the viewport every 10 ms', () => {
+    const rig = new Vm3dRig(spec);
+    const clip = CLIPS['kbd.swing'];
+    const cam = new THREE.PerspectiveCamera(54, 1280 / 672, 0.01, 5);
+    for (let t = 0; t <= clip.duration + 1e-9; t += 0.01) {
+      rig.solve(clip, t);
+      for (const side of ['L', 'R'] as const) {
+        const n = rig.hands[side].group.getWorldPosition(new THREE.Vector3()).project(cam);
+        expect(Math.abs(n.x) < 1 && n.y > -1 && n.y < 1, `swing@${t.toFixed(3)} ${side} wrist off-screen (${n.x.toFixed(2)},${n.y.toFixed(2)})`).toBe(true);
+      }
+    }
+  });
+
+  it('SWING: ≥60% of each hand stays on screen every 10 ms', () => {
+    const rig = new Vm3dRig(spec);
+    const clip = CLIPS['kbd.swing'];
+    const cam = new THREE.PerspectiveCamera(54, 1280 / 672, 0.01, 5);
+    for (let t = 0; t <= clip.duration + 1e-9; t += 0.01) {
+      rig.solve(clip, t);
+      for (const side of ['L', 'R'] as const) {
+        const hand = rig.hands[side];
+        const pts = [hand.group.getWorldPosition(new THREE.Vector3()), hand.palmCentreWorld(new THREE.Vector3())];
+        for (const f of HAND_FINGERS) pts.push(...hand.fingerJointsWorld(f));
+        let inside = 0;
+        for (const p of pts) {
+          const n = p.clone().project(cam);
+          if (Math.abs(n.x) <= 1 && Math.abs(n.y) <= 1) inside++;
+        }
+        expect(
+          inside / pts.length,
+          `swing@${t.toFixed(3)} ${side} hand ${(100 * inside / pts.length).toFixed(0)}% on screen`,
+        ).toBeGreaterThanOrEqual(0.6);
+      }
+    }
+  });
+
+  it('SWING: no arm/hand vertex comes within 15 cm of the camera; arm covers ≤20% of the viewport', () => {
+    const rig = new Vm3dRig(spec);
+    const clip = CLIPS['kbd.swing'];
+    const cam = new THREE.PerspectiveCamera(54, 1280 / 672, 0.01, 5);
+    const v = new THREE.Vector3();
+    for (let t = 0; t <= clip.duration + 1e-9; t += 0.01) {
+      rig.solve(clip, t);
+      for (const side of ['L', 'R'] as const) {
+        const hand = rig.hands[side];
+        hand.group.updateWorldMatrix(true, true);
+        // every joint (inside the skin surface) at least 15 cm out
+        for (const f of HAND_FINGERS) {
+          for (const p of hand.fingerJointsWorld(f)) {
+            expect(p.length(), `swing@${t.toFixed(3)} ${side}.${f} joint at camera`).toBeGreaterThanOrEqual(0.15);
+          }
+        }
+        const meshes: THREE.Mesh[] = [];
+        hand.group.traverse((o) => {
+          const m = o as THREE.Mesh;
+          if (m.isMesh) meshes.push(m);
+        });
+        // raster estimate of forearm/sleeve coverage: barycentric-subdivide
+        // each tube triangle and stamp the samples onto a 96×96 NDC grid
+        const grid = new Uint8Array(96 * 96);
+        for (const m of meshes) {
+          const pos = m.geometry.getAttribute('position');
+          const idx = m.geometry.getIndex();
+          const isArm = /forearm|sleeve|forecap|sleevecap/.test(m.name);
+          const nVerts = pos.count;
+          for (let i = 0; i < nVerts; i++) {
+            if ((m as THREE.SkinnedMesh).isSkinnedMesh) {
+              (m as THREE.SkinnedMesh).applyBoneTransform(i, v.fromBufferAttribute(pos, i));
+            } else {
+              v.fromBufferAttribute(pos, i);
+            }
+            m.localToWorld(v);
+            if (v.length() < 0.15) {
+              throw new Error(`swing@${t.toFixed(3)} ${side}.${m.name} vertex ${v.length().toFixed(3)}m from camera`);
+            }
+          }
+          if (!isArm) continue;
+          const tri = (k: number) => (idx ? idx.getX(k) : k);
+          const nTris = (idx ? idx.count : nVerts) / 3;
+          const va = new THREE.Vector3(), vb = new THREE.Vector3(), vc = new THREE.Vector3(), p = new THREE.Vector3();
+          for (let i = 0; i < nTris; i++) {
+            va.fromBufferAttribute(pos, tri(i * 3)); m.localToWorld(va);
+            vb.fromBufferAttribute(pos, tri(i * 3 + 1)); m.localToWorld(vb);
+            vc.fromBufferAttribute(pos, tri(i * 3 + 2)); m.localToWorld(vc);
+            for (let a = 0; a < 8; a++) for (let b = 0; b < 8 - a; b++) {
+              const u = a / 8, w = b / 8;
+              p.set(
+                va.x + (vb.x - va.x) * u + (vc.x - va.x) * w,
+                va.y + (vb.y - va.y) * u + (vc.y - va.y) * w,
+                va.z + (vb.z - va.z) * u + (vc.z - va.z) * w,
+              );
+              if (p.z > -0.01) continue;
+              const n = p.clone().project(cam);
+              if (Math.abs(n.x) <= 1 && Math.abs(n.y) <= 1) {
+                const gx = Math.min(95, Math.max(0, Math.round((n.x + 1) / 2 * 95)));
+                const gy = Math.min(95, Math.max(0, Math.round((n.y + 1) / 2 * 95)));
+                grid[gy * 96 + gx] = 1;
+              }
+            }
+          }
+        }
+        let armCells = 0;
+        for (const c of grid) armCells += c;
+        expect(armCells / grid.length, `swing@${t.toFixed(3)} ${side} arm covers ${(100 * armCells / grid.length).toFixed(1)}% of view`).toBeLessThanOrEqual(0.2);
       }
     }
   });

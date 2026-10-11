@@ -437,38 +437,51 @@ export class LiveHand {
     const boneDir = toBoneLocal('wrist', dirL).normalize();
     const len = 0.26 / s;                    // forearm always exits the frame
     const rw = this.palmW * 0.36 / s;        // wrist cross-section radius
+    const jacket = ANALYSTS[this.spec.gender].jacket;
+    const cuffStart = 0.04 / s;
+    const cuffEnd = 0.26 / s;
 
-    // tapered forearm: wrist radius at the wrist, +12 % toward the elbow;
-    // both end caps are hidden (wrist cap inside the wrist, elbow cap
-    // far off-screen)
-    // open-ended forearm tube (no flat skin cap anywhere); the wrist end
-    // is buried 24 mm inside the wrist with a narrowed cap ring so it
-    // never peeks onto the finger side of the wrist plane even when the
-    // cosmetic tail is re-aimed off the anatomical arm axis
-    const foreGeo = new THREE.CylinderGeometry(rw * 1.12, rw * 0.68, len, 12, 1, true);
-    foreGeo.translate(0, len / 2 + 0.024 / s, 0);
+    // tapered forearm: wrist radius at the wrist, +12 % toward the elbow.
+    // It STOPS 14 mm inside the cuff so its far end can never peek out —
+    // and it is capped anyway (an open tube shows its lit interior when
+    // the arm points anywhere near the camera).
+    const foreLen = cuffEnd - 0.014 / s - 0.024 / s;
+    const foreGeo = new THREE.CylinderGeometry(rw * 1.12, rw * 0.68, foreLen, 12, 1, true);
+    foreGeo.translate(0, foreLen / 2 + 0.024 / s, 0);
     const fore = new THREE.Mesh(foreGeo, skinMat);
     fore.name = 'vm3d-forearm';
     fore.quaternion.setFromUnitVectors(Y_AXIS, boneDir);
+    const foreCap = new THREE.Mesh(
+      new THREE.CircleGeometry(rw * 1.12, 12).rotateX(-Math.PI / 2).translate(0, 0.024 / s + foreLen, 0),
+      skinMat,
+    );
+    foreCap.name = 'vm3d-forecap';
+    foreCap.quaternion.copy(fore.quaternion);
 
-    // open-ended sleeve tube: begins 4 cm behind the wrist so it overlaps
-    // the skin (hiding the seam) while its near rim stays on the arm side
-    // of the wrist plane; cuff radius ≤ 1.08× wrist, gently tapering
-    const jacket = ANALYSTS[this.spec.gender].jacket;
-    const cuffStart = 0.04 / s;
+    // sleeve tube: begins 4 cm behind the wrist so it overlaps the skin
+    // (hiding the seam) while its near rim stays on the arm side of the
+    // wrist plane. The far end is SEALED with a jacket-coloured cap —
+    // an open cuff reads as a hollow tube of backfaces end-on.
     const rForeAtStart = rw * (1 + 0.2 * (cuffStart / len));
-    const cuffLen = len - cuffStart;
+    const cuffLen = cuffEnd - cuffStart;
+    const cuffMat = new THREE.MeshStandardMaterial({ color: shade(jacket, 0.7), roughness: 0.85, metalness: 0, side: THREE.FrontSide });
     const cuffGeo = new THREE.CylinderGeometry(rForeAtStart * 1.08, rForeAtStart * 1.04, cuffLen, 12, 1, true);
     cuffGeo.translate(0, cuffStart + cuffLen / 2, 0);
-    const cuff = new THREE.Mesh(cuffGeo, new THREE.MeshStandardMaterial({ color: shade(jacket, 0.7), roughness: 0.85, metalness: 0 }));
+    const cuff = new THREE.Mesh(cuffGeo, cuffMat);
     cuff.name = 'vm3d-sleeve';
     cuff.quaternion.copy(fore.quaternion);
+    const cuffCap = new THREE.Mesh(
+      new THREE.CircleGeometry(rForeAtStart * 1.08, 12).rotateX(-Math.PI / 2).translate(0, cuffEnd, 0),
+      cuffMat,
+    );
+    cuffCap.name = 'vm3d-sleevecap';
+    cuffCap.quaternion.copy(fore.quaternion);
     // cosmetic tail group: the solver re-aims it each pose so the arm
     // always exits toward a screen corner instead of following the wrist
     // bone's own axis
     const tail = new THREE.Group();
     tail.name = 'vm3d-tail';
-    tail.add(fore, cuff);
+    tail.add(fore, foreCap, cuff, cuffCap);
     this.tail = tail;
     this.wristBone.add(tail);
     this.tailBindQuat = fore.quaternion.clone();
@@ -486,10 +499,8 @@ export class LiveHand {
   orientTail(): void {
     if (!this.tailDir) {
       // restore construction-time alignment
-      const g = this.tail.children[0] as THREE.Mesh;
-      g.quaternion.copy(this.tailBindQuat);
+      for (const c of this.tail.children) c.quaternion.copy(this.tailBindQuat);
       this.tail.quaternion.identity();
-      (this.tail.children[1] as THREE.Mesh).quaternion.copy(this.tailBindQuat);
       return;
     }
     const wq = this.wristBone.getWorldQuaternion(new THREE.Quaternion()).invert();
