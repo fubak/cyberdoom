@@ -33,7 +33,7 @@ const FIST = (tight = 0) => ({
 });
 
 const PINCH = (open = 0) => ({
-  index: { abd: 4, mcp: 34 - open * 10, pip: 42 - open * 8 },
+  index: { abd: 4, mcp: 80 - open * 10, pip: 85 - open * 8 },
   middle: { abd: 0, mcp: 70, pip: 84 },
   ring: { abd: -8, mcp: 82, pip: 98 },
   pinky: { abd: -14, mcp: 88, pip: 100 },
@@ -112,11 +112,11 @@ export const POSES: Record<string, RigFrame> = {
   // — BADGE: card pinched thumb + index side —————————————————————————————————
   'badge.rest': {
     w: 48, h: 44, persp: 430,
-    hands: [{ wrist: [24, 4, 2], pitch: 6, thumbOut: 0.4, yaw: 40, roll: -4, size: 16, fingers: curls(PINCH(0.3)), arm: [10, -28, -14] }],
+    hands: [{ wrist: [24, 4, 2], pitch: -14, thumbOut: 0.4, yaw: 40, roll: -4, size: 16, fingers: curls(PINCH(0.3)), arm: [10, -28, -14] }],
   },
   'badge.present': {
     w: 48, h: 44, persp: 430,
-    hands: [{ wrist: [24, 8, 6], pitch: 30, thumbOut: 0.4, yaw: 48, roll: -10, size: 16, fingers: curls(PINCH(0.3)), arm: [8, -28, -14] }],
+    hands: [{ wrist: [24, 8, 6], pitch: 22, thumbOut: 0.4, yaw: 48, roll: -10, size: 16, fingers: curls(PINCH(0.3)), arm: [8, -28, -14] }],
   },
 
   // — MFA token: relaxed fist, thumb over the button —————————————————————————
@@ -143,15 +143,15 @@ export const POSES: Record<string, RigFrame> = {
   'tap.rest': {
     w: 84, h: 40, persp: 440,
     hands: [
-      { mirror: true, wrist: [10, 6, 4], pitch: -58, yaw: -52, roll: 10, size: 15, fingers: curls(GRIP_SIDE()), arm: [0, -24, -14] },
-      { mirror: false, wrist: [74, 6, 4], pitch: -58, yaw: 52, roll: -10, size: 15, fingers: curls(GRIP_SIDE()), arm: [84, -24, -14] },
+      { mirror: true, wrist: [10, 6, 4], pitch: -58, thumbOut: 0.35, yaw: -52, roll: 10, size: 15, fingers: curls(GRIP_SIDE()), arm: [0, -24, -14] },
+      { mirror: false, wrist: [74, 6, 4], pitch: -58, thumbOut: 0.35, yaw: 52, roll: -10, size: 15, fingers: curls(GRIP_SIDE()), arm: [84, -24, -14] },
     ],
   },
   'tap.squeeze': {
     w: 84, h: 40, persp: 440,
     hands: [
-      { mirror: true, wrist: [10, 6, 4], pitch: -58, yaw: -52, roll: 10, size: 15, fingers: curls(GRIP_SIDE(0.5)), arm: [0, -24, -14] },
-      { mirror: false, wrist: [74, 6, 4], pitch: -58, yaw: 52, roll: -10, size: 15, fingers: curls(GRIP_SIDE(0.5)), arm: [84, -24, -14] },
+      { mirror: true, wrist: [10, 6, 4], pitch: -58, thumbOut: 0.35, yaw: -52, roll: 10, size: 15, fingers: curls(GRIP_SIDE(0.5)), arm: [0, -24, -14] },
+      { mirror: false, wrist: [74, 6, 4], pitch: -58, thumbOut: 0.35, yaw: 52, roll: -10, size: 15, fingers: curls(GRIP_SIDE(0.5)), arm: [84, -24, -14] },
     ],
   },
 
@@ -159,15 +159,15 @@ export const POSES: Record<string, RigFrame> = {
   'edr.rest': {
     w: 88, h: 42, persp: 440,
     hands: [
-      { mirror: true, wrist: [12, 6, 4], pitch: -46, yaw: -46, roll: 12, size: 15, fingers: curls(GRIP_SIDE()), arm: [0, -24, -14] },
-      { mirror: false, wrist: [76, 6, 4], pitch: -46, yaw: 46, roll: -12, size: 15, fingers: curls(GRIP_SIDE()), arm: [88, -24, -14] },
+      { mirror: true, wrist: [12, 6, 4], pitch: -46, thumbOut: 0.35, yaw: -46, roll: 12, size: 15, fingers: curls(GRIP_SIDE()), arm: [0, -24, -14] },
+      { mirror: false, wrist: [76, 6, 4], pitch: -46, thumbOut: 0.35, yaw: 46, roll: -12, size: 15, fingers: curls(GRIP_SIDE()), arm: [88, -24, -14] },
     ],
   },
   'edr.tap': {
     w: 88, h: 42, persp: 440,
     hands: [
-      { mirror: true, wrist: [12, 6, 4], pitch: -46, yaw: -46, roll: 12, size: 15, fingers: curls(GRIP_SIDE()), arm: [0, -24, -14] },
-      { mirror: false, wrist: [74, 6, 6], pitch: -46, yaw: 40, roll: -14, size: 15, fingers: curls({ ...GRIP_SIDE(), thumb: { abd: 0, mcp: 56, pip: 60 } }), arm: [88, -24, -14] },
+      { mirror: true, wrist: [12, 6, 4], pitch: -46, thumbOut: 0.35, yaw: -46, roll: 12, size: 15, fingers: curls(GRIP_SIDE()), arm: [0, -24, -14] },
+      { mirror: false, wrist: [74, 6, 6], pitch: -46, thumbOut: 0.35, yaw: 40, roll: -14, size: 15, fingers: curls({ ...GRIP_SIDE(), thumb: { abd: 0, mcp: 56, pip: 60 } }), arm: [88, -24, -14] },
     ],
   },
 };

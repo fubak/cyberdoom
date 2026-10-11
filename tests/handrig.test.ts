@@ -5,7 +5,7 @@ import { clampCurl, fingerJoints, handJoints, FINGER_LEN, PHALANX, JOINT_LIMITS,
 import { POSES, TOOL_HANDS } from '../src/render/handposes';
 import { SKIN_TONES } from '../src/tools/look';
 import { rasterize, type Prim, type V3 } from '../src/render/model';
-import { fingertipLayout } from '../src/render/handmesh';
+import { fingertipLayout, jointLayout } from '../src/render/handmesh';
 import { RES } from '../src/render/res';
 import { vmLine } from '../src/tools/anim';
 import { drawToolViewmodel } from '../src/render/viewmodels';
@@ -185,5 +185,31 @@ describe('fingertip layout (mesh readability, no WebGL)', () => {
       const xs = four.map((t) => t.x);
       expect(Math.max(...xs) - Math.min(...xs)).toBeGreaterThanOrEqual(q.size * 0.5);
     });
+  }
+});
+
+describe('thumb stays below the index MCP on grip poses (no hook)', () => {
+  // screen-y down = -y (camera up is +y): "below" means smaller world y
+  for (const pose of ['mouse.rest', 'usb.rest', 'badge.rest', 'mfa.rest', 'patch.rest'] as const) {
+    for (const gender of ['male', 'female'] as const) {
+      it(`${pose} ${gender}: thumb tip + IP below index MCP, within palm span +15%`, () => {
+        const fr = POSES[pose];
+        for (const p of fr.hands) {
+          const q = { ...p, wrist: [p.wrist[0] * RES, p.wrist[1] * RES, p.wrist[2] * RES] as V3, size: p.size * RES };
+          const j = jointLayout(q, { gender, skin: SKIN_TONES[1] });
+          const thumb = j.thumb;
+          const idxMcp = j.index[0];
+          // palm span = projected x range of the four finger MCPs, padded 15%
+          const xs = [j.index[0].x, j.middle[0].x, j.ring[0].x, j.pinky[0].x];
+          const lo = Math.min(...xs), hi = Math.max(...xs);
+          const pad = (hi - lo) * 0.15 + 2;
+          for (const pt of [thumb[3], thumb[2]]) {
+            expect(pt.y).toBeLessThanOrEqual(idxMcp.y);
+            expect(pt.x).toBeGreaterThanOrEqual(lo - pad);
+            expect(pt.x).toBeLessThanOrEqual(hi + pad);
+          }
+        }
+      });
+    }
   }
 });

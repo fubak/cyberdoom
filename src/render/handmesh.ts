@@ -93,9 +93,15 @@ function tube(a: V3, b: V3, r0: number, r1: number, col: string): THREE.Mesh {
   const av = new THREE.Vector3(...a), bv = new THREE.Vector3(...b);
   const len = av.distanceTo(bv);
   // lerp radii across segments via LatheGeometry profile for a smooth taper
-  const pts: THREE.Vector2[] = [];
+  const pts: THREE.Vector2[] = [
+    // rounded caps at both ends — an open lathe profile renders as a thin
+    // lip, which shows up as a 1-3px silhouette spike at bake resolution
+    new THREE.Vector2(0.001, -r0 * 0.9),
+    new THREE.Vector2(r0 * 0.6, -r0 * 0.75),
+  ];
   const steps = 5;
   for (let i = 0; i <= steps; i++) pts.push(new THREE.Vector2(r0 + (r1 - r0) * (i / steps), i / steps * len));
+  pts.push(new THREE.Vector2(r1 * 0.6, len + r1 * 0.75), new THREE.Vector2(0.001, len + r1 * 0.9));
   const g = track(new THREE.LatheGeometry(pts, 12));
   const m = new THREE.Mesh(g, toon(col));
   const dir = bv.clone().sub(av).normalize();
@@ -108,6 +114,64 @@ function tube(a: V3, b: V3, r0: number, r1: number, col: string): THREE.Mesh {
 // —— hand construction ————————————————————————————————————————————————————
 
 const HAND_ORDER: FingerName[] = ['index', 'middle', 'ring', 'pinky', 'thumb'];
+
+/**
+ * Shared thumb-chain geometry used by both buildHand and jointLayout so the
+ * test math can never drift from the rendered mesh.
+ *
+ * thumbOut semantics (0..1): at 1 the metacarpal emerges with its full
+ * forward (+z, toward-viewer) component — open grips. As it drops, the
+ * metacarpal's +z AND +y components shrink AND its base slides down the palm
+ * side; below ~0.5 the metacarpal dives down-and-out and the flex draws the
+ * phalanges across the palm's front face, so the tip lands low and inside
+ * the silhouette — the thumb reads as wrapping the object's side/front
+ * instead of hooking over the hand's top contour.
+ */
+function thumbGeom(p: Place, palmW: number, palmL: number, mx: number, mcp: number, pip: number): {
+  base: V3; d0: THREE.Vector3; d1: THREE.Vector3; d2: THREE.Vector3;
+} {
+  const tout = Math.max(0, Math.min(1, p.thumbOut ?? 1));
+  if (tout < 0.5) {
+    // TUCK: metacarpal dives down-and-out below the palm edge; the flex then
+    // sweeps the phalanges across the palm's front face so the tip lands low
+    // and inside the silhouette, pointing at the gripped object. This is the
+    // decisive anti-hook path: nothing rises above the palm's top contour.
+    const base: V3 = [-0.3 * palmW * mx, palmL * 0.08, -0.05 * palmW];
+    const d0 = new THREE.Vector3(-0.4 * mx, -0.65, -0.1).normalize();
+    const d1 = new THREE.Vector3(
+      d0.x + (mcp / 60) * 2.5 * mx,
+      d0.y + (mcp / 60) * 1.0,
+      d0.z + (mcp / 60) * 1.0,
+    ).normalize();
+    const d2 = new THREE.Vector3(
+      d1.x + (pip / 80) * 1.5 * mx,
+      d1.y + (pip / 80) * 0.2,
+      d1.z - (pip / 80) * 0.1,
+    ).normalize();
+    return { base, d0, d1, d2 };
+  }
+  const base: V3 = [
+    THUMB_BASE[0] * palmW * mx * (1 + 0.3 * (1 - tout)),
+    palmL * (THUMB_BASE[1] - 0.34 * (1 - tout)),
+    THUMB_BASE[2] * palmW,
+  ];
+  const d0 = new THREE.Vector3(
+    -0.72 * mx,
+    0.18 * tout - 0.12 * (1 - tout),
+    0.66 * tout,
+  ).normalize();
+  const d1 = new THREE.Vector3(
+    d0.x + (mcp / 60) * 0.85 * mx,
+    d0.y - mcp / 110,
+    d0.z - (mcp / 60) * 0.3 * tout,
+  ).normalize();
+  const d2 = new THREE.Vector3(
+    d1.x + (pip / 80) * 0.65 * mx,
+    d1.y - pip / 120,
+    d1.z - (pip / 80) * 0.35 * tout,
+  ).normalize();
+  return { base, d0, d1, d2 };
+}
 
 export interface BuiltHand {
   group: THREE.Group;
@@ -154,13 +218,9 @@ export function buildHand(p: Place, spec: { gender: Gender; skin: SkinTone }): B
     const isThumb = f === 'thumb';
     const len = (isThumb ? THUMB_LEN : FINGER_LEN[f as keyof typeof FINGER_LEN]) * size;
     const ls = [len * PHALANX[0], len * PHALANX[1], len * PHALANX[2]];
-    const tout0 = p.thumbOut ?? 1;
+    const tg = isThumb ? thumbGeom(p, palmW, palmL, mx, cc.mcp, cc.pip) : null;
     const base: V3 = isThumb
-      ? [
-          THUMB_BASE[0] * palmW * mx * (1 + 0.25 * (1 - tout0)),
-          palmL * (THUMB_BASE[1] - 0.3 * (1 - tout0)),
-          THUMB_BASE[2] * palmW,
-        ]
+      ? tg!.base
       : [MCP_X[f as keyof typeof MCP_X] * palmW * mx, palmL * 0.88, 0];
     const fr = isThumb ? r0 * 1.22 : r0;
     const radii = [fr, fr * 0.93, fr * 0.85, fr * 0.62];
@@ -174,12 +234,7 @@ export function buildHand(p: Place, spec: { gender: Gender; skin: SkinTone }): B
       // thumbOut scales the viewer-facing (+z) component: at steep palms-down
       // pitches +z maps straight up on screen, so grips that must keep the
       // thumb low pass a fraction here.
-      const tout = p.thumbOut ?? 1;
-      const d0 = new THREE.Vector3(-0.72 * mx, 0.18 * tout - 0.12 * (1 - tout), 0.66 * tout).normalize();
-      const d1 = new THREE.Vector3(
-        d0.x + (cc.mcp / 60) * 0.85 * mx, d0.y - cc.mcp / 110, d0.z - (cc.mcp / 60) * 0.3 * tout).normalize();
-      const d2 = new THREE.Vector3(
-        d1.x + (cc.pip / 80) * 0.65 * mx, d1.y - cc.pip / 120, d1.z - (cc.pip / 80) * 0.35 * tout).normalize();
+      const { d0, d1, d2 } = tg!;
       const q0 = new THREE.Quaternion().setFromUnitVectors(Y_AXIS, d0);
       const q1 = new THREE.Quaternion().setFromUnitVectors(d0, d1);
       const q2 = new THREE.Quaternion().setFromUnitVectors(d1, d2);
@@ -241,11 +296,13 @@ export function buildHand(p: Place, spec: { gender: Gender; skin: SkinTone }): B
     const dir = to.clone().sub(wristW);
     const len = dir.length();
     dir.normalize();
-    const skinEnd = wristW.clone().addScaledVector(dir, len * 0.3);
+    const skinEnd = wristW.clone().addScaledVector(dir, len * 0.26);
     const armG = new THREE.Group();
     armG.add(tube(wristW.toArray() as V3, skinEnd.toArray() as V3, palmW * 0.42, palmW * 0.38, skin));
     armG.add(tube(skinEnd.toArray() as V3, to.toArray() as V3, palmW * 0.5, palmW * 0.74, jacket));
-    const cuffC = wristW.clone().addScaledVector(dir, len * 0.3);
+    // round off the sleeve's end cap so no 1-3px point spikes the silhouette
+    armG.add(ellipsoid(to.toArray() as V3, [palmW * 0.8, palmW * 0.8, palmW * 0.8], jacket));
+    const cuffC = wristW.clone().addScaledVector(dir, len * 0.33);
     armG.add(ellipsoid(cuffC.toArray() as V3,
       [palmW * 0.52, palmW * 0.47, palmW * 0.4], shade(jacket, 0.7)));
     if (spec.gender === 'male') {
@@ -456,53 +513,57 @@ function postPass(
 // —— test helpers (pure math, no GL) ———————————————————————————————————————
 
 /**
- * Orthographic-projected fingertip positions of a placed hand (bake px).
- * Used by tests to prove ≥4 digits read with gaps.
+ * Projected joint positions per finger: [base(mcp/cmc), j1, j2, tip] in bake
+ * px (x right, y up-world — screen-y is -y). Shares thumbGeom with buildHand.
  */
-export function fingertipLayout(p: Place, spec: { gender: Gender; skin: SkinTone }): { x: number; y: number }[] {
+export function jointLayout(p: Place, spec: { gender: Gender; skin: SkinTone }): Record<FingerName, { x: number; y: number }[]> {
   const fem = spec.gender === 'female';
   const palmW = p.size * (fem ? 0.84 : 0.95);
   const palmL = p.size * PALM_LEN;
   const mx = p.mirror ? -1 : 1;
   const size = p.size;
-  const tips: { x: number; y: number }[] = [];
+  const orient = new THREE.Euler((p.pitch ?? 0) * D2R, (p.yaw ?? 0) * D2R, (p.roll ?? 0) * D2R, 'ZXY');
+  const wrist = new THREE.Vector3(p.wrist[0], p.wrist[1], p.wrist[2]);
+  const out = {} as Record<FingerName, { x: number; y: number }[]>;
   for (const f of HAND_ORDER) {
     const cc = clampCurl(f, { ...defaultCurl(f), ...p.fingers?.[f] });
-    // same chain math as buildHand, evaluated cheaply in 2.5D
     const isThumb = f === 'thumb';
     const len = (isThumb ? THUMB_LEN : FINGER_LEN[f as keyof typeof FINGER_LEN]) * size;
     const ls = [len * PHALANX[0], len * PHALANX[1], len * PHALANX[2]];
-    const tbo = p.thumbOut ?? 1;
+    const tg = isThumb ? thumbGeom(p, palmW, palmL, mx, cc.mcp, cc.pip) : null;
     const base: V3 = isThumb
-      ? [
-          THUMB_BASE[0] * palmW * mx * (1 + 0.25 * (1 - tbo)),
-          palmL * (THUMB_BASE[1] - 0.3 * (1 - tbo)),
-          THUMB_BASE[2] * palmW,
-        ]
+      ? tg!.base
       : [MCP_X[f as keyof typeof MCP_X] * palmW * mx, palmL * 0.88, 0];
-    let pt = new THREE.Vector3(...base);
+    const chain: THREE.Vector3[] = [new THREE.Vector3(...base)];
     if (isThumb) {
-      const tout = p.thumbOut ?? 1;
-      const d0 = new THREE.Vector3(-0.72 * mx, 0.18 * tout - 0.12 * (1 - tout), 0.66 * tout).normalize();
-      const d1 = new THREE.Vector3(d0.x + (cc.mcp / 60) * 0.85 * mx, d0.y - cc.mcp / 110, d0.z - (cc.mcp / 60) * 0.3 * tout).normalize();
-      const d2 = new THREE.Vector3(d1.x + (cc.pip / 80) * 0.65 * mx, d1.y - cc.pip / 120, d1.z - (cc.pip / 80) * 0.35 * tout).normalize();
-      pt = pt.addScaledVector(d0, ls[0]).addScaledVector(d1, ls[1]).addScaledVector(d2, ls[2]);
+      const { d0, d1, d2 } = tg!;
+      chain.push(
+        chain[0].clone().addScaledVector(d0, ls[0]),
+        chain[0].clone().addScaledVector(d0, ls[0]).addScaledVector(d1, ls[1]),
+        chain[0].clone().addScaledVector(d0, ls[0]).addScaledVector(d1, ls[1]).addScaledVector(d2, ls[2]),
+      );
     } else {
       const dir = (th: number) => {
         const d = new THREE.Vector3(0, Math.cos(-th * D2R), Math.sin(-th * D2R));
         const a = cc.abd * mx * D2R;
         return new THREE.Vector3(d.x * Math.cos(a) - d.y * Math.sin(a), d.x * Math.sin(a) + d.y * Math.cos(a), d.z);
       };
-      pt = pt.addScaledVector(dir(cc.mcp), ls[0])
-        .addScaledVector(dir(cc.mcp + cc.pip), ls[1])
-        .addScaledVector(dir(cc.mcp + cc.pip + cc.dip), ls[2]);
+      const j1 = chain[0].clone().addScaledVector(dir(cc.mcp), ls[0]);
+      const j2 = j1.clone().addScaledVector(dir(cc.mcp + cc.pip), ls[1]);
+      const tip = j2.clone().addScaledVector(dir(cc.mcp + cc.pip + cc.dip), ls[2]);
+      chain.push(j1, j2, tip);
     }
-    // apply the palm orient (match orient() Ry→Rx→Rz via euler ZXY)
-    pt.applyEuler(new THREE.Euler((p.pitch ?? 0) * D2R, (p.yaw ?? 0) * D2R, (p.roll ?? 0) * D2R, 'ZXY'));
-    pt.add(new THREE.Vector3(p.wrist[0], p.wrist[1], p.wrist[2]));
-    tips.push({ x: pt.x, y: pt.y });
+    out[f] = chain.map((pt) => {
+      const q = pt.clone().applyEuler(orient).add(wrist);
+      return { x: q.x, y: q.y };
+    });
   }
-  return tips;
+  return out;
+}
+
+export function fingertipLayout(p: Place, spec: { gender: Gender; skin: SkinTone }): { x: number; y: number }[] {
+  const j = jointLayout(p, spec);
+  return HAND_ORDER.map((f) => j[f][3]);
 }
 
 
