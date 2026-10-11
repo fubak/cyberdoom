@@ -57,14 +57,17 @@ interface EnemyProfile {
   seals?: boolean;
   /** rootkit: invisible beyond ~2 tiles until tap/EDR/damage/close contact. */
   stealthy?: boolean;
+  /** ranged types that sidestep perpendicular to the target after firing or
+   *  when hit (Doom-style strafing) — keeps a firefight moving. */
+  strafes?: boolean;
 }
 
 export const ENEMY_PROFILES: Record<string, EnemyProfile> = {
   worm: { speed: 2.6, ranged: false, damage: 3, painChance: 0.8, range: 0.95, windup: 0.55, propagates: true },
-  trojan: { speed: 1.8, ranged: true, damage: 10, painChance: 0.6, projectileSpeed: 5.5, windup: 0.5, disguised: true },
-  ransomware: { speed: 1.3, ranged: true, damage: 18, painChance: 0.4, projectileSpeed: 4, windup: 0.7, seals: true },
+  trojan: { speed: 1.8, ranged: true, damage: 10, painChance: 0.6, projectileSpeed: 5.5, windup: 0.5, disguised: true, strafes: true },
+  ransomware: { speed: 1.3, ranged: true, damage: 18, painChance: 0.4, projectileSpeed: 4, windup: 0.7, seals: true, strafes: true },
   logicbomb: { speed: 0, ranged: false, damage: 22, painChance: 0, range: 2.2, windup: 1.4, aggroRange: 4, logicBomb: true },
-  rat: { speed: 3.2, ranged: true, damage: 8, painChance: 0.6, projectileSpeed: 7, windup: 0.5, retreatAfterShot: 0.7 },
+  rat: { speed: 3.2, ranged: true, damage: 8, painChance: 0.6, projectileSpeed: 7, windup: 0.5, retreatAfterShot: 0.7, strafes: true },
   rootkit: { speed: 1.6, ranged: false, damage: 12, painChance: 0.4, range: 0.95, windup: 0.5, regenerate: true, hidesWhenIdle: true, stealthy: true },
 };
 
@@ -344,6 +347,30 @@ function pickMoveDir(e: Entity, map: WorldMap, dx: number, dy: number): number {
   return direct;
 }
 
+/**
+ * Doom-style sidestep (ENEMIES F5): a ranged attacker slips perpendicular
+ * to the line of fire — picks the side with more clearance, holds it for a
+ * short burst, then resumes the chase. Returns false when both sides are
+ * boxed in so the caller can fall back to 'recover'.
+ */
+function enterStrafe(e: Entity, dx: number, dy: number, dist: number, map: WorldMap): boolean {
+  const inv = 1 / (dist || 1);
+  const px = -dy * inv;
+  const py = dx * inv;
+  const room = (s: number) => {
+    const res = map.resolve(e.x + px * s * 0.4, e.y + py * s * 0.4, ENEMY_RADIUS);
+    return Math.hypot(res.x - e.x, res.y - e.y);
+  };
+  const a = room(1);
+  const b = room(-1);
+  if (Math.max(a, b) < 0.05) return false;
+  e.state.mode = 'strafe';
+  e.state.strafeT = 0.45 + Math.random() * 0.45;
+  e.state.strafeSide = a >= b ? 1 : -1;
+  delete e.state.strafeFlip;
+  return true;
+}
+
 export function enemyMoveTo(e: Entity, nx: number, ny: number, map: WorldMap, player: Player): boolean {
   const res = map.resolve(nx, ny, ENEMY_RADIUS);
   const currentDist = Math.hypot(e.x - player.x, e.y - player.y);
@@ -566,6 +593,35 @@ export function updateEntities(
         e.y = res.y;
         turnToward(e, away, dt, 8);
         if (retreatT <= 0) e.state.mode = 'chase';
+      } else if (currentMode === 'strafe') {
+        // Sidestep: move perpendicular to the target line, facing the travel
+        // direction so the walk-rotation frames read as a flanking move.
+        const strafeT = ((e.state.strafeT as number | undefined) ?? 0) - dt;
+        e.state.strafeT = strafeT;
+        const side = (e.state.strafeSide as number | undefined) ?? 1;
+        const inv = 1 / (dist || 1);
+        const sx = -dy * inv * side;
+        const sy = dx * inv * side;
+        if (!enemyMoveTo(e, e.x + sx * speed * 1.15 * dt, e.y + sy * speed * 1.15 * dt, map, player)) {
+          if (e.state.strafeFlip === true) {
+            e.state.strafeT = 0;
+          } else {
+            e.state.strafeSide = -side;
+            e.state.strafeFlip = true;
+          }
+        } else {
+          turnToward(e, Math.atan2(sy, sx), dt, 10);
+          e.state.stepT = ((e.state.stepT as number | undefined) ?? 0) - dt;
+          if ((e.state.stepT as number) <= 0) {
+            hooks.onStep?.(e);
+            e.state.stepT = 0.35;
+          }
+        }
+        if (strafeT <= 0) {
+          e.state.mode = 'chase';
+          delete e.state.strafeSide;
+          delete e.state.strafeFlip;
+        }
       } else if (currentMode === 'windup') {
         const windupT = ((e.state.windupT as number | undefined) ?? 0) + dt;
         e.state.windupT = windupT;
@@ -598,9 +654,15 @@ export function updateEntities(
             if (grudge) hooks.onEnemyMelee?.(e, grudge, meleeDmg);
             else hooks.onMelee(e, meleeDmg);
           }
-          e.state.mode = profile.retreatAfterShot ? 'retreat' : 'recover';
-          if (profile.retreatAfterShot) e.state.retreatT = profile.retreatAfterShot;
-          else e.state.recoverT = profile.ranged ? 0.3 : 0.25;
+          e.state.mode = 'recover';
+          if (profile.retreatAfterShot) {
+            e.state.mode = 'retreat';
+            e.state.retreatT = profile.retreatAfterShot;
+          } else if (profile.strafes && dist > 1.4 && Math.random() < 0.45) {
+            // post-shot sidestep: slips off the player's aim line (Doom-ish)
+            if (!enterStrafe(e, dx, dy, dist, map)) e.state.mode = 'recover';
+          }
+          if (mode(e) === 'recover') e.state.recoverT = profile.ranged ? 0.3 : 0.25;
           e.state.popT = 0;
           e.state.attackCooldown = profile.ranged ? rangedCooldown() : meleeCooldown();
         }
@@ -711,10 +773,17 @@ export function hurtEntity(e: Entity, fromDx: number, fromDy: number, rng = Math
     e.state.sighted = true;
   }
   e.state.lastHurtAt = (e.state.aiClock as number | undefined) ?? 0;
-  const painChance = ENEMY_PROFILES[e.def.threat ?? e.def.sprite]?.painChance ?? 0;
+  const profile = ENEMY_PROFILES[e.def.threat ?? e.def.sprite];
+  const painChance = profile?.painChance ?? 0;
   if (painChance > 0 && rng() < painChance) {
     e.state.mode = 'pain';
     e.state.painT = 0.2;
+  } else if (profile?.strafes && mode(e) === 'chase' && rng() < 0.45) {
+    // shot at: flinch sideways off the aim line instead of always eating fire
+    e.state.mode = 'strafe';
+    e.state.strafeT = 0.4 + rng() * 0.4;
+    e.state.strafeSide = rng() < 0.5 ? 1 : -1;
+    delete e.state.strafeFlip;
   }
 }
 
