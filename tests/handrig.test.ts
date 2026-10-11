@@ -79,7 +79,7 @@ describe('anthropometric finger lengths', () => {
 
 describe('keystroke cycles put the striking fingertip on a keycap', () => {
   // the keyboard's home-row band in viewmodel units (art rows 5-24, centred)
-  const KEY = { x0: -46, x1: 46, y0: 4, y1: 40 };
+  const KEY = { x0: -36, x1: 36, y0: 10, y1: 34 };
   const ms = CYCLE_MS['kbd.type'];
   const strikes: [number, number, FingerName][] = [
     [0, 0, 'middle'],
@@ -101,7 +101,7 @@ describe('keystroke cycles put the striking fingertip on a keycap', () => {
 });
 
 describe('mouse click keeps the index fingertip over the left button', () => {
-  const BTN = { x0: -24, x1: 12, y0: 4, y1: 40 };
+  const BTN = { x0: -10, x1: 0, y0: 16, y1: 30 };
   const ms = CYCLE_MS.mouse;
   for (const frame of ['mouse.rest', 'mouse.click']) {
     for (const gender of ['male', 'female'] as Gender[]) {
@@ -189,7 +189,7 @@ describe('fingertip layout (mesh readability, no WebGL)', () => {
         }
       // and the four digits span a real width (not a fist blob)
       const xs = four.map((t) => t.x);
-      expect(Math.max(...xs) - Math.min(...xs)).toBeGreaterThanOrEqual(q.size * 0.45);
+      expect(Math.max(...xs) - Math.min(...xs)).toBeGreaterThanOrEqual(q.size * 0.5);
     });
   }
 });

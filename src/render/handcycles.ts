@@ -169,39 +169,21 @@ function quantize(ev: CycleEval, def: CycleDef, tMs: number): number {
 }
 
 /**
- * Idle modifiers (spec §5.4): finger drift + seeded fidgets as ADDITIVE pose
- * deltas (absolute targets = rest + offset, computed against each hand's own
- * curls). Returns the per-hand deltas and a bake-key suffix. t is seconds.
+ * Idle modifiers (spec §5.4): finger drift + seeded fidgets as continuous
+ * composite offsets — NOT pose deltas. Re-baking a sprite per idle phase
+ * (the old `i${t}` key exploded the PartCache into ~70 poses/tool and
+ * stalled a frame on every phase change) is worse than a 1-2px whole-hand
+ * micro-shift, which is all the drift reads as at bake res anyway.
+ * Returns [dx, dy, rollDeg] in 1x px. t is seconds.
  */
-export function idleFrame(frame: RigFrame, t: number, seed: number, variant = 0): { frame: RigFrame; key: string } {
+export function idleFrame(t: number, seed: number): { move: [number, number, number] } {
   const dr = fingerDrift(t);
   const fg = fidgetAt(t, seed);
-  const thumbTap = fg?.kind === 0 ? (fg.u < 0.41 ? fg.u / 0.41 : Math.max(0, 1 - (fg.t - 0.18) / 0.26)) : 0;
+  const thumbTap = fg?.kind === 0 ? Math.sin(Math.PI * Math.min(1, fg.u)) : 0;
   const idxLift = fg?.kind === 1 ? Math.sin(Math.PI * fg.u) : 0;
   const rollW = fg?.kind === 2 ? 3 * Math.sin(Math.PI * fg.u) : 0;
   const regrip = fg?.kind === 3 ? Math.sin(Math.PI * fg.u) : 0;
-  const hands = frame.hands.map((p) => {
-    const d: HandDelta = { fingers: {}, roll: rollW };
-    for (const f of ['index', 'middle', 'ring', 'pinky', 'thumb'] as const) {
-      const base = p.fingers?.[f];
-      if (!base) continue;
-      const rel: Partial<import('./handrig').Curl> = {};
-      if (f === 'index') { rel.mcp = dr.index - 8 * idxLift + 4 * regrip; rel.pip = dr.index - 4 * idxLift; }
-      else if (f === 'ring') { rel.mcp = dr.ring + 4 * regrip; rel.pip = dr.ring; }
-      else if (f === 'pinky') { rel.mcp = dr.pinky + 4 * regrip; rel.pip = dr.pinky; }
-      else if (f === 'middle') { rel.mcp = 4 * regrip; }
-      else if (f === 'thumb') { rel.mcp = 14 * thumbTap + 4 * regrip; rel.pip = 8 * thumbTap; }
-      const c: Partial<import('./handrig').Curl> = {};
-      for (const k of ['abd', 'cmcFlex', 'mcp', 'pip', 'dip'] as const) {
-        if (rel[k] !== undefined) c[k] = (base[k] ?? (k === 'dip' ? (base.pip * 2) / 3 : 0)) + rel[k]!;
-      }
-      if (Object.keys(c).length) d.fingers![f] = c;
-    }
-    return { place: p, delta: d };
-  });
-  const key = `${variant}.i${Math.round((t % 5.56) * 8)}${fg ? `f${fg.kind}${Math.min(5, Math.floor(fg.u * 6))}` : ''}`;
-  return {
-    key,
-    frame: { ...frame, hands: hands.map((h) => blendPlace(h.place, h.delta, 1)) },
-  };
+  const dx = 0.5 * Math.sin(2 * Math.PI * 0.13 * t + seed * 2.3) + 0.8 * regrip + 0.3 * dr.index;
+  const dy = 0.6 * Math.sin(2 * Math.PI * 0.18 * t + seed * 1.1) + 1.2 * thumbTap - 1.0 * idxLift + 0.3 * dr.ring;
+  return { move: [dx, dy, rollW + 0.4 * dr.pinky] };
 }

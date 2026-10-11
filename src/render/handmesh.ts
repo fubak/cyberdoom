@@ -365,7 +365,7 @@ export function bakeHands(W: number, H: number, places: Place[], spec: { gender:
 
   const built: BuiltHand[] = [];
   for (const p of places) {
-    const b = buildHand({ ...p, wrist: [p.wrist[0] - W / 2, p.wrist[1] - H / 2, p.wrist[2]], arm: p.arm ? [p.arm[0] - W / 2, p.arm[1] - H / 2, p.arm[2]] : undefined }, spec);
+    const b = buildHand({ ...p, wrist: [p.wrist[0], p.wrist[1] - H / 2, p.wrist[2]], arm: p.arm ? [p.arm[0], p.arm[1] - H / 2, p.arm[2]] : undefined }, spec);
     built.push(b);
     scene.add(b.group);
   }
@@ -482,17 +482,12 @@ function postPass(
         const a1 = ja[s + 1].clone().add(jb[s + 1]).multiplyScalar(0.5);
         const p0 = proj(a0), p1 = proj(a1);
         // nearer finger = higher projected z at the mid-line
-        const near = ja[s].clone().project(cam).z > jb[s].clone().project(cam).z ? ja : jb;
-        const ndir = proj(near[s].clone().add(near[s + 1]).multiplyScalar(0.5));
-        const dxr = Math.sign(ndir.x - p0.x) || 1;
         const n = Math.ceil(Math.hypot(p1.x - p0.x, p1.y - p0.y) * 2);
         for (let i = 0; i <= n; i++) {
           const t = 0.3 + (i / Math.max(1, n)) * 0.7;
           const xi = p0.x + (p1.x - p0.x) * t, yi = p0.y + (p1.y - p0.y) * t;
           const wid = t > 0.67 ? 0 : 1; // taper to 1px over the distal third
           dot(xi, yi, SEAM, wid);
-          // 1px rim highlight on the nearer finger's side of the seam
-          if (opaque(Math.round(xi + dxr * (wid + 1)), Math.round(yi))) px(Math.round(xi + dxr * (wid + 1)), Math.round(yi), HI);
         }
       }
       // web darkening: 3x3 core triangle at the MCP web

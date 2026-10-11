@@ -17,6 +17,9 @@ import { Renderer } from './render/renderer';
 import { prewarmLazySpriteFrames, prioritizeLazySprites, spriteSets } from './render/sprites';
 import { textureRegistry } from './render/textures';
 import { TOOL_FLASH } from './render/viewmodels';
+import { bakeRig } from './render/handrig';
+import { POSES, TOOL_HANDS } from './render/handposes';
+import { currentSkin } from './tools/look';
 import { Hud } from './ui/hud';
 import { Automap } from './ui/automap';
 import { setupPresentation } from './ui/present';
@@ -583,6 +586,7 @@ class Game {
     texIndex: number;
     stage: number;
     ready: boolean;
+    handWarm: number;
   } | null = null;
 
   private scheduleIdle(cb: () => void): void {
@@ -597,7 +601,7 @@ class Game {
   private prepareMission(id: string): void {
     // palette-recolored threat sets must exist before syncEntities builds meshes
     registerThreatSprites();
-    const p = { id, map: null as WorldMap | null, built: false, textures: [] as Parameters<Renderer['initTexture']>[0][], texIndex: 0, stage: 0, ready: false };
+    const p = { id, map: null as WorldMap | null, built: false, textures: [] as Parameters<Renderer['initTexture']>[0][], texIndex: 0, stage: 0, ready: false, handWarm: 0 };
     this.prepared = p;
     const step = () => {
       if (this.prepared !== p || p.ready) return; // superseded or finished
@@ -663,8 +667,19 @@ class Game {
       }
       case 6: // HUD glyph/bar caches
         this.warmHud(mission);
-        p.ready = true;
+        p.stage++;
         break;
+      case 7: { // hand bakes: one tool's rest pose per idle slice so equipping
+        // a tool never stalls a frame on the WebGL mesh bake
+        const tools = Object.keys(TOOL_HANDS);
+        if (p.handWarm >= tools.length) {
+          p.ready = true;
+          break;
+        }
+        const rest = TOOL_HANDS[tools[p.handWarm++] as keyof typeof TOOL_HANDS].rest;
+        try { bakeRig(rest, POSES[rest], { gender: this.gender, skin: currentSkin() }); } catch { /* bake warms lazily at draw */ }
+        break;
+      }
     }
   }
 

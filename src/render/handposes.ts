@@ -24,151 +24,130 @@ const TH = (cmcAbd: number, cmcFlex: number, mcp: number, ip: number): Curl => (
  * palm flat down) ≈ rig roll 0 for the right hand — so roll maps to
  * −(specRoll + 90) for the right hand and its mirror for the left.
  */
-const wristO = (pitch: number, yaw: number, roll: number, mirror: boolean) => ({
-  pitch: pitch - 30,
-  yaw,
-  roll: (mirror ? -1 : 1) * -(roll + 90),
-});
 
 const mk = (fingers: Record<string, Curl>) => fingers;
 
-// —— §2.1 mouse: single right hand, dorsum up ———————————————————————————————
+// ---- curl tables: main's grip values (review: baseline = main poses) ------
 const MOUSE = {
-  index: F(6, 34, 36, 10),
-  middle: F(0, 28, 34, 14),
-  ring: F(-6, 44, 56, 28),
-  pinky: F(-12, 56, 66, 36),
-  thumb: TH(38, 10, 8, 10),
+  index: F(8, 40, 30, 18), middle: F(-2, 46, 36, 22), ring: F(-10, 62, 58, 26),
+  pinky: F(-16, 68, 64, 30), thumb: TH(4, 4, 38, 44),
 };
-// —— §2.2 keyboard: two hands "holding a ball" ——————————————————————————————
 const TYPEH = {
-  index: F(8, 26, 40, 14),
-  middle: F(2, 28, 44, 16),
-  ring: F(-4, 30, 46, 18),
-  pinky: F(-10, 36, 50, 20),
-  thumb: TH(30, 20, 6, 14),
+  index: F(6, 38, 52, 34), middle: F(0, 42, 56, 37), ring: F(-6, 46, 60, 40),
+  pinky: F(-12, 52, 64, 42), thumb: TH(25, 10, 60, 55),
 };
-// —— §2.3 usb: tripod pinch —————————————————————————————————————————————————
 const USBP = {
-  index: F(4, 34, 44, 18),
-  middle: F(0, 40, 52, 24),
-  ring: F(-8, 72, 84, 44),
-  pinky: F(-14, 82, 88, 46),
-  thumb: TH(46, 30, 18, 10),
+  index: F(4, 80, 85, 56), middle: F(0, 70, 84, 55), ring: F(-8, 82, 98, 64),
+  pinky: F(-14, 88, 100, 66), thumb: TH(30, 12, 44, 42),
 };
-// —— §2.4 badge: card pinch, supinated ——————————————————————————————————————
 const BADGE = {
-  index: F(4, 20, 22, 8),
-  middle: F(0, 22, 24, 10),
-  ring: F(-8, 48, 54, 26),
-  pinky: F(-14, 58, 62, 30),
-  thumb: TH(34, 25, 14, 4),
+  index: F(4, 77, 82, 54), middle: F(0, 70, 84, 55), ring: F(-8, 82, 98, 64),
+  pinky: F(-14, 88, 100, 66), thumb: TH(30, 12, 41, 40),
 };
-// —— §2.5 mfa: fob grip, thumb over button ——————————————————————————————————
 const MFAP = {
-  index: F(6, 22, 18, 8),
-  middle: F(0, 62, 70, 38),
-  ring: F(-6, 68, 76, 40),
-  pinky: F(-12, 74, 80, 42),
-  thumb: TH(48, 20, 10, 8),
+  index: F(6, 82, 93, 62), middle: F(0, 87, 97, 64), ring: F(-6, 90, 98, 65),
+  pinky: F(-12, 90, 100, 66), thumb: TH(30, 12, 24, 32),
 };
-// —— §2.6 patch: plate hold —————————————————————————————————————————————————
 const PATCH = {
-  index: F(6, 16, 14, 4),
-  middle: F(0, 16, 14, 4),
-  ring: F(-6, 18, 16, 6),
-  pinky: F(-12, 30, 30, 12),
-  thumb: TH(12, 22, 18, 0),
+  index: F(6, 78, 84, 56), middle: F(0, 70, 84, 55), ring: F(-6, 82, 98, 64),
+  pinky: F(-12, 88, 100, 66), thumb: TH(20, 10, 42, 41),
 };
-// —— §2.7 tap: two-hand device hold —————————————————————————————————————————
 const TAPH = {
-  index: F(6, 30, 36, 14),
-  middle: F(0, 60, 68, 34),
-  ring: F(-6, 64, 70, 36),
-  pinky: F(-12, 70, 76, 38),
-  thumb: TH(36, 18, 12, 10),
+  index: F(8, 62, 70, 46), middle: F(0, 66, 74, 49), ring: F(-8, 70, 78, 52),
+  pinky: F(-14, 76, 82, 54), thumb: TH(25, 10, 26, 30),
 };
 
 const S1 = 23.2; // L = 190 at 1×  (190 / 8.2)
 const S2 = 18.3; // L = 150 two-hand (150 / 8.2)
 
 export const POSES: Record<string, RigFrame> = {
+  // — KEYBOARD: two hands palm-down on the home row (main pose, canvas x1.22) —
   'kbd.rest': {
-    w: 100, h: 56, persp: 460,
+    w: 117, h: 63, persp: 460,
     hands: [
-      { mirror: true, wrist: [11.6, 8, 4], yaw: 4, roll: 5, pitch: -22, size: S2, fingers: mk({ ...TYPEH }), arm: [-14, -30, -16] },
-      { wrist: [88.4, 8, 4], yaw: -4, roll: -5, pitch: -22, size: S2, fingers: mk({ ...TYPEH }), arm: [114, -30, -16] },
+      { mirror: true, wrist: [37, 12, 7], pitch: -58, yaw: -14, roll: 10, size: S2, fingers: mk({ ...TYPEH }), arm: [5, -32, -19] },
+      { mirror: false, wrist: [80, 12, 7], pitch: -58, yaw: 14, roll: -10, size: S2, fingers: mk({ ...TYPEH }), arm: [112, -32, -19] },
     ],
   },
 
+  // — MOUSE: right-hand palm grip (main pose, canvas x1.45) ——————————————————
   'mouse.rest': {
-    w: 64, h: 60, persp: 440,
-    hands: [{ wrist: [31, 10, 8], ...wristO(12, -6, -80, false), size: S1, fingers: mk({ ...MOUSE }), arm: [70, -32, -18] }],
+    w: 93, h: 81, persp: 420,
+    hands: [{ wrist: [49.5, 20, 15], pitch: -62, yaw: 18, roll: -6, size: S1, fingers: mk({ ...MOUSE }), arm: [81, -35, -26] }],
   },
 
+  // — USB stick: pinch grip, connector up ————————————————————————————————————
   'usb.rest': {
-    w: 64, h: 64, persp: 450,
-    hands: [{ wrist: [36, 8, 6], ...wristO(4, -10, -60, false), size: S1, fingers: mk({ ...USBP }), arm: [74, -32, -18] }],
+    w: 81, h: 70, persp: 430,
+    hands: [{ wrist: [41, 12, 6], pitch: -18, yaw: 34, roll: -6, size: S1, fingers: mk({ ...USBP }), arm: [64, -38, -23] }],
   },
 
+  // — BADGE: card pinched thumb + index side —————————————————————————————————
   'badge.rest': {
-    w: 56, h: 64, persp: 440,
-    hands: [{ wrist: [28, 6, 4], ...wristO(-6, 8, -50, false), size: S1, fingers: mk({ ...BADGE }), arm: [66, -32, -18] }],
+    w: 70, h: 64, persp: 430,
+    hands: [{ wrist: [35, 6, 3], pitch: -14, yaw: 40, roll: -4, size: S1, fingers: mk({ ...BADGE }), arm: [15, -41, -20] }],
   },
 
+  // — MFA token: relaxed fist, thumb over the button —————————————————————————
   'mfa.rest': {
-    w: 56, h: 60, persp: 430,
-    hands: [{ wrist: [32, 8, 4], ...wristO(10, 4, -70, false), size: S1, fingers: mk({ ...MFAP }), arm: [70, -30, -18] }],
+    w: 64, h: 64, persp: 420,
+    hands: [{ wrist: [32, 9, 3], pitch: -8, yaw: 26, roll: -4, size: S1, fingers: mk({ ...MFAP }), arm: [49, -38, -23] }],
   },
 
+  // — PATCH disk: pinch on the edge ——————————————————————————————————————————
   'patch.rest': {
-    w: 56, h: 60, persp: 430,
-    hands: [{ wrist: [34, 6, 2], ...wristO(18, -8, -65, false), size: S1, fingers: mk({ ...PATCH }), arm: [72, -30, -18] }],
+    w: 64, h: 64, persp: 420,
+    hands: [{ wrist: [32, 6, 0], pitch: -4, yaw: 30, roll: -2, size: S1, fingers: mk({ ...PATCH }), arm: [49, -38, -23] }],
   },
 
+  // — TAP: two hands squeeze the clip housing ————————————————————————————————
   'tap.rest': {
-    w: 116, h: 56, persp: 460,
+    w: 102, h: 49, persp: 440,
     hands: [
-      { mirror: true, wrist: [6.8, 8, 4], ...wristO(6, 10, 70, true), size: S2, fingers: mk({ ...TAPH }), arm: [-16, -30, -16] },
-      { wrist: [109.2, 8, 4], ...wristO(6, -10, -70, false), size: S2, fingers: mk({ ...TAPH }), arm: [132, -30, -16] },
+      { mirror: true, wrist: [12, 7, 5], pitch: -58, yaw: -52, roll: 10, size: S2, fingers: mk({ ...TAPH }), arm: [0, -29, -17] },
+      { mirror: false, wrist: [90, 7, 5], pitch: -58, yaw: 52, roll: -10, size: S2, fingers: mk({ ...TAPH }), arm: [102, -29, -17] },
     ],
   },
 
+  // — EDR tablet: two hands on the bezel, right thumb taps on use ————————————
   'edr.rest': {
-    w: 140, h: 56, persp: 460,
+    w: 107, h: 51, persp: 440,
     hands: [
-      { mirror: true, wrist: [6, 8, 4], yaw: 4, roll: 5, pitch: -22, size: S2, fingers: mk({ ...TYPEH }), arm: [-18, -30, -16] },
-      { wrist: [134, 8, 4], yaw: -4, roll: -5, pitch: -22, size: S2, fingers: mk({ ...TYPEH }), arm: [158, -30, -16] },
+      { mirror: true, wrist: [15, 7, 5], pitch: -46, yaw: -46, roll: 12, size: S2, fingers: mk({ ...TAPH }), arm: [0, -29, -17] },
+      { mirror: false, wrist: [93, 7, 5], pitch: -46, yaw: 46, roll: -12, size: S2, fingers: mk({ ...TAPH }), arm: [107, -29, -17] },
     ],
   },
 };
 
-// —— use cycles (spec §5.2) ————————————————————————————————————————————————
-
-export interface CycleDef {
-  ms: CycleMs;
-  /** delta each hand reaches at the strike (S) — the "impact" pose. */
-  impact: (HandDelta | undefined)[];
-  /** delta during hold (e.g. usb finger release), blended in at `at` ms. */
-  release?: { at: number; deltas: (HandDelta | undefined)[] };
-  /** hand-level move [dx, dy, scaleMul] at full anticipation / at strike. */
-  moveA?: [number, number, number];
-  moveS?: [number, number, number];
-}
-
-/** Keyboard strike variants (§2.2): typeA left-middle, typeB right-index, enter right-pinky. */
+// — strike deltas: absolute finger targets + additive wrist/orient offsets —
+// (derived from main's named use poses, wrist offsets scaled to the canvas).
 const KBD_TYPE_A: (HandDelta | undefined)[] = [
-  { fingers: { middle: { mcp: 40, pip: 48, dip: 6 } }, roll: 4 },
+  { wrist: [0, -1.2, 0], fingers: { index: { mcp: 62, pip: 84, dip: 60 } } },
   undefined,
 ];
 const KBD_TYPE_B: (HandDelta | undefined)[] = [
   undefined,
-  { fingers: { index: { mcp: 40, pip: 44, dip: 6 } }, roll: -4 },
+  { wrist: [0, -1.2, 0], fingers: { middle: { mcp: 66, pip: 86, dip: 62 } } },
 ];
 const KBD_ENTER: (HandDelta | undefined)[] = [
   undefined,
-  { fingers: { pinky: { mcp: 46, pip: 52, dip: 8 } }, yaw: 6 },
+  { wrist: [0, -2.4, 2.4], pitch: -2, roll: -4, fingers: { ring: { mcp: 70, pip: 88, dip: 62 }, pinky: { mcp: 74, pip: 90, dip: 64 } } },
 ];
+const SQUEEZE: HandDelta = {
+  fingers: {
+    index: { mcp: 67, pip: 75 }, middle: { mcp: 71, pip: 79 },
+    ring: { mcp: 75, pip: 83 }, pinky: { mcp: 81, pip: 87 },
+  },
+};
+
+export interface CycleDef {
+  ms: CycleMs;
+  impact: (HandDelta | undefined)[];
+  /** anticipation (A) and strike (S) moves of the tool object [dx, dy, scale] */
+  moveA?: [number, number, number];
+  moveS?: [number, number, number];
+  release?: { at: number; deltas: (HandDelta | undefined)[] };
+}
 
 export interface ToolHands {
   rest: string;
@@ -178,7 +157,7 @@ export interface ToolHands {
 
 export const TOOL_HANDS: Record<string, ToolHands> = {
   keyboard: {
-    rest: 'kbd.rest', at: [0, -1],
+    rest: 'kbd.rest', at: [4, 9],
     cycles: [
       { ms: CYCLE_MS['kbd.type'], impact: KBD_TYPE_A },
       { ms: CYCLE_MS['kbd.type'], impact: KBD_TYPE_B },
@@ -186,16 +165,16 @@ export const TOOL_HANDS: Record<string, ToolHands> = {
     ],
   },
   mouse: {
-    rest: 'mouse.rest', at: [13, 2],
-    cycles: [{ ms: CYCLE_MS.mouse, impact: [{ fingers: { index: { mcp: 36, pip: 36, dip: 4 } }, wrist: [0, -1, 0] }], moveS: [0, -1, 1] }],
+    rest: 'mouse.rest', at: [3, 6],
+    cycles: [{ ms: CYCLE_MS.mouse, impact: [{ wrist: [0, -1.45, 0], fingers: { index: { mcp: 52, pip: 42, dip: 30 } } }], moveS: [0, -1, 1] }],
   },
   usb: {
-    rest: 'usb.rest', at: [15, 5],
+    rest: 'usb.rest', at: [-4, 18],
     cycles: [{
       ms: CYCLE_MS.usb,
-      impact: [{ wrist: [8, -13, -10], sizeMul: 0.93 }],
+      impact: [{ wrist: [0, 2.9, 8.7], pitch: 4, yaw: -4, fingers: { index: { mcp: 84, pip: 88 }, thumb: { mcp: 48, pip: 45 } } }],
       moveA: [0, 6, 1.05],
-      moveS: [8, -13, 0.93],
+      moveS: [0, 2.9, 0.93],
       release: {
         at: 40,
         deltas: [{ fingers: { thumb: { abd: 54, pip: 6 }, index: { pip: 36 } } }],
@@ -203,46 +182,39 @@ export const TOOL_HANDS: Record<string, ToolHands> = {
     }],
   },
   badge: {
-    rest: 'badge.rest', at: [-10, 4],
+    rest: 'badge.rest', at: [-6, 13],
     cycles: [{
       ms: CYCLE_MS.badge,
-      impact: [{ wrist: [-18, -28, 7], roll: -20, fingers: { index: { abd: 9 }, middle: { abd: 5, pip: 18 }, ring: { abd: -3 }, pinky: { abd: -9 }, thumb: { abd: 30 } } }],
+      impact: [{ wrist: [0, 5.8, 5.8], pitch: 36, yaw: 8, roll: -6 }],
       moveA: [0, -3, 1],
-      moveS: [-18, -28, 1],
+      moveS: [0, 5.8, 1],
     }],
   },
   mfa: {
-    rest: 'mfa.rest', at: [22, 4],
+    rest: 'mfa.rest', at: [9, 12],
     cycles: [{
       ms: CYCLE_MS.mfa,
-      impact: [{ fingers: { thumb: { mcp: 32, pip: 36, cmcFlex: 30 } }, wrist: [0, -3, 0] }],
+      impact: [{ wrist: [0, 1.45, 0], pitch: -4, fingers: { thumb: { mcp: 52, pip: 66 } } }],
       moveA: [0, -3, 1],
-      moveS: [0, -3, 1],
+      moveS: [0, 1.45, 1],
     }],
   },
   patch: {
-    rest: 'patch.rest', at: [26, 4],
+    rest: 'patch.rest', at: [11, 13],
     cycles: [{
       ms: CYCLE_MS.patch,
-      impact: [{ wrist: [0, -22, -11], sizeMul: 0.91, roll: -12, pitch: -8 }],
+      impact: [{ wrist: [0, 5.8, 11.6], pitch: -6, fingers: { index: { mcp: 79, pip: 84 }, thumb: { mcp: 43, pip: 41 } } }],
       moveA: [0, 4, 1.04],
-      moveS: [0, -22, 0.91],
+      moveS: [0, 5.8, 0.91],
     }],
   },
   tap: {
-    rest: 'tap.rest', at: [0, 2],
-    cycles: [{
-      ms: CYCLE_MS.tap,
-      impact: [
-        { fingers: { thumb: { mcp: 30, pip: 24 } }, wrist: [0, -1, 0] },
-        { fingers: { thumb: { mcp: 30, pip: 24 } }, wrist: [0, -1, 0] },
-      ],
-      moveS: [0, -1, 1],
-    }],
+    rest: 'tap.rest', at: [3, 6],
+    cycles: [{ ms: CYCLE_MS.tap, impact: [SQUEEZE, SQUEEZE], moveS: [0, -1, 1] }],
   },
   edr: {
-    rest: 'edr.rest', at: [0, 2],
-    cycles: [{ ms: CYCLE_MS.edr, impact: [undefined, { fingers: { index: { mcp: 40, pip: 44, dip: 6 } }, roll: -4 }] }],
+    rest: 'edr.rest', at: [3, 6],
+    cycles: [{ ms: CYCLE_MS.edr, impact: [undefined, { wrist: [-2.4, 0, 2.4], yaw: -6, roll: -2, fingers: { thumb: { mcp: 56, pip: 60 } } }] }],
   },
 };
 

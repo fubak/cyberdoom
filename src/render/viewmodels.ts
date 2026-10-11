@@ -320,30 +320,31 @@ export function drawToolViewmodel(
       const variant = Math.floor(_time * 0.6) % anchor.cycles.length;
       const hf = handCycleFrame(tool.id, ph ? anim!.sinceUse * 1000 : null, variant);
       if (hf) {
-        let frame = hf.frame;
-        let key = hf.key;
-        if (hf.stage === 'idle' || hf.stage === 'done') {
-          const idl = idleFrame(frame, _time, handMods.seed, variant);
-          frame = idl.frame;
-          key += idl.key;
-        }
-        // sway-roll + bob-pitch quantize into baked variants (±4° / ±3° steps)
-        const rb = Math.round(handMods.roll / 4) * 4;
-        const pb = Math.round(handMods.bobPitch / 3) * 3;
-        if (rb || pb) {
-          frame = { ...frame, hands: frame.hands.map((p) => ({ ...p, roll: (p.roll ?? 0) + rb + pb })) };
-          key += `.r${rb}p${pb}`;
-        }
+        const frame = hf.frame;
+        const key = hf.key;
+        const idleM = hf.stage === 'idle' || hf.stage === 'done' ? idleFrame(_time, handMods.seed).move : [0, 0, 0];
         const sp = bakeRig(key, frame, { gender, skin: currentSkin() });
         const sw = sp.c.width / RES;
         const sh = sp.c.height / RES;
         const [brx, bry] = breath(_time);
         const hs = hf.move[2];
-        const hx = Math.round(w / 2 + anchor.at[0] - (sw * hs) / 2 + bx + dx + hf.move[0] + brx * 0.5 + 1);
-        let hy = Math.round(h - anchor.at[1] - sh * hs + dyDown + drop + hf.move[1] + bry);
+        const hx = Math.round(w / 2 + anchor.at[0] - (sw * hs) / 2 + bx + dx + hf.move[0] + brx * 0.5 + 1 + idleM[0]);
+        let hy = Math.round(h - anchor.at[1] - sh * hs + dyDown + drop + hf.move[1] + bry + idleM[1]);
         // never let the hand's first opaque row cross the clearance line
         hy = Math.max(hy, Math.ceil(line - (sp.top / RES) * hs));
-        g.drawImage(sp.c as CanvasImageSource, hx, hy, sw * hs, sh * hs);
+        // sway roll + bob pitch + idle roll applied continuously at draw:
+        // rotating the canvas is free; baking per-degree variants is not
+        const rot = (handMods.roll + handMods.bobPitch + idleM[2]) * (Math.PI / 180);
+        if (Math.abs(rot) > 1e-4 && 'rotate' in g) {
+          const gg = g as CanvasRenderingContext2D;
+          gg.save();
+          gg.translate(hx + (sw * hs) / 2, hy + (sh * hs) / 2);
+          gg.rotate(rot);
+          gg.drawImage(sp.c as CanvasImageSource, (-sw * hs) / 2, (-sh * hs) / 2, sw * hs, sh * hs);
+          gg.restore();
+        } else {
+          g.drawImage(sp.c as CanvasImageSource, hx, hy, sw * hs, sh * hs);
+        }
       }
     }
   }
