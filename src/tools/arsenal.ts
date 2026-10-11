@@ -131,6 +131,7 @@ export class Arsenal {
       playTool('new-tool');
       playVoice(this.gender, 'pickup');
       this.face.grin();
+      this.face.talk();
       this.gotT = 0;
       this.gotSlot = t.slot;
       this.say(`[${t.slot}] ${t.name}: ${t.control?.use ?? ''}`);
@@ -140,6 +141,7 @@ export class Arsenal {
 
   /** Queue a long explanation as 2-line ticker pages so it is never cut off mid-sentence. */
   private say(text: string): void {
+    this.face.talk();
     const lines = wrapText(text.toUpperCase(), TICKER_COLS, Infinity);
     this.pages = [];
     for (let i = 0; i < lines.length; i += 2) this.pages.push(lines.slice(i, i + 2).join(' '));

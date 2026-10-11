@@ -30,6 +30,14 @@ export interface RasterOpts {
   /** final colour mix toward `tint` by `tintT` (pain heat / quarantine green) */
   tint?: V3;
   tintT?: number;
+  /**
+   * Optional perspective projection: focal length in pixels. When set, each
+   * pixel fires a ray from the fixed camera point (0,0,500) through
+   * (X, Y, 500-f) instead of a parallel orthographic ray, so prims closer to
+   * the camera foreshorten. Unset keeps the exact orthographic code path —
+   * byte-identical output.
+   */
+  persp?: number;
 }
 
 const LX = -0.45 / Math.hypot(-0.45, 0.68, 0.6);
@@ -109,6 +117,8 @@ interface Prep {
   dx: number; dy: number; dz: number;
   rx: number; ry: number; rz: number;
   bound: number;
+  /** projected centre + culling bound (equals cx/cy/bound when orthographic) */
+  pcx: number; pcy: number; pbound: number;
   /** clamped pixel-space AABB rows [y0,y1) and columns [x0,x1) */
   y0: number; y1: number; x0: number; x1: number;
   base: V3;
@@ -130,6 +140,8 @@ export interface RasterJob {
   preps: Prep[];
   tint?: V3;
   tt: number;
+  /** perspective focal length (0 = orthographic) */
+  persp: number;
 }
 
 export function createRasterJob(w: number, h: number, prims: Prim[], opts: RasterOpts): RasterJob {
@@ -142,6 +154,13 @@ export function createRasterJob(w: number, h: number, prims: Prim[], opts: Raste
     const m = localMatrix(yaw, pitch, roll);
     const d = toLocal([0, 0, -1], yaw, pitch, roll);
     const bound = p.shape === 'box' ? Math.hypot(p.r[0], p.r[1], p.r[2]) : Math.max(p.r[0], p.r[1], p.r[2]);
+    // perspective: a prim at view-depth (500-cz) projects with scale f/depth,
+    // so its projected centre and culling radius move off the ortho values
+    const f = opts.persp ?? 0;
+    const ps = f > 0 ? f / Math.max(1, 500 - c[2] - bound) : 1;
+    const pcx = f > 0 ? c[0] * f / Math.max(1, 500 - c[2]) : c[0];
+    const pcy = f > 0 ? c[1] * f / Math.max(1, 500 - c[2]) : c[1];
+    const pbound = f > 0 ? bound * ps : bound;
     return {
       shape: p.shape,
       m0: m[0], m1: m[1], m2: m[2], m3: m[3], m4: m[4], m5: m[5], m6: m[6], m7: m[7], m8: m[8],
@@ -149,11 +168,12 @@ export function createRasterJob(w: number, h: number, prims: Prim[], opts: Raste
       dx: d[0], dy: d[1], dz: d[2],
       rx: p.r[0], ry: p.r[1], rz: p.r[2],
       bound,
+      pcx, pcy, pbound,
       // X spans px - w/2 + 0.5 (px 0..w-1); Y spans h - py - 0.5 (py 0..h-1, flipped)
-      x0: Math.max(0, Math.ceil(c[0] - bound + w / 2 - 0.5)),
-      x1: Math.min(w, Math.floor(c[0] + bound + w / 2 - 0.5) + 1),
-      y0: Math.max(0, Math.ceil(h - (c[1] + bound) - 0.5)),
-      y1: Math.min(h, Math.floor(h - (c[1] - bound) - 0.5) + 1),
+      x0: Math.max(0, Math.ceil(pcx - pbound + w / 2 - 0.5)),
+      x1: Math.min(w, Math.floor(pcx + pbound + w / 2 - 0.5) + 1),
+      y0: Math.max(0, Math.ceil(h - (pcy + pbound) - 0.5)),
+      y1: Math.min(h, Math.floor(h - (pcy - pbound) - 0.5) + 1),
       base: hex(p.col),
       glow: p.glow ?? false,
       decal: p.decal,
@@ -173,6 +193,7 @@ export function createRasterJob(w: number, h: number, prims: Prim[], opts: Raste
     preps,
     tint: opts.tint,
     tt: opts.tintT ?? 0,
+    persp: opts.persp ?? 0,
   };
 }
 
@@ -181,6 +202,7 @@ export function rasterizeRows(job: RasterJob, y0: number, y1: number): void {
   const { w, h, rgba, glow, preps, rows } = job;
   const tint = job.tint;
   const tt = job.tt;
+  const persp = job.persp;
   const yEnd = Math.min(y1, h);
   for (let py = Math.max(y0, job.next); py < yEnd; py++) {
     const Y = h - 1 - py + 0.5;
@@ -192,16 +214,26 @@ export function rasterizeRows(job: RasterJob, y0: number, y1: number): void {
       // hit point in local coords + local-space normal (scalars: no per-pixel allocs)
       let hnx = 0, hny = 0, hnz = 1;
       let hlx = 0, hly = 0, hlz = 0;
+      let hitz = 0;
       for (let qi = 0; qi < rowPrims.length; qi++) {
         const q = preps[rowPrims[qi]];
         if (px < q.x0 || px >= q.x1) continue;
-        if (Math.abs(X - q.cx) > q.bound) continue;
-        // origin in local space: M · (X-cx, Y-cy, 500-cz)
-        const vx = X - q.cx, vy = Y - q.cy, vz = 500 - q.cz;
+        if (Math.abs(X - q.pcx) > q.pbound) continue;
+        // origin in local space: ortho M · (X-cx, Y-cy, 500-cz);
+        // persp M · (0-cx, 0-cy, 500-cz) with per-pixel dir M · (X, Y, -f)
+        let vx: number, vy: number, vz: number, dx: number, dy: number, dz: number;
+        if (persp > 0) {
+          vx = -q.cx; vy = -q.cy; vz = 500 - q.cz;
+          dx = q.m0 * X + q.m1 * Y - q.m2 * persp;
+          dy = q.m3 * X + q.m4 * Y - q.m5 * persp;
+          dz = q.m6 * X + q.m7 * Y - q.m8 * persp;
+        } else {
+          vx = X - q.cx; vy = Y - q.cy; vz = 500 - q.cz;
+          dx = q.dx; dy = q.dy; dz = q.dz;
+        }
         const ox = q.m0 * vx + q.m1 * vy + q.m2 * vz;
         const oy = q.m3 * vx + q.m4 * vy + q.m5 * vz;
         const oz = q.m6 * vx + q.m7 * vy + q.m8 * vz;
-        const dx = q.dx, dy = q.dy, dz = q.dz;
         const rx = q.rx, ry = q.ry, rz = q.rz;
         let t = Infinity;
         let nx = 0, ny = 0, nz = 1;
@@ -260,6 +292,7 @@ export function rasterizeRows(job: RasterJob, y0: number, y1: number): void {
           hit = q;
           hnx = nx; hny = ny; hnz = nz;
           hlx = ox + t * dx; hly = oy + t * dy; hlz = oz + t * dz;
+          hitz = persp > 0 ? 500 - t * persp : 500 - t;
         }
       }
       if (!hit) continue;
@@ -279,8 +312,7 @@ export function rasterizeRows(job: RasterJob, y0: number, y1: number): void {
       } else {
         const diff = Math.max(0, nvx * LIGHT[0] + nvy * LIGHT[1] + nvz * LIGHT[2]);
         const rim = Math.pow(1 - Math.abs(nvz), 3) * 0.18;
-        const z = 500 - best;
-        const depth = 0.8 + 0.2 * Math.max(0, Math.min(1, (z + 16) / 32));
+        const depth = 0.8 + 0.2 * Math.max(0, Math.min(1, (hitz + 16) / 32));
         const grad = hit.shape === 'box' ? 0.1 * (hly / hit.ry) : 0;
         const I = (0.3 + 0.66 * diff + 0.12 * Math.max(0, nvy) + rim + grad) * depth;
         const q = Math.max(0, Math.min(15, Math.round((I / 1.1) * 15)));

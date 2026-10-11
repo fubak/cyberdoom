@@ -3,7 +3,6 @@ import { impactBurst, usePhase, tipY } from './anim';
 import { bevel, rect } from './pixel';
 import { mfaPending } from './badge';
 import { targetNoun } from './hint';
-import { fist, handLook, sleeve } from './shared';
 
 const WINDUP = 0.08;
 
@@ -32,8 +31,7 @@ export const mfaTool: ToolDef = {
     use: 'MFA doors: swipe the BADGE (something you have), then touch the token (your fingerprint: something you are). It refuses phishing prompts and shared accounts, because the key is bound to your identity and to the real site.',
     lesson: 'MFA combines different factor types (know / have / are / somewhere you are). Two of the same type is not MFA. FIDO2 keys are phishing-resistant because they check the origin; a shared account defeats MFA because nobody is uniquely identified.',
   },
-  drawViewmodel(g, w, h, _bob, gender, _cd, anim) {
-    const look = handLook(gender, anim);
+  drawViewmodel(g, w, h, _bob, _gender, _cd, anim) {
     const ph = usePhase(anim?.sinceUse ?? 9, WINDUP);
     // insert + touch: the token seats UP into the reader and HELD through the
     // impact window while the fingerprint read lands (LED blinks white/amber)
@@ -76,9 +74,6 @@ export const mfaTool: ToolDef = {
     rect(g, x0 + 12, y0 + 47, 10, 2, '#aeb6c2');
     rect(g, x0 + 20, y0 + 47, 2, 8, '#aeb6c2');
     rect(g, x0 + 12, y0 + 53, 10, 2, '#7a8296');
-    // fist pinches only the far end, so the key stays readable
-    sleeve(g, x0 + 4, y0 + 56, 22, 1, look, h);
-    fist(g, x0 - 4, y0 + 36, 28, look, 1);
   },
   drawFx(g, w, h, anim) {
     impactBurst(g, w / 2, tipY(h), anim.sinceConfirm, anim.confirmGood, 0.7);

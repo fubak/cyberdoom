@@ -12,8 +12,12 @@ import { shade } from './pixel';
 
 export interface FaceState {
   integrity: number;
-  /** -1 = look left, 0 = ahead, 1 = look right. */
+  /** -1 = look left, 0 = ahead, 1 = look right (plus small saccade darts). */
   look: number;
+  /** Eyelid closure 0..1 (a ~120 ms blink every ~3-6 s). */
+  blink: number;
+  /** Mouth open amount 0..1 while the analyst "talks" (voice line / ticker). */
+  talk: number;
   ouch: boolean;
   grin: boolean;
   dead: boolean;
@@ -26,8 +30,12 @@ export class Face {
   god = false;
   private hurtT = 9;
   private grinT = 9;
+  private talkT = 9;
   private dir = 0;
   private time = 0;
+  /** deterministic blink schedule (independent of frame rate) */
+  private nextBlink = 2.4;
+  private blinkN = 0;
 
   /** dir: -1 = attacker on the left, 1 = right, 0 = ahead. */
   hurt(dir: number): void {
@@ -37,6 +45,11 @@ export class Face {
 
   grin(): void {
     this.grinT = 0;
+  }
+
+  /** A voice line / ticker burst: the portrait's mouth moves while it plays. */
+  talk(): void {
+    this.talkT = 0;
   }
 
   reset(): void {
@@ -49,6 +62,7 @@ export class Face {
     this.time += dt;
     this.hurtT += dt;
     this.grinT += dt;
+    this.talkT += dt;
   }
 
   state(integrity: number): FaceState {
@@ -59,18 +73,34 @@ export class Face {
       // idle glance cycle (like Doom's status face)
       const c = Math.floor(this.time / 1.6) % 4;
       look = c === 1 ? -1 : c === 3 ? 1 : 0;
+      // micro-saccade: a quick half-step dart inside some glance windows
+      if (Math.floor(this.time * 5) % 13 === 4) look *= 0.45;
     }
+    // deterministic blink: 120 ms lid cycle every ~2.8-6 s (seeded spacing)
+    while (this.time >= this.nextBlink) {
+      this.blinkN++;
+      this.nextBlink += 2.8 + ((this.blinkN * 0.618 + 0.31) % 1) * 3.2;
+    }
+    const bt = this.nextBlink - this.time;
+    const blink = dead || this.ouchOpen() ? 0 : bt < 0.12 ? 1 - bt / 0.12 : 0;
+    const talk = this.talkT < 1.1 && this.hurtT > 0.35 ? Math.max(0, Math.sin(this.talkT * 34)) * (1 - this.talkT / 1.1) : 0;
     return {
       integrity,
       look,
-      ouch: !this.god && this.hurtT < 0.35,
+      blink: Math.max(0, blink),
+      talk,
+      ouch: this.ouchOpen(),
       grin: this.god || (this.grinT < 1.2 && this.hurtT > 0.35),
       dead,
     };
   }
+
+  private ouchOpen(): boolean {
+    return !this.god && this.hurtT < 0.35;
+  }
 }
 
-const portraits = new PartCache<HTMLCanvasElement>(96);
+const portraits = new PartCache<HTMLCanvasElement>(160);
 
 function mix(a: string, b: string, t: number): string {
   const pa = parseInt(a.slice(1), 16), pb = parseInt(b.slice(1), 16);
@@ -100,7 +130,7 @@ export function drawPortrait(
 ): void {
   const base = skinBase ?? currentSkin().base;
   const tier = damageTier(st.integrity);
-  const key = `${gender}|${s}|${base}|${tier}|${st.look}|${st.ouch ? 1 : 0}${st.grin ? 1 : 0}${st.dead ? 1 : 0}`;
+  const key = `${gender}|${s}|${base}|${tier}|${st.look}|${st.ouch ? 1 : 0}${st.grin ? 1 : 0}${st.dead ? 1 : 0}|${st.blink > 0.5 ? 1 : 0}${Math.round(st.talk * 2)}`;
   const c = portraits.get(key, () => {
     const P = painter(FACE_SIZE, FACE_SIZE, s * RES);
     paintPortrait(P, gender, st, base);
@@ -226,14 +256,15 @@ function paintPortrait(P: Painter, gender: Gender, st: FaceState, base: string):
   P.ell(9.1, 16.25, 0.32, 0.3, st.dead ? '#333' : '#39d353');
   if (!st.dead) P.rect(9, 16.1, u, u, '#d0ffd8');
 
-  // brows
-  const by = st.ouch ? 7.3 : 8.3;
+  // brows — each state gets its own brow: calm, strained (inner lift),
+  // hurt (knit down), ouch (clamped), near-dead (slack)
+  const by = st.ouch ? 7.3 : st.talk > 0.3 ? 7.9 : 8.3;
   const bt = female ? 0.45 : 0.75;
   const browC = shade(hair, 0.85);
   for (const side of [-1, 1]) {
     const inner = 12 + side * 1.2;
     const outer = 12 + side * 4.2;
-    const iy = by + (hurt ? 0.7 : tier >= 2 ? 0.35 : 0);
+    const iy = by + (hurt ? 0.7 : tier >= 2 ? 0.4 : tier >= 1 ? 0.22 : 0);
     const arch = female ? -0.45 : -0.15;
     P.poly([[inner, iy], [12 + side * 2.7, by + arch], [outer, by + 0.5], [outer, by + 0.5 + bt * 0.6], [12 + side * 2.7, by + arch + bt], [inner, iy + bt]], browC);
   }
@@ -241,7 +272,8 @@ function paintPortrait(P: Painter, gender: Gender, st: FaceState, base: string):
   // eyes — the lids sag as the tiers climb (Doom's beaten faces lose the wide eyes)
   const eyeY = 10.7;
   const iris = female ? '#4a3220' : '#2e1e12';
-  const droop = st.dead || st.ouch ? 0 : tier >= 4 ? 0.62 : tier >= 3 ? 0.34 : 0;
+  const droop = st.dead || st.ouch ? 0 : tier >= 4 ? 0.62 : tier >= 3 ? 0.34 : tier >= 2 ? 0.12 : 0;
+  const lid = Math.max(droop, st.blink * 0.95);
   const white = tier >= 4 && !st.dead ? '#e8b8a8' : '#f2f2ee';
   for (const ex of [9.4, 14.6]) {
     if (st.dead) {
@@ -263,18 +295,18 @@ function paintPortrait(P: Painter, gender: Gender, st: FaceState, base: string):
       P.rect(ex - 1.3, eyeY - 0.1, 0.5, u, '#d83828');
       P.rect(ex + 0.9, eyeY + 0.15, 0.5, u, '#d83828');
     }
-    if (droop > 0) {
+    if (lid > 0) {
       // skin-toned lid slides down over the top of the eye + a crease line
-      P.ell(ex, eyeY - ry - 0.55 + droop * 1.4, 1.9, 1.0, sk);
+      P.ell(ex, eyeY - ry - 0.55 + lid * 1.7, 1.9, 1.1, sk);
       P.line(
         [
-          [ex - 1.55, eyeY - ry + droop * 1.15],
-          [ex, eyeY - ry + 0.25 + droop * 0.9],
-          [ex + 1.55, eyeY - ry + droop * 1.15],
+          [ex - 1.55, eyeY - ry + lid * 1.3],
+          [ex, eyeY - ry + 0.25 + lid * 1.05],
+          [ex + 1.55, eyeY - ry + lid * 1.3],
         ],
         skDD,
       );
-      P.dots(ex - 1.4, eyeY - ry + droop * 0.9, 2.8, 0.6, skD, 0.4, ex === 9.4 ? 5 : 6);
+      P.dots(ex - 1.4, eyeY - ry + lid * 1.05, 2.8, 0.6, skD, 0.4, ex === 9.4 ? 5 : 6);
     }
     P.line([[ex - 1.5, eyeY - 0.1], [ex - 0.6, eyeY - ry - 0.05], [ex + 0.6, eyeY - ry - 0.05], [ex + 1.5, eyeY - 0.1]], '#1a1210', female ? 2 : 1);
     if (female) P.line([[ex + (ex > 12 ? 1.5 : -1.5), eyeY - 0.2], [ex + (ex > 12 ? 2 : -2), eyeY - 0.7]], '#1a1210', 1);
@@ -308,6 +340,13 @@ function paintPortrait(P: Painter, gender: Gender, st: FaceState, base: string):
     for (let x = 10.9; x < 13.4; x += 0.8) P.rect(x, 15.3, u, 0.5, '#8a8478');
     P.line([[9.6, 15.4], [10.2, 16.3], [13.8, 16.3], [14.4, 15.4]], lip, lw(0.4));
     P.line([[10.4, 15.4], [10.1, 16.9]], blood, lw(0.3));
+  } else if (st.talk > 0.25) {
+    // talking: open mouth with a hint of teeth, lip frame stays
+    const open = 0.5 + st.talk * 0.9;
+    P.ell(12, 16.2, 1.6, open, '#3a0c0c');
+    P.rect(10.8, 15.4, 2.4, 0.4, '#e8e4dc');
+    P.line([[10.3, 15.3], [12, 15.1], [13.7, 15.3]], lip, lw(0.35));
+    P.line([[10.6, 16.9], [12, 17.1], [13.4, 16.9]], lip, lw(0.3));
   } else if (st.grin) {
     P.poly([[9.3, 15.3], [14.7, 15.3], [13.6, 16.9], [10.4, 16.9]], '#3a0c0c');
     P.rect(9.8, 15.35, 4.4, 0.6, '#f4f4f0');
@@ -348,7 +387,8 @@ function paintPortrait(P: Painter, gender: Gender, st: FaceState, base: string):
   };
   if (!st.dead) {
     if (tier >= 1) {
-      // nicked brow, a puffed cut on the cheekbone, first sweat bead
+      // nicked brow, a puffed cut on the cheekbone, shiny sweat sheen on the
+      // forehead and obvious beads at BOTH temples (tier 1 must read alone)
       P.line([[7.1, 7.1], [8.9, 7.6]], '#c84a3a', lw(0.35));
       P.line([[7.3, 6.9], [8.9, 7.4]], blood, lw(0.25));
       P.dots(7, 6.8, 2.2, 1.4, '#e07060', 0.35, 2);
@@ -356,9 +396,16 @@ function paintPortrait(P: Painter, gender: Gender, st: FaceState, base: string):
       P.line([[14.9, 12.4], [16.6, 13.2]], mix(sk, '#4a3450', 0.4), lw(0.25));
       streak([[8.6, 12.6], [9.6, 13.2]], 0.3);
       P.rect(6.8, 9.4, u, 0.8, '#9ad0ff');
+      P.ell(7, 9.2, 0.5, 0.9, '#b8e2ff');
+      P.rect(6.9, 8.6, u, u, '#eefaff');
+      P.ell(17, 9.2, 0.5, 0.9, '#b8e2ff');
+      P.rect(16.9, 8.6, u, u, '#eefaff');
+      P.dots(9, 5.4, 6, 1.4, '#cfe8ff', 0.22, 44);
     }
     if (tier >= 2) {
-      // blood from the hairline runs down past the brow into the eye
+      // bruised eye socket + blood from the hairline running into the eye
+      P.ell(14.6, 10.4, 2.1, 1.1, mix(sk, '#4a3450', 0.45));
+      P.dots(13.4, 9.7, 2.4, 1.6, mix(sk, '#3a2440', 0.5), 0.5, 46);
       streak([[14.4, 4.2], [14.6, 6.4], [15.2, 8.6], [15.5, 10.4]], 0.55);
       soak(14.2, 4.4, 1.4, 2.6, 0.55, 11);
       P.dots(13.4, 3.6, 3, 1.2, blood, 0.35, 12);
