@@ -18,7 +18,7 @@
  *   analyst voices    vox-<pain|grunt|ready|pickup|death> (per gender)
  */
 
-import { renderLayers, type Layer, type OscType } from './dsp';
+import { peakNormalize, renderLayers, type Layer, type OscType } from './dsp';
 import { formantBank, VOICES, type Vowel } from './voicebank';
 
 const osc = (type: OscType, f0: number, f1: number, dur: number, gain: number, t0 = 0, extra: Partial<Layer> = {}): Layer =>
@@ -305,6 +305,12 @@ export const SFX_DEFS: Record<string, SfxSpec> = {
     osc('sawtooth', 180, 170, 0.32, 0.45, 0.08),
     osc('square', 186, 176, 0.32, 0.3, 0.08),
   ]),
+  'door-clunk': one(() => [
+    // heavy bolt retracting after the reader accepts — low thud + clack
+    nz(900, 300, 'lowpass', 0.07, 0.8, 0.3),
+    osc('triangle', 110, 48, 0.14, 0.7, 0.3),
+    nz(3400, 1800, 'highpass', 0.03, 0.5, 0.36, 2),
+  ]),
   'tap-sweep': one(() => [
     nz(6200, 3400, 'highpass', 0.02, 0.55),
     ...[0, 1, 2, 3, 4, 5].map((i) => osc('square', 700 + i * 260, 900 + i * 260, 0.03, 0.16, i * 0.035)),
@@ -551,7 +557,11 @@ export function renderSfx(name: string, sr: number, gender: SfxVariant = 'male',
   V = variant;
   try {
     const seed = hashName(name) + variant * 7919;
-    return renderLayers(spec.layers(gender, variant), sr, seed);
+    const out = renderLayers(spec.layers(gender, variant), sr, seed);
+    // layered transient+body+tail stacks can crest past unity — scale down
+    // only when they would clip, so quiet sounds keep their character
+    peakNormalize(out, 0.95);
+    return out;
   } finally {
     V = 0;
   }

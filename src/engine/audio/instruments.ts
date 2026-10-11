@@ -5,7 +5,7 @@
  * measure is exactly what plays.
  */
 
-import { renderLayers, mulberry32, type Layer } from './dsp';
+import { renderLayers, type Layer } from './dsp';
 import type { InstName } from './sequencer';
 
 const osc = (type: Layer['type'], f0: number, f1: number, dur: number, gain: number, t0 = 0, extra: Partial<Layer> = {}): Layer =>

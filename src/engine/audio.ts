@@ -1,3 +1,28 @@
+/**
+ * AUDIO: the runtime facade. Every SFX event name maps to a layered recipe
+ * in audio/sfxdef.ts that is rendered ONCE into an AudioBuffer (offline,
+ * deterministic — see audio/dsp.ts) and replayed through the shared bus
+ * graph, so a "fire" call costs one buffer source instead of a dozen live
+ * oscillators. Music is a deterministic score (audio/songs.ts) rendered
+ * per layer ('bed' | 'threat' | 'combat') and mixed live for adaptive
+ * intensity: exploration bed → threat swells when voices wake → full combat
+ * stack while setCombat(true).
+ *
+ * Bus graph:
+ *   sfx voices  → sfxBus → [quant grit → 5.5k LP] ─┬─→ master
+ *                (positional pan/gain per voice)   └─→ reverb send ─┐
+ *   ambience    → ambBus ──────────────────────────→ master          │
+ *   music layers→ layerGains → musicDuck ──→ musicBus ─→ master      │
+ *                        └──────────→ reverb send ────→ convolver ───┘
+ *   master → glue comp → brickwall limiter → analyser → destination
+ */
+
+import { mulberry32 } from './audio/dsp';
+import { renderSfx, SFX_DEFS, sfxVariantCount, type SfxVariant } from './audio/sfxdef';
+import { renderSong, renderSting } from './audio/render';
+import { SONGS, STINGS } from './audio/songs';
+import type { MusicLayer } from './audio/sequencer';
+
 export interface SpatialPosition {
   x?: number;
   y?: number;
@@ -17,16 +42,10 @@ export function spatialize(
   return { gain, pan: Math.sin(rel) * 0.75 };
 }
 
-interface VoiceRoute {
-  output: AudioNode;
-  gain: number;
-  pan: number;
-}
-
-/** Sources + envelopes scheduled by one sfx() call, so a whole event can be stolen. */
-interface VoiceGroup {
-  sources: AudioScheduledSourceNode[];
-  envs: (GainNode | undefined)[];
+/** One playing SFX instance: a single buffer source plus its steal-fade gain. */
+interface Voice {
+  source: AudioBufferSourceNode;
+  env: GainNode;
 }
 
 /** Max concurrent instances of one SFX event; the oldest is faded+stolen past the cap. */
@@ -51,6 +70,7 @@ export const VOICE_CAPS: Record<string, number> = {
   kill: 2,
   win: 1,
   lose: 1,
+  alarm: 1,
 };
 const VOICE_CAP_DEFAULT = 3;
 
@@ -69,106 +89,16 @@ export function voiceCapFor(name: string): number {
   return VOICE_CAPS[name] ?? VOICE_CAPS[VOICE_CAP_ALIAS[family ?? ''] ?? ''] ?? VOICE_CAP_DEFAULT;
 }
 
-/** Background-score intensity, picked from the mission's difficulty. */
-export type MusicTier = 'early' | 'mid' | 'late' | 'rick';
+/** Background-score identity: mission tiers plus the screen beds and the RICKROLL egg. */
+export type MusicTier = 'early' | 'mid' | 'late' | 'rick' | 'title' | 'briefing' | 'debrief';
 
-interface MusicSpec {
-  bpm: number;
-  /** Bass root frequency (Hz). */
-  root: number;
-  /** Semitone offsets from root per step of a 16-step bar; null = rest. */
-  bass: (number | null)[];
-  kick: number[];
-  hat: number[];
-  snare: number[];
-  /** Bar steps that fire a low detuned chord stab. */
-  stab: number[];
-  /** Stab chord semitones above 2*root (minor = dark). */
-  chord: number[];
-  /** Lead motif per step, semitones above 4*root; null = rest. */
-  lead: (number | null)[];
-  /** Bass lowpass cutoff — later tiers run brighter/more aggressive. */
-  dark: number;
-}
+/** Music-bus send: the score sits ~-18..-20 dB RMS under the sfx bus. */
+const MUSIC_SEND = 1.2;
 
-/** Original looping score beds, one per campaign act. All synth, no samples. */
-const MUSIC: Record<MusicTier, MusicSpec> = {
-  // early missions: a steady eighth-note pulse under a somber motif
-  early: {
-    bpm: 100,
-    root: 55,
-    dark: 620,
-    bass: [0, null, 0, null, -2, null, 3, null, 0, null, -2, null, -4, null, 3, null],
-    kick: [0, 8],
-    hat: [2, 6, 10, 14],
-    snare: [12],
-    stab: [0, 8],
-    chord: [0, 3, 7],
-    lead: [12, null, null, 10, null, null, 7, null, null, 12, null, null, 14, null, 12, null],
-  },
-  // mid missions: driving sixteenth-note bass, backbeat snare, offbeat hats
-  mid: {
-    bpm: 126,
-    root: 55,
-    dark: 850,
-    bass: [0, 0, -2, 0, 3, 0, -2, 3, 0, 0, 5, 3, -2, 0, -4, -2],
-    kick: [0, 4, 8, 12],
-    hat: [2, 6, 7, 10, 14, 15],
-    snare: [4, 12],
-    stab: [0, 8],
-    chord: [0, 3, 7],
-    lead: [12, null, 12, null, 15, null, 14, null, 12, null, 10, null, 7, null, 10, null],
-  },
-  // EGGS (RICKROLL): the jingle tier — a bright, jaunty major-key bounce
-  // with an annoyingly catchy triplet-ish lead. Still 100% original synth.
-  rick: {
-    bpm: 120,
-    root: 60,
-    dark: 1400,
-    bass: [0, null, 4, null, 7, null, 4, null, 0, null, 4, null, 7, null, 9, null],
-    kick: [0, 8],
-    hat: [4, 12],
-    snare: [4, 12],
-    stab: [0, 8],
-    chord: [0, 4, 7],
-    lead: [12, null, 16, null, 19, 16, null, 12, null, 14, null, 16, 19, null, 21, null],
-  },
-  // late missions: fast, dissonant, relentless — full 16th hats and a
-  // double-kick push under an aggressive semitone lead line
-  late: {
-    bpm: 144,
-    root: 49,
-    dark: 1100,
-    bass: [0, 0, -2, 0, 0, 3, -2, 0, 0, 5, 0, 3, -2, 0, -4, -2],
-    kick: [0, 4, 8, 12, 14],
-    hat: [2, 3, 6, 7, 10, 11, 14, 15],
-    snare: [4, 12, 15],
-    stab: [0, 6, 8, 14],
-    chord: [0, 3, 6],
-    lead: [12, 13, null, 12, null, 10, 12, null, 15, null, 14, 13, null, 12, 10, 8],
-  },
-};
+const MUSIC_LAYERS: MusicLayer[] = ['bed', 'threat', 'combat'];
 
-/**
- * Music-bus send coefficient: the score should sit ~-18..-20 dB RMS under the
- * sfx bus, not whisper at -30 dB. Denser patterns plus this send get it there.
- */
-const MUSIC_SEND = 2.4;
-
-interface FilterSpec {
-  type: BiquadFilterType;
-  frequency: number;
-  q?: number;
-}
-
-interface OscOptions {
-  attack?: number;
-  delay?: number;
-  detune?: number;
-  pitchRange?: number;
-  filter?: FilterSpec;
-  distortion?: boolean;
-}
+/** How long the threat layer keeps swelling after the last hostile voice. */
+const THREAT_LINGER_S = 3.5;
 
 export class Audio {
   private ctx: AudioContext | null = null;
@@ -181,33 +111,40 @@ export class Audio {
   private analyser: AnalyserNode | null = null;
   private meterSamples: Float32Array<ArrayBuffer> | null = null;
   private noiseBuffer: AudioBuffer | null = null;
+  private convolver: ConvolverNode | null = null;
+  private roomSizeBucket = -1;
   private activeVoices = 0;
   private lastPlayed = new Map<string, number>();
   private listenerX = 0;
   private listenerY = 0;
   private listenerAngle = 0;
   private unlocked = false;
+  private muted = false;
   private combat = false;
-  private combatGainApplied = false;
   private ambienceRequested = false;
   private ambience: { sources: AudioScheduledSourceNode[]; nodes: AudioNode[] } | null = null;
   private musicRequested: MusicTier | null = null;
-  private musicTier: MusicTier = 'early';
-  private musicStep = 0;
-  private musicNextT = 0;
-  private musicTimer: ReturnType<typeof setInterval> | null = null;
+  private musicPlaying: MusicTier | null = null;
   private musicVol = 0.7;
-  private voiceGroups = new Map<string, VoiceGroup[]>();
-  /** Group collecting sources scheduled by the sfx() call currently dispatching. */
-  private group: VoiceGroup | null = null;
+  private layerGains: Record<MusicLayer, GainNode> | null = null;
+  private musicSources: AudioBufferSourceNode[] = [];
+  private threatUntil = 0;
+  private gender: SfxVariant = 'male';
+  private sfxCache = new Map<string, AudioBuffer>();
+  private songCache = new Map<string, AudioBuffer[]>();
+  private stingCache = new Map<string, AudioBuffer>();
+  private variantPick = new Map<string, number>();
+  private voices = new Map<string, Voice[]>();
 
   private ensure(): AudioContext | null {
-    if (!this.unlocked) return null;
+    if (!this.unlocked || this.muted) return null;
     if (typeof AudioContext === 'undefined') return null;
     if (!this.ctx) {
       this.ctx = new AudioContext();
       const ctx = this.ctx;
       this.sfxBus = ctx.createGain();
+      // lo-fi grit shared by every sfx voice: subtle 32-step quantization
+      // plus a 5.5 kHz lowpass keeps hits crunchy but tamed
       const shaper = ctx.createWaveShaper();
       const curve = new Float32Array(64);
       for (let i = 0; i < curve.length; i++) {
@@ -219,21 +156,15 @@ export class Audio {
       gritLowpass.type = 'lowpass';
       gritLowpass.frequency.value = 5500;
       const gritGain = ctx.createGain();
-      gritGain.gain.value = 1;
       this.sfxBus.connect(shaper).connect(gritLowpass).connect(gritGain);
 
       this.ambBus = ctx.createGain();
       this.musicDuck = ctx.createGain();
       this.musicBus = ctx.createGain();
-      // modest send: the score sits under the sfx, never on top of them
       this.musicBus.gain.value = this.musicVol * MUSIC_SEND;
       this.master = ctx.createGain();
-      // Pre-limiter gain kept low so stacked combat sfx hit the glue compressor
-      // and brick-wall limiter with headroom instead of clipping digitally.
+      // pre-limiter headroom so stacked combat hits glue, not digital clip
       this.master.gain.value = 0.45;
-      // Glue compressor: evens the mix but a 4ms attack lets hit transients
-      // through so loud events still punch over the bed. The limiter after it
-      // is a brick wall for stacked combat sfx so they can't clip.
       const compressor = ctx.createDynamicsCompressor();
       compressor.threshold.value = -10;
       compressor.knee.value = 6;
@@ -246,15 +177,29 @@ export class Audio {
       limiter.ratio.value = 20;
       limiter.attack.value = 0.001;
       limiter.release.value = 0.08;
+
+      // synthesized room reverb: one deterministic IR regenerated on room
+      // size change; sfx get the bigger send, the score a touch for space
+      this.convolver = ctx.createConvolver();
+      const sfxSend = ctx.createGain();
+      sfxSend.gain.value = 0.3;
+      const musicSend = ctx.createGain();
+      musicSend.gain.value = 0.12;
+      this.setRoomSize(this.roomSizeBucket < 0 ? 0.5 : this.roomSizeBucket / 10);
+
       gritGain.connect(this.master);
+      gritGain.connect(sfxSend).connect(this.convolver);
       this.ambBus.connect(this.master);
       this.musicBus.connect(this.musicDuck).connect(this.master);
+      this.musicDuck.connect(musicSend).connect(this.convolver);
+      this.convolver.connect(this.master);
       this.master.connect(compressor).connect(limiter).connect(ctx.destination);
       this.limiter = limiter;
 
       this.noiseBuffer = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
       const samples = this.noiseBuffer.getChannelData(0);
-      for (let i = 0; i < samples.length; i++) samples[i] = Math.random() * 2 - 1;
+      const rng = mulberry32(0x5eed);
+      for (let i = 0; i < samples.length; i++) samples[i] = rng() * 2 - 1;
     }
     return this.ctx;
   }
@@ -267,24 +212,65 @@ export class Audio {
     if (this.musicRequested) this.startMusic(this.musicRequested);
   }
 
+  /** tools/sfx.ts mute flag (menu sounds off while tests drive the game). */
+  setMuted(m: boolean): void {
+    this.muted = m;
+  }
+
   setListener(x: number, y: number, angle: number): void {
     this.listenerX = x;
     this.listenerY = y;
     this.listenerAngle = angle;
   }
 
-  setCombat(active: boolean): void {
-    if (active !== this.combat) this.combatGainApplied = false;
-    this.combat = active;
-    this.applyCombatGain();
+  /**
+   * Room-scale reverb: `size` 0..1 maps to a ~0.4-2.6 s synthesized impulse
+   * response (decaying noise + a few early taps). Quantized to 0.1 buckets so
+   * per-frame callers never rebuild the IR.
+   */
+  setRoomSize(size: number): void {
+    const bucket = Math.round(Math.max(0, Math.min(1, size)) * 10);
+    if (bucket === this.roomSizeBucket && this.convolver?.buffer) return;
+    this.roomSizeBucket = bucket;
+    if (!this.ctx || !this.convolver) return;
+    const sr = this.ctx.sampleRate;
+    const seconds = 0.4 + (bucket / 10) * 2.2;
+    const n = Math.floor(seconds * sr);
+    const ir = this.ctx.createBuffer(2, n, sr);
+    const rng = mulberry32(0xc0ffee + bucket * 977);
+    for (let ch = 0; ch < 2; ch++) {
+      const d = ir.getChannelData(ch);
+      for (let i = 0; i < n; i++) {
+        const t = i / sr;
+        d[i] = (rng() * 2 - 1) * Math.exp((-3 * t) / seconds) * (1 - t / seconds);
+      }
+      // sparse early reflections so small rooms still read as rooms
+      for (const tap of [0.021, 0.037, 0.052]) {
+        const i = Math.floor(tap * sr);
+        if (i < n) d[i] += (rng() - 0.5) * 0.5;
+      }
+    }
+    this.convolver.buffer = ir;
   }
 
-  private applyCombatGain(): void {
-    if (!this.ctx || !this.ambBus || this.combatGainApplied) return;
-    this.ambBus.gain.setTargetAtTime(this.combat ? 10 ** (-8 / 20) : 1, this.ctx.currentTime, 0.3);
+  setCombat(active: boolean): void {
+    this.combat = active;
+    if (!this.ctx) return;
+    this.ambBus?.gain.setTargetAtTime(active ? 10 ** (-8 / 20) : 1, this.ctx.currentTime, 0.3);
     // the score ducks under combat sfx so hits/kills still read on top
-    this.musicDuck?.gain.setTargetAtTime(this.combat ? 10 ** (-7 / 20) : 1, this.ctx.currentTime, 0.25);
-    this.combatGainApplied = true;
+    this.musicDuck?.gain.setTargetAtTime(active ? 10 ** (-7 / 20) : 1, this.ctx.currentTime, 0.25);
+    this.applyLayerTargets();
+  }
+
+  private applyLayerTargets(): void {
+    const ctx = this.ctx;
+    const gains = this.layerGains;
+    if (!ctx || !gains) return;
+    const now = ctx.currentTime;
+    const threatened = this.combat || now < this.threatUntil;
+    gains.bed.gain.setTargetAtTime(1, now, 0.8);
+    gains.threat.gain.setTargetAtTime(this.combat ? 0.85 : threatened ? 0.55 : 0.04, now, 0.9);
+    gains.combat.gain.setTargetAtTime(this.combat ? 1 : 0, now, this.combat ? 0.35 : 1.2);
   }
 
   meter(): { rmsDb: number; peakDb: number } {
@@ -315,13 +301,75 @@ export class Audio {
     };
   }
 
-  setVoice(_gender: 'male' | 'female'): void {
-    this.voicePitch = _gender === 'female' ? 1.45 : 1;
+  setVoice(gender: 'male' | 'female'): void {
+    this.gender = gender;
   }
 
-  private voicePitch = 1;
+  // ---------- sfx buffers ----------
 
-  private route(opts: SpatialPosition, context: AudioContext): VoiceRoute | null {
+  /**
+   * Resolve a played name to its registry key: `<kind>-<anything>` without a
+   * recipe falls back to the shared family voice (what the old switch did for
+   * unknown threats), everything else stays silent.
+   */
+  private resolveName(name: string): string | null {
+    if (SFX_DEFS[name]) return name;
+    const m = /^(growl|idle|pain|death|attack|fire)-/.exec(name);
+    if (!m) return null;
+    const fallback = { growl: 'growl', idle: 'growl', pain: 'enemy-pain', death: 'enemy-death', attack: 'bite', fire: 'enemy-fire' }[m[1]];
+    return fallback && SFX_DEFS[fallback] ? fallback : null;
+  }
+
+  private bufferFor(name: string): AudioBuffer | null {
+    const spec = SFX_DEFS[name];
+    const ctx = this.ctx;
+    if (!spec || !ctx) return null;
+    const variants = sfxVariantCount(name);
+    const pick = variants > 1 ? (this.variantPick.get(name) ?? 0) % variants : 0;
+    if (variants > 1) this.variantPick.set(name, pick + 1);
+    const key = spec.gendered ? `${name}|${this.gender}` : variants > 1 ? `${name}|${pick}` : name;
+    let buf = this.sfxCache.get(key);
+    if (!buf) {
+      const data = renderSfx(name, ctx.sampleRate, this.gender, pick);
+      if (!data) return null;
+      buf = ctx.createBuffer(1, data.length, ctx.sampleRate);
+      buf.copyToChannel(data as Float32Array<ArrayBuffer>, 0);
+      this.sfxCache.set(key, buf);
+    }
+    return buf;
+  }
+
+  private allow(name: string, ctx: AudioContext): boolean {
+    const now = ctx.currentTime;
+    if (now - (this.lastPlayed.get(name) ?? -Infinity) < 0.05) return false;
+    this.lastPlayed.set(name, now);
+    return true;
+  }
+
+  /** Past the per-name cap, fade the oldest instance out over ~15 ms and steal it. */
+  private limitVoices(name: string, ctx: AudioContext): void {
+    const list = this.voices.get(name);
+    if (!list) return;
+    while (list.length >= voiceCapFor(name)) {
+      const oldest = list.shift()!;
+      oldest.env.gain.setTargetAtTime(0.0001, ctx.currentTime, 0.012);
+      try {
+        oldest.source.stop(ctx.currentTime + 0.06);
+      } catch {
+        // already stopped
+      }
+    }
+  }
+
+  sfx(name: string, opts: SpatialPosition = {}): void {
+    const ctx = this.ensure();
+    if (!ctx || !this.sfxBus) return;
+    const resolved = this.resolveName(name);
+    if (!resolved || !this.allow(resolved, ctx)) return;
+    const buffer = this.bufferFor(resolved);
+    if (!buffer) return;
+    this.limitVoices(resolved, ctx);
+
     let gain = opts.gain ?? 1;
     let pan = opts.pan ?? 0;
     if (opts.x !== undefined || opts.y !== undefined) {
@@ -333,600 +381,49 @@ export class Audio {
       gain *= position.gain;
       pan += position.pan;
     }
-    if (gain <= 0 || this.activeVoices >= 24) return null;
-    const panner = typeof context.createStereoPanner === 'function'
-      ? context.createStereoPanner()
-      : null;
+    // `idle-<threat>` is the growl timbre dropped to mutter level
+    if (name.startsWith('idle-')) gain *= 0.55;
+    if (gain <= 0 || this.activeVoices >= 24) return;
+
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    if (opts.dur !== undefined && SFX_DEFS[resolved]?.truncatable && opts.dur > 0.05) {
+      source.playbackRate.value = Math.max(0.5, Math.min(3, buffer.duration / opts.dur));
+    }
+    const env = ctx.createGain();
+    env.gain.value = gain;
+    const panner = typeof ctx.createStereoPanner === 'function' ? ctx.createStereoPanner() : null;
     if (panner) {
       panner.pan.value = Math.max(-1, Math.min(1, pan));
-      panner.connect(this.sfxBus!);
+      source.connect(env).connect(panner).connect(this.sfxBus);
+    } else {
+      source.connect(env).connect(this.sfxBus);
     }
-    return { output: panner ?? this.sfxBus!, gain, pan };
-  }
 
-  private scheduleVoice(
-    source: OscillatorNode | AudioBufferSourceNode,
-    route: VoiceRoute,
-    duration: number,
-    delay: number,
-    nodes: AudioNode[],
-    bufferOffset?: number,
-    envelope?: GainNode,
-  ): void {
-    const ctx = this.ctx!;
-    const start = ctx.currentTime + delay;
-    const end = start + duration;
     this.activeVoices++;
-    const grp = this.group;
-    if (grp) {
-      grp.sources.push(source);
-      grp.envs.push(envelope);
-    }
+    const voice: Voice = { source, env };
     source.onended = () => {
       source.disconnect();
-      for (const node of nodes) node.disconnect();
-      if (route.output !== this.sfxBus) route.output.disconnect();
+      env.disconnect();
+      panner?.disconnect();
       this.activeVoices = Math.max(0, this.activeVoices - 1);
-      if (grp) {
-        const i = grp.sources.indexOf(source);
-        if (i >= 0) {
-          grp.sources.splice(i, 1);
-          grp.envs.splice(i, 1);
-        }
-      }
+      const list = this.voices.get(resolved);
+      const i = list?.indexOf(voice) ?? -1;
+      if (list && i >= 0) list.splice(i, 1);
     };
-    if (source instanceof AudioBufferSourceNode && bufferOffset !== undefined) {
-      source.start(start, bufferOffset);
-    } else {
-      source.start(start);
-    }
-    source.stop(end + 0.005);
-  }
+    let list = this.voices.get(resolved);
+    if (!list) this.voices.set(resolved, (list = []));
+    list.push(voice);
+    source.start();
 
-  private oscillator(
-    type: OscillatorType,
-    f0: number,
-    f1: number,
-    duration: number,
-    gain: number,
-    opts: SpatialPosition = {},
-    options: OscOptions = {},
-  ): void {
-    const ctx = this.ensure();
-    if (!ctx || !this.sfxBus) return;
-    const route = this.route(opts, ctx);
-    if (!route) return;
-    const source = ctx.createOscillator();
-    const envelope = ctx.createGain();
-    const now = ctx.currentTime + (options.delay ?? 0);
-    const attack = Math.min(duration, options.attack ?? Math.min(0.008, duration * 0.2));
-    const pitch = 1 + (Math.random() - 0.5) * (options.pitchRange ?? 0.1);
-    source.type = type;
-    source.frequency.setValueAtTime(Math.max(20, f0 * pitch), now);
-    source.frequency.exponentialRampToValueAtTime(Math.max(20, f1 * pitch), now + duration);
-    if (options.detune !== undefined) source.detune.setValueAtTime(options.detune, now);
-    const nodes: AudioNode[] = [envelope];
-    let chain: AudioNode = source;
-    if (options.filter) {
-      const filter = ctx.createBiquadFilter();
-      filter.type = options.filter.type;
-      filter.frequency.value = options.filter.frequency;
-      filter.Q.value = options.filter.q ?? 1;
-      chain.connect(filter);
-      chain = filter;
-      nodes.push(filter);
-    }
-    if (options.distortion) {
-      const shaper = ctx.createWaveShaper();
-      const curve = new Float32Array(256);
-      for (let i = 0; i < curve.length; i++) {
-        const x = (i / (curve.length - 1)) * 2 - 1;
-        curve[i] = Math.tanh(x * 5);
-      }
-      shaper.curve = curve;
-      chain.connect(shaper);
-      chain = shaper;
-      nodes.push(shaper);
-    }
-    chain.connect(envelope);
-    envelope.connect(route.output);
-    envelope.gain.setValueAtTime(0.0001, now);
-    envelope.gain.linearRampToValueAtTime(Math.max(0.0002, gain * route.gain), now + attack);
-    envelope.gain.exponentialRampToValueAtTime(0.0001, now + duration);
-    this.scheduleVoice(source, route, duration, options.delay ?? 0, nodes, undefined, envelope);
-  }
-
-  private noise(
-    filterType: BiquadFilterType,
-    f0: number,
-    f1: number,
-    duration: number,
-    q: number,
-    gain: number,
-    opts: SpatialPosition = {},
-    delay = 0,
-  ): void {
-    const ctx = this.ensure();
-    if (!ctx || !this.noiseBuffer || !this.sfxBus) return;
-    const route = this.route(opts, ctx);
-    if (!route) return;
-    const source = ctx.createBufferSource();
-    source.buffer = this.noiseBuffer;
-    const filter = ctx.createBiquadFilter();
-    filter.type = filterType;
-    const now = ctx.currentTime + delay;
-    filter.frequency.setValueAtTime(Math.max(20, f0), now);
-    filter.frequency.exponentialRampToValueAtTime(Math.max(20, f1), now + duration);
-    filter.Q.value = q;
-    const envelope = ctx.createGain();
-    envelope.gain.setValueAtTime(0.0001, now);
-    envelope.gain.linearRampToValueAtTime(Math.max(0.0002, gain * route.gain), now + Math.min(0.006, duration * 0.2));
-    envelope.gain.exponentialRampToValueAtTime(0.0001, now + duration);
-    source.connect(filter).connect(envelope);
-    this.scheduleVoice(
-      source,
-      route,
-      duration,
-      delay,
-      [filter, envelope],
-      Math.random() * Math.max(0, this.noiseBuffer.duration - duration),
-      envelope,
-    );
-  }
-
-  private formant(
-    f0: number,
-    f1: number,
-    duration: number,
-    gain: number,
-    opts: SpatialPosition,
-  ): void {
-    const voice = this.voicePitch;
-    this.oscillator('sawtooth', f0 * voice, f1 * voice, duration, gain * 0.7, opts,
-      { filter: { type: 'bandpass', frequency: 700, q: 6 }, pitchRange: 0.05 });
-    this.oscillator('sawtooth', f0 * voice, f1 * voice, duration, gain * 0.45, opts,
-      { filter: { type: 'bandpass', frequency: 1200, q: 6 }, pitchRange: 0.05 });
-    this.noise('bandpass', 1800, 1100, Math.min(duration, 0.18), 1.2, gain * 0.12, opts);
-  }
-
-  /** Short crack + low thump so impacts read as hits, not dull thuds. */
-  private impactLayer(opts: SpatialPosition, gain: number, delay = 0): void {
-    this.noise('highpass', 2400, 900, 0.035, 0.9, gain * 0.9, opts, delay);
-    this.oscillator('sine', 85, 36, 0.11, gain, opts, {
-      attack: 0.004,
-      distortion: true,
-      pitchRange: 0.02,
-      delay,
-    });
-  }
-
-  private body(
-    freqStart: number,
-    freqEnd: number,
-    duration: number,
-    gain: number,
-    opts: SpatialPosition,
-  ): void {
-    this.oscillator('sine', freqStart, freqEnd, duration, gain, opts,
-      { attack: Math.min(0.012, duration * 0.15), distortion: true, pitchRange: 0.01 });
-  }
-
-  /**
-   * ENEMIES: per-type threat voices. Names arrive as `<kind>-<threat>`
-   * (kind: growl | pain | death | attack | fire) from the combat wiring in
-   * main.ts. Each threat gets a signature timbre so pain/death/attack read
-   * by ear alone; unknown threats fall back to the shared voices.
-   */
-  private enemyVoice(kind: 'growl' | 'pain' | 'death' | 'attack' | 'fire', threat: string, o: SpatialPosition): void {
-    switch (threat) {
-      case 'worm':
-        // high chittering parasite
-        if (kind === 'growl') {
-          this.noise('bandpass', 2400, 1600, 0.3, 2, 0.14, o);
-          [0, 0.09, 0.2].forEach((d, i) => this.oscillator('square', 900 - i * 140, 700 - i * 140, 0.05, 0.1, o, { delay: d }));
-        } else if (kind === 'pain') {
-          // two variants so repeated hits don't sound like a replayed sample
-          if (Math.random() < 0.5) this.formant(620, 380, 0.18, 0.75, o);
-          else this.formant(700, 300, 0.14, 0.7, o);
-          this.noise('bandpass', 2800, 1900, 0.12, 2.5, 0.16, o);
-        } else if (kind === 'death') {
-          this.impactLayer(o, 0.5);
-          this.formant(540, 90, 0.65, 0.95, o);
-          this.noise('lowpass', 900, 200, 0.5, 1, 0.32, o, 0.08);
-        } else if (kind === 'attack') {
-          this.noise('highpass', 2400, 1100, 0.06, 1, 0.3, o);
-          this.body(160, 60, 0.14, 0.5, o);
-        } else {
-          this.noise('bandpass', 2000, 1200, 0.14, 2, 0.2, o);
-          this.oscillator('sawtooth', 700, 240, 0.16, 0.2, o);
-        }
-        return;
-      case 'trojan':
-        // servo-driven gift box: robotic garble + mechanism clacks
-        if (kind === 'growl') {
-          [0, 0.07, 0.16, 0.24].forEach((d, i) => this.oscillator('square', 320 + i * 60, 240, 0.045, 0.09, o, { delay: d }));
-          this.noise('bandpass', 1400, 1000, 0.3, 3, 0.08, o);
-        } else if (kind === 'pain') {
-          if (Math.random() < 0.5) this.oscillator('square', 480, 170, 0.14, 0.45, o, { pitchRange: 0.3 });
-          else this.oscillator('square', 560, 140, 0.11, 0.42, o, { pitchRange: 0.3 });
-          this.noise('bandpass', 2200, 1500, 0.1, 3, 0.12, o);
-        } else if (kind === 'death') {
-          this.impactLayer(o, 0.55);
-          this.oscillator('square', 420, 38, 0.8, 0.55, o, { pitchRange: 0.06 });
-          this.noise('bandpass', 1800, 300, 0.6, 1.6, 0.3, o, 0.1);
-          this.body(90, 40, 0.55, 0.55, o);
-        } else if (kind === 'attack') {
-          this.noise('highpass', 1600, 700, 0.1, 1, 0.32, o);
-          this.oscillator('square', 220, 90, 0.12, 0.4, o);
-        } else {
-          this.noise('bandpass', 2600, 1400, 0.16, 2, 0.26, o);
-          this.oscillator('square', 800, 300, 0.12, 0.24, o, { delay: 0.03 });
-        }
-        return;
-      case 'ransomware':
-        // heavy padlock brute: metallic clangs, chains, deep slam
-        if (kind === 'growl') {
-          this.oscillator('sawtooth', 95, 65, 0.5, 0.3, o, { filter: { type: 'lowpass', frequency: 500 } });
-          this.noise('bandpass', 900, 500, 0.4, 4, 0.14, o, 0.06);
-        } else if (kind === 'pain') {
-          if (Math.random() < 0.5) this.oscillator('square', 180, 90, 0.16, 0.52, o, { filter: { type: 'bandpass', frequency: 1200, q: 4 } });
-          else this.oscillator('sawtooth', 230, 70, 0.14, 0.5, o, { filter: { type: 'bandpass', frequency: 1000, q: 4 } });
-          this.noise('bandpass', 1500, 800, 0.14, 4, 0.2, o);
-        } else if (kind === 'death') {
-          this.impactLayer(o, 0.6);
-          this.body(95, 30, 0.9, 0.9, o);
-          this.noise('bandpass', 1200, 250, 0.7, 3, 0.36, o, 0.05);
-          this.oscillator('square', 160, 45, 0.5, 0.34, o, { delay: 0.12 });
-        } else if (kind === 'attack') {
-          this.impactLayer(o, 0.55);
-          this.oscillator('sawtooth', 140, 50, 0.22, 0.42, o);
-        } else {
-          this.noise('lowpass', 1400, 300, 0.3, 0.8, 0.34, o);
-          this.body(110, 50, 0.26, 0.5, o);
-        }
-        return;
-      case 'logicbomb':
-        // countdown device: error beeps → detonation
-        if (kind === 'growl') {
-          [0, 0.12].forEach((d) => this.oscillator('square', 1180, 1180, 0.05, 0.12, o, { delay: d }));
-        } else if (kind === 'pain') {
-          const base = Math.random() < 0.5 ? 980 : 1180;
-          [0, 0.07, 0.14].forEach((d, i) => this.oscillator('square', base - i * 180, base - i * 180, 0.045, 0.32, o, { delay: d }));
-        } else if (kind === 'death' || kind === 'attack') {
-          this.impactLayer(o, 0.85);
-          this.noise('lowpass', 2400, 90, 0.8, 0.7, 0.5, o, 0.02);
-          this.body(120, 28, 0.75, 0.8, o);
-        } else {
-          this.oscillator('square', 880, 660, 0.08, 0.3, o);
-          this.noise('bandpass', 1600, 900, 0.1, 2, 0.2, o);
-        }
-        return;
-      case 'rat':
-        // quick chittering remote agent
-        if (kind === 'growl') {
-          [0, 0.06, 0.13, 0.21].forEach((d, i) => this.oscillator('square', 1500 - i * 110, 1300 - i * 110, 0.035, 0.09, o, { delay: d }));
-        } else if (kind === 'pain') {
-          const base = Math.random() < 0.5 ? 1600 : 1800;
-          [0, 0.05, 0.1].forEach((d, i) => this.oscillator('square', base - i * 160, base - i * 320, 0.04, 0.3, o, { delay: d }));
-        } else if (kind === 'death') {
-          this.impactLayer(o, 0.5);
-          this.noise('highpass', 2600, 900, 0.3, 1, 0.34, o);
-          this.oscillator('square', 1400, 150, 0.35, 0.36, o);
-          this.body(200, 60, 0.3, 0.45, o);
-        } else if (kind === 'attack') {
-          this.noise('highpass', 3000, 1600, 0.05, 1, 0.3, o);
-          this.oscillator('square', 1300, 500, 0.09, 0.34, o, { delay: 0.015 });
-        } else {
-          this.noise('bandpass', 3200, 2000, 0.1, 2.5, 0.28, o);
-          this.oscillator('square', 1500, 800, 0.08, 0.22, o, { delay: 0.02 });
-        }
-        return;
-      case 'rootkit':
-        // sub-bass burrower: groans, scrapes, rumbles
-        if (kind === 'growl') {
-          this.oscillator('sine', 70, 48, 0.6, 0.4, o, { distortion: true });
-          this.noise('lowpass', 400, 150, 0.55, 1, 0.2, o);
-        } else if (kind === 'pain') {
-          if (Math.random() < 0.5) this.oscillator('sine', 85, 48, 0.28, 0.62, o, { distortion: true });
-          else this.oscillator('sine', 100, 40, 0.22, 0.6, o, { distortion: true });
-          this.noise('bandpass', 700, 350, 0.2, 2, 0.2, o);
-        } else if (kind === 'death') {
-          this.impactLayer(o, 0.55);
-          this.noise('lowpass', 1200, 120, 0.9, 1, 0.44, o);
-          this.body(75, 26, 0.95, 0.85, o);
-        } else if (kind === 'attack') {
-          this.noise('bandpass', 900, 300, 0.22, 2.5, 0.4, o);
-          this.body(110, 45, 0.2, 0.55, o);
-        } else {
-          this.noise('lowpass', 800, 200, 0.3, 1, 0.32, o);
-          this.oscillator('sawtooth', 110, 55, 0.28, 0.34, o, { distortion: true });
-        }
-        return;
-      default:
-        // unknown threat → shared voices
-        if (kind === 'pain') this.sfx('enemy-pain', o);
-        else if (kind === 'death') this.sfx('enemy-death', o);
-        else if (kind === 'attack') this.sfx('bite', o);
-        else if (kind === 'fire') this.sfx('enemy-fire', o);
-        else this.sfx('growl', o);
+    // hostile voices swell the threat music layer even before combat engages
+    if (/^(growl|idle|pain|death|attack|fire|sight)-/.test(name)) {
+      this.threatUntil = ctx.currentTime + THREAT_LINGER_S;
+      this.applyLayerTargets();
     }
   }
 
-  private allow(name: string, ctx: AudioContext): boolean {
-    const now = ctx.currentTime;
-    if (now - (this.lastPlayed.get(name) ?? -Infinity) < 0.05) return false;
-    this.lastPlayed.set(name, now);
-    return true;
-  }
-
-  /**
-   * Per-event voice limiting: past the per-name cap, the oldest instance is
-   * faded out over ~15 ms and its sources stopped, so stacked combat sfx
-   * stay clean instead of summing into clipping.
-   */
-  private limitVoices(name: string, ctx: AudioContext): void {
-    const groups = this.voiceGroups.get(name);
-    if (!groups) return;
-    for (let i = groups.length - 1; i >= 0; i--) {
-      if (groups[i].sources.length === 0) groups.splice(i, 1);
-    }
-    const cap = voiceCapFor(name);
-    while (groups.length >= cap) {
-      const oldest = groups.shift()!;
-      for (let i = 0; i < oldest.sources.length; i++) {
-        const env = oldest.envs[i];
-        if (env) env.gain.setTargetAtTime(0.0001, ctx.currentTime, 0.012);
-        try {
-          oldest.sources[i].stop(ctx.currentTime + 0.06);
-        } catch {
-          // already stopped
-        }
-      }
-    }
-  }
-
-  sfx(name: string, opts: SpatialPosition = {}): void {
-    const ctx = this.ensure();
-    if (!ctx || !this.allow(name, ctx)) return;
-    this.limitVoices(name, ctx);
-    const grp: VoiceGroup = { sources: [], envs: [] };
-    this.group = grp;
-    const o = opts;
-    const dur = opts.dur;
-    try {
-    const voice = /^(growl|idle|pain|death|attack|fire)-([a-z]+)$/.exec(name);
-    if (voice) {
-      // `idle-<threat>` is the threat's growl timbre dropped to mutter level:
-      // an unalerted, off-screen vocalization that carries through corridors.
-      const idle = voice[1] === 'idle';
-      this.enemyVoice(
-        (idle ? 'growl' : voice[1]) as 'growl' | 'pain' | 'death' | 'attack' | 'fire',
-        voice[2],
-        idle ? { ...o, gain: (o.gain ?? 1) * 0.55 } : o,
-      );
-    } else {
-    switch (name) {
-      case 'fire':
-        this.noise('highpass', 1800, 900, 0.11, 0.8, 0.38, o);
-        this.oscillator('sawtooth', 180, 75, 0.13, 0.32, o);
-        break;
-      case 'keyboard':
-        for (let i = 0; i < 3; i++) this.noise('highpass', 1800 + i * 250, 1100, 0.025, 0.7, 0.24, o, i * 0.025);
-        this.oscillator('square', 1450, 1150, 0.035, 0.12, o, { delay: 0.018 });
-        break;
-      case 'scan':
-        this.oscillator('square', 880, 220, 0.14, 0.5, o);
-        this.noise('bandpass', 2600, 1300, 0.06, 1, 0.45, o);
-        this.oscillator('sine', 120, 50, 0.1, 0.42, o);
-        break;
-      case 'clean':
-        [620, 830, 1100].forEach((f, i) => this.oscillator('sine', f, f * 1.08, 0.22, 0.35, o, { delay: i * 0.105 }));
-        break;
-      case 'door':
-        this.noise('lowpass', 200, 600, 0.75, 0.7, 0.38, o, 0.05);
-        this.oscillator('sawtooth', 55, 80, 0.75, 0.28, o, { delay: 0.05 });
-        this.noise('lowpass', 400, 100, 0.1, 0.8, 0.38, o);
-        this.oscillator('square', 110, 45, 0.09, 0.2, o, { delay: 0.8 });
-        break;
-      case 'denied':
-        this.oscillator('square', 140, 120, 0.15, 0.32, o);
-        this.oscillator('square', 140, 110, 0.17, 0.32, o, { delay: 0.18 });
-        break;
-      case 'hurt':
-        this.formant(150, 95, 0.22, 1.15, o);
-        this.body(68, 45, 0.24, 0.58, o);
-        break;
-      case 'pickup':
-        this.oscillator('square', 660, 660, 0.05, 0.28, o);
-        this.oscillator('square', 990, 990, 0.08, 0.32, o, { delay: 0.055 });
-        break;
-      case 'inspect':
-        [880, 1320, 1760].forEach((f, i) => this.oscillator('square', f, f, 0.04, 0.2, o, { delay: i * 0.04 }));
-        break;
-      case 'win':
-        [523, 659, 784, 1047].forEach((f, i) => this.oscillator('square', f, f, 0.2, 0.24, o, { delay: i * 0.12 }));
-        break;
-      case 'lose':
-        this.oscillator('sawtooth', 300, 70, 0.7, 0.55, o);
-        this.noise('lowpass', 600, 120, 0.55, 1, 0.14, o);
-        break;
-      case 'click':
-        this.oscillator('square', 900, 720, 0.035, 0.16, o);
-        break;
-      case 'oof':
-        this.formant(180, 105, 0.12, 0.52, o);
-        break;
-      case 'death':
-        this.formant(300, 80, 0.9, 1.25, o);
-        this.noise('bandpass', 1400, 500, 0.82, 1.3, 0.38, o);
-        this.body(68, 42, 0.88, 0.72, o);
-        break;
-      case 'badge':
-        this.oscillator('square', 1800, 1800, 0.07, 0.2, o);
-        break;
-      case 'mouse':
-        this.noise('highpass', 1800, 900, 0.035, 0.8, 0.2, o);
-        this.noise('highpass', 1800, 900, 0.035, 0.8, 0.2, o, 0.09);
-        break;
-      case 'switch':
-        this.noise('bandpass', 900, 300, 0.12, 1, 0.28, o);
-        this.oscillator('square', 170, 75, 0.09, 0.3, o, { delay: 0.06 });
-        break;
-      case 'sight-worm':
-        this.oscillator('sawtooth', 200, 900, 0.24, 0.3, o, { filter: { type: 'bandpass', frequency: 850, q: 4 } });
-        break;
-      case 'sight-trojan':
-        this.roboticGarble(o);
-        break;
-      case 'sight-ransomware':
-        this.oscillator('sawtooth', 60, 110, 0.6, 0.65, o, {
-          filter: { type: 'lowpass', frequency: 420, q: 1 }, distortion: true,
-        });
-        break;
-      case 'sight-logicbomb':
-        // fuse hiss + a rising charge whine
-        this.noise('bandpass', 1200, 3200, 0.3, 1, 0.3, o);
-        this.oscillator('square', 300, 1400, 0.35, 0.2, o, { delay: 0.08 });
-        break;
-      case 'sight-rat':
-        // chittering bursts: short high blips + a scrape
-        for (let i = 0; i < 4; i++) {
-          this.oscillator('square', 1400 - i * 150, 1100 - i * 120, 0.05, 0.26, o, { delay: i * 0.055 });
-        }
-        this.noise('bandpass', 2400, 1600, 0.12, 1.4, 0.3, o, 0.1);
-        break;
-      case 'sight-rootkit':
-        // sub-bass throb surfacing out of a hiss — something was under the floor
-        this.oscillator('sine', 55, 90, 0.5, 0.6, o, { distortion: true });
-        this.noise('bandpass', 400, 900, 0.4, 1, 0.2, o, 0.1);
-        break;
-      case 'growl':
-        // low hunting rumble, positional; wobbles like breathing
-        this.oscillator('sawtooth', 70, 95, 0.5, 0.3, o, {
-          filter: { type: 'lowpass', frequency: 300, q: 2 }, distortion: true, pitchRange: 0.06,
-        });
-        this.noise('lowpass', 350, 150, 0.4, 1, 0.14, o);
-        break;
-      case 'seal':
-        // padlock slam: metallic clack + dead-bolt thud
-        this.noise('bandpass', 700, 1800, 0.07, 1.6, 0.5, o);
-        this.oscillator('square', 220, 90, 0.12, 0.42, o, { delay: 0.04 });
-        this.body(65, 42, 0.16, 0.5, o);
-        break;
-      case 'unseal':
-        [880, 1100].forEach((f, i) => this.oscillator('square', f, f, 0.07, 0.24, o, { delay: i * 0.08 }));
-        break;
-      case 'spawn':
-        // teleport-fog whoosh + materialise thump
-        this.noise('bandpass', 300, 2800, 0.36, 1, 0.72, o);
-        this.oscillator('sine', 90, 320, 0.32, 0.5, o);
-        this.oscillator('square', 1600, 400, 0.14, 0.24, o, { delay: 0.05 });
-        this.body(80, 50, 0.3, 0.4, o);
-        break;
-      case 'windup':
-        this.oscillator('sine', 300, 1200, Math.max(0.1, dur ?? 0.5), 0.32, o);
-        break;
-      case 'bite':
-        this.noise('highpass', 2600, 1100, 0.035, 0.8, 0.75, o);
-        this.noise('lowpass', 1600, 180, 0.14, 0.7, 0.85, o);
-        this.oscillator('square', 150, 65, 0.07, 0.42, o);
-        this.body(70, 48, 0.14, 0.45, o);
-        break;
-      case 'enemy-fire':
-        this.noise('bandpass', 400, 1500, 0.25, 1, 0.68, o);
-        this.oscillator('square', 110, 55, 0.24, 0.42, o);
-        this.body(70, 46, 0.24, 0.42, o);
-        break;
-      case 'impact':
-        this.impactLayer(o, 0.85);
-        this.noise('lowpass', 1500, 200, 0.3, 0.8, 0.76, o);
-        this.oscillator('sine', 90, 40, 0.25, 0.68, o);
-        this.body(70, 45, 0.28, 0.62, o);
-        break;
-      case 'enemy-pain':
-        this.noise('highpass', 2200, 1000, 0.03, 0.9, 0.5, o);
-        this.formant(640, 300, 0.2, 0.95, o);
-        this.body(75, 45, 0.14, 0.5, o);
-        break;
-      case 'enemy-death':
-        this.impactLayer(o, 0.9);
-        this.noise('bandpass', 1400, 220, 0.45, 1, 0.95, o);
-        this.oscillator('sawtooth', 400, 60, 0.5, 0.78, o, { filter: { type: 'lowpass', frequency: 900, q: 1 } });
-        this.body(70, 45, 0.5, 0.72, o);
-        break;
-      case 'kill':
-        // heavy kill punctuation under the death voice: sub thump + mid crack
-        // + a short noise tail, so every kill lands like Doom's body drop
-        this.impactLayer(o, 1.0);
-        this.noise('bandpass', 1600, 420, 0.2, 1.2, 0.5, o);
-        this.noise('lowpass', 2200, 160, 0.45, 0.8, 0.68, o);
-        this.body(110, 30, 0.5, 0.85, o);
-        this.oscillator('sawtooth', 210, 48, 0.3, 0.4, o, { distortion: true });
-        break;
-      case 'step':
-        this.noise('lowpass', 320, 180, 0.06, 0.8, 0.09, o);
-        this.oscillator('sine', 90, 60, 0.06, 0.09, o, { pitchRange: 0.08 });
-        this.noise('bandpass', 1500, 850, 0.018, 1.2, 0.045, o);
-        break;
-      default:
-        break;
-    }
-    }
-    } finally {
-      this.group = null;
-    }
-    if (grp.sources.length > 0) {
-      const groups = this.voiceGroups.get(name) ?? [];
-      groups.push(grp);
-      this.voiceGroups.set(name, groups);
-    }
-  }
-
-  private roboticGarble(opts: SpatialPosition): void {
-    const ctx = this.ensure();
-    if (!ctx || !this.sfxBus) return;
-    const route = this.route(opts, ctx);
-    if (!route) return;
-    const carrier = ctx.createOscillator();
-    carrier.type = 'square';
-    carrier.frequency.value = 190;
-    const lfo = ctx.createOscillator();
-    const lfoGain = ctx.createGain();
-    lfo.frequency.value = 23;
-    lfoGain.gain.value = 80;
-    lfo.connect(lfoGain).connect(carrier.frequency);
-    const envelope = ctx.createGain();
-    const now = ctx.currentTime;
-    envelope.gain.setValueAtTime(0.0001, now);
-    envelope.gain.linearRampToValueAtTime(0.3 * route.gain, now + 0.015);
-    envelope.gain.exponentialRampToValueAtTime(0.0001, now + 0.4);
-    carrier.connect(envelope).connect(route.output);
-    this.activeVoices++;
-    const grp = this.group;
-    if (grp) {
-      grp.sources.push(carrier);
-      grp.envs.push(envelope);
-    }
-    carrier.onended = () => {
-      carrier.disconnect();
-      lfo.disconnect();
-      lfoGain.disconnect();
-      envelope.disconnect();
-      if (route.output !== this.sfxBus) route.output.disconnect();
-      this.activeVoices = Math.max(0, this.activeVoices - 1);
-      if (grp) {
-        const i = grp.sources.indexOf(carrier);
-        if (i >= 0) {
-          grp.sources.splice(i, 1);
-          grp.envs.splice(i, 1);
-        }
-      }
-    };
-    lfo.start(now);
-    lfo.stop(now + 0.41);
-    carrier.start(now);
-    carrier.stop(now + 0.405);
-  }
+  // ---------- ambience ----------
 
   startAmbience(): void {
     this.ambienceRequested = true;
@@ -983,7 +480,7 @@ export class Audio {
       try {
         source.stop(stopAt);
       } catch {
-        // A source may already have been stopped by the audio context.
+        // a source may already have been stopped by the audio context
       }
     }
   }
@@ -991,27 +488,76 @@ export class Audio {
   // ---------- procedural score ----------
 
   /**
-   * Start the mission's looping score bed. Safe before the audio context
-   * exists (the request is replayed on unlock) and idempotent: calling with
-   * a different tier switches the pattern at the next step.
+   * Render (once, cached) and loop the named score. Safe before the audio
+   * context exists — the request replays on unlock — and idempotent per tier.
    */
   startMusic(tier: MusicTier): void {
     this.musicRequested = tier;
-    this.musicTier = tier;
     const ctx = this.ensure();
-    if (!ctx || !this.musicBus || this.musicTimer !== null) return;
-    this.musicStep = 0;
-    this.musicNextT = ctx.currentTime + 0.08;
-    this.musicTimer = setInterval(() => this.pumpMusic(), 70);
-    this.pumpMusic();
+    if (!ctx) return;
+    if (this.musicPlaying === tier && this.musicSources.length > 0) return;
+    const song = SONGS[tier];
+    if (!song) return;
+    this.stopMusicSources();
+
+    let layers = this.songCache.get(tier);
+    if (!layers) {
+      const rendered = renderSong(song, ctx.sampleRate, 0xdec0de + tier.length * 131);
+      layers = MUSIC_LAYERS.map((l) => {
+        const buf = ctx.createBuffer(1, rendered[l].length, ctx.sampleRate);
+        buf.copyToChannel(rendered[l] as Float32Array<ArrayBuffer>, 0);
+        return buf;
+      });
+      this.songCache.set(tier, layers);
+    }
+    if (!this.layerGains) {
+      this.layerGains = {
+        bed: ctx.createGain(),
+        threat: ctx.createGain(),
+        combat: ctx.createGain(),
+      };
+      for (const l of MUSIC_LAYERS) this.layerGains[l].connect(this.musicDuck!);
+    }
+    const now = ctx.currentTime;
+    this.layerGains.bed.gain.setValueAtTime(0.0001, now);
+    this.layerGains.threat.gain.setValueAtTime(0.04, now);
+    this.layerGains.combat.gain.setValueAtTime(0, now);
+    this.musicSources = MUSIC_LAYERS.map((l, i) => {
+      const src = ctx.createBufferSource();
+      src.buffer = layers![i];
+      src.loop = true;
+      src.connect(this.layerGains![l]);
+      src.start();
+      return src;
+    });
+    this.musicPlaying = tier;
+    this.applyLayerTargets();
+  }
+
+  private stopMusicSources(): void {
+    const ctx = this.ctx;
+    for (const src of this.musicSources) {
+      try {
+        if (ctx) src.stop(ctx.currentTime + 0.1);
+        else src.stop();
+      } catch {
+        // already stopped
+      }
+      src.onended = () => src.disconnect();
+    }
+    this.musicSources = [];
+    this.musicPlaying = null;
   }
 
   stopMusic(): void {
     this.musicRequested = null;
-    if (this.musicTimer !== null) {
-      clearInterval(this.musicTimer);
-      this.musicTimer = null;
+    this.musicPlaying = null;
+    const ctx = this.ctx;
+    if (ctx && this.layerGains) {
+      // quick fade so loops don't click on the way out
+      for (const l of MUSIC_LAYERS) this.layerGains[l].gain.setTargetAtTime(0.0001, ctx.currentTime, 0.06);
     }
+    this.stopMusicSources();
   }
 
   /** User music volume 0-1 (0 = muted); applied live and persisted by the game. */
@@ -1026,127 +572,30 @@ export class Audio {
     return this.musicVol;
   }
 
-  /** Lookahead scheduler: keeps ~0.3 s of the loop queued so it never gaps. */
-  private pumpMusic(): void {
-    const ctx = this.ctx;
-    if (!ctx || !this.musicBus) return;
-    const spec = MUSIC[this.musicTier];
-    const stepDur = 60 / spec.bpm / 2;
-    // clamp catch-up so a suspended tab can't schedule a huge backlog
-    if (this.musicNextT < ctx.currentTime) this.musicNextT = ctx.currentTime + 0.05;
-    while (this.musicNextT < ctx.currentTime + 0.3) {
-      this.scheduleStep(spec, this.musicStep % 16, this.musicNextT, stepDur);
-      this.musicStep++;
-      this.musicNextT += stepDur;
+  /**
+   * One-shot stingers (win / lose / death / boss) played through the music
+   * duck so they sit with the score, not on the sfx bus.
+   */
+  playSting(name: string): void {
+    const ctx = this.ensure();
+    if (!ctx || !this.musicDuck || !STINGS[name]) return;
+    let buf = this.stingCache.get(name);
+    if (!buf) {
+      const data = renderSting(name, ctx.sampleRate, 0x5711a + name.length * 137);
+      if (!data) return;
+      buf = ctx.createBuffer(1, data.length, ctx.sampleRate);
+      buf.copyToChannel(data as Float32Array<ArrayBuffer>, 0);
+      this.stingCache.set(name, buf);
     }
-  }
-
-  private scheduleStep(spec: MusicSpec, step: number, when: number, stepDur: number): void {
-    const semi = spec.bass[step];
-    if (semi !== null && semi !== undefined) {
-      const f = spec.root * 2 ** (semi / 12);
-      this.mTone('sawtooth', f, f, stepDur * 1.8, 0.14, when, spec.dark);
-      this.mTone('square', f / 2, f / 2, stepDur * 1.8, 0.06, when, spec.dark * 0.7);
-    }
-    // sustained low drone under each half-bar: keeps the bed's sustained RMS
-    // up between percussive hits instead of collapsing to silence
-    if (step % 8 === 0) {
-      this.mTone('triangle', spec.root, spec.root, stepDur * 8.4, 0.075, when, spec.dark * 0.6);
-      this.mTone('sine', spec.root * 2, spec.root * 2, stepDur * 8.4, 0.04, when);
-    }
-    if (spec.kick.includes(step)) {
-      this.mTone('sine', 120, 38, 0.13, 0.5, when);
-      this.mNoise('highpass', 2500, 1200, 0.02, 0.8, 0.1, when);
-    }
-    if (spec.hat.includes(step)) this.mNoise('highpass', 6500, 5000, 0.035, 1, step % 4 === 2 ? 0.055 : 0.03, when);
-    if (spec.snare.includes(step)) this.mNoise('bandpass', 1900, 900, 0.11, 1.1, 0.13, when);
-    const leadSemi = spec.lead[step];
-    if (leadSemi !== null && leadSemi !== undefined) {
-      const f = spec.root * 4 * 2 ** (leadSemi / 12);
-      this.mTone('square', f, f, stepDur * 0.85, 0.05, when, spec.dark * 2.2);
-      this.mTone('sawtooth', f * 1.005, f * 1.005, stepDur * 0.85, 0.028, when, spec.dark * 2.2);
-    }
-    if (spec.stab.includes(step)) {
-      for (const c of spec.chord) {
-        const f = spec.root * 2 * 2 ** (c / 12);
-        this.mTone('sawtooth', f * 0.997, f * 0.997, 0.5, 0.045, when, spec.dark * 1.6);
-        this.mTone('sawtooth', f * 1.004, f * 1.004, 0.5, 0.045, when, spec.dark * 1.6);
-      }
-    }
-  }
-
-  /** One scheduled synth voice on the music bus (bypasses sfx routing/caps). */
-  private mTone(
-    type: OscillatorType,
-    f0: number,
-    f1: number,
-    dur: number,
-    gain: number,
-    when: number,
-    cutoff?: number,
-  ): void {
-    const ctx = this.ctx;
-    if (!ctx || !this.musicBus) return;
-    const osc = ctx.createOscillator();
-    osc.type = type;
-    osc.frequency.setValueAtTime(Math.max(20, f0), when);
-    osc.frequency.exponentialRampToValueAtTime(Math.max(20, f1), when + dur);
-    const env = ctx.createGain();
-    env.gain.setValueAtTime(0.0001, when);
-    env.gain.linearRampToValueAtTime(gain, when + Math.min(0.01, dur * 0.2));
-    // hold near full gain for most of the note, short release tail: keeps the
-    // music bed's sustained RMS up instead of every voice collapsing in ~100 ms
-    env.gain.setValueAtTime(gain, when + Math.min(0.01, dur * 0.2));
-    env.gain.setTargetAtTime(0.0001, when + dur * 0.8, dur * 0.06);
-    let chain: AudioNode = osc;
-    let filter: BiquadFilterNode | null = null;
-    if (cutoff !== undefined) {
-      filter = ctx.createBiquadFilter();
-      filter.type = 'lowpass';
-      filter.frequency.value = cutoff;
-      chain.connect(filter);
-      chain = filter;
-    }
-    chain.connect(env).connect(this.musicBus);
-    osc.onended = () => {
-      osc.disconnect();
-      filter?.disconnect();
-      env.disconnect();
-    };
-    osc.start(when);
-    osc.stop(when + dur + 0.01);
-  }
-
-  /** One scheduled noise hit on the music bus (kick click, hats, snare). */
-  private mNoise(
-    type: BiquadFilterType,
-    f0: number,
-    f1: number,
-    dur: number,
-    q: number,
-    gain: number,
-    when: number,
-  ): void {
-    const ctx = this.ctx;
-    if (!ctx || !this.musicBus || !this.noiseBuffer) return;
     const src = ctx.createBufferSource();
-    src.buffer = this.noiseBuffer;
-    const filter = ctx.createBiquadFilter();
-    filter.type = type;
-    filter.frequency.setValueAtTime(Math.max(20, f0), when);
-    filter.frequency.exponentialRampToValueAtTime(Math.max(20, f1), when + dur);
-    filter.Q.value = q;
-    const env = ctx.createGain();
-    env.gain.setValueAtTime(0.0001, when);
-    env.gain.linearRampToValueAtTime(gain, when + Math.min(0.006, dur * 0.2));
-    env.gain.exponentialRampToValueAtTime(0.0001, when + dur);
-    src.connect(filter).connect(env).connect(this.musicBus);
+    src.buffer = buf;
+    const g = ctx.createGain();
+    g.gain.value = 0.9;
+    src.connect(g).connect(this.musicDuck);
     src.onended = () => {
       src.disconnect();
-      filter.disconnect();
-      env.disconnect();
+      g.disconnect();
     };
-    src.start(when, Math.random() * Math.max(0, this.noiseBuffer.duration - dur));
-    src.stop(when + dur + 0.01);
+    src.start();
   }
 }

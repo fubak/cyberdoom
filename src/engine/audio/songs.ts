@@ -10,7 +10,7 @@
  * tops it off under fire.
  */
 
-import type { Bar, SongDef } from './sequencer';
+import type { SongDef } from './sequencer';
 
 const H = (s: number, v?: number, d?: number, c?: number[]) => ({ s, v, d, c });
 

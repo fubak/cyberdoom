@@ -185,7 +185,10 @@ export class MissionRuntime {
     if (ids.has(entityId)) return;
     ids.add(entityId);
     objective.progress++;
-    if (objective.progress >= objective.target) objective.done = true;
+    if (objective.progress >= objective.target && !objective.done) {
+      objective.done = true;
+      this.bus.emit('objective-done', { id: objective.def.id });
+    }
   }
 
   private rejectUninspectedClean(e: Entity): boolean {

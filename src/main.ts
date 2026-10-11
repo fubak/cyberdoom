@@ -26,6 +26,7 @@ import * as screens from './ui/screens';
 import { MissionRuntime } from './missions/runtime';
 import { mfaPending } from './tools/badge';
 import { Arsenal, ammoUnit } from './tools/arsenal';
+import { bindAudio } from './tools/sfx';
 import { missionById, requireMission } from './content/missions';
 import { objectiveById } from './content/objectives';
 import { CHEATS, CheatBuffer, KonamiBuffer } from './eggs/cheats';
@@ -130,6 +131,7 @@ class Game {
   private cheatBuf = new CheatBuffer();
   private konamiBuf = new KonamiBuffer();
   private god = false;
+  private bossStung = false;
   private gender: Gender = 'male';
   private role = 'analyst';
   private overlay: HTMLElement | null = null;
@@ -297,9 +299,11 @@ class Game {
     );
     viewport.appendChild(this.dossier.canvas);
 
+    bindAudio(this.audio);
     this.bus.on('message', ({ text, kind }) => this.hud.pushMessage(text, kind ?? 'info'));
     this.bus.on('evidence', (evidence) => {
       if (this.screen !== 'play') return;
+      this.audio.sfx('evidence', { gain: 0.6 });
       // Auto-open the dossier on an entity's FIRST inspection. Later evidence
       // for the same entity — or any evidence while a hostile is within 6
       // tiles — goes to the ticker instead so combat is never interrupted;
@@ -320,6 +324,7 @@ class Game {
       }
       this.hud.pushMessage(`${evidence.label} — logged. L for the case file.`, 'info');
     });
+    this.bus.on('objective-done', () => this.audio.sfx('objective'));
     // tool sfx are the arsenal's (per-tool, per-phase); using a tool still wakes nearby enemies
     this.bus.on('tool-used', ({ toolId }) => {
       if (this.player && this.runtime) alertNear(this.runtime.entities, this.player.x, this.player.y, 8);
@@ -412,6 +417,14 @@ class Game {
       this.particles.spawn(e.x, e.y);
       this.renderer.spawnTeleport(e.x, e.y);
       this.audio.sfx('spawn', { x: e.x, y: e.y });
+      // ambushes get the klaxon; the FIRST one on a boss-tier mission gets
+      // the reveal stinger (there is no literal boss entity — the ambush
+      // IS the boss moment)
+      this.audio.sfx('alarm', { gain: 0.45 });
+      if (!this.bossStung && (this.runtime?.mission.difficulty ?? 0) >= 9) {
+        this.bossStung = true;
+        this.audio.playSting('sting-boss');
+      }
       this.spawnCue(e, 'ambush');
     });
     // deep link: ?mission=m01&gender=female
@@ -460,6 +473,7 @@ class Game {
   }
 
   private showTitle(): void {
+    this.audio.startMusic('title');
     this.setScreen('title', screens.titleScreen(() => this.showCharSelect()));
   }
 
@@ -473,7 +487,7 @@ class Game {
 
   private showMissionSelect(): void {
     this.audio.stopAmbience();
-    this.audio.stopMusic();
+    this.audio.startMusic('title');
     this.releaseLock();
     this.automap.close();
     this.setScreen('mission-select', screens.missionSelect((id) => this.showBriefing(id), () => this.showCharSelect()));
@@ -482,6 +496,7 @@ class Game {
   private showBriefing(id: string): void {
     const m = requireMission(id);
     this.prepareMission(id);
+    this.audio.startMusic('briefing');
     this.setScreen('briefing', screens.briefing(m, () => this.deploy(id), () => this.showMissionSelect()));
   }
 
@@ -726,6 +741,7 @@ class Game {
     const rt = this.runtime!;
     const mission = rt.mission;
     this.releaseLock();
+    this.audio.startMusic('debrief');
     this.setScreen('debrief', screens.debrief({
       mission,
       won: rt.finished === 'won',
@@ -796,6 +812,17 @@ class Game {
     this.audio.setListener(this.player.x, this.player.y, this.player.angle);
     this.audio.startAmbience();
     this.audio.setMusicVolume(this.musicVol);
+    // room-scale reverb: open-floor share of the grid is the room-size proxy
+    let open = 0;
+    for (const row of mission.map.grid) {
+      for (const ch of row) {
+        const kind = mission.map.legend[ch]?.kind;
+        if (kind === 'floor' || kind === 'door' || kind === 'exit') open++;
+      }
+    }
+    const cells = Math.max(1, mission.map.grid.length * (mission.map.grid[0]?.length ?? 0));
+    this.audio.setRoomSize(Math.max(0.15, Math.min(1, (open / cells) * 1.9)));
+    this.bossStung = false;
     this.audio.startMusic(musicTierFor(mission.difficulty));
     this.setScreen('play', null);
     if (!DEBUG) this.input.requestLock();
@@ -808,6 +835,7 @@ class Game {
     this.endCalled = true;
     this.audio.stopAmbience();
     this.audio.stopMusic();
+    this.audio.playSting(this.runtime?.finished === 'won' ? 'sting-win' : 'sting-lose');
     this.showDebrief();
   }
 
@@ -1294,6 +1322,7 @@ class Game {
     }
     if (!p.alive) {
       this.audio.sfx('death');
+      this.audio.playSting('sting-death');
       this.hud.pushMessage(`INTEGRITY DEPLETED${by ? ` - ${by}` : ''}`, 'bad');
       this.bus.emit('player-down', { by: source?.def.inspect?.label, threat: source?.def.sprite });
     }
