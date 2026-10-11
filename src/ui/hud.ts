@@ -271,14 +271,6 @@ export class Hud {
   }
 
   /**
-   * Compact Doom-style message ticker: tiny glyphs (about half the old
-   * chunky height) at the top-left on a dark backing strip. The newest
-   * message wraps to up to 3 lines so long pickup/refusal/corroboration
-   * text is never cut; at most 4 rows total keeps the whole block in the
-   * top band, clear of the view centre. Collapsed repeats show "xN" on
-   * the last wrapped line.
-   */
-  /**
    * ARSENAL: per-tool use effect drawn in the aim space itself — a USB scan
    * beam that ends in a ring on the target, a badge reader LED at the door,
    * an inspect bracket, the tap clipping onto the cable, the patch writing
@@ -478,6 +470,14 @@ export class Hud {
     }
   }
 
+  /**
+   * Compact Doom-style message ticker: tiny glyphs (about half the old
+   * chunky height) at the top-left on a dark backing strip. The newest
+   * message wraps to up to 3 lines so long pickup/refusal/corroboration
+   * text is never cut; at most 4 rows total keeps the whole block in the
+   * top band, clear of the view centre. Collapsed repeats show "xN" on
+   * the last wrapped line.
+   */
   private drawTicker(): void {
     let y = 1;
     if (this.pickup) {
