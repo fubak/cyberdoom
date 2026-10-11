@@ -36,7 +36,7 @@ let gradient: THREE.DataTexture | null = null;
 function gradientMap(): THREE.DataTexture {
   if (!gradient) {
     // 5 toon steps; NearestFilter gives the banded retro ramp
-    const data = new Uint8Array([150, 195, 230, 255]);
+    const data = new Uint8Array([150, 195, 255, 255]);
     gradient = new THREE.DataTexture(data, 4, 1, THREE.RedFormat);
     gradient.minFilter = THREE.NearestFilter;
     gradient.magFilter = THREE.NearestFilter;
@@ -154,8 +154,13 @@ export function buildHand(p: Place, spec: { gender: Gender; skin: SkinTone }): B
     const isThumb = f === 'thumb';
     const len = (isThumb ? THUMB_LEN : FINGER_LEN[f as keyof typeof FINGER_LEN]) * size;
     const ls = [len * PHALANX[0], len * PHALANX[1], len * PHALANX[2]];
+    const tout0 = p.thumbOut ?? 1;
     const base: V3 = isThumb
-      ? [THUMB_BASE[0] * palmW * mx, THUMB_BASE[1] * palmL, THUMB_BASE[2] * palmW]
+      ? [
+          THUMB_BASE[0] * palmW * mx * (1 + 0.25 * (1 - tout0)),
+          palmL * (THUMB_BASE[1] - 0.3 * (1 - tout0)),
+          THUMB_BASE[2] * palmW,
+        ]
       : [MCP_X[f as keyof typeof MCP_X] * palmW * mx, palmL * 0.88, 0];
     const fr = isThumb ? r0 * 1.22 : r0;
     const radii = [fr, fr * 0.93, fr * 0.85, fr * 0.62];
@@ -165,12 +170,16 @@ export function buildHand(p: Place, spec: { gender: Gender; skin: SkinTone }): B
     chain.position.set(base[0], base[1], base[2]);
     const segs: { g: THREE.Group; l: number }[] = [];
     if (isThumb) {
-      // thumb directions: metacarpal out/forward, then flex draws across palm
-      const d0 = new THREE.Vector3(-0.72 * mx, 0.18, 0.66).normalize();
+      // thumb directions: metacarpal out/forward, then flex draws across palm.
+      // thumbOut scales the viewer-facing (+z) component: at steep palms-down
+      // pitches +z maps straight up on screen, so grips that must keep the
+      // thumb low pass a fraction here.
+      const tout = p.thumbOut ?? 1;
+      const d0 = new THREE.Vector3(-0.72 * mx, 0.18 * tout - 0.12 * (1 - tout), 0.66 * tout).normalize();
       const d1 = new THREE.Vector3(
-        d0.x + (cc.mcp / 60) * 0.85 * mx, d0.y - cc.mcp / 110, d0.z - (cc.mcp / 60) * 0.3).normalize();
+        d0.x + (cc.mcp / 60) * 0.85 * mx, d0.y - cc.mcp / 110, d0.z - (cc.mcp / 60) * 0.3 * tout).normalize();
       const d2 = new THREE.Vector3(
-        d1.x + (cc.pip / 80) * 0.65 * mx, d1.y - cc.pip / 120, d1.z - (cc.pip / 80) * 0.35).normalize();
+        d1.x + (cc.pip / 80) * 0.65 * mx, d1.y - cc.pip / 120, d1.z - (cc.pip / 80) * 0.35 * tout).normalize();
       const q0 = new THREE.Quaternion().setFromUnitVectors(Y_AXIS, d0);
       const q1 = new THREE.Quaternion().setFromUnitVectors(d0, d1);
       const q2 = new THREE.Quaternion().setFromUnitVectors(d1, d2);
@@ -267,16 +276,18 @@ export function buildHand(p: Place, spec: { gender: Gender; skin: SkinTone }): B
 
 // —— bake to pixels ———————————————————————————————————————————————————————
 
-let renderer: THREE.WebGLRenderer | null | undefined;
+let renderer: THREE.WebGLRenderer | null = null;
+let glFailed = false;
 
 export function meshAvailable(): boolean {
-  if (renderer === undefined) {
+  if (!renderer && !glFailed) {
     try {
       const c = document.createElement('canvas');
       renderer = new THREE.WebGLRenderer({ canvas: c, antialias: false, alpha: true });
       renderer.setClearColor(0x000000, 0);
     } catch {
       renderer = null;
+      glFailed = true;
     }
   }
   return !!renderer;
@@ -306,14 +317,15 @@ export function bakeHands(
   r.setSize(W, H, false);
 
   const scene = new THREE.Scene();
-  scene.add(new THREE.AmbientLight(0xffffff, 0.62));
-  const key = new THREE.DirectionalLight(0xfff2e0, 1.35);
-  key.position.set(-1.1, 1.7, 1.3);
+  scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+  const key = new THREE.DirectionalLight(0xfff2e0, 1.7);
+  key.position.set(-0.8, 2.1, 1.1);
   scene.add(key);
   const fill = new THREE.DirectionalLight(0xbfd4ff, 0.4);
   fill.position.set(1.4, -0.5, 0.9);
   scene.add(fill);
-  const rim = new THREE.DirectionalLight(0xffffff, 0.65);
+  // weak warm rim: silhouette lift only, never a white crescent
+  const rim = new THREE.DirectionalLight(0xffc9a3, 0.3);
   rim.position.set(0.4, 0.7, -1.2);
   scene.add(rim);
 
@@ -333,6 +345,10 @@ export function bakeHands(
   scene.updateMatrixWorld(true);
 
   const rt = new THREE.WebGLRenderTarget(W, H, { magFilter: THREE.NearestFilter, minFilter: THREE.NearestFilter });
+  // read back sRGB-encoded bytes: ColorManagement puts material colors in
+  // linear space, and without this the readback returns linear values
+  // (darker/more saturated than the authored skin ramp).
+  rt.texture.colorSpace = THREE.SRGBColorSpace;
   r.setRenderTarget(rt);
   r.render(scene, cam);
   const buf = new Uint8Array(W * H * 4);
@@ -345,7 +361,7 @@ export function bakeHands(
   for (let y = 0; y < H; y++) {
     rgba.set(buf.subarray(y * W * 4, (y + 1) * W * 4), (H - 1 - y) * W * 4);
   }
-  postPass(rgba, W, H, built, cam);
+  postPass(rgba, W, H, built, cam, spec);
 
   const tips: { x: number; y: number }[] = [];
   for (const b of built) {
@@ -359,14 +375,41 @@ export function bakeHands(
   for (const g of geos) g.dispose();
   geos.length = 0;
 
+  // release the GL context once the bake queue has been quiet for a bit —
+  // we don't hold a second WebGL context during play; a later bake lazily
+  // recreates the renderer.
+  if (disposeTimer !== null) clearTimeout(disposeTimer);
+  disposeTimer = setTimeout(() => {
+    disposeTimer = null;
+    if (renderer) {
+      renderer.dispose();
+      renderer.forceContextLoss();
+      renderer = null;
+    }
+  }, 4000);
+
   return { rgba, w: W, h: H, tips };
 }
 
+let disposeTimer: ReturnType<typeof setTimeout> | null = null;
+
 const OUTLINE = [0x1c, 0x12, 0x0c];
-const SEAM = [0x2a, 0x18, 0x10];
+
+const hexRgb = (hex: string): number[] => [
+  parseInt(hex.slice(1, 3), 16),
+  parseInt(hex.slice(3, 5), 16),
+  parseInt(hex.slice(5, 7), 16),
+];
 
 /** Outline + inter-finger seams on baked pixels. */
-function postPass(rgba: Uint8ClampedArray, W: number, H: number, built: BuiltHand[], cam: THREE.Camera): void {
+function postPass(
+  rgba: Uint8ClampedArray, W: number, H: number,
+  built: BuiltHand[], cam: THREE.Camera,
+  spec: { gender: Gender; skin: SkinTone },
+): void {
+  // finger seams ride just under the skin shadow tone so they read as
+  // separations between digits, not cuts
+  const SEAM = hexRgb(shade(spec.skin.shadow, 0.82));
   const px = (x: number, y: number, c: number[]) => {
     if (x < 0 || x >= W || y < 0 || y >= H) return;
     const i = (y * W + x) * 4;
@@ -429,14 +472,20 @@ export function fingertipLayout(p: Place, spec: { gender: Gender; skin: SkinTone
     const isThumb = f === 'thumb';
     const len = (isThumb ? THUMB_LEN : FINGER_LEN[f as keyof typeof FINGER_LEN]) * size;
     const ls = [len * PHALANX[0], len * PHALANX[1], len * PHALANX[2]];
+    const tbo = p.thumbOut ?? 1;
     const base: V3 = isThumb
-      ? [THUMB_BASE[0] * palmW * mx, THUMB_BASE[1] * palmL, THUMB_BASE[2] * palmW]
+      ? [
+          THUMB_BASE[0] * palmW * mx * (1 + 0.25 * (1 - tbo)),
+          palmL * (THUMB_BASE[1] - 0.3 * (1 - tbo)),
+          THUMB_BASE[2] * palmW,
+        ]
       : [MCP_X[f as keyof typeof MCP_X] * palmW * mx, palmL * 0.88, 0];
     let pt = new THREE.Vector3(...base);
     if (isThumb) {
-      const d0 = new THREE.Vector3(-0.72 * mx, 0.18, 0.66).normalize();
-      const d1 = new THREE.Vector3(d0.x + (cc.mcp / 60) * 0.85 * mx, d0.y - cc.mcp / 110, d0.z - (cc.mcp / 60) * 0.3).normalize();
-      const d2 = new THREE.Vector3(d1.x + (cc.pip / 80) * 0.65 * mx, d1.y - cc.pip / 120, d1.z - (cc.pip / 80) * 0.35).normalize();
+      const tout = p.thumbOut ?? 1;
+      const d0 = new THREE.Vector3(-0.72 * mx, 0.18 * tout - 0.12 * (1 - tout), 0.66 * tout).normalize();
+      const d1 = new THREE.Vector3(d0.x + (cc.mcp / 60) * 0.85 * mx, d0.y - cc.mcp / 110, d0.z - (cc.mcp / 60) * 0.3 * tout).normalize();
+      const d2 = new THREE.Vector3(d1.x + (cc.pip / 80) * 0.65 * mx, d1.y - cc.pip / 120, d1.z - (cc.pip / 80) * 0.35 * tout).normalize();
       pt = pt.addScaledVector(d0, ls[0]).addScaledVector(d1, ls[1]).addScaledVector(d2, ls[2]);
     } else {
       const dir = (th: number) => {

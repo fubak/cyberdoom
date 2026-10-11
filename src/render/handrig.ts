@@ -55,6 +55,11 @@ export interface Place {
   arm?: V3;
   /** Extra thumb-only orientation: rotate the whole thumb chain this far toward the palm. */
   thumbTuck?: number;
+  /**
+   * Scales the thumb metacarpal's viewer-facing (+z) component (0..1).
+   * Lower keeps the thumb low at steep palms-down pitches.
+   */
+  thumbOut?: number;
 }
 
 export interface RigFrame {

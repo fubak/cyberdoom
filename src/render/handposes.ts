@@ -46,7 +46,7 @@ const CUP = (click = false) => ({
   middle: { abd: -2, mcp: 46, pip: 36, dip: 22 },
   ring: { abd: -10, mcp: 62, pip: 58 },
   pinky: { abd: -16, mcp: 68, pip: 64 },
-  thumb: { abd: 0, mcp: 60, pip: 62 },
+  thumb: { abd: 0, mcp: 38, pip: 44 },
 });
 
 // squeeze a clip/bezel edge
@@ -63,80 +63,80 @@ export const POSES: Record<string, RigFrame> = {
   'kbd.rest': {
     w: 96, h: 52, persp: 460,
     hands: [
-      { mirror: true, wrist: [30, 10, 6], pitch: -58, yaw: -14, roll: 10, size: 15, fingers: curls(TYPE()), arm: [4, -26, -16] },
-      { mirror: false, wrist: [66, 10, 6], pitch: -58, yaw: 14, roll: -10, size: 15, fingers: curls(TYPE()), arm: [92, -26, -16] },
+      { mirror: true, wrist: [30, 10, 6], pitch: -58, thumbOut: 0.35, yaw: -14, roll: 10, size: 15, fingers: curls(TYPE()), arm: [4, -26, -16] },
+      { mirror: false, wrist: [66, 10, 6], pitch: -58, thumbOut: 0.35, yaw: 14, roll: -10, size: 15, fingers: curls(TYPE()), arm: [92, -26, -16] },
     ],
   },
   'kbd.typeA': {
     w: 96, h: 52, persp: 460,
     hands: [
-      { mirror: true, wrist: [30, 9, 6], pitch: -58, yaw: -14, roll: 10, size: 15, fingers: curls(TYPE({ index: { mcp: 62, pip: 84, dip: 60 } })), arm: [4, -26, -16] },
-      { mirror: false, wrist: [66, 10, 6], pitch: -58, yaw: 14, roll: -10, size: 15, fingers: curls(TYPE()), arm: [92, -26, -16] },
+      { mirror: true, wrist: [30, 9, 6], pitch: -58, thumbOut: 0.35, yaw: -14, roll: 10, size: 15, fingers: curls(TYPE({ index: { mcp: 62, pip: 84, dip: 60 } })), arm: [4, -26, -16] },
+      { mirror: false, wrist: [66, 10, 6], pitch: -58, thumbOut: 0.35, yaw: 14, roll: -10, size: 15, fingers: curls(TYPE()), arm: [92, -26, -16] },
     ],
   },
   'kbd.typeB': {
     w: 96, h: 52, persp: 460,
     hands: [
-      { mirror: true, wrist: [30, 10, 6], pitch: -58, yaw: -14, roll: 10, size: 15, fingers: curls(TYPE()), arm: [4, -26, -16] },
-      { mirror: false, wrist: [66, 9, 6], pitch: -58, yaw: 14, roll: -10, size: 15, fingers: curls(TYPE({ middle: { mcp: 66, pip: 86, dip: 62 } })), arm: [92, -26, -16] },
+      { mirror: true, wrist: [30, 10, 6], pitch: -58, thumbOut: 0.35, yaw: -14, roll: 10, size: 15, fingers: curls(TYPE()), arm: [4, -26, -16] },
+      { mirror: false, wrist: [66, 9, 6], pitch: -58, thumbOut: 0.35, yaw: 14, roll: -10, size: 15, fingers: curls(TYPE({ middle: { mcp: 66, pip: 86, dip: 62 } })), arm: [92, -26, -16] },
     ],
   },
   'kbd.enter': {
     w: 96, h: 52, persp: 460,
     hands: [
-      { mirror: true, wrist: [30, 10, 6], pitch: -58, yaw: -14, roll: 10, size: 15, fingers: curls(TYPE()), arm: [4, -26, -16] },
-      { mirror: false, wrist: [66, 8, 8], pitch: -60, yaw: 14, roll: -14, size: 15, fingers: curls(TYPE({ ring: { mcp: 70, pip: 88, dip: 62 }, pinky: { mcp: 74, pip: 90, dip: 64 } })), arm: [92, -26, -16] },
+      { mirror: true, wrist: [30, 10, 6], pitch: -58, thumbOut: 0.35, yaw: -14, roll: 10, size: 15, fingers: curls(TYPE()), arm: [4, -26, -16] },
+      { mirror: false, wrist: [66, 8, 8], pitch: -60, thumbOut: 0.35, yaw: 14, roll: -14, size: 15, fingers: curls(TYPE({ ring: { mcp: 70, pip: 88, dip: 62 }, pinky: { mcp: 74, pip: 90, dip: 64 } })), arm: [92, -26, -16] },
     ],
   },
 
   // — MOUSE: right-hand palm grip ————————————————————————————————————————————
   'mouse.rest': {
     w: 64, h: 56, persp: 420,
-    hands: [{ wrist: [32, 20, 10], pitch: -62, yaw: 18, roll: -6, size: 16, fingers: curls(CUP()), arm: [56, -24, -18] }],
+    hands: [{ wrist: [32, 20, 10], pitch: -62, thumbOut: 0.08, yaw: 18, roll: -6, size: 16, fingers: curls(CUP()), arm: [56, -24, -18] }],
   },
   'mouse.click': {
     w: 64, h: 56, persp: 420,
-    hands: [{ wrist: [32, 19, 10], pitch: -62, yaw: 18, roll: -6, size: 16, fingers: curls(CUP(true)), arm: [56, -24, -18] }],
+    hands: [{ wrist: [32, 19, 10], pitch: -62, thumbOut: 0.08, yaw: 18, roll: -6, size: 16, fingers: curls(CUP(true)), arm: [56, -24, -18] }],
   },
 
   // — USB stick: pinch grip, connector up ————————————————————————————————————
   'usb.rest': {
     w: 56, h: 48, persp: 430,
-    hands: [{ wrist: [28, 8, 4], pitch: -18, yaw: 34, roll: -6, size: 16, fingers: curls(PINCH()), arm: [44, -26, -16] }],
+    hands: [{ wrist: [28, 8, 4], pitch: -18, thumbOut: 0.4, yaw: 34, roll: -6, size: 16, fingers: curls(PINCH()), arm: [44, -26, -16] }],
   },
   'usb.thrust': {
     w: 56, h: 48, persp: 430,
-    hands: [{ wrist: [28, 10, 10], pitch: -14, yaw: 30, roll: -6, size: 16, fingers: curls(PINCH(-0.4)), arm: [46, -26, -18] }],
+    hands: [{ wrist: [28, 10, 10], pitch: -14, thumbOut: 0.4, yaw: 30, roll: -6, size: 16, fingers: curls(PINCH(-0.4)), arm: [46, -26, -18] }],
   },
 
   // — BADGE: card pinched thumb + index side —————————————————————————————————
   'badge.rest': {
     w: 48, h: 44, persp: 430,
-    hands: [{ wrist: [24, 4, 2], pitch: 6, yaw: 40, roll: -4, size: 16, fingers: curls(PINCH(0.3)), arm: [10, -28, -14] }],
+    hands: [{ wrist: [24, 4, 2], pitch: 6, thumbOut: 0.4, yaw: 40, roll: -4, size: 16, fingers: curls(PINCH(0.3)), arm: [10, -28, -14] }],
   },
   'badge.present': {
     w: 48, h: 44, persp: 430,
-    hands: [{ wrist: [24, 8, 6], pitch: 30, yaw: 48, roll: -10, size: 16, fingers: curls(PINCH(0.3)), arm: [8, -28, -14] }],
+    hands: [{ wrist: [24, 8, 6], pitch: 30, thumbOut: 0.4, yaw: 48, roll: -10, size: 16, fingers: curls(PINCH(0.3)), arm: [8, -28, -14] }],
   },
 
   // — MFA token: relaxed fist, thumb over the button —————————————————————————
   'mfa.rest': {
     w: 44, h: 44, persp: 420,
-    hands: [{ wrist: [22, 6, 2], pitch: -8, yaw: 26, roll: -4, size: 16, fingers: curls(FIST(-0.4)), arm: [34, -26, -16] }],
+    hands: [{ wrist: [22, 6, 2], pitch: -8, thumbOut: 0.4, yaw: 26, roll: -4, size: 16, fingers: curls(FIST(-0.4)), arm: [34, -26, -16] }],
   },
   'mfa.press': {
     w: 44, h: 44, persp: 420,
-    hands: [{ wrist: [22, 7, 2], pitch: -12, yaw: 26, roll: -4, size: 16, fingers: curls({ ...FIST(-0.4), thumb: { abd: 0, mcp: 52, pip: 66 } }), arm: [34, -26, -16] }],
+    hands: [{ wrist: [22, 7, 2], pitch: -12, thumbOut: 0.4, yaw: 26, roll: -4, size: 16, fingers: curls({ ...FIST(-0.4), thumb: { abd: 0, mcp: 52, pip: 66 } }), arm: [34, -26, -16] }],
   },
 
   // — PATCH disk: pinch on the edge ——————————————————————————————————————————
   'patch.rest': {
     w: 44, h: 44, persp: 420,
-    hands: [{ wrist: [22, 4, 0], pitch: -4, yaw: 30, roll: -2, size: 16, fingers: curls(PINCH(0.15)), arm: [34, -26, -16] }],
+    hands: [{ wrist: [22, 4, 0], pitch: -4, thumbOut: 0.4, yaw: 30, roll: -2, size: 16, fingers: curls(PINCH(0.15)), arm: [34, -26, -16] }],
   },
   'patch.push': {
     w: 44, h: 44, persp: 420,
-    hands: [{ wrist: [22, 8, 8], pitch: -10, yaw: 30, roll: -2, size: 16, fingers: curls(PINCH(0.1)), arm: [34, -26, -16] }],
+    hands: [{ wrist: [22, 8, 8], pitch: -10, thumbOut: 0.4, yaw: 30, roll: -2, size: 16, fingers: curls(PINCH(0.1)), arm: [34, -26, -16] }],
   },
 
   // — TAP: two hands squeeze the clip housing ————————————————————————————————
