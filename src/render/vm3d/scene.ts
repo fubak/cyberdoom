@@ -1,0 +1,195 @@
+import * as THREE from 'three';
+import { fidgetAt } from '../vmotion';
+import { VM_CLEAR } from '../../tools/anim';
+import { TOOL_FLASH } from '../viewmodels';
+import { CLIPS, KBD_ACTION_CLIP, type KbdAction, type VmClip } from './clips';
+import { Vm3dRig } from './rig';
+import { HAND_FINGERS, type HandSpec } from './hand3d';
+
+/** base-px → viewmodel-space metres at the board's working distance (~0.45 m). */
+const PX2M = (2 * Math.tan((54 / 2) * Math.PI / 180) * 0.45) / 168 * 0.6;
+
+export interface Vm3dFrame {
+  dt: number;
+  simT: number;
+  toolId: string;
+  /** switching/lower 0..1 and death-drop in base px. */
+  lower: number;
+  dropPx: number;
+  /** sway/bob offsets in base px (matches the sprite path's inputs). */
+  swayX: number;
+  swayY: number;
+  bob: number;
+  breath: number;
+  rollDeg: number;
+  bobPitchDeg: number;
+  /** sector light at the player tile (0..~1.4). */
+  light: number;
+  /** tool-flash rgb + seconds since use, or null. */
+  flash: { rgb: [number, number, number]; sinceUse: number; windup: number } | null;
+  seed: number;
+}
+
+/**
+ * Live 3D viewmodel layer: its own Scene + PerspectiveCamera rendered after
+ * the world into the same render target (depth cleared), so the world post
+ * pass (palette LUT) gives it the same pixel grain. A GL scissor keeps it
+ * under VM_CLEAR except during the swing's 150 ms centre-crossing window.
+ */
+export class Vm3d {
+  readonly scene = new THREE.Scene();
+  readonly cam = new THREE.PerspectiveCamera(54, 1, 0.01, 5);
+  readonly pass = { renderInto: (r: THREE.WebGLRenderer, w: number, h: number) => this.renderInto(r, w, h) };
+  private rig: Vm3dRig;
+  private spec: HandSpec;
+  private clip: VmClip = CLIPS['kbd.idle'];
+  private clipT = 0;
+  private toolId: string | null = null;
+  private forced: KbdAction | null = null;
+  private freezeT: number | null = null;
+  private key: THREE.PointLight;
+  private fill: THREE.DirectionalLight;
+  private hemi: THREE.HemisphereLight;
+  private flashLight: THREE.PointLight;
+  private flickT = 0;
+
+  constructor(spec: HandSpec) {
+    this.spec = spec;
+    this.rig = new Vm3dRig(spec);
+    this.scene.add(this.rig.root, this.rig.stage);
+    this.key = new THREE.PointLight('#fff2e2', 2.2, 4, 1.8);
+    this.key.position.set(0.25, 0.35, 0.15);
+    this.fill = new THREE.DirectionalLight('#ffb88a', 0.55);
+    this.fill.position.set(-0.4, -0.2, 0.3);
+    this.hemi = new THREE.HemisphereLight('#b8c4de', '#3a2a22', 0.5);
+    this.flashLight = new THREE.PointLight('#ffc85a', 0, 2.5, 2);
+    this.flashLight.position.set(0, -0.05, -0.3);
+    this.scene.add(this.key, this.fill, this.hemi, this.flashLight);
+  }
+
+  /** Tool id the vm3d layer draws this frame ('keyboard' or null → sprite path). */
+  handles(): string | null {
+    return this.toolId;
+  }
+
+  onToolUsed(toolId: string, action?: string): void {
+    if (toolId !== 'keyboard') return;
+    const a = (this.forced ?? action ?? 'type') as KbdAction;
+    this.clip = CLIPS[KBD_ACTION_CLIP[a] ?? KBD_ACTION_CLIP.type];
+    this.clipT = 0;
+    if (this.freezeT !== null) this.freezeT = 0;
+  }
+
+  /** Rebuild the rig when the analyst changes. */
+  setSpec(spec: HandSpec): void {
+    if (spec.gender === this.spec.gender && spec.skin.id === this.spec.skin.id) return;
+    this.spec = spec;
+    this.scene.remove(this.rig.root, this.rig.stage);
+    this.rig = new Vm3dRig(spec);
+    this.scene.add(this.rig.root, this.rig.stage);
+  }
+
+  /** Capture/debug: force the next keyboard action. */
+  forceAction(action: KbdAction | null): void {
+    this.forced = action;
+  }
+
+  /** Capture/debug: pin the clip at time t (null → live). */
+  freeze(t: number | null): void {
+    this.freezeT = t;
+  }
+
+  /** Current clip time (debug state). */
+  clipTime(): number {
+    return this.clipT;
+  }
+
+  frame(f: Vm3dFrame): void {
+    this.toolId = f.toolId === 'keyboard' ? 'keyboard' : null;
+    if (!this.toolId) return;
+    if (this.freezeT === null) this.clipT += f.dt;
+    const t = this.freezeT ?? this.clipT;
+    if (this.clipT > this.clip.duration && !this.clip.loop) {
+      this.clip = CLIPS['kbd.idle'];
+      this.clipT = 0;
+    }
+    this.rig.solve(this.clip, this.clip.loop ? t % this.clip.duration : Math.min(t, this.clip.duration));
+
+    // --- motion layer (vmotion inputs retargeted to the vm-space root) ---
+    const g = this.rig.root;
+    const px = PX2M;
+    const bobY = Math.abs(Math.cos(f.bob)) * 3 * px;
+    const bobX = Math.sin(f.bob) * 6 * px;
+    g.position.set(
+      f.swayX * px * 0.7 + bobX,
+      f.swayY * px * 0.7 + bobY + f.breath * px - f.lower * 0.30 - f.dropPx * px * 1.2,
+      0,
+    );
+    g.rotation.set(
+      f.bobPitchDeg * Math.PI / 180 * 0.5,
+      0,
+      f.rollDeg * Math.PI / 180 * 0.55,
+    );
+
+    // idle finger fidgets: thumb tap + index lift + regrip on the free hand
+    if (this.clip === CLIPS['kbd.idle']) {
+      const fig = fidgetAt(f.simT, f.seed);
+      if (fig) {
+        const u = Math.sin(Math.PI * fig.u);
+        const r = this.rig.hands.R;
+        if (fig.kind === 0) {
+          const c = r.getCurl('thumb');
+          r.setCurl('thumb', { ...c, mcp: c.mcp + u * 14 });
+        } else if (fig.kind === 1) {
+          const c = r.getCurl('index');
+          r.setCurl('index', { ...c, mcp: c.mcp - u * 12 });
+        } else if (fig.kind === 3) {
+          for (const fn of HAND_FINGERS) {
+            if (fn === 'thumb') continue;
+            const c = r.getCurl(fn);
+            r.setCurl(fn, { ...c, mcp: c.mcp + u * 7, pip: c.pip + u * 7 });
+          }
+        } else {
+          g.rotation.z += u * 2.2 * Math.PI / 180;
+        }
+      }
+    }
+
+    // --- lights follow the sector light at the player tile ---
+    const lv = Math.min(1.3, f.light);
+    this.key.intensity = 0.6 + lv * 1.9;
+    this.hemi.intensity = 0.25 + lv * 0.4;
+    this.flashLight.intensity = 0;
+    if (f.flash && f.flash.sinceUse >= f.flash.windup && f.flash.sinceUse - f.flash.windup < 0.09) {
+      const u = 1 - (f.flash.sinceUse - f.flash.windup) / 0.09;
+      this.flashLight.color.setRGB(f.flash.rgb[0] / 255, f.flash.rgb[1] / 255, f.flash.rgb[2] / 255);
+      this.flashLight.intensity = 5 * u;
+      if (f.toolId === 'keyboard') this.rig.board.flashKeys(u);
+      else this.rig.board.clearFlash();
+    } else {
+      this.rig.board.clearFlash();
+    }
+    this.flickT += f.dt;
+    this.rig.board.blinkLed(f.simT + this.flickT);
+  }
+
+  /** Render into the bound world RT; caller keeps the viewport/scissor state. */
+  renderInto(r: THREE.WebGLRenderer, w: number, h: number): void {
+    if (!this.toolId) return;
+    const crossing = this.clip === CLIPS['kbd.swing'] && this.clipT < 0.16;
+    const bandH = crossing ? Math.floor(h * 0.58) : Math.floor(h * (1 - VM_CLEAR));
+    this.cam.aspect = w / h;
+    this.cam.updateProjectionMatrix();
+    r.setScissorTest(true);
+    r.setScissor(0, 0, w, bandH);
+    r.render(this.scene, this.cam);
+    r.setScissorTest(false);
+  }
+}
+
+export function vm3dFlashRgb(toolId: string): [number, number, number] | null {
+  const s = TOOL_FLASH[toolId];
+  if (!s) return null;
+  const p = s.split(',').map(Number);
+  return [p[0], p[1], p[2]];
+}

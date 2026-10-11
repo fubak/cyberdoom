@@ -7,8 +7,8 @@
 import type { CallAction, EvidenceEntry } from './types';
 
 export interface EventMap {
-  /** A tool was used (fired). */
-  'tool-used': { toolId: string };
+  /** A tool was used (fired). `action` names the tool's chosen verb (keyboard: 'type'|'swing'). */
+  'tool-used': { toolId: string; action?: string };
   /** Player inspected an entity with the Mouse. */
   inspect: { entityId: string };
   /** Evidence was logged or re-read; the UI opens the case file. */

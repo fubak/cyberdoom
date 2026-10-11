@@ -107,8 +107,14 @@ export const keyboardTool: ToolDef = {
   },
   use(ctx) {
     // point-blank targets fill more of the view, so the strike cone widens up close
-    const e = ctx.aimEntity(KEYBOARD_RANGE, 0.5) ?? ctx.aimEntity(0.9, 1.0);
-    ctx.bus.emit('tool-used', { toolId: 'keyboard' });
+    const near = ctx.aimEntity(KEYBOARD_RANGE, 0.5);
+    const e = near ?? ctx.aimEntity(0.9, 1.0);
+    // the vm3d layer branches TYPE vs SWING on the same aim test: a true
+    // point-blank enemy (first test only) swings; consoles/commands type
+    ctx.bus.emit('tool-used', {
+      toolId: 'keyboard',
+      action: near?.def.kind === 'enemy' ? 'swing' : 'type',
+    });
     if (!e) return;
     const name = e.def.inspect?.label ?? e.def.id;
     if (e.def.kind === 'enemy') {
