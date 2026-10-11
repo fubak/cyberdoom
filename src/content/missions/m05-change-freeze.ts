@@ -71,7 +71,7 @@ const map: MapDef = {
 const evidenceAndWork: EntityDef[] = [
   {
     id: 'impact-analysis', kind: 'console', x: 8.5, y: 25.5, sprite: 'console', tags: ['change-doc'],
-    log: 'CHANGE RECORD: impact analysis completed. Payroll, HR export, and downstream timekeeping dependencies reviewed.\nCONTROL REVIEW: categorized technical control (EDR agent), managerial control (approval policy), operational control (review procedure) and physical control (badge door); typed preventive (change approval), deterrent (audit clause), detective (access logging), corrective (backout plan), compensating (manual review for the legacy host) and directive (runbook).',
+    log: 'CHANGE RECORD: impact analysis completed. Payroll, HR export, and downstream timekeeping dependencies reviewed.\nCompensating control noted: manual review for the legacy host during the window.',
     inspect: { label: 'Impact analysis', detail: 'Change impact record for payroll and its dependent services.', category: 'legit', objectives: ['1.3'] },
   },
   {
@@ -81,7 +81,7 @@ const evidenceAndWork: EntityDef[] = [
   },
   {
     id: 'owner-approval', kind: 'console', x: 12.5, y: 20.5, sprite: 'console', tags: ['change-doc'],
-    log: 'CHANGE RECORD: payroll service owner approved CHG-8821 for the maintenance window.\nPlan documents approval process, ownership and stakeholders, test results, downtime, service restart and application restart order, restricted activities during the window, a version control tag, and updating diagrams and policies as the standard operating procedure requires. Deny-list entries for legacy applications stay in force.\nGOVERNANCE: board + audit committee oversight; owners, controllers, processors and custodians/stewards for systems and data; policies (AUP, information security policy, incident response, business continuity, disaster recovery, change management, SDLC) set intent; standards mandate parameters (password standards, access control standards, physical security standards, encryption standards); procedures and playbooks cover onboarding/offboarding; guidelines advise. Regulatory, legal and industry obligations monitored and revised quarterly, under a centralized structure - some decentralized teams report to government entities.',
+    log: 'CHANGE RECORD: payroll service owner approved CHG-8821 for the maintenance window.\nBackout plan and test results attached; restricted activities apply during the window.',
     inspect: { label: 'Owner approval', detail: 'Approval record from the payroll service owner.', category: 'legit', objectives: ['1.3'] },
   },
   {
@@ -399,7 +399,7 @@ export const m05Teach: MissionTeaching = {
     'wrong-call': { objective: '4.3', done: 'No false-positive scan results were patched.', missed: 'The service inventory showed that some flagged services were absent.' },
     exit: { objective: '1.3', done: 'The approved change was completed before exit.', missed: 'Complete the change and required validation before exiting.' },
   },
-  examTip: 'A backout plan restores the last good state; reported-but-absent services are false positives, while standards are mandatory, specific, measurable requirements.',
+  examTip: 'A backout plan restores the last good state; reported-but-absent services are false positives, while standards are mandatory, specific, measurable requirements.\nFIELD NOTES: control categories are technical, managerial, operational control and physical; types are preventive, deterrent, detective, corrective, compensating and directive. Change-management vocabulary: ownership and stakeholder sign-off, dependencies mapped, test results attached, downtime and the maintenance window, service restart and application restart order, restricted activities during the window, version control tags, updating diagrams, and special handling for a legacy application. Risk terms that show up here: compensating controls, exception, exemption and risk tolerance. Governance stack: the information security policy sets intent, standards mandate it (password, access control standards, physical security standards, encryption standards), procedures cover onboarding and offboarding, and business continuity plus disaster recovery sit beside the software development lifecycle - all bound by regulatory obligations.'
 };
 
 export const m05Walkthrough: WalkStep[] = [

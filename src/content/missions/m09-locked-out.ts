@@ -107,7 +107,7 @@ briefing:
     })),
     {
       id: 'netflow', kind: 'console', x: 16.5, y: 24.5, sprite: 'console', tags: ['netflow'],
-      log: 'NETFLOW, VLAN 30 -> internet, last 6 h\n01:52 10.30.0.43 -> 203.0.113.66:443 first seen, then every 60 s\n01:58 10.30.0.12 / .27 / .51 -> 203.0.113.66:443 (each after SMB from 10.30.0.43)\nDHCP: .12 FIN-01, .27 FIN-02, .43 FIN-03, .51 FIN-04\nINVESTIGATION FEEDS: correlated firewall logs, endpoint logs, application logs,\nOS security logs, IPS/IDS logs and network logs; metadata first, then packet\ncaptures where tapped; automated reports feed the dashboards.',
+      log: 'NETFLOW, VLAN 30 -> internet, last 6 h\n01:52 10.30.0.43 -> 203.0.113.66:443 first seen, then every 60 s\n01:58 10.30.0.12 / .27 / .51 -> 203.0.113.66:443 (each after SMB from 10.30.0.43)\nDHCP: .12 FIN-01, .27 FIN-02, .43 FIN-03, .51 FIN-04\nCorrelate with firewall logs and endpoint logs before you name patient zero.',
       inspect: { label: 'Firewall / NetFlow console', detail: 'Connection records: source, destination, port, time.', category: 'legit', objectives: ['4.9'] },
     },
     // War-room decision: mark the actual patient zero (grouped pick, decoys are false positives).
@@ -146,12 +146,12 @@ briefing:
     },
     {
       id: 'restore', kind: 'console', x: 37.5, y: 1.5, sprite: 'console', tags: ['recover'],
-      log: 'BACKUP: restoring fin-share from offline immutable snapshot (02:00).\nHashes verified. Finance is back online.\nBACKUP PROGRAM: onsite replicas for speed, offsite copies for disaster, snapshot frequency hourly, journaling for point-in-time recovery, replication for live shares - but replicas copied the encrypted files too, so recovery runs from the air-gapped copy. Backup media itself is encrypted. Power: generators + UPS keep the vault up during outages.\nRESILIENCE PLAN: high availability through load balancing vs clustering,\nplatform diversity and multi-cloud systems, a continuity of operations\nrunbook, capacity planning (people and tech) and geographic dispersion.\nTesting cadence: tabletop exercise, then fail over and parallel processing\nsimulation.',
+      log: 'BACKUP: restoring fin-share from offline immutable snapshot (02:00).\nHashes verified. Finance is back online.\nReplicated shares copied the encrypted files too - recovery runs from the air-gapped copy. Generator + UPS kept the vault up.',
       inspect: { label: 'Offline backup restore', detail: 'Air-gapped, immutable snapshots: ransomware could not reach them.', category: 'legit', objectives: ['3.4'] },
     },
     {
       id: 'lessons', kind: 'console', x: 16.5, y: 1.5, sprite: 'console', tags: ['lessons'],
-      log: 'LESSONS LEARNED filed: root cause phishing macro, add MFA + macro blocking,\nkeep offline backups, re-test the IR plan quarterly.\nIR PROCESS REVIEW: preparation -> detection -> analysis -> containment ->\neradication -> recovery -> lessons learned. Root cause analysis attached;\nthreat hunting sweep opened for siblings of the C2 domain; next test is a\ntabletop exercise, then a full simulation with the recovery team.',
+      log: 'LESSONS LEARNED filed: root cause phishing macro; added MFA;\nkeep offline backups; re-test the IR plan quarterly.\nA threat hunting sweep opened for siblings of the C2 domain.',
       inspect: { label: 'Post-incident review', detail: 'Lessons learned: the final phase of incident response.', category: 'legit', objectives: ['4.8'] },
     },
     { id: 'rw-a', kind: 'enemy', x: 14.5, y: 18.5, sprite: 'ransomware', ai: 'wander', hp: 4, infected: true, tags: ['malware'],
@@ -427,7 +427,7 @@ export const m09Teach: MissionTeaching = {
       missed: 'You did not reach the exit.',
     },
   },
-  examTip: 'Incident response order on the exam: preparation, detection, analysis, containment, eradication, recovery, lessons learned. Ransomware recovery = offline/immutable backups, not replicas.',
+  examTip: 'Incident response order on the exam: preparation, detection, analysis, containment, eradication, recovery, lessons learned. Ransomware recovery = offline/immutable backups, not replicas.\nFIELD NOTES: resilience menu - continuity of operations runbook, capacity planning for people and tech, platform diversity and multi-cloud systems, offsite copies and journaling for point-in-time recovery, a generator and UPS for outages, and testing by tabletop exercise, simulation, failover and parallel processing. Sources the SOC correlates: IPS/IDS logs and vulnerability scans on top of firewall, endpoint and application logs.'
 };
 
 setMapCell(m09.map, 17, 15, '3');

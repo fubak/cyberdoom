@@ -99,15 +99,7 @@ export const m08: Mission = {
         'FILE-02 file server SMB buffer overflow CVSS 9.8\n' +
         'HR-03 intranet      stored XSS          CVSS 5.4\n' +
         'LAB-04 test box     kernel race cond.   CVSS 7.0 (banner match)\n' +
-        'METHOD: authenticated agent plus agentless sweep; findings scored CVSS,\n' +
-        'tracked by CVE. Threat feed (OSINT, proprietary feeds, an information-sharing organization,\n' +
-        'dark web chatter) shows a live exploit kit - 1 suspected\n' +
-        'zero-day has no CVE yet. Coverage spans application, OS-based, web,\n' +
-        'hardware/firmware, virtualization, cloud-specific, supply-chain,\n' +
-        'mobile (side loading, jailbreaks), cryptographic vulnerability classes,\n' +
-        'misconfiguration and malicious-update vectors. Build side: static analysis, dynamic analysis and\n' +
-        'package monitoring; a system audit is pending. Responsible disclosure\n' +
-        'program / bug bounty intake logged.\n' +
+        'METHOD: internal sweep; findings scored CVSS, tracked by CVE.\n' +
         'Change window open: CHANGE role granted.',
     },
     {
@@ -186,7 +178,7 @@ export const m08: Mission = {
         objectives: ['4.1'],
         detail: 'Listening: 443 (storefront), 21 FTP, 23 Telnet, 8080 admin console open to the internet. Benchmark: only required services.',
       },
-      log: 'Baseline applied: FTP, Telnet and internet-facing 8080 disabled. Only 443 remains.\nSecure baselines are established, deployed and maintained across hardening targets: workstations, servers, switches, routers, cloud infrastructure, mobile devices, embedded systems and RTOS gear, ICS/SCADA and IoT devices.\nKIOSK FLEET: MDM enrollment mandatory - BYOD gets a work profile, COPE and CYOD devices get full management; cellular, Wi-Fi and Bluetooth connection methods audited; no side loading and no jailbroken devices pass compliance.',
+      log: 'Baseline applied: FTP, Telnet and internet-facing 8080 disabled. Only 443 remains.\nKIOSK FLEET: MDM enrollment mandatory - BYOD gets a work profile, COPE and CYOD devices get full management.',
     },
     {
       id: 'sign-gate',
@@ -201,7 +193,7 @@ export const m08: Mission = {
         objectives: ['4.1'],
         detail: 'Release policy: any build may be deployed; signatures not checked.',
       },
-      log: 'Policy set: only code-signed builds from the vendor or our CI may deploy.\nApp-security checklist: code signing required, input validation enforced server-side, secure cookies flagged HttpOnly+Secure, static code analysis in CI, and sandboxing for the browser tier.',
+      log: 'Policy set: only code-signed builds from the vendor or our CI may deploy.\nDeploy checklist: code signing required; input validation enforced server-side.',
     },
     {
       id: 'forum-hotfix',
@@ -231,7 +223,7 @@ export const m08: Mission = {
         objectives: ['4.3'],
         detail: 'Re-runs the credentialed scan against all four hosts.',
       },
-      log: 'RESCAN 06:40: WEB-01, FILE-02, HR-03 clear. LAB-04 confirmed false positive. 0 open findings.\nValidation of remediation = rescanning plus audit. Watch false negatives: a silent miss is worse than a false positive. Findings prioritized by exposure factor and environmental variables (internet-facing first); LAB-04 got an exception - a documented exemption within risk tolerance. Cyber insurance reviewed; segmentation limits the blast radius.'
+      log: 'RESCAN 06:40: WEB-01, FILE-02, HR-03 clear. LAB-04 confirmed false positive. 0 open findings.\nLAB-04 keeps a documented exemption within risk tolerance.'
     },
     {
       id: 'trojan-a',
@@ -603,7 +595,7 @@ export const m08Teach: MissionTeaching = {
       missed: 'You tried a lower-priority finding first. CVSS base scores do not account for environment; consider exposure and threat intelligence before changing systems.',
     },
   },
-  examTip: 'Prioritize with CVSS plus exposure, exploitation threat intelligence and impact. Confirm banner-only findings with credentialed evidence, then validate remediation with a rescan.',
+  examTip: 'Prioritize with CVSS plus exposure, exploitation threat intelligence and impact. Confirm banner-only findings with credentialed evidence, then validation of remediation with a rescan.\nFIELD NOTES: vuln classes the exam lists - memory injection, buffer overflow, race condition (TOC/TOU), malicious update, OS-based, SQL injection, XSS, firmware, end-of-life, legacy, VM escape, cloud-specific, cryptographic vulnerability, misconfiguration, side loading, jailbreak and zero-day. Intel sources: threat feed, open-source intelligence, an information-sharing organization, dark web chatter, plus penetration testing, a responsible disclosure program and bug bounty programs. Tooling: static analysis, dynamic analysis, package monitoring and a system audit. Mobile and infra estate: mobile devices under mobile device management (MDM), BYOD vs COPE vs choose your own device, cellular audited; switches, routers and cloud infrastructure get baselines too; wireless means a site survey, WPA3, RADIUS or TACACS+ and pinned cryptographic protocols and authentication protocols.'
 };
 
 // F1: encounter pacing — opening skirmish at the lobby, room reveals,

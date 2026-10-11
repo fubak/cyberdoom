@@ -138,15 +138,7 @@ export const m12: Mission = {
         '[ ] SOAR playbook: ticket -> contain -> resilience\n' +
         '[ ] failure modes for every automated control\n' +
         '[ ] proof the MDM push landed on every kiosk\n' +
-        'then sign off at the war-room console.\n' +
-        'ORCHESTRATION SCOPE: user provisioning and resource provisioning,\n' +
-        'guard rails on security groups, ticket creation, escalation,\n' +
-        'enabling and disabling services and access, continuous integration and\n' +
-        'testing, plus integrations over APIs. Benefits: efficiency and time\n' +
-        'savings, enforced baselines, standard infrastructure configurations,\n' +
-        'secure scaling, faster reaction time, a workforce multiplier - and\n' +
-        'employee retention when toil dies. Watch: complexity, cost, the\n' +
-        'single point of failure, technical debt and ongoing supportability.',
+        'then sign off at the war-room console.',
       inspect: { label: 'Automation war board', detail: 'Leadership\u2019s checklist for automating the SOC by Friday.', category: 'item', objectives: ['4.7'] },
     },
     // --- SIEM hall: the queue, rule evidence, tuning consoles ---
@@ -160,21 +152,7 @@ export const m12: Mission = {
         'R3 DNS TUNNEL ............   1/mo  ws-fin-07 hourly TXT lookups\n' +
         'Analyst note: "we mostly just ack R1 now"\n' +
         'SOC role granted: lab, vault and payment consoles unlocked.\n' +
-        'MONITORING STACK: the SIEM does log aggregation across systems,\n' +
-        'applications and infrastructure, plus alerting, scanning, reporting\n' +
-        'and archiving; alert response covers quarantine and alert tuning.\n' +
-        'Tools in play: SCAP benchmarks, agents and agentless collectors,\n' +
-        'antivirus, DLP, SNMP traps, NetFlow and vulnerability scanners.\n' +
-        'ENDPOINT TIER: network access control (NAC) gates admission,\n' +
-        'EDR/XDR agents correlate, file integrity monitoring watches system\n' +
-        'binaries, user behavior analytics flags impossible hours, and Group Policy\n' +
-        'plus SELinux enforce baselines - configuration enforcement\n' +
-        'at scale.\n' +
-        'MITIGATION SHELF: segmentation, ACLs and permissions, application\n' +
-        'allow lists, isolation, patching, encryption, monitoring, least\n' +
-        'privilege and decommissioning. Hardening means access lists (ACLs)\n' +
-        'on the wire, disabling ports and protocols, default password changes\n' +
-        'and removal of unnecessary software.',
+        'Alert tuning needed: suppress the known-good noise, keep the anomalies.',
       inspect: { label: 'SIEM alert queue', detail: 'Aggregated alerts from every rule, ranked by volume. Three rules account for almost all of it.', category: 'item', objectives: ['4.4'] },
     },
     {
@@ -626,7 +604,7 @@ export const m12Teach: MissionTeaching = {
       missed: 'You did not reach the exit.',
     },
   },
-  examTip: 'SOAR questions hinge on guard rails: human approval for privileged identities, redundancy so one outage cannot stall response, and tuning that cuts false positives without creating false negatives. Fail-closed protects confidentiality; fail-open protects availability and life safety.',
+  examTip: 'SOAR questions hinge on guard rails: human approval for privileged identities, redundancy so one outage cannot stall response, and tuning that cuts false positives without creating false negatives. Fail-closed protects confidentiality; fail-open protects availability and life safety.\nFIELD NOTES: orchestration scope covers user provisioning and resource provisioning, security groups, ticket creation and escalation, enabling and disabling services, continuous integration and API integrations; benefits are efficiency, standard infrastructure configurations, secure scaling, faster reaction time and a workforce multiplier; watch complexity, technical debt and the single point of failure. Monitoring stack: the SIEM does log aggregation, alerting and archiving; agents and agentless collectors, SCAP benchmarks, antivirus, DLP, SNMP traps, NetFlow and vulnerability scanners feed it; the endpoint tier adds EDR/XDR, file integrity monitoring, user behavior analytics, Group Policy and SELinux. Placement reminder: the proxy server, load balancer and sensors sit where zones meet.'
 };
 
 addThreatEncounter(m12, 'spike-rat', 'rat', 3, {

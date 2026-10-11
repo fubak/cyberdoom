@@ -113,7 +113,7 @@ export const m10: Mission = {
     // --- VENDOR SUITE: assessment demands (interact 'assess-doc') ---
     {
       id: 'demand-questionnaire', kind: 'console', x: 7.5, y: 2.5, sprite: 'console', tags: ['assess-doc'],
-      log: 'REQUEST FILED: standardized security questionnaire issued to the vendor — control coverage, MFA for their admins, subcontractors, incident history.\nVENDOR ASSESSMENT PACK: due-diligence questionnaire, evidence of internal audits, independent assessments, penetration testing results, supply chain analysis, and a conflict of interest disclosure; rules of engagement govern any test; vendor monitoring continues quarterly after signing.',
+      log: 'REQUEST FILED: standardized security questionnaire issued to the vendor — control coverage, MFA for their admins, subcontractors, incident history.\nAlso required: evidence of internal audits and a conflict of interest disclosure.',
       inspect: { label: 'Issue security questionnaire', detail: 'First ask: the standardized questionnaire puts the vendor\u2019s controls on the record before any contract talk.', category: 'legit', objectives: ['5.3'] },
     },
     {
@@ -123,7 +123,7 @@ export const m10: Mission = {
     },
     {
       id: 'demand-assessment', kind: 'console', x: 13.5, y: 2.5, sprite: 'console', tags: ['assess-doc'],
-      log: 'DEMAND LOGGED: independent third-party assessment required — a SOC 2 / ISO review from an outside assessor, not vendor self-attestation.\nAGREEMENT STACK: a master service agreement (MSA) plus statements of work (SOW) set scope, the SLA sets service levels, an NDA covers the data, an MOU governs the incident partner, an MOA the joint ops team, and a BPA the reseller.',
+      log: 'DEMAND LOGGED: independent third-party assessment required — a SOC 2 / ISO review from an outside assessor, not vendor self-attestation.',
       inspect: { label: 'Demand independent assessment', detail: 'Self-attestation is the vendor grading its own homework. An independent assessment gives the answers weight.', category: 'legit', objectives: ['5.3'] },
     },
     {
@@ -280,7 +280,7 @@ export const m10: Mission = {
     {
       id: 'risk-intake', kind: 'console', x: 7.5, y: 13.5, sprite: 'console', tags: ['risk-intake'],
       grants: { resource: 'role:risk', amount: 1 },
-      log: 'Risk charter signed. RISK DESK access granted on your badge.\nRISK MODEL: risk identification feeds the risk register - key risk indicators (KRI), a named risk owner per entry, and a risk threshold per metric. Risk assessment runs ad hoc, recurring, one-time or continuous. Analysis is qualitative ranking or quantitative math: single loss expectancy (SLE) x annualized rate of occurrence (ARO) = annualized loss expectancy (ALE); probability times likelihood and impact. Appetite: expansionary, conservative or neutral - tolerance is the wiggle room inside it. Strategies: transfer (insurance), accept (exception or exemption), avoid, mitigate. Business impact analysis sets recovery time objective (RTO), recovery point objective (RPO), mean time to repair (MTTR) and mean time between failures (MTBF). Risk reporting goes to the board.',
+      log: 'Risk charter signed. RISK DESK access granted on your badge.\nEntries in the risk register name a risk owner and a risk threshold; the math runs SLE x ARO = ALE.',
       inspect: { label: 'Risk intake terminal', detail: 'The risk desk is restricted — sign the charter here to get the RISK role on your badge.', category: 'legit', objectives: ['5.2'] },
     },
     // --- RISK DESK: appetite + registers (inspect 'risk-evidence') ---
@@ -660,7 +660,7 @@ export const m10Teach: MissionTeaching = {
       missed: 'You left before the vendor file was finished.',
     },
   },
-  examTip: 'Vendor risk on the exam: agreements each have a job — NDA protects information, SLA sets measurable service levels, MSA is the umbrella, SOW is one project, MOU/BPA is non-binding intent. Risk math: SLE = AV x EF, ALE = SLE x ARO; the response must fit the STATED appetite. And an MSP\u2019s trusted access is a supply-chain vector.',
+  examTip: 'Vendor risk on the exam: agreements each have a job — NDA protects information, SLA sets measurable service levels, MSA is the umbrella, SOW is one project, MOU/MOA states intent; a BPA sets partner responsibilities. Risk math: SLE = AV x EF, ALE = SLE x ARO; the response must fit the STATED appetite. And an MSP\u2019s trusted access is a supply-chain vector.\nFIELD NOTES: a vendor assessment pack collects the questionnaire, evidence of internal audits, independent assessments, penetration testing results and a supply chain analysis; due diligence includes a conflict of interest disclosure, and vendor monitoring continues quarterly after signing. Risk process: risk identification feeds the risk register - a risk owner, a risk threshold and a key risk indicator per entry; risk assessment runs ad hoc, recurring, one-time or continuous; analysis is qualitative or quantitative - probability times impact. Appetite reads expansionary, conservative or neutral, with risk tolerance inside it, and risk reporting goes to the board. A business impact analysis sets RTO and RPO. Cloud shared-responsibility terms: the responsibility matrix splits duties in hybrid deals, and risk transference moves some exposure to the vendor while scalability stays yours to size.'
 };
 
 // Enemy pressure: the pushed package drops implants once the player verifies it,

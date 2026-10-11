@@ -34,13 +34,13 @@ const SMALL: Record<string, number[]> = {
   // Lowercase (x-height rows 2-6; ascenders reach row 0-1, descenders to row 6-7).
   a: [0, 0, 14, 1, 15, 17, 15], b: [16, 16, 30, 17, 17, 17, 30], c: [0, 0, 14, 17, 16, 17, 14],
   d: [1, 1, 15, 17, 17, 17, 15], e: [0, 0, 14, 17, 31, 16, 14], f: [6, 9, 8, 30, 8, 8, 8],
-  g: [0, 14, 17, 17, 15, 17, 14], h: [16, 16, 30, 17, 17, 17, 17], i: [4, 0, 12, 4, 4, 4, 14],
+  g: [0, 15, 17, 17, 15, 1, 14], h: [16, 16, 30, 17, 17, 17, 17], i: [4, 0, 12, 4, 4, 4, 14],
   j: [2, 0, 6, 2, 2, 18, 12], k: [16, 16, 18, 20, 24, 20, 18], l: [12, 4, 4, 4, 4, 4, 14],
   m: [0, 0, 27, 21, 21, 21, 21], n: [0, 0, 30, 17, 17, 17, 17], o: [0, 0, 14, 17, 17, 17, 14],
   p: [0, 30, 17, 17, 30, 16, 16], q: [0, 15, 17, 17, 15, 1, 1], r: [0, 0, 22, 25, 16, 16, 16],
   s: [0, 0, 15, 16, 14, 1, 30], t: [8, 8, 30, 8, 8, 8, 6], u: [0, 0, 17, 17, 17, 17, 15],
   v: [0, 0, 17, 17, 17, 10, 4], w: [0, 0, 17, 17, 21, 21, 10], x: [0, 0, 17, 10, 4, 10, 17],
-  y: [0, 17, 17, 17, 15, 17, 14], z: [0, 0, 31, 2, 4, 8, 31],
+  y: [0, 17, 17, 17, 15, 1, 14], z: [0, 0, 31, 2, 4, 8, 31],
 };
 
 const TINY: Record<string, number[]> = {
@@ -257,8 +257,7 @@ export function drawBigText(
   let cx = Math.round(x);
   for (const raw of text) {
     const ch = norm(raw);
-    const src = glyphRowsFor('small', ch);
-    const rows = src && fat ? fatRows(src) : src;
+    const rows = fat ? chunkyRows(ch) : glyphRowsFor('small', ch);
     if (rows) {
       const w = spec.w;
       const glyph = nativeGlyph(`big${fat}|${ch}`, rows, w, 2, ramp);
@@ -282,6 +281,59 @@ export function measureBig(text: string, fat = false): number {
 const fatRows = (rows: number[]) => rows.map((b) => (b << 1) | b);
 
 /**
+ * Hand-authored 6x7 chunky rows for glyphs where the generic embolden
+ * (b<<1)|b would fuse two 1px-separated runs of lit pixels into one: the
+ * alternating-bit strokes in m/M/w/W, the arms of K/k/R, the diagonals of
+ * N/Q/V/X/Y/v/x, and a handful of symbols and digits. Each row keeps the
+ * source row's run count while thickening a stroke, and stays within 6 bits
+ * so stems and gaps both read at least 1px. g/y pin the open-hook descender
+ * so they cannot regress to reading as 9/0.
+ */
+const CHUNKY_OVERRIDES: Record<string, number[]> = {
+  '0': [30, 51, 55, 45, 59, 51, 30],
+  '4': [6, 14, 22, 54, 63, 6, 6],
+  G: [30, 51, 48, 55, 51, 51, 31],
+  K: [51, 54, 52, 56, 52, 54, 51],
+  M: [51, 54, 45, 45, 51, 51, 51],
+  N: [51, 51, 59, 53, 55, 51, 51],
+  Q: [30, 51, 51, 51, 53, 54, 29],
+  R: [62, 51, 51, 62, 52, 54, 51],
+  V: [51, 51, 51, 51, 51, 26, 12],
+  W: [51, 51, 51, 45, 45, 45, 26],
+  X: [51, 51, 26, 12, 22, 51, 51],
+  Y: [51, 51, 26, 12, 12, 12, 12],
+  '"': [27, 27, 27, 0, 0, 0, 0],
+  '#': [27, 27, 63, 27, 63, 27, 27],
+  '*': [0, 12, 45, 30, 45, 12, 0],
+  '&': [28, 54, 52, 24, 45, 54, 29],
+  '@': [30, 51, 3, 27, 45, 45, 30],
+  '~': [0, 0, 27, 55, 0, 0, 0],
+  $: [12, 31, 52, 30, 11, 62, 12],
+  '✓': [0, 3, 6, 6, 44, 24, 0],
+  '✗': [0, 51, 26, 12, 22, 51, 0],
+  '∞': [0, 0, 26, 45, 22, 0, 0],
+  g: [0, 31, 51, 51, 31, 3, 30],
+  k: [48, 48, 54, 52, 56, 52, 54],
+  m: [0, 0, 54, 45, 45, 45, 45],
+  r: [0, 0, 55, 59, 48, 48, 48],
+  v: [0, 0, 51, 51, 51, 26, 12],
+  w: [0, 0, 51, 51, 45, 45, 26],
+  x: [0, 0, 51, 26, 12, 22, 51],
+  y: [0, 51, 51, 51, 31, 3, 30],
+};
+
+/**
+ * Chunky (6-wide emboldened) rows for a char: the hand-authored override
+ * when the generic embolden would merge runs, else (b<<1)|b per row.
+ */
+export function chunkyRows(ch: string): number[] | undefined {
+  const key = norm(ch);
+  const src = glyphRowsFor('small', key);
+  if (!src) return undefined;
+  return CHUNKY_OVERRIDES[key] ?? fatRows(src);
+}
+
+/**
  * Chunky HUD font (ticker, banners, panel labels): the 5x7 glyphs emboldened
  * to 6x7, with a top→bottom colour ramp and a hard 1px drop shadow. 7px advance.
  */
@@ -297,9 +349,8 @@ export function drawChunky(
   let cx = Math.round(x);
   const cy = Math.round(y);
   for (const raw of text) {
-    const rows = glyphRowsFor('small', norm(raw));
-    if (rows) {
-      const fr = fatRows(rows);
+    const fr = chunkyRows(norm(raw));
+    if (fr) {
       const glyph = nativeGlyph(`chunky|${norm(raw)}`, fr, 6, 1, rs);
       if (shadow) {
         const shade = nativeGlyph(`chunky-shadow|${norm(raw)}`, fr, 6, 1, [shadow], false);
