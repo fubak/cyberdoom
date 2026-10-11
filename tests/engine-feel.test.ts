@@ -363,8 +363,13 @@ describe('Doom enemy AI', () => {
     const player = new Player(5.5, 2.5, 0);
     const onFire = vi.fn();
     const h = hooks({ onFire });
-    for (let i = 0; i < 120 && onFire.mock.calls.length === 0; i++) {
-      updateEntities([e], map, player, 0.025, h);
+    const rand = vi.spyOn(Math, 'random').mockReturnValue(0.1);
+    try {
+      for (let i = 0; i < 120 && onFire.mock.calls.length === 0; i++) {
+        updateEntities([e], map, player, 0.025, h);
+      }
+    } finally {
+      rand.mockRestore();
     }
     expect(onFire).toHaveBeenCalled();
     const projectile = onFire.mock.calls[0][1];
