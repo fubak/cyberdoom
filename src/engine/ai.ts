@@ -12,6 +12,9 @@ export interface AiHooks {
   onStep?(e: Entity): void;
   /** Occasional positional growl while actively hunting. */
   onGrowl?(e: Entity): void;
+  /** Unalerted idle vocalization: a quiet positional mutter so a live threat
+   *  can be heard before it is seen (hidden/disguised enemies stay silent). */
+  onIdle?(e: Entity): void;
   /** A new enemy materialised (worm self-propagation). */
   onSpawn?(e: Entity): void;
   /** Ransomware sealed a door or console. */
@@ -305,6 +308,16 @@ function runMalwareMechanics(
     if ((e.state.growlT as number) <= 0) {
       e.state.growlT = 4 + Math.random() * 5;
       hooks.onGrowl?.(e);
+    }
+  }
+  // Unalerted idle vocalization: quiet positional mutter while the threat
+  // hasn't noticed the player yet, so it can be heard before it's seen.
+  const hidden = (profile.disguised && !e.state.revealedTrojan) || (profile.stealthy && !e.state.revealedRootkit);
+  if (e.state.sighted !== true && e.state.aggroed !== true && !hidden) {
+    e.state.idleT = ((e.state.idleT as number | undefined) ?? (1.5 + Math.random() * 4)) - dt;
+    if ((e.state.idleT as number) <= 0) {
+      e.state.idleT = 3 + Math.random() * 5;
+      hooks.onIdle?.(e);
     }
   }
 }
@@ -681,9 +694,16 @@ export function damageEntity(e: Entity, dmg: number, fromDx: number, fromDy: num
 
 export function hurtEntity(e: Entity, fromDx: number, fromDy: number, rng = Math.random): void {
   const length = Math.hypot(fromDx, fromDy) || 1;
-  e.hurtT = 0.25;
-  e.state.knockVx = (fromDx / length) * 1.5;
-  e.state.knockVy = (fromDy / length) * 1.5;
+  // Hit-flash window: ~100 ms pinned so the full-sprite flash holds >=0.9
+  // brightness for the ~90 ms the eye needs to register it (renderer reads
+  // hurtT each frame, then the flash decays).
+  e.hurtT = 0.1;
+  // Melee-range hits knock back much less so follow-up swings still connect
+  // (a full 1.5 impulse shoved worms out of the 1.5-tile keyboard arc and
+  // turned a 3-hit kill into a 7-swing chase); ranged hits keep the shove.
+  const knock = length < 2 ? 0.55 : 1.5;
+  e.state.knockVx = (fromDx / length) * knock;
+  e.state.knockVy = (fromDy / length) * knock;
   if ((e.def.ai === 'chase' || e.def.ai === 'wander') && mode(e) === 'idle') {
     e.state.aggroed = true;
     e.state.mode = 'chase';

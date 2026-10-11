@@ -10,7 +10,7 @@ export type ToolSound =
   | 'kb-swing' | 'kb-impact' | 'mouse-click' | 'mouse-flag' | 'usb-fire' | 'usb-hit'
   | 'badge-swipe' | 'badge-ok' | 'badge-deny' | 'tap-sweep' | 'edr-charge' | 'edr-blast'
   | 'dry' | 'lower' | 'raise' | 'new-tool' | 'ammo' | 'menu-move' | 'menu-pick' | 'menu-back'
-  | 'fizzle' | 'confirm' | 'mfa-beep' | 'patch-insert';
+  | 'fizzle' | 'confirm' | 'mfa-beep' | 'patch-insert' | 'patch-fire';
 
 export type VoiceLine = 'pain' | 'grunt' | 'ready' | 'pickup' | 'death';
 
@@ -193,6 +193,15 @@ export function playTool(s: ToolSound): void {
     case 'patch-insert':
       S.noise(0.018, 0.5, 5600, 1, 0, 'highpass');
       S.noise(0.07, 0.35, 1100, 2); S.tone(320, 180, 0.04, 'square', 0.3, 0.06); S.tone(700, 1400, 0.1, 'triangle', 0.2, 0.12); break;
+    case 'patch-fire':
+      // write-chirp: the imaging head scribbles — four quick rising chirps
+      // over a disk clack, landing on a commit thunk. FEEL addition so the
+      // patch kit has its own report instead of silence after the insert.
+      S.noise(0.015, 0.8, 6400, 1, 0, 'highpass');
+      for (let i = 0; i < 4; i++) S.tone(1150 + i * 320, 1900 + i * 320, 0.035, 'square', 0.3, i * 0.04);
+      S.noise(0.05, 0.55, 1800, 2, 0.05);
+      S.tone(210, 90, 0.14, 'triangle', 0.5, 0.16);
+      break;
     case 'confirm': S.tone(1046, 1046, 0.06, 'square', 0.25); S.tone(1568, 1568, 0.12, 'square', 0.22, 0.06); break;
   }
 }

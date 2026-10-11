@@ -54,8 +54,11 @@ export class ParticleSystem {
    * Doom's gibs read as stuff left behind; the splat + settled debris is
    * what makes a kill read as a kill instead of a deletion.
    * A 'hit' is the same spray dialled down: 18 smaller shards, short life.
+   * When `dirX`/`dirY` give the attack direction the shards spray away from
+   * the shooter — a directional blood burst, a lower-amplitude echo of the
+   * kill burst (coordinator note: keyed off hit coordinates, not sprite size).
    */
-  burst(x: number, y: number, z: number, kind: 'kill' | 'hit', tint: Color = [1, 0.28, 0.08]): void {
+  burst(x: number, y: number, z: number, kind: 'kill' | 'hit', tint: Color = [1, 0.28, 0.08], dirX = 0, dirY = 0): void {
     const rng = this.rng;
     const shard = (): Color => [
       Math.min(1, tint[0] * (0.75 + rng() * 0.5)),
@@ -64,8 +67,10 @@ export class ParticleSystem {
     ];
     const kill = kind === 'kill';
     const count = kill ? 48 : 18;
+    const hasDir = Math.hypot(dirX, dirY) > 1e-3;
+    const baseA = hasDir ? Math.atan2(dirY, dirX) : 0;
     for (let i = 0; i < count; i++) {
-      const angle = rng() * Math.PI * 2;
+      const angle = hasDir ? baseA + (rng() - 0.5) * 2.0 : rng() * Math.PI * 2;
       const speed = (kill ? 1.0 : 0.65) + rng() * (kill ? 3.2 : 2.5);
       const big = i % 4 === 0;
       const hot = kill ? i % 3 === 0 : i % 2 === 0;

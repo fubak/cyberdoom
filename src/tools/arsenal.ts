@@ -18,7 +18,7 @@ const SOUNDS: Record<string, { wind?: ToolSound; fire?: ToolSound; hit?: ToolSou
   tap: { fire: 'tap-sweep', hit: 'confirm' },
   edr: { wind: 'edr-charge', fire: 'edr-blast', hit: 'confirm' },
   mfa: { fire: 'mfa-beep', hit: 'confirm' },
-  patch: { wind: 'patch-insert', hit: 'confirm' },
+  patch: { wind: 'patch-insert', fire: 'patch-fire', hit: 'confirm' },
 };
 
 function sorted(): ToolDef[] {

@@ -4,9 +4,36 @@ export interface ViewPose {
   angle: number;
   dz: number;
   roll: number;
+  pitch?: number;
   hurt?: number;
   hurtSide?: number;
   bonus?: number;
+}
+
+/**
+ * WCAG 2.3.1 photosafety guard for FULL-SCREEN flashes (world light blooms,
+ * the pain wash, muzzle light floods): no more than `maxPerSecond` flash
+ * events inside any one-second window, even under sustained fire. Small,
+ * localized effects (enemy sprite hit-flash, impact particles) are exempt.
+ * Sliding-window counter: a flash is allowed only when fewer than
+ * `maxPerSecond` flashes happened in the last second.
+ */
+export class FlashRateLimiter {
+  private readonly times: number[] = [];
+
+  constructor(private readonly maxPerSecond = 3) {}
+
+  /** Try to spend one flash at time `now` (seconds, monotonic). */
+  allow(now: number): boolean {
+    while (this.times.length > 0 && this.times[0] < now - 1) this.times.shift();
+    if (this.times.length >= this.maxPerSecond) return false;
+    this.times.push(now);
+    return true;
+  }
+
+  reset(): void {
+    this.times.length = 0;
+  }
 }
 
 export class Feel {
@@ -21,9 +48,20 @@ export class Feel {
   private kickAmt = 0;
   /** Kill punch: instant camera dip that eases back over ~150 ms. */
   private punchAmt = 0;
+  /** Player-hurt view kick: pitch punch + roll jab, scaled by damage. */
+  private hurtPitchAmt = 0;
+  private hurtRollAmt = 0;
+  private hurtRollSide = 0;
 
-  hurt(dmg: number, side = 0): void {
+  hurt(dmg: number, side = 0, wash = true): void {
     this.trauma = Math.min(1, this.trauma + dmg / 40);
+    // View kick: a short pitch punch + roll jab toward the attacker, scaled by
+    // damage — the hit physically shoves the camera at the damage instant.
+    this.hurtPitchAmt = Math.max(this.hurtPitchAmt, Math.min(0.1, 0.035 + dmg * 0.0022));
+    this.hurtRollAmt = Math.max(this.hurtRollAmt, Math.min(0.075, 0.02 + dmg * 0.002));
+    if (side !== 0) this.hurtRollSide = Math.sign(side);
+    else if (this.hurtRollSide === 0) this.hurtRollSide = Math.random() < 0.5 ? -1 : 1;
+    if (!wash) return; // photosafety limiter spent: keep kick/shake, skip the red wash
     // Doom pain wash: any hit floods the view red, holds ~0.1s, then eases out
     // over ~0.3-0.4s; bigger hits flood deeper and linger a little longer.
     const peak = Math.min(0.9, 0.62 + dmg * 0.011);
@@ -60,12 +98,24 @@ export class Feel {
     return this.punchAmt * 0.055;
   }
 
+  /** Upward view punch (radians) from a taken hit — snaps in, ~150 ms out. */
+  get hurtPitch(): number {
+    return this.hurtPitchAmt;
+  }
+
+  /** Roll jab (radians) toward the attacker from a taken hit. */
+  get hurtRoll(): number {
+    return this.hurtRollAmt * this.hurtRollSide;
+  }
+
   update(dt: number): void {
     this.trauma = Math.max(0, this.trauma - 2.2 * dt);
     this.hurtElapsed = Math.min(this.hurtDuration, this.hurtElapsed + dt);
     this.bonusAmount = Math.max(0, this.bonusAmount - (0.35 / 0.25) * dt);
     this.kickAmt = Math.max(0, this.kickAmt - 9 * dt);
     this.punchAmt = Math.max(0, this.punchAmt - 7 * dt);
+    this.hurtPitchAmt = Math.max(0, this.hurtPitchAmt - 8 * dt);
+    this.hurtRollAmt = Math.max(0, this.hurtRollAmt - 9 * dt);
   }
 
   get red(): number {

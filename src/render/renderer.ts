@@ -60,6 +60,8 @@ uniform float uFloor;
 uniform float uGain;
 uniform float uFlash;
 uniform vec4 uFire;
+uniform vec4 uImpact;
+uniform vec3 uImpactCol;
 uniform vec3 uTint;
 uniform vec2 uUvScale;
 uniform vec2 uUvOffset;
@@ -138,8 +140,12 @@ void main() {
   // distance (overrides banding like Doom's fullbright muzzle-flash frame)
   float reach = (1.0 - clamp(vDist / 14.0, 0.0, 0.92)) * uFire.a;
   L = min(L + reach, 1.5);
+  // landed-hit bloom: world light wells up >=1.5x inside ~3 tiles of the hit
+  // point for ~100 ms (a muzzle-bloom at the impact, not at the camera)
+  float iboost = uImpact.z * smoothstep(3.0, 0.6, distance(vWorld, uImpact.xy));
+  L = min(L * (1.0 + iboost), 1.5);
   vec3 c = mix(min(t.rgb * uTint * vTint * L * uGain, vec3(1.0)), vec3(1.0), uFlash);
-  c = min(c + uFire.rgb * reach * 0.4, vec3(1.0));
+  c = min(c + uFire.rgb * reach * 0.4 + uImpactCol * iboost * 0.45, vec3(1.0));
   c *= sfl;
   if (uWound > 0.0) {
     // wound char (ENEMIES): burnt-out blotches rimmed with corruption embers
@@ -208,6 +214,9 @@ const timeUniform = { value: 0 };
 const probeStrobeUniform = { value: -1 };
 /** Shared muzzle-flash light: rgb = tool colour, w = intensity (decays ~110 ms). */
 const fireUniform = { value: new THREE.Vector4(0, 0, 0, 0) };
+/** Shared landed-hit bloom: x,y = hit point (world), z = intensity (decays ~100 ms). */
+const impactUniform = { value: new THREE.Vector4(0, 0, 0, 0) };
+const impactColUniform = { value: new THREE.Vector3(1, 1, 1) };
 
 /** Wall families flat enough to carry a decal plate overlay. */
 const DECALABLE = new Set(['wall-panel', 'wall-brick', 'wall-tech', 'wall-ribs', 'wall-brick2', 'wall-panel2']);
@@ -223,6 +232,8 @@ function worldMaterial(map: THREE.Texture, light = 1, floor = 0.16, tint?: THREE
       uGain: { value: 1 },
       uFlash: { value: 0 },
       uFire: fireUniform,
+      uImpact: impactUniform,
+      uImpactCol: impactColUniform,
       uTint: { value: tint ?? new THREE.Vector3(1, 1, 1) },
       uUvScale: { value: new THREE.Vector2(1, 1) },
       uUvOffset: { value: new THREE.Vector2(0, 0) },
@@ -1030,7 +1041,9 @@ export class Renderer {
       if (e.hp < st.lastHp) st.flash = 1;
       st.lastHp = e.hp;
       const hurtT = (e as Entity & { hurtT?: number }).hurtT;
-      if (typeof hurtT === 'number' && hurtT > 0) st.flash = Math.max(st.flash, 0.8);
+      // every landed hit pins the sprite flash to full for the ~100 ms hurt
+      // window, so >=0.9 brightness holds for the ~90 ms the eye needs
+      if (typeof hurtT === 'number' && hurtT > 0) st.flash = Math.max(st.flash, 1);
       const dx = e.x - st.lastX;
       const dy = e.y - st.lastY;
       if (Math.hypot(dx, dy) > 0.002) {
@@ -1239,6 +1252,19 @@ export class Renderer {
     return fireUniform.value.w;
   }
 
+  /** FEEL hook: landed-hit light bloom — the world light wells up around the
+   *  hit point (~3 tile radius, ~100 ms) in threat-tinted colour. */
+  impactLight(x: number, y: number, r: number, g: number, b: number, strength = 0.9): void {
+    if (this.debugNoFlash) return;
+    impactUniform.value.set(x, y, strength, 0);
+    impactColUniform.value.set(r, g, b);
+  }
+
+  /** Current landed-hit bloom intensity (debug/tests). */
+  impactLevel(): number {
+    return impactUniform.value.z;
+  }
+
   render(player: Player, pose?: ViewPose): void {
     const now = performance.now();
     const dt = Math.min(0.1, (now - this.lastTime) / 1000);
@@ -1251,7 +1277,10 @@ export class Renderer {
       timeUniform.value = this.time;
     }
     probeStrobeUniform.value = this.debugNoFlash ? 0.1 : -1;
-    if (!this.debugNoFlash) fireUniform.value.w = Math.max(0, fireUniform.value.w - dt / 0.11);
+    if (!this.debugNoFlash) {
+      fireUniform.value.w = Math.max(0, fireUniform.value.w - dt / 0.11);
+      impactUniform.value.z = Math.max(0, impactUniform.value.z - dt / 0.1);
+    }
 
     // damage → palette red shift
     if (player.integrity < this.lastIntegrity) this.hurt = Math.min(0.85, this.hurt + 0.3 + (this.lastIntegrity - player.integrity) * 0.012);
@@ -1263,7 +1292,10 @@ export class Renderer {
     this.postMat.uniforms.uHurt.value = this.debugNoFlash ? 0 : Math.min(0.85, Math.max(pose?.hurt ?? this.hurt, lowHp));
     this.postMat.uniforms.uHurtSide.value = this.debugNoFlash ? 0 : pose?.hurtSide ?? 0;
     this.postMat.uniforms.uBonus.value = this.debugNoFlash ? 0 : pose?.bonus ?? 0;
-    if (this.debugNoFlash) fireUniform.value.w = 0;
+    if (this.debugNoFlash) {
+      fireUniform.value.w = 0;
+      impactUniform.value.z = 0;
+    }
 
     const speed = Math.min(1, Math.hypot(player.vx, player.vy) / 4);
     const bobY = Math.abs(Math.sin(player.bob)) * 0.035 * speed;
@@ -1273,7 +1305,7 @@ export class Renderer {
     this.lastPX = player.x;
     this.lastPY = player.y;
     this.camera.position.set(cameraX, pose ? EYE_H + pose.dz : EYE_H + bobY, cameraY);
-    this.camera.rotation.set(0, -cameraAngle - Math.PI / 2, pose?.roll ?? 0, 'YXZ');
+    this.camera.rotation.set(pose?.pitch ?? 0, -cameraAngle - Math.PI / 2, pose?.roll ?? 0, 'YXZ');
     const yaw = this.camera.rotation.y;
 
     for (const st of [...this.sprites.values(), ...this.ghosts, ...this.projSprites.values()]) {
@@ -1343,7 +1375,9 @@ export class Renderer {
       // before the pain-frame swap / dissolve, like Doom's bright hit
       // frames; other sprites keep the shorter flicker
       const painFlash = st.set.anim === 'monster'
-        ? Math.min(1, Math.max(0, (st.flash - 0.5) * 2.4))
+        ? st.flash > 0.62
+          ? 1
+          : Math.max(0, st.flash * 1.9 - 0.5)
         : st.flash > 0.75
           ? 0.6
           : 0;
