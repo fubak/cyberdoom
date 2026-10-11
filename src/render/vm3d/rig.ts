@@ -112,6 +112,7 @@ export class Vm3dRig {
     // thumbOut must be set before setCurls: the thumb CMC quaternion is
     // baked from it inside setCurl
     if (rh.thumbOut !== undefined) hand.thumbOut = rh.thumbOut;
+    hand.tailDir = rh.tailDir ? new THREE.Vector3(...rh.tailDir).normalize() : null;
     hand.setCurls(rh.curls);
     for (const c of rh.contacts) {
       const target = c.socket.startsWith('key.')
@@ -120,5 +121,6 @@ export class Vm3dRig {
       hand.ikTo(c.finger as FingerName, target, c.weight);
     }
     this.stage.updateMatrixWorld(true);
+    hand.orientTail();
   }
 }

@@ -23,6 +23,9 @@ export interface HandKey {
   curls?: Partial<Record<FingerName, Curl>>;
   /** thumb wrap amount (1 = extended sideways, 0 = wrapped around a grip). */
   thumbOut?: number;
+  /** cosmetic forearm direction in stage space (the arm exits toward a
+   *  screen corner); unset = follow the wrist bone axis. */
+  tail?: V3;
   /** fingertip → socket contacts active at this key. */
   ik?: IkContact[];
 }
@@ -59,6 +62,7 @@ export interface ResolvedHand {
   wrists: WristTarget[];
   curls: Partial<Record<FingerName, Curl>>;
   thumbOut?: number;
+  tailDir?: V3;
   contacts: ResolvedContact[];
 }
 
@@ -126,6 +130,7 @@ function resolveHand(a: HandKey | undefined, b: HandKey | undefined, u: number):
     wrists,
     curls: lerpCurls(a?.curls, b?.curls, u),
     thumbOut,
+    tailDir: lerp3(a?.tail, b?.tail, u),
     contacts: [...contacts.values()].filter((c) => c.weight > 0.2),
   };
 }
@@ -172,7 +177,7 @@ const FIST_CURLS: Partial<Record<FingerName, Curl>> = {
   index: { mcp: 62, pip: 104, abd: -4 },
   middle: { mcp: 64, pip: 106, abd: 0 },
   ring: { mcp: 64, pip: 104, abd: 5 },
-  pinky: { mcp: 58, pip: 100, abd: 9 },
+  pinky: { mcp: 64, pip: 106, abd: 9 },
   // thumb.abd = CMC opposition wrap: lays the distal pad across the
   // flexed index/middle phalanges (power grip) instead of an OK loop
   thumb: { mcp: 40, pip: 50, abd: 90 },
@@ -183,17 +188,24 @@ const HOLD_L_CURLS: Partial<Record<FingerName, Curl>> = {
   index: { mcp: 58, pip: 93, abd: -4 },
   middle: { mcp: 60, pip: 95, abd: 0 },
   ring: { mcp: 60, pip: 93, abd: 5 },
-  pinky: { mcp: 58, pip: 90, abd: 9 },
+  pinky: { mcp: 62, pip: 96, abd: 9 },
   thumb: { mcp: 37, pip: 46, abd: 84 },
 };
 
 const ikc = (finger: FingerName, socket: string, weight?: number): IkContact => ({ finger, socket, weight });
+// arm exits toward a bottom screen corner (stage space, +z = viewer)
+const TAIL_R: V3 = [0.15, -0.7, 0.68];
+// grip poses roll the metacarpals toward -z, so the anatomical forearm
+// direction is +z (toward the viewer) — tilted laterally so the tube
+// exits the nearer screen edge instead of pointing at the camera
+const TAIL_GRIP_L: V3 = [-0.15, -0.2, 0.93];
+const TAIL_GRIP_R: V3 = [0.12, -0.2, 0.94];
 // support grip for idle/type — relaxed closed hand on the board's left end
-const L_GRIP = { wristSocket: 'gripL.wrist', curls: HOLD_L_CURLS, thumbOut: 0.3 };
+const L_GRIP = { wristSocket: 'gripL.wrist', curls: HOLD_L_CURLS, thumbOut: 0.3, tail: TAIL_GRIP_L };
 // swing grip: both fists stacked along the board's left end
-const L_FIST = { wristSocket: 'gripL.wrist', curls: FIST_CURLS, thumbOut: 0.2 };
+const L_FIST = { wristSocket: 'gripL.wrist', curls: FIST_CURLS, thumbOut: 0.2, tail: TAIL_GRIP_L };
 // right hand cups the end face: thumb wrapped flat against the palm
-const R_GRIP = { wristSocket: 'gripR.wrist', thumbOut: 0.2, curls: {
+const R_GRIP = { wristSocket: 'gripR.wrist', thumbOut: 0.2, tail: TAIL_GRIP_R, curls: {
   ...FIST_CURLS,
   thumb: { mcp: 55, pip: 65, abd: 105 },
 } };
@@ -219,7 +231,7 @@ const R_LIFT = { wristSocket: 'hoverR.wrist', curls: LIFT_CURLS, thumbOut: 0.6 }
 // mid-air waypoint above the grip end: the hand arcs up over the board
 // between the home-row hover and the bat grip instead of dragging its
 // fingers through the case
-const R_WAY = { wristSocket: 'wayR.wrist', thumbOut: 0.5, curls: {
+const R_WAY = { wristSocket: 'wayR.wrist', thumbOut: 0.5, tail: TAIL_R, curls: {
   index: { mcp: 80, pip: 92, abd: -5 },
   middle: { mcp: 82, pip: 94, abd: 0 },
   ring: { mcp: 82, pip: 94, abd: 5 },
@@ -228,7 +240,10 @@ const R_WAY = { wristSocket: 'wayR.wrist', thumbOut: 0.5, curls: {
 } };
 // low pull-back beside the end face: near-fist tuck keeps every joint
 // outboard of the case while the hand slides out behind the end
-const R_WAY2 = { wristSocket: 'wayR2.wrist', thumbOut: 0.5, curls: {
+// tucked regrip waypoints hold the fingers pointing down, so the
+// anatomical arm direction is up-right for this brief transition
+const TAIL_TUCK_R: V3 = [0.15, 0.9, 0.4];
+const R_WAY2 = { wristSocket: 'wayR2.wrist', thumbOut: 0.5, tail: TAIL_TUCK_R, curls: {
   index: { mcp: 80, pip: 92, abd: -5 },
   middle: { mcp: 82, pip: 94, abd: 0 },
   ring: { mcp: 82, pip: 94, abd: 5 },
@@ -237,7 +252,7 @@ const R_WAY2 = { wristSocket: 'wayR2.wrist', thumbOut: 0.5, curls: {
 } };
 // high hover above the home row: final approach of the regrip drops
 // vertically onto the keys instead of swooping under the front lip
-const R_WAY3 = { wristSocket: 'wayR3.wrist', thumbOut: 0.6, curls: {
+const R_WAY3 = { wristSocket: 'wayR3.wrist', thumbOut: 0.6, tail: TAIL_TUCK_R, curls: {
   index: { mcp: 60, pip: 72, abd: -4 },
   middle: { mcp: 62, pip: 74, abd: 0 },
   ring: { mcp: 64, pip: 76, abd: 5 },
@@ -246,7 +261,7 @@ const R_WAY3 = { wristSocket: 'wayR3.wrist', thumbOut: 0.6, curls: {
 } };
 // raised tuck still in the typing pose: the hand lifts and rolls before
 // sweeping sideways, so no joint sweeps through the keywell
-const R_LIFT3 = { wristSocket: 'liftR3.wrist', thumbOut: 0.35, curls: {
+const R_LIFT3 = { wristSocket: 'liftR3.wrist', thumbOut: 0.35, tail: TAIL_R, curls: {
   index: { mcp: 56, pip: 66, abd: -4 },
   middle: { mcp: 58, pip: 68, abd: 0 },
   ring: { mcp: 60, pip: 70, abd: 5 },

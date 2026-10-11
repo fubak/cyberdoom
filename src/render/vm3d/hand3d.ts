@@ -435,32 +435,67 @@ export class LiveHand {
     // live world quat already contains the frame/scale parents.
     const dirL = new THREE.Vector3(0, -1, 0);
     const boneDir = toBoneLocal('wrist', dirL).normalize();
-    const len = 0.40 / s;                    // forearm always exits the frame
+    const len = 0.26 / s;                    // forearm always exits the frame
     const rw = this.palmW * 0.36 / s;        // wrist cross-section radius
 
-    // tapered forearm: wrist radius at the wrist, +20 % toward the elbow;
+    // tapered forearm: wrist radius at the wrist, +12 % toward the elbow;
     // both end caps are hidden (wrist cap inside the wrist, elbow cap
     // far off-screen)
-    // bury the wrist end 8 mm inside the wrist so the cap rim can never
-    // peek onto the finger side of the wrist plane
-    const foreGeo = new THREE.CylinderGeometry(rw * 1.2, rw, len, 12, 1);
-    foreGeo.translate(0, len / 2 + 0.008 / s, 0);
+    // open-ended forearm tube (no flat skin cap anywhere); the wrist end
+    // is buried 24 mm inside the wrist with a narrowed cap ring so it
+    // never peeks onto the finger side of the wrist plane even when the
+    // cosmetic tail is re-aimed off the anatomical arm axis
+    const foreGeo = new THREE.CylinderGeometry(rw * 1.12, rw * 0.68, len, 12, 1, true);
+    foreGeo.translate(0, len / 2 + 0.024 / s, 0);
     const fore = new THREE.Mesh(foreGeo, skinMat);
     fore.name = 'vm3d-forearm';
     fore.quaternion.setFromUnitVectors(Y_AXIS, boneDir);
 
-    // open-ended sleeve tube starting ~1.5 cm behind the wrist so it
-    // overlaps and hides the wrist seam; radius ≤ 1.3× forearm there
+    // open-ended sleeve tube: begins 4 cm behind the wrist so it overlaps
+    // the skin (hiding the seam) while its near rim stays on the arm side
+    // of the wrist plane; cuff radius ≤ 1.08× wrist, gently tapering
     const jacket = ANALYSTS[this.spec.gender].jacket;
-    const cuffStart = 0.015 / s;
+    const cuffStart = 0.04 / s;
     const rForeAtStart = rw * (1 + 0.2 * (cuffStart / len));
     const cuffLen = len - cuffStart;
-    const cuffGeo = new THREE.CylinderGeometry(rForeAtStart * 1.3, rForeAtStart * 1.22, cuffLen, 12, 1, true);
+    const cuffGeo = new THREE.CylinderGeometry(rForeAtStart * 1.08, rForeAtStart * 1.04, cuffLen, 12, 1, true);
     cuffGeo.translate(0, cuffStart + cuffLen / 2, 0);
     const cuff = new THREE.Mesh(cuffGeo, new THREE.MeshStandardMaterial({ color: shade(jacket, 0.7), roughness: 0.85, metalness: 0 }));
     cuff.name = 'vm3d-sleeve';
     cuff.quaternion.copy(fore.quaternion);
-    this.wristBone.add(fore, cuff);
+    // cosmetic tail group: the solver re-aims it each pose so the arm
+    // always exits toward a screen corner instead of following the wrist
+    // bone's own axis
+    const tail = new THREE.Group();
+    tail.name = 'vm3d-tail';
+    tail.add(fore, cuff);
+    this.tail = tail;
+    this.wristBone.add(tail);
+    this.tailBindQuat = fore.quaternion.clone();
+  }
+
+  /** Default arm direction from construction (before any pose override). */
+  private tailBindQuat!: THREE.Quaternion;
+  /** Cosmetic arm group on the wrist bone (forearm + sleeve). */
+  private tail!: THREE.Group;
+  /** Desired arm direction in stage space; null = follow the wrist bone. */
+  tailDir: THREE.Vector3 | null = null;
+
+  /** Re-aim the cosmetic arm tail so the forearm exits along `dir`
+   * (stage-space unit vector). Called post-pose from the solver. */
+  orientTail(): void {
+    if (!this.tailDir) {
+      // restore construction-time alignment
+      const g = this.tail.children[0] as THREE.Mesh;
+      g.quaternion.copy(this.tailBindQuat);
+      this.tail.quaternion.identity();
+      (this.tail.children[1] as THREE.Mesh).quaternion.copy(this.tailBindQuat);
+      return;
+    }
+    const wq = this.wristBone.getWorldQuaternion(new THREE.Quaternion()).invert();
+    const q = new THREE.Quaternion().setFromUnitVectors(Y_AXIS, this.tailDir.clone().normalize());
+    this.tail.quaternion.copy(wq).multiply(q);
+    this.tail.children.forEach((c) => c.quaternion.identity());
   }
 
   /** Apply joint angles for one finger (clamped + DIP coupling). */

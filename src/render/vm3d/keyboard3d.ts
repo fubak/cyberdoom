@@ -274,8 +274,8 @@ export class KeyboardRig {
     // bat grip: palm against the board's left end face (palm-in +x), fingers
     // run down the face and curl under the bottom; hands stacked along the
     // edge — L at the front corner (z+0.05), R at the back corner (z-0.05).
-    this.addSocket('gripL.wrist', [-0.181, 0.045, 0.050], [-155, -90, 0]);
-    this.addSocket('gripR.wrist', [-0.181, 0.045, -0.050], [-155, -90, 0]);
+    this.addSocket('gripL.wrist', [-0.177, -0.006, 0.050], [-70, 90, -180]);
+    this.addSocket('gripR.wrist', [-0.184, -0.003, -0.050], [-70, 90, -180]);
     // mid-air waypoint above the grip end, in the same palm-down grip
     // orientation: the hand lifts off the end without twisting so its
     // joints never sweep through the case

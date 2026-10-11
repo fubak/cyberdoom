@@ -8,6 +8,7 @@ import { ensureHandAssets, HAND_FINGERS, LiveHand, type HandSpec } from './hand3
 import type { Curl, FingerName } from '../handrig';
 
 /** base-px → viewmodel-space metres at the board's working distance (~0.45 m). */
+const D2R = Math.PI / 180;
 const PX2M = (2 * Math.tan((54 / 2) * Math.PI / 180) * 0.45) / 168 * 0.6;
 
 export interface Vm3dFrame {
@@ -97,7 +98,7 @@ export class Vm3d {
     this.fill.position.set(-0.4, -0.2, 0.3);
     this.hemi = new THREE.HemisphereLight('#b8c4de', '#3a2a22', 0.5);
     this.flashLight = new THREE.PointLight('#ffc85a', 0, 3.5, 2);
-    this.flashLight.position.set(0, 0.02, -0.6);
+    this.flashLight.position.set(0, 0.04, -0.75);
     this.scene.add(this.key, this.fill, this.hemi, this.flashLight);
     ensureHandAssets(); // kick the glb fetch at startup; hands join when ready
   }
@@ -153,6 +154,14 @@ export class Vm3d {
    */
   gripCloseup(view: 'dorsal' | 'side' | 'under' | null): void {
     this.gripView = view;
+  }
+
+  /** Debug: nudge a named board socket (board-local pos metres, euler deg). */
+  setSocket(name: string, pos?: [number, number, number], rot?: [number, number, number]): void {
+    const s = this.rig.board.socket(name);
+    if (!s) return;
+    if (pos) s.position.set(pos[0], pos[1], pos[2]);
+    if (rot) s.quaternion.setFromEuler(new THREE.Euler(rot[0] * D2R, rot[1] * D2R, rot[2] * D2R, 'ZXY'));
   }
 
   /**
@@ -230,11 +239,13 @@ export class Vm3d {
     const lv = Math.min(1.3, f.light);
     this.key.intensity = 0.6 + lv * 1.9;
     this.hemi.intensity = 0.25 + lv * 0.4;
+    this.fill.position.set(-0.4, -0.2, 0.3);
+    this.fill.intensity = 0.45;
     this.flashLight.intensity = 0;
     if (f.flash && f.flash.sinceUse >= f.flash.windup && f.flash.sinceUse - f.flash.windup < 0.09) {
       const u = 1 - (f.flash.sinceUse - f.flash.windup) / 0.09;
       this.flashLight.color.setRGB(f.flash.rgb[0] / 255, f.flash.rgb[1] / 255, f.flash.rgb[2] / 255);
-      this.flashLight.intensity = 1.6 * u;
+      this.flashLight.intensity = 1.0 * u;
       if (f.toolId === 'keyboard') this.rig.board.flashKeys(u);
       else this.rig.board.clearFlash();
     } else {
@@ -283,12 +294,22 @@ export class Vm3d {
       this.cam.fov = 30;
       this.cam.updateProjectionMatrix();
       const end = this.rig.board.group.localToWorld(new THREE.Vector3(-0.155, -0.01, 0));
-      if (this.gripView === 'dorsal') this.cam.position.copy(end).add(new THREE.Vector3(-0.20, 0.30, 0.10));
-      else if (this.gripView === 'side') this.cam.position.copy(end).add(new THREE.Vector3(-0.12, 0.05, 0.42));
-      else this.cam.position.copy(end).add(new THREE.Vector3(-0.10, -0.32, 0.20));
+      // camera offsets in BOARD space so the turntable stays framed on the
+      // grip even while the board whips through the swing
+      const bq = this.rig.board.group.getWorldQuaternion(new THREE.Quaternion());
+      let off = new THREE.Vector3(-0.14, 0.30, 0.08);           // dorsal: above and outboard
+      if (this.gripView === 'side') off = new THREE.Vector3(-0.38, 0.06, 0.0); // end-on
+      else if (this.gripView === 'under') off = new THREE.Vector3(-0.12, -0.32, 0.10); // below
+      this.cam.position.copy(end).add(off.applyQuaternion(bq));
       this.cam.lookAt(end);
-      this.key.intensity = 1.6;
-      this.hemi.intensity = 1.4;
+      // product-turntable lighting: bright key riding the camera, a cool
+      // fill from the opposite side, and ambient hemispheric lift — every
+      // finger, thumb, board end and wrist direction must be readable
+      this.key.position.copy(this.cam.position).multiplyScalar(1.2);
+      this.key.intensity = 2.4;
+      this.fill.position.copy(this.cam.position).multiplyScalar(-1).add(new THREE.Vector3(0, 0.2, 0));
+      this.fill.intensity = 0.9;
+      this.hemi.intensity = 1.6;
       const prev = new THREE.Color();
       r.getClearColor(prev);
       const prevA = r.getClearAlpha();

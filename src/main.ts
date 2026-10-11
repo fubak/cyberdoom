@@ -1848,6 +1848,10 @@ class Game {
         gripView(view: string | null) {
           g.vm3d?.gripCloseup(view === 'dorsal' || view === 'side' || view === 'under' ? view : null);
         },
+        /** debug: move/rotate a named board socket (pos metres, euler deg ZXY). */
+        socket(name: string, pos?: number[], rot?: number[]) {
+          g.vm3d?.setSocket(name, pos as [number, number, number] | undefined, rot as [number, number, number] | undefined);
+        },
         state() {
           return { active: g.vm3d?.handles() ?? null, clipT: g.vm3d?.clipTime() ?? null };
         },
