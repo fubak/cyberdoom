@@ -14,6 +14,7 @@ const CLIPS = {
   type: { dur: 0.62, stills: [0, 0.06, 0.17, 0.3, 0.46, 0.52, 0.58, 0.62] },
   swing: { dur: 0.6, stills: [0, 0.03, 0.06, 0.105, 0.17, 0.3, 0.45, 0.6] },
 };
+const SIDES = ['L', 'R'];
 const errors = [];
 mkdirSync(OUT, { recursive: true });
 
@@ -31,22 +32,26 @@ for (const gender of ['male', 'female']) {
   await page.waitForFunction(() => window.__cd, { timeout: 30000 });
   await page.evaluate((g) => window.__cd.startMission('m01', g), gender);
   await page.waitForTimeout(1400);
-  for (const pose of POSES) {
-    for (const view of VIEWS) {
-      await page.evaluate(([p, v]) => window.__cd.vm3d.study(p, v), [pose, view]);
-      await page.waitForTimeout(350);
-      await page.screenshot({ path: `${OUT}/study-${gender}-${pose}-${view}.png` });
+  for (const side of SIDES) {
+    for (const pose of POSES) {
+      for (const view of VIEWS) {
+        await page.evaluate(([p, v, s]) => window.__cd.vm3d.study(p, v, s), [pose, view, side]);
+        await page.waitForTimeout(350);
+        await page.screenshot({ path: `${OUT}/study-${gender}-${side}-${pose}-${view}.png` });
+      }
     }
   }
   await page.evaluate(() => window.__cd.vm3d.study(null));
   await page.close();
   await browser.close();
-  // sheet: rows = poses, cols = views
-  const tiles = POSES.flatMap((p) => VIEWS.map((v) => `${OUT}/study-${gender}-${p}-${v}.png`));
-  try {
-    execFileSync('montage', [...tiles, '-tile', '3x5', '-geometry', '+4+4', '-background', '#222',
-      `${OUT}/hand-study-${gender}.png`]);
-  } catch (e) { errors.push(`montage study: ${e.message.slice(0, 200)}`); }
+  // sheet per hand: rows = poses, cols = views
+  for (const side of SIDES) {
+    const tiles = POSES.flatMap((p) => VIEWS.map((v) => `${OUT}/study-${gender}-${side}-${p}-${v}.png`));
+    try {
+      execFileSync('montage', [...tiles, '-tile', '3x5', '-geometry', '+4+4', '-background', '#222',
+        `${OUT}/hand-study-${gender}-${side}.png`]);
+    } catch (e) { errors.push(`montage study: ${e.message.slice(0, 200)}`); }
+  }
 
   // ---------- 4K idle + clip stills (contact sheets) ----------
   const b4k = await chromium.launch();

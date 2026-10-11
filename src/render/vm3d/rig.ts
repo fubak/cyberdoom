@@ -2,17 +2,16 @@ import * as THREE from 'three';
 import type { FingerName } from '../handrig';
 import { resolveClip, type Resolved, type ResolvedHand, type VmClip } from './clips';
 import { KeyboardRig, keyTopWorld } from './keyboard3d';
-import { ensureHandAssets, handAssetsReady, LiveArm, LiveHand, type HandSpec } from './hand3d';
+import { ensureHandAssets, handAssetsReady, LiveHand, type HandSpec } from './hand3d';
 
 const D2R = Math.PI / 180;
-const _p = new THREE.Vector3();
 const _q = new THREE.Quaternion();
 const _e = new THREE.Euler();
 
 /**
- * The vm3d rig: board + two live hands + two arms. `root` is the vm-space
+ * The vm3d rig: board + two live hands. `root` is the vm-space
  * group the motion layer offsets (sway/bob/lower); it parents the tool. The
- * hands and arms live in `stage` (scene/camera space) and are driven by
+ * hands live in `stage` (scene/camera space) and are driven by
  * socket world transforms every frame, so grips track the board rigidly.
  */
 export class Vm3dRig {
@@ -20,7 +19,6 @@ export class Vm3dRig {
   readonly stage = new THREE.Group();
   readonly board = new KeyboardRig();
   private _hands: Record<'L' | 'R', LiveHand> | null = null;
-  private _arms: Record<'L' | 'R', LiveArm> | null = null;
   readonly spec: HandSpec;
 
   constructor(spec: HandSpec) {
@@ -40,11 +38,7 @@ export class Vm3dRig {
     this._hands = { L: new LiveHand('L', this.spec), R: new LiveHand('R', this.spec) };
     this._hands.L.thumbOut = 0.9; // gripping hand wraps its thumb around the board end
     this._hands.R.thumbOut = 0.6; // typing/backup hand keeps the thumb tucked
-    this._arms = {
-      L: new LiveArm('L', this.spec, this._hands.L.palmW),
-      R: new LiveArm('R', this.spec, this._hands.R.palmW),
-    };
-    this.stage.add(this._hands.L.group, this._hands.R.group, this._arms.L.group, this._arms.R.group);
+    this.stage.add(this._hands.L.group, this._hands.R.group);
     return true;
   }
 
@@ -55,11 +49,6 @@ export class Vm3dRig {
   get hands(): Record<'L' | 'R', LiveHand> {
     if (!this._hands) throw new Error('vm3d: hands not loaded yet');
     return this._hands;
-  }
-
-  get arms(): Record<'L' | 'R', LiveArm> {
-    if (!this._arms) throw new Error('vm3d: hands not loaded yet');
-    return this._arms;
   }
 
   /** Pose everything at clip time t. Returns the resolved frame for tests. */
@@ -128,6 +117,5 @@ export class Vm3dRig {
       hand.ikTo(c.finger as FingerName, target, c.weight);
     }
     this.stage.updateMatrixWorld(true);
-    this.arms[side].update(hand.group.getWorldPosition(_p));
   }
 }

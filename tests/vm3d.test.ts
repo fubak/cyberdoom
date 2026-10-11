@@ -127,20 +127,61 @@ describe('vm3d clip contacts (plan §5)', () => {
           // wrist plane: through the wrist, normal along wrist → middle MCP
           const n = hand.fingerJointsWorld('middle')[0]
             .applyMatrix4(inv).normalize();
-          for (const meshName of ['vm3d-forearm', 'vm3d-sleeve']) {
-            const mesh = hand.group.getObjectByName(meshName) as THREE.Mesh | undefined;
-            expect(mesh, `${side} has ${meshName}`).toBeTruthy();
-            const posAttr = mesh!.geometry.getAttribute('position');
+          // every non-skin mesh under the hand (forearm, sleeve, any stray
+          // arm geometry) must stay on the arm side of the wrist plane
+          const meshes: THREE.Mesh[] = [];
+          hand.group.traverse((o) => {
+            const m = o as THREE.Mesh;
+            if (m.isMesh && !(m as THREE.SkinnedMesh).isSkinnedMesh) meshes.push(m);
+          });
+          expect(meshes.length, `${side} has arm-tail meshes`).toBeGreaterThan(0);
+          for (const mesh of meshes) {
+            const posAttr = mesh.geometry.getAttribute('position');
             const v = new THREE.Vector3();
             for (let vi = 0; vi < posAttr.count; vi++) {
               v.fromBufferAttribute(posAttr, vi);
-              mesh!.localToWorld(v).applyMatrix4(inv);
+              mesh.localToWorld(v).applyMatrix4(inv);
               expect(
                 v.dot(n),
-                `${name}@${t.toFixed(3)} ${side}.${meshName} vertex on finger side`,
+                `${name}@${t.toFixed(3)} ${side}.${mesh.name} vertex on finger side`,
               ).toBeLessThan(0.001);
             }
           }
+        }
+      }
+    });
+
+    it(`${name}: hand frames are proper rotations and forearms point away from the fingers`, () => {
+      const rig = new Vm3dRig(spec);
+      const steps = 10;
+      const inv = new THREE.Matrix4();
+      for (let i = 0; i <= steps; i++) {
+        const t = (i / steps) * clip.duration;
+        rig.solve(clip, t);
+        for (const side of ['L', 'R'] as const) {
+          const hand = rig.hands[side];
+          expect(hand.frameDet, `${side} wrist-frame determinant`).toBeCloseTo(1, 5);
+          hand.group.updateWorldMatrix(true, true);
+          inv.copy(hand.group.matrixWorld).invert();
+          const n = hand.fingerJointsWorld('middle')[0].applyMatrix4(inv).normalize();
+          // forearm tube axis: from the vertex nearest the wrist to the
+          // farthest vertex (the elbow end) — must point away from the MCP
+          const fore = hand.group.getObjectByName('vm3d-forearm') as THREE.Mesh;
+          const posAttr = fore.geometry.getAttribute('position');
+          const v = new THREE.Vector3();
+          const near = new THREE.Vector3();
+          const far = new THREE.Vector3();
+          let dNear = Infinity;
+          let dFar = -1;
+          for (let vi = 0; vi < posAttr.count; vi++) {
+            v.fromBufferAttribute(posAttr, vi);
+            fore.localToWorld(v).applyMatrix4(inv);
+            const d = v.length();
+            if (d < dNear) { dNear = d; near.copy(v); }
+            if (d > dFar) { dFar = d; far.copy(v); }
+          }
+          const axis = far.sub(near).normalize();
+          expect(axis.dot(n), `${name}@${t.toFixed(3)} ${side} forearm axis toward fingers`).toBeLessThan(-0.5);
         }
       }
     });

@@ -1841,8 +1841,8 @@ class Game {
           g.vm3d?.play(a === 'swing' ? 'swing' : 'type');
         },
         /** anatomy study: pose 'open'|'relaxed'|'typing'|'fist'|'bat', view 'palm'|'back'|'side' */
-        study(pose: string | null, view?: string) {
-          g.vm3d?.study(pose, view);
+        study(pose: string | null, view?: string, side?: string) {
+          g.vm3d?.study(pose, view, side === 'L' ? 'L' : 'R');
         },
         state() {
           return { active: g.vm3d?.handles() ?? null, clipT: g.vm3d?.clipTime() ?? null };

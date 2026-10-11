@@ -83,6 +83,7 @@ export class Vm3d {
   private flashLight: THREE.PointLight;
   private flickT = 0;
   private studyHand: LiveHand | null = null;
+  private studySide: 'L' | 'R' = 'R';
   private studyView: 'palm' | 'back' | 'side' = 'back';
 
   constructor(spec: HandSpec) {
@@ -145,14 +146,16 @@ export class Vm3d {
   }
 
   /**
-   * Anatomy study (debug): pose a lone right hand on a neutral background,
-   * `view` in 'palm' | 'back' | 'side'. null pose returns to the viewmodel.
+   * Anatomy study (debug): pose a lone hand on a neutral background,
+   * `view` in 'palm' | 'back' | 'side', `side` 'L' | 'R' (default R).
+   * null pose returns to the viewmodel.
    */
-  study(pose: string | null, view = 'back'): void {
+  study(pose: string | null, view = 'back', side: 'L' | 'R' = 'R'): void {
     if (this.studyHand) { this.scene.remove(this.studyHand.group); this.studyHand = null; }
     if (!pose || !STUDY_POSES[pose] || !this.rig.ready) return;
     this.studyView = view === 'palm' || view === 'side' ? view : 'back';
-    const h = new LiveHand('R', this.spec);
+    this.studySide = side === 'L' ? 'L' : 'R';
+    const h = new LiveHand(this.studySide, this.spec);
     const p = STUDY_POSES[pose];
     h.thumbOut = p.thumbOut ?? 1;
     h.setCurls(p.curls);
@@ -239,8 +242,9 @@ export class Vm3d {
       this.cam.updateProjectionMatrix();
       const d = 0.30;
       const cy = l * 0.55;
+      const sideSign = this.studySide === 'L' ? 1 : -1;
       if (this.studyView === 'palm') this.cam.position.set(0, cy, -d);
-      else if (this.studyView === 'side') this.cam.position.set(-d, cy, 0);
+      else if (this.studyView === 'side') this.cam.position.set(sideSign * d, cy, 0);
       else this.cam.position.set(0, cy, d);
       this.cam.lookAt(0, cy, 0);
       this.key.intensity = 0.45;

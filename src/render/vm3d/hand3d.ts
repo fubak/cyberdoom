@@ -122,6 +122,8 @@ export class LiveHand {
   readonly size: number;
   readonly palmW: number;
   readonly palmL: number;
+  /** determinant of the wrist-frame basis — +1 for a proper rotation. */
+  readonly frameDet: number;
   private readonly spec: HandSpec;
   private readonly chains = {} as Record<FingerName, Chain>;
   private readonly curls = {} as Record<FingerName, Required<Curl>>;
@@ -200,12 +202,27 @@ export class LiveHand {
     };
 
     // ---- palm-in normal (local): the sign that curls toward the palm ----
-    const mcpC = ['index', 'middle', 'ring', 'pinky'].map((f) => toLocal(pos(`${f}-finger-metacarpal`)));
-    const palmCentre = mcpC.reduce((a, p) => a.add(p), new THREE.Vector3())
+    const mcpCentre = () => ['index', 'middle', 'ring', 'pinky']
+      .map((f) => toLocal(pos(`${f}-finger-metacarpal`)))
+      .reduce((a, p) => a.add(p), new THREE.Vector3())
       .divideScalar(4).add(new THREE.Vector3(0, -this.size * 0.45, 0));
+    let palmCentre = mcpCentre();
     // candidates are ±z in FRAME-LOCAL space (palm in = −z by convention);
     // the empirical probe picks the sign that actually bends toward the palm
-    const palmIn = this.pickPalmIn(bones, pos, toLocal, toBoneLocal, new THREE.Vector3(0, 0, -1), palmCentre);
+    let palmIn = this.pickPalmIn(bones, pos, toLocal, toBoneLocal, new THREE.Vector3(0, 0, -1), palmCentre);
+    // Chirality: the frame must be a proper rotation with palm-in at −z.
+    // For a mirrored (left) glb, x = −sx can leave the palm on +z, which
+    // corrupts every bone-local conversion. Flip x so the thumb side reads
+    // +x on L (−x on R) and palm-in returns to −z for both hands.
+    if (palmIn.z > 0) {
+      x.negate();
+      z.crossVectors(x, y).normalize();
+      R.makeBasis(x, y, z).invert();
+      Rinv.copy(R).invert();
+      palmCentre = mcpCentre();
+      palmIn = this.pickPalmIn(bones, pos, toLocal, toBoneLocal, new THREE.Vector3(0, 0, -1), palmCentre);
+    }
+    this.frameDet = new THREE.Vector3().crossVectors(x, y).dot(z);
 
     // ---- per-joint flexion axes (bone-local) ----
     const childOf = new Map<string, string>();
@@ -528,8 +545,6 @@ export class LiveHand {
   }
 }
 
-const _tv = new THREE.Vector3();
-const _tv2 = new THREE.Vector3();
 const clampN = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
 /** Gaussian-elimination solve of a ≤3×3 system (normal equations for the IK). */
@@ -551,92 +566,4 @@ function solve3(A: number[][], b: number[]): number[] {
   return m.map((row) => row[n]);
 }
 
-/* ------------------------------------------------------------------ */
 
-const geoCache = new Map<string, THREE.BufferGeometry>();
-function geo<T extends THREE.BufferGeometry>(key: string, make: () => T): T {
-  let g = geoCache.get(key) as T | undefined;
-  if (!g) { g = make(); geoCache.set(key, g); }
-  return g;
-}
-const matCache = new Map<string, THREE.MeshStandardMaterial>();
-function std(col: string, rough = 0.6): THREE.MeshStandardMaterial {
-  const key = `${col}/${rough}`;
-  let m = matCache.get(key);
-  if (!m) {
-    m = new THREE.MeshStandardMaterial({ color: new THREE.Color(col), roughness: Math.max(rough, 0.78), metalness: 0, side: THREE.DoubleSide });
-    matCache.set(key, m);
-  }
-  return m;
-}
-
-/** Unit-length lathe tube (tapered, rounded ends) along +y; caller scales y. */
-function unitTube(): THREE.BufferGeometry {
-  const pts: THREE.Vector2[] = [new THREE.Vector2(0.001, -0.55)];
-  const steps = 5;
-  for (let i = 0; i <= steps; i++) {
-    const t = i / steps;
-    const r = 0.75 + (1.0 - 0.75) * t;
-    pts.push(new THREE.Vector2(Math.max(0.001, r - 0.25 * Math.cos((t - 0.5) * Math.PI)), t * 1.1 - 0.55));
-  }
-  pts.push(new THREE.Vector2(0.001, 0.55));
-  return geo('unitTube', () => new THREE.LatheGeometry(pts, 10));
-}
-
-/**
- * Two-bone arm: shoulder anchor (off-screen) → elbow → wrist, solved
- * analytically with a preferred pole direction (elbows sag down/out).
- * The sleeve jacket tube runs shoulder→wrist with a skin stub at the wrist.
- */
-export class LiveArm {
-  readonly group = new THREE.Group();
-  private readonly upper = new THREE.Mesh(unitTube(), std('#000'));
-  private readonly fore = new THREE.Mesh(unitTube(), std('#000'));
-  private readonly cuff = new THREE.Mesh(geo('sph', () => new THREE.SphereGeometry(1, 12, 9)), std('#000'));
-  private readonly skinStub = new THREE.Mesh(unitTube(), std('#000'));
-  private readonly shoulder = new THREE.Vector3();
-  private readonly pole = new THREE.Vector3();
-  private readonly l1: number;
-  private readonly l2: number;
-  private readonly rw: number;
-
-  constructor(side: 'L' | 'R', spec: HandSpec, palmW: number) {
-    const jacket = ANALYSTS[spec.gender].jacket;
-    this.upper.material = std(jacket, 0.75);
-    this.fore.material = std(jacket, 0.75);
-    this.cuff.material = std(shade(jacket, 0.7), 0.8);
-    this.skinStub.material = std(spec.skin.base);
-    const s = side === 'L' ? -1 : 1;
-    this.shoulder.set(0.34 * s, -0.42, -0.28);
-    this.pole.set(0.7 * s, -0.55, -0.45).normalize();
-    this.l1 = 0.24;
-    this.l2 = 0.24;
-    this.rw = palmW * 0.5;
-    this.group.add(this.upper, this.fore, this.cuff, this.skinStub);
-  }
-
-  /** Re-pose the arm so the forearm ends at `wrist` (world space). */
-  update(wrist: THREE.Vector3): void {
-    const S = this.shoulder;
-    const d = Math.min(S.distanceTo(wrist), this.l1 + this.l2 - 1e-4);
-    const dir = _tv.copy(wrist).sub(S).divideScalar(Math.max(1e-6, S.distanceTo(wrist)));
-    const a = (this.l1 * this.l1 - this.l2 * this.l2 + d * d) / (2 * d);
-    const h = Math.sqrt(Math.max(0, this.l1 * this.l1 - a * a));
-    const pole = _tv2.copy(this.pole).addScaledVector(dir, -this.pole.dot(dir)).normalize();
-    const elbow = S.clone().addScaledVector(dir, a).addScaledVector(pole, h);
-    this.layTube(this.upper, S, elbow, this.rw * 1.5);
-    this.layTube(this.fore, elbow, wrist, this.rw * 1.12);
-    // cuff just short of the wrist + skin stub into the palm
-    const skinEnd = wrist.clone().addScaledVector(dir, -this.rw * 1.6);
-    this.layTube(this.skinStub, skinEnd, wrist, this.rw * 0.82);
-    this.cuff.position.copy(skinEnd);
-    this.cuff.scale.setScalar(this.rw * 1.15);
-  }
-
-  private layTube(m: THREE.Mesh, a: THREE.Vector3, b: THREE.Vector3, r: number): void {
-    const len = Math.max(1e-4, a.distanceTo(b));
-    m.position.copy(a);
-    m.quaternion.setFromUnitVectors(Y_AXIS, _tv.copy(b).sub(a).divideScalar(len));
-    m.scale.set(r, len, r);
-  }
-}
