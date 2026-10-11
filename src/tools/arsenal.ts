@@ -94,6 +94,7 @@ export class Arsenal {
     bus.on('badge-door', ({ allowed }) => {
       this.confirm(allowed, 'badge');
       playTool(allowed ? 'badge-ok' : 'badge-deny');
+      if (allowed) playTool('door-clunk'); // the bolt itself, a beat after the beep
     });
     bus.on('badge-confirm', ({ allowed }) => {
       this.confirm(allowed, 'badge');

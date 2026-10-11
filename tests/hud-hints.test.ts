@@ -396,7 +396,7 @@ describe('MissionRuntime.interactHint', () => {
       { id: 'c', kind: 'workstation', x: 1, y: 2, sprite: 's' },
     ]), new EventBus());
     expect(rt.interactHint(rt.byId('i')!)).toBe(rt.interactHint(rt.byId('c')!));
-    expect(rt.interactHint(rt.byId('i')!)).toBe('INSPECT FIRST (MOUSE 2)');
+    expect(rt.interactHint(rt.byId('i')!)).toBe('INSPECT HOST');
     // once revealed, the infected host is visibly different
     rt.byId('i')!.state.revealed = true;
     rt.byId('c')!.state.revealed = true;
