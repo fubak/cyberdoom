@@ -1844,6 +1844,10 @@ class Game {
         study(pose: string | null, view?: string, side?: string) {
           g.vm3d?.study(pose, view, side === 'L' ? 'L' : 'R');
         },
+        /** grip close-up: 'dorsal'|'side'|'under'|null (pair with play+freeze) */
+        gripView(view: string | null) {
+          g.vm3d?.gripCloseup(view === 'dorsal' || view === 'side' || view === 'under' ? view : null);
+        },
         state() {
           return { active: g.vm3d?.handles() ?? null, clipT: g.vm3d?.clipTime() ?? null };
         },

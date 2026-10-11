@@ -110,6 +110,7 @@ export class Vm3dRig {
       }
     }
     hand.setCurls(rh.curls);
+    if (rh.thumbOut !== undefined) hand.thumbOut = rh.thumbOut;
     for (const c of rh.contacts) {
       const target = c.socket.startsWith('key.')
         ? keyTopWorld(this.board, c.socket.slice(4))

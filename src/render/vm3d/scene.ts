@@ -85,6 +85,7 @@ export class Vm3d {
   private studyHand: LiveHand | null = null;
   private studySide: 'L' | 'R' = 'R';
   private studyView: 'palm' | 'back' | 'side' = 'back';
+  private gripView: 'dorsal' | 'side' | 'under' | null = null;
 
   constructor(spec: HandSpec) {
     this.spec = spec;
@@ -143,6 +144,15 @@ export class Vm3d {
   /** Current clip time (debug state). */
   clipTime(): number {
     return this.clipT;
+  }
+
+  /**
+   * Grip close-up (debug): camera tight on the board's left end showing
+   * both hands at the swing grip, from 'dorsal' | 'side' | 'under'.
+   * null returns to the viewmodel. Pair with play('swing') + freeze(t).
+   */
+  gripCloseup(view: 'dorsal' | 'side' | 'under' | null): void {
+    this.gripView = view;
   }
 
   /**
@@ -265,6 +275,28 @@ export class Vm3d {
       return;
     }
     if (!this.toolId) return;
+    if (this.gripView) {
+      // tight shot on the board's left end: world position of the end
+      // face centre, then offset the camera per the requested view
+      this.cam.aspect = w / h;
+      this.cam.updateProjectionMatrix();
+      const end = this.rig.board.group.localToWorld(new THREE.Vector3(-0.155, -0.01, 0));
+      if (this.gripView === 'dorsal') this.cam.position.copy(end).add(new THREE.Vector3(-0.10, 0.24, 0.10));
+      else if (this.gripView === 'side') this.cam.position.copy(end).add(new THREE.Vector3(-0.02, 0.04, 0.26));
+      else this.cam.position.copy(end).add(new THREE.Vector3(-0.05, -0.20, 0.16));
+      this.cam.lookAt(end);
+      this.key.intensity = 0.8;
+      this.hemi.intensity = 0.9;
+      const prev = new THREE.Color();
+      r.getClearColor(prev);
+      const prevA = r.getClearAlpha();
+      r.setClearColor('#3a4150', 1);
+      r.render(this.scene, this.cam);
+      r.setClearColor(prev, prevA);
+      this.cam.position.set(0, 0, 0);
+      this.cam.lookAt(0, 0, -1);
+      return;
+    }
     const crossing = this.clip === CLIPS['kbd.swing'] && this.clipT < 0.16;
     const bandH = crossing ? Math.floor(h * 0.58) : Math.floor(h * (1 - VM_CLEAR));
     this.cam.aspect = w / h;

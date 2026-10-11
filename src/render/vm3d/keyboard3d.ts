@@ -269,28 +269,23 @@ export class KeyboardRig {
 
   private buildSockets(): void {
     const d = Math.PI / 180;
-    // left grip: fist wrapped around the board's left end like a bat handle —
-    // knuckles hang over the front edge, fingers curl under the bottom face,
-    // thumb wraps over the top edge
-    this.addSocket('gripL.wrist', [-0.152, 0.005, 0.020], [60, -15, -120]);
-    this.addSocket('gripL.tip.thumb', [-0.075, 0.012, 0.050]);
-    this.addSocket('gripL.tip.index', [-0.081, -0.013, 0.061]);
-    this.addSocket('gripL.tip.middle', [-0.089, -0.031, 0.057]);
-    this.addSocket('gripL.tip.ring', [-0.105, -0.036, 0.056]);
-    this.addSocket('gripL.tip.pinky', [-0.130, -0.048, 0.063]);
-    // swing grip: right hand stacked just inboard of the left at the same end
-    this.addSocket('gripR.wrist', [-0.112, 0.008, 0.035], [60, -15, -120]);
-    this.addSocket('gripR.tip.thumb', [-0.025, 0.010, 0.045]);
-    this.addSocket('gripR.tip.index', [-0.034, -0.011, 0.067]);
-    this.addSocket('gripR.tip.middle', [-0.056, -0.022, 0.073]);
-    this.addSocket('gripR.tip.ring', [-0.072, -0.033, 0.074]);
-    this.addSocket('gripR.tip.pinky', [-0.081, -0.043, 0.071]);
-    // mid-air waypoint above the grip end: swing grab/release routes the
-    // hand over the board so finger joints never cross the case
-    this.addSocket('wayR.wrist', [-0.175, 0.130, 0.020], [0, 90, -180]);
-    // low pull-back point: fingertips slide off the board to the left of
-    // the end face before the hand rises, so they never cross the case
-    this.addSocket('wayR2.wrist', [-0.205, 0.028, 0.030], [0, 90, -180]);
+    // bat grip: two fists stacked along the board's left short end. The
+    // left hand wraps over the top corner: wrist outboard of the end face,
+    // palm down, knuckles over the top, fingers curl down the end face
+    // with tips tucked under the end plane (euler [0,-90,-90]). The right
+    // hand cups the end face from outboard-behind: palm into the face,
+    // fingers down and under the bottom (euler [0,90,180]). One fist
+    // above/front, one below/behind — no fingertip IK, fixed fist curls.
+    this.addSocket('gripL.wrist', [-0.210, 0.015, 0.040], [0, -90, -90]);
+    this.addSocket('gripR.wrist', [-0.175, 0.050, -0.080], [0, 90, 180]);
+    // mid-air waypoint above the grip end, in the same palm-down grip
+    // orientation: the hand lifts off the end without twisting so its
+    // joints never sweep through the case
+    this.addSocket('wayR.wrist', [-0.185, 0.130, -0.010], [0, -90, -90]);
+    // low pull-back beside the end face, in the same cup-grip
+    // orientation: the tucked hand slides off behind the end without
+    // twisting so its joints never sweep the case
+    this.addSocket('wayR2.wrist', [-0.195, 0.060, -0.095], [0, 90, 180]);
     // high point above the right-hand side of the deck: regrip finishes by
     // dropping straight down onto the home row, not swooping under the lip
     this.addSocket('wayR3.wrist', [0.060, 0.150, 0.050], [0, 90, -180]);

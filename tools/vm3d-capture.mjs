@@ -84,7 +84,22 @@ for (const gender of ['male', 'female']) {
         '-background', '#111', `${OUT}/montage-${gender}-${action}.png`]);
     } catch (e) { errors.push(`montage ${action}: ${e.message.slice(0, 200)}`); }
   }
-  await p4k.evaluate(() => { window.__cd.vm3d.freeze(null); window.__cd.vm3d.force(null); });
+  // ---------- grip close-up: 3 views of the two-hand end grip ----------
+  for (const view of ['dorsal', 'side', 'under']) {
+    await p4k.evaluate((v) => {
+      window.__cd.vm3d.play('swing');
+      window.__cd.vm3d.freeze(0.05);
+      window.__cd.vm3d.gripView(v);
+    }, view);
+    await p4k.waitForTimeout(300);
+    await p4k.screenshot({ path: `${OUT}/closeup-${gender}-grip-${view}.png` });
+  }
+  try {
+    execFileSync('montage', [...['dorsal', 'side', 'under'].map((v) => `${OUT}/closeup-${gender}-grip-${v}.png`),
+      '-tile', '3x1', '-geometry', '1280x720+2+2', '-background', '#222',
+      `${OUT}/closeup-${gender}-grip.png`]);
+  } catch (e) { errors.push(`montage closeup: ${e.message.slice(0, 200)}`); }
+  await p4k.evaluate(() => { window.__cd.vm3d.gripView(null); window.__cd.vm3d.freeze(null); window.__cd.vm3d.force(null); });
   await p4k.close();
   await b4k.close();
 

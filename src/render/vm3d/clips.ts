@@ -21,6 +21,8 @@ export interface HandKey {
   /** palm orientation (euler deg, ZXY) used with a free `wrist`. */
   wristRot?: V3;
   curls?: Partial<Record<FingerName, Curl>>;
+  /** thumb wrap amount (1 = extended sideways, 0 = wrapped around a grip). */
+  thumbOut?: number;
   /** fingertip → socket contacts active at this key. */
   ik?: IkContact[];
 }
@@ -56,6 +58,7 @@ export interface WristTarget {
 export interface ResolvedHand {
   wrists: WristTarget[];
   curls: Partial<Record<FingerName, Curl>>;
+  thumbOut?: number;
   contacts: ResolvedContact[];
 }
 
@@ -115,9 +118,14 @@ function resolveHand(a: HandKey | undefined, b: HandKey | undefined, u: number):
   if (b && (b.wristSocket || b.wrist)) {
     wrists.push({ socket: b.wristSocket, pos: b.wrist, rot: b.wristRot, weight: u });
   }
+  const thumbOut =
+    a?.thumbOut === undefined ? b?.thumbOut
+      : b?.thumbOut === undefined ? a?.thumbOut
+        : lerp(a.thumbOut, b.thumbOut, u);
   return {
     wrists,
     curls: lerpCurls(a?.curls, b?.curls, u),
+    thumbOut,
     contacts: [...contacts.values()].filter((c) => c.weight > 0.2),
   };
 }
@@ -157,42 +165,39 @@ const HOVER_CURLS: Partial<Record<FingerName, Curl>> = {
   pinky: { mcp: 55, pip: 70, abd: 10 },
   thumb: { mcp: 12, pip: 18 },
 };
-// the left hand's permanent end-grip curl; IK puts the tips on the board
-const GRIP_L_CURLS: Partial<Record<FingerName, Curl>> = {
-  index: { mcp: 78, pip: 92, dip: 60, abd: -4 },
-  middle: { mcp: 82, pip: 95, dip: 64, abd: 0 },
-  ring: { mcp: 84, pip: 95, dip: 64, abd: 4 },
-  pinky: { mcp: 80, pip: 90, dip: 60, abd: 8 },
-  thumb: { mcp: 30, pip: 24 },
+// full fist: the study 'fist' curls that visibly close the hand. Used by
+// BOTH hands for the swing's bat grip — no fingertip IK, the fixed curls
+// wrap the fingers around the board's left end on their own.
+const FIST_CURLS: Partial<Record<FingerName, Curl>> = {
+  index: { mcp: 88, pip: 104, abd: -4 },
+  middle: { mcp: 90, pip: 106, abd: 0 },
+  ring: { mcp: 90, pip: 104, abd: 5 },
+  pinky: { mcp: 88, pip: 100, abd: 9 },
+  thumb: { mcp: 38, pip: 45 },
 };
-const GRIP_R_CURLS: Partial<Record<FingerName, Curl>> = {
-  index: { mcp: 80, pip: 94, dip: 62, abd: -5 },
-  middle: { mcp: 84, pip: 97, dip: 66, abd: 0 },
-  ring: { mcp: 86, pip: 97, dip: 66, abd: 5 },
-  pinky: { mcp: 82, pip: 92, dip: 62, abd: 9 },
-  thumb: { mcp: 32, pip: 26 },
+// the left hand's permanent end-grip hold: same closed-grip geometry as the
+// fist relaxed ~18% (support grip, thumb over the top edge)
+const HOLD_L_CURLS: Partial<Record<FingerName, Curl>> = {
+  index: { mcp: 72, pip: 85, abd: -4 },
+  middle: { mcp: 74, pip: 87, abd: 0 },
+  ring: { mcp: 74, pip: 85, abd: 5 },
+  pinky: { mcp: 72, pip: 82, abd: 9 },
+  thumb: { mcp: 31, pip: 37 },
 };
 
 const ikc = (finger: FingerName, socket: string, weight?: number): IkContact => ({ finger, socket, weight });
-const L_GRIP = { wristSocket: 'gripL.wrist', curls: GRIP_L_CURLS, ik: [
-  // the thumb wraps the end face: soft contact (the 2-dof thumb reaches
-  // within ~1 cm of the face — enough to read as a wrap without strain)
-  ikc('thumb', 'gripL.tip.thumb', 0.6),
-  ikc('index', 'gripL.tip.index'),
-  ikc('middle', 'gripL.tip.middle'),
-  ikc('ring', 'gripL.tip.ring'),
-  ikc('pinky', 'gripL.tip.pinky'),
-] };
-const R_GRIP = { wristSocket: 'gripR.wrist', curls: GRIP_R_CURLS, ik: [
-  ikc('thumb', 'gripR.tip.thumb', 0.5),
-  ikc('index', 'gripR.tip.index'),
-  ikc('middle', 'gripR.tip.middle'),
-  ikc('ring', 'gripR.tip.ring'),
-  ikc('pinky', 'gripR.tip.pinky'),
-] };
+// support grip for idle/type — relaxed closed hand on the board's left end
+const L_GRIP = { wristSocket: 'gripL.wrist', curls: HOLD_L_CURLS, thumbOut: 0.45 };
+// swing grip: both fists stacked along the board's left end
+const L_FIST = { wristSocket: 'gripL.wrist', curls: FIST_CURLS, thumbOut: 0.3 };
+// right hand cups the end face: thumb wrapped flat against the palm
+const R_GRIP = { wristSocket: 'gripR.wrist', thumbOut: 0.0, curls: {
+  ...FIST_CURLS,
+  thumb: { mcp: 60, pip: 58 },
+} };
 // home pose: palm down over the home row, all four fingertips resting on
 // J K L ; (the board's home row ends at ENT), thumb near the space bar.
-const R_REST = { wristSocket: 'hoverR.wrist', curls: HOVER_CURLS, ik: [
+const R_REST = { wristSocket: 'hoverR.wrist', curls: HOVER_CURLS, thumbOut: 0.6, ik: [
   ikc('index', 'key.j'),
   ikc('middle', 'key.k'),
   ikc('ring', 'key.l'),
@@ -208,29 +213,29 @@ const LIFT_CURLS: Partial<Record<FingerName, Curl>> = {
   pinky: { mcp: 30, pip: 34, abd: 10 },
   thumb: { mcp: 5, pip: 10 },
 };
-const R_LIFT = { wristSocket: 'hoverR.wrist', curls: LIFT_CURLS };
+const R_LIFT = { wristSocket: 'hoverR.wrist', curls: LIFT_CURLS, thumbOut: 0.6 };
 // mid-air waypoint above the grip end: the hand arcs up over the board
 // between the home-row hover and the bat grip instead of dragging its
 // fingers through the case
-const R_WAY = { wristSocket: 'wayR.wrist', curls: {
-  index: { mcp: 68, pip: 80, abd: -4 },
-  middle: { mcp: 72, pip: 84, abd: 0 },
-  ring: { mcp: 74, pip: 86, abd: 5 },
-  pinky: { mcp: 70, pip: 82, abd: 9 },
-  thumb: { mcp: 20, pip: 26 },
+const R_WAY = { wristSocket: 'wayR.wrist', thumbOut: 0.5, curls: {
+  index: { mcp: 80, pip: 92, abd: -5 },
+  middle: { mcp: 82, pip: 94, abd: 0 },
+  ring: { mcp: 82, pip: 94, abd: 5 },
+  pinky: { mcp: 80, pip: 90, abd: 9 },
+  thumb: { mcp: 30, pip: 35 },
 } };
-// low pull-back beside the end face: fingers stay curled while the hand
-// slides left, keeping the tips outside the case until they're clear
-const R_WAY2 = { wristSocket: 'wayR2.wrist', curls: {
-  index: { mcp: 55, pip: 65, abd: -5 },
-  middle: { mcp: 60, pip: 70, abd: 0 },
-  ring: { mcp: 64, pip: 74, abd: 5 },
-  pinky: { mcp: 58, pip: 68, abd: 9 },
-  thumb: { mcp: 16, pip: 24 },
+// low pull-back beside the end face: near-fist tuck keeps every joint
+// outboard of the case while the hand slides out behind the end
+const R_WAY2 = { wristSocket: 'wayR2.wrist', thumbOut: 0.5, curls: {
+  index: { mcp: 80, pip: 92, abd: -5 },
+  middle: { mcp: 82, pip: 94, abd: 0 },
+  ring: { mcp: 82, pip: 94, abd: 5 },
+  pinky: { mcp: 80, pip: 90, abd: 9 },
+  thumb: { mcp: 30, pip: 35 },
 } };
 // high hover above the home row: final approach of the regrip drops
 // vertically onto the keys instead of swooping under the front lip
-const R_WAY3 = { wristSocket: 'wayR3.wrist', curls: {
+const R_WAY3 = { wristSocket: 'wayR3.wrist', thumbOut: 0.6, curls: {
   index: { mcp: 60, pip: 72, abd: -4 },
   middle: { mcp: 62, pip: 74, abd: 0 },
   ring: { mcp: 64, pip: 76, abd: 5 },
@@ -239,12 +244,12 @@ const R_WAY3 = { wristSocket: 'wayR3.wrist', curls: {
 } };
 // raised tuck still in the typing pose: the hand lifts and rolls before
 // sweeping sideways, so no joint sweeps through the keywell
-const R_LIFT3 = { wristSocket: 'liftR3.wrist', curls: {
+const R_LIFT3 = { wristSocket: 'liftR3.wrist', thumbOut: 0.35, curls: {
   index: { mcp: 56, pip: 66, abd: -4 },
   middle: { mcp: 58, pip: 68, abd: 0 },
   ring: { mcp: 60, pip: 70, abd: 5 },
   pinky: { mcp: 58, pip: 68, abd: 9 },
-  thumb: { mcp: 16, pip: 22 },
+  thumb: { mcp: 32, pip: 38 },
 } };
 // during a strike the other fingers stay lifted clear of the deck
 const PRESS_CURLS: Partial<Record<FingerName, Curl>> = { ...LIFT_CURLS };
@@ -322,23 +327,26 @@ export const CLIPS: Record<string, VmClip> = {
     keys: [
       // trigger: right hand drops onto the grip, board starts up-right
       { t: 0, root: { pos: HOME_POS, rot: HOME_ROT }, L: L_GRIP, R: R_HOVER },
-      { t: 0.008, root: { pos: [0.022, -0.144, -0.439], rot: [25, 2, -11] }, L: L_GRIP, R: R_LIFT3 },
-      { t: 0.016, root: { pos: [0.03, -0.140, -0.437], rot: [25, -1, -14] }, L: L_GRIP, R: R_WAY },
-      { t: 0.024, root: { pos: [0.042, -0.137, -0.436], rot: [26, -4, -16] }, L: L_GRIP, R: R_WAY2 },
-      { t: 0.03, root: { pos: [0.05, -0.135, -0.435], rot: [26, -6, -18] }, L: L_GRIP, R: R_GRIP },
+      { t: 0.008, root: { pos: [0.022, -0.144, -0.439], rot: [25, 2, -11] }, L: L_FIST, R: R_LIFT3 },
+      { t: 0.016, root: { pos: [0.03, -0.140, -0.437], rot: [25, -1, -14] }, L: L_FIST, R: R_WAY },
+      { t: 0.024, root: { pos: [0.042, -0.137, -0.436], rot: [26, -4, -16] }, L: L_FIST, R: R_WAY2 },
+      { t: 0.03, root: { pos: [0.05, -0.135, -0.435], rot: [26, -6, -18] }, L: L_FIST, R: R_GRIP },
       // wind-up peak at the 60 ms windup: held end high right, rolled back
-      { t: 0.06, root: { pos: [0.13, -0.10, -0.41], rot: [30, -20, -36] }, L: L_GRIP, R: R_GRIP },
+      { t: 0.06, root: { pos: [0.13, -0.10, -0.41], rot: [30, -20, -36] }, L: L_FIST, R: R_GRIP },
       // impact: board whips across to the lower left but the stacked grip
       // stays in frame (never leaves the view)
-      { t: 0.105, root: { pos: [-0.08, 0.005, -0.36], rot: [14, 30, 22] }, L: L_GRIP, R: R_GRIP },
+      { t: 0.105, root: { pos: [-0.08, 0.005, -0.36], rot: [14, 30, 22] }, L: L_FIST, R: R_GRIP },
       // follow-through: carried left and up, grip still visible
-      { t: 0.17, root: { pos: [-0.11, -0.03, -0.40], rot: [8, 34, 12] }, L: L_GRIP, R: R_GRIP },
-      // recover and regrip
-      { t: 0.30, root: { pos: [-0.06, -0.14, -0.44], rot: [18, 16, -2] }, L: L_GRIP, R: R_GRIP },
-      { t: 0.335, root: { pos: [-0.034, -0.141, -0.431], rot: [21, 13, -3] }, L: L_GRIP, R: R_WAY2 },
-      { t: 0.36, root: { pos: [-0.025, -0.143, -0.432], rot: [21, 12, -4] }, L: L_GRIP, R: R_WAY },
-      { t: 0.40, root: { pos: [-0.012, -0.145, -0.436], rot: [22, 10, -6] }, L: L_GRIP, R: R_WAY3 },
-      { t: 0.435, root: { pos: [0.002, -0.146, -0.438], rot: [23, 8, -7] }, L: L_GRIP, R: R_LIFT3 },
+      { t: 0.17, root: { pos: [-0.11, -0.03, -0.40], rot: [8, 34, 12] }, L: L_FIST, R: R_GRIP },
+      // recover and regrip: the right hand lifts straight up off the end,
+      // arcs high over the deck, and drops back onto the home row
+      { t: 0.30, root: { pos: [-0.06, -0.14, -0.44], rot: [18, 16, -2] }, L: L_FIST, R: R_GRIP },
+      { t: 0.335, root: { pos: [-0.034, -0.141, -0.431], rot: [21, 13, -3] }, L: L_FIST, R: R_WAY2 },
+      { t: 0.37, root: { pos: [-0.025, -0.143, -0.432], rot: [21, 12, -4] }, L: L_FIST, R: R_WAY3 },
+      { t: 0.41, root: { pos: [-0.012, -0.145, -0.436], rot: [22, 10, -6] }, L: L_FIST, R: R_LIFT3 },
+      // hold the tuck high until the last 20 ms, then settle onto the keys
+      // — a slow diagonal descent drags the thumb tip through the keywell
+      { t: 0.43, root: { pos: [0.0, -0.146, -0.438], rot: [22, 8, -7] }, L: L_FIST, R: R_LIFT3 },
       { t: 0.45, root: { pos: [0.005, -0.147, -0.44], rot: [23, 7, -7] }, L: L_GRIP, R: R_HOVER },
       { t: 0.6, root: { pos: HOME_POS, rot: HOME_ROT }, L: L_GRIP, R: R_HOVER },
     ],
