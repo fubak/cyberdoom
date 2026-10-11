@@ -69,8 +69,8 @@ Doom); movement/fire keys are never swallowed.
 
 6. **`m04` secret exit → `m13` HONEYPOT** (the E1M9 egg). A wall-tell door on
    the west end of the south cage corridor hides a one-cell exit pad
-   (`CellDef.secretExit`). Stepping on it finishes the mission *won* — even if
-   objectives are open — and routes the debrief to a briefing for `m13`. The
+   (`CellDef.secretExit`). Once the mission's objectives are done, stepping on it
+   finishes the mission *won* like the normal exit, but routes the debrief to a briefing for `m13`. The
    nearby cage console logs a lure-domain note hinting that easy links go
    somewhere else. Payoff: an entire level nobody told you about.
 
