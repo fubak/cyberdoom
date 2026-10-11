@@ -545,6 +545,57 @@ export function buildTextures(jobs = false): void {
     g.fillRect(0, 78, 64, 2);
   });
 
+  // EGGS: dev-room credits mural (the Icon-of-Sin egg — the devs hiding
+  // themselves in the game). Steel panel etched with the build roster, lit
+  // like a museum plaque.
+  wall('wall-devs', (p) => {
+    const { g, glow } = p;
+    noiseFill(p, [30, 26, 34], 8);
+    steelPanel(p, 2, 2, 60, 60, [64, 58, 74]);
+    bevel(g, 6, 6, 52, 46, '#3a3450', '#8a80a8', '#141020', true);
+    drawText(g, 'CYBERDOOM', 12, 11, '#ffd040', 'small', '#100a04');
+    drawText(g, 'BUILT BY DEVIN', 10, 22, '#e8e4f4', 'tiny', null);
+    drawText(g, 'LOOK FEEL ARSENAL', 10, 30, '#9ab0c8', 'tiny', null);
+    drawText(g, 'ENEMIES LEVELS', 10, 37, '#9ab0c8', 'tiny', null);
+    drawText(g, 'CURRICULUM EGGS', 10, 44, '#9ab0c8', 'tiny', null);
+    glow.fillStyle = '#fff';
+    glow.fillRect(12, 11, 40, 7);
+    for (const [x, y] of [[8, 8], [55, 8], [8, 50], [55, 50]]) rivet(g, x, y);
+    g.fillStyle = '#18d8f0';
+    g.fillRect(2, 55, 60, 2);
+    glow.fillRect(2, 55, 60, 2);
+    vShade(g, 0, 5, '6,5,10', 0.35, 0);
+    g.fillStyle = '#14161c';
+    g.fillRect(0, 78, 64, 2);
+  });
+
+  // EGGS: the quack tell — same office panels, but someone stenciled a small
+  // yellow duck near the floor. That is the whole hint.
+  wall('wall-quack', (p) => {
+    const { g, glow } = p;
+    noiseFill(p, [52, 46, 40], 10);
+    steelPanel(p, 1, 2, 30, 44, [104, 98, 88]);
+    steelPanel(p, 33, 2, 30, 44, [104, 98, 88]);
+    seam(g, 32, 2, 32, 45);
+    for (const [x, y] of [[3, 4], [27, 4], [3, 42], [27, 42], [35, 4], [59, 4], [35, 42], [59, 42]]) rivet(g, x, y);
+    g.fillStyle = '#0a0c10';
+    g.fillRect(0, 47, 64, 5);
+    g.fillStyle = '#18d8f0';
+    g.fillRect(2, 48, 60, 3);
+    glow.fillStyle = '#fff';
+    glow.fillRect(2, 48, 60, 3);
+    // duck glyph: body, head+beak, wing — tiny, yellow, low on the wall
+    g.fillStyle = '#ffd040';
+    g.fillRect(46, 58, 10, 6); // body
+    g.fillRect(43, 56, 6, 5); // head
+    g.fillStyle = '#ff9030';
+    g.fillRect(41, 58, 3, 2); // beak
+    g.fillStyle = '#c09020';
+    g.fillRect(48, 59, 6, 3); // wing
+    g.fillStyle = '#14161c';
+    g.fillRect(0, 78, 64, 2);
+  });
+
   // Server rack: dark chassis, 2U units, drive bays, fullbright blinkenlights.
   wallV('wall-server', (p) => {
     const { g, glow } = p;

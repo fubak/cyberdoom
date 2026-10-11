@@ -28,9 +28,29 @@ export function isCompleted(id: string): boolean {
 
 export function isUnlocked(id: string, orderedIds: string[]): boolean {
   if (new URLSearchParams(globalThis.location?.search ?? '').get('debug') === '1') return true;
+  if (cheatUnlocked()) return true;
   const index = orderedIds.indexOf(id);
   if (index <= 0) return true;
   return completedIds().includes(orderedIds[index - 1]);
+}
+
+const CHEAT_KEY = 'cyberdoom.konami';
+
+/** EGGS: the title-screen Konami code persists an unlock-everything flag. */
+export function cheatUnlocked(): boolean {
+  try {
+    return globalThis.localStorage?.getItem(CHEAT_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+export function unlockEverything(): void {
+  try {
+    globalThis.localStorage?.setItem(CHEAT_KEY, '1');
+  } catch {
+    // Storage is optional.
+  }
 }
 
 export type MissionRowState = 'cleared' | 'next' | 'open' | 'locked';

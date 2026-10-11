@@ -26,15 +26,16 @@ import * as screens from './ui/screens';
 import { MissionRuntime } from './missions/runtime';
 import { mfaPending } from './tools/badge';
 import { Arsenal, ammoUnit } from './tools/arsenal';
-import { missionRegistry } from './content/missions';
+import { missionById, requireMission } from './content/missions';
 import { objectiveById } from './content/objectives';
+import { CHEATS, CheatBuffer, KonamiBuffer } from './eggs/cheats';
 import { toolForSlot } from './tools';
 
 import { USB_PLUG_RANGE } from './tools/usb';
 import { characterSelect } from './ui/characterSelect';
 import { applyBack, LOOK_HINT, MENU_HINT } from './ui/nav';
 import { pauseMenu } from './ui/pause';
-import { markCompleted } from './missions/progress';
+import { markCompleted, unlockEverything } from './missions/progress';
 import { registerThreatSprites } from './missions/threatSprites';
 import { genDebugCompare } from './render/genpool';
 
@@ -125,6 +126,10 @@ class Game {
   private dossier!: Dossier;
   private input!: Input;
   private screen: Screen = 'title';
+  /** EGGS: typed-cheat state — Doom-style letter buffer + Konami matcher. */
+  private cheatBuf = new CheatBuffer();
+  private konamiBuf = new KonamiBuffer();
+  private god = false;
   private gender: Gender = 'male';
   private role = 'analyst';
   private overlay: HTMLElement | null = null;
@@ -207,6 +212,25 @@ class Game {
     this.input = new Input(this.renderer.canvas, () => this.audio.unlock(), () => this.lockWanted());
     this.hud = new Hud(viewport);
     this.automap = new Automap(this.hud.canvas);
+    // EGGS: Doom-style typed cheats during play; the Konami code on title.
+    // Capture phase: this listener is registered before the dossier's capture
+    // listener (new Dossier below), so a live cheat prefix can swallow keys —
+    // otherwise 'l' opens the case file mid-RICKROLL and kills the code.
+    window.addEventListener('keydown', (event) => {
+      if (event.repeat) return;
+      if (this.screen === 'title') {
+        if (this.konamiBuf.push(event.key)) this.applyKonami();
+        return;
+      }
+      if (this.screen !== 'play' || this.paused || this.dossier.isOpen) return;
+      const cheat = this.cheatBuf.push(event.key);
+      // A completed code, or a live prefix deep enough to be unambiguous,
+      // eats the key so in-play hotkeys (L log, M map, E use, digit tools)
+      // don't fire mid-code and kill the sequence — Doom lets cheat letters
+      // keep their side effects, but losing the rest of the code is worse.
+      if (cheat || this.cheatBuf.hot()) event.stopImmediatePropagation();
+      if (cheat) this.applyCheat(cheat);
+    }, true);
     window.addEventListener('keydown', (event) => {
       if (event.repeat || this.screen !== 'play') return;
       if (event.code === 'KeyM') {
@@ -393,7 +417,7 @@ class Game {
     // deep link: ?mission=m01&gender=female
     const dm = params.get('mission');
     const dg = params.get('gender');
-    if (dm && missionRegistry.get(dm)) {
+    if (dm && missionById(dm)) {
       this.gender = dg === 'female' ? 'female' : 'male';
       this.startMission(dm);
     } else {
@@ -456,7 +480,7 @@ class Game {
   }
 
   private showBriefing(id: string): void {
-    const m = missionRegistry.require(id);
+    const m = requireMission(id);
     this.prepareMission(id);
     this.setScreen('briefing', screens.briefing(m, () => this.deploy(id), () => this.showMissionSelect()));
   }
@@ -555,7 +579,7 @@ class Game {
   }
 
   private prepStep(p: NonNullable<Game['prepared']>): void {
-    const mission = missionRegistry.require(p.id);
+    const mission = requireMission(p.id);
     switch (p.stage) {
       case 0: // pure setup: parse the map
         p.map = new WorldMap(mission.map);
@@ -711,15 +735,20 @@ class Game {
       evidence: rt.evidence,
       stats: rt.stats(),
       loss: rt.lossCause,
+      unscored: rt.unscored,
       onRedeploy: () => this.startMission(mission.id),
-      onDone: () => this.showMissionSelect(),
+      onDone: () => {
+        // EGGS: a secret exit routes onward to the hidden mission's briefing.
+        if (rt.nextMission) this.showBriefing(rt.nextMission);
+        else this.showMissionSelect();
+      },
     }));
   }
 
   // ---------- mission lifecycle ----------
 
   private startMission(id: string): void {
-    const mission = missionRegistry.require(id);
+    const mission = requireMission(id);
     registerThreatSprites();
     const prep = this.prepared && this.prepared.id === id ? this.prepared : null;
     this.prepared = null; // prep is consumed; a retry re-runs the synchronous path
@@ -733,6 +762,9 @@ class Game {
     this.particles.clear();
     this.feel = new Feel();
     this.arsenal.reset(mission, this.gender);
+    this.god = false;
+    this.arsenal.face.god = false;
+    this.cheatBuf = new CheatBuffer();
     this.useCd = 0;
     this.simT = 0;
     this.replicaGate.reset();
@@ -1113,9 +1145,10 @@ class Game {
         this.hud.pushMessage(text, 'good');
       }
     }
-    const onExit = map.cellAtF(p.x, p.y)?.kind === 'exit';
+    const cell = map.cellAtF(p.x, p.y);
+    const onExit = cell?.kind === 'exit';
     if (exitEdge(this.wasOnExit, onExit, runtime.finished !== null)) {
-      this.bus.emit('reach-exit', {});
+      this.bus.emit('reach-exit', { secretTo: cell?.secretExit });
     }
     this.wasOnExit = onExit;
 
@@ -1131,7 +1164,8 @@ class Game {
 
     if (runtime.finished && this.endTimer === null) {
       this.endTimer = runtime.finished === 'lost' ? 1.6 : 0.5;
-      if (runtime.finished === 'won') markCompleted(runtime.mission.id);
+      // EGGS: a cheated run wins but never records completion/progress.
+      if (runtime.finished === 'won' && !runtime.unscored) markCompleted(runtime.mission.id);
     }
     if (this.endTimer !== null) {
       if (runtime.finished === 'lost') {
@@ -1149,10 +1183,80 @@ class Game {
     if (this.flashLimit.allow(this.simT)) this.renderer.impactLight(x, y, blood[0], blood[1], blood[2], 0.9);
   }
 
+  // ---------- EGGS: cheat codes ----------
+
+  /** Doom-style typed cheat: applies the effect, marks the run unscored,
+   *  grins the HUD face. `id` comes from CHEATS (see eggs/cheats.ts). */
+  private applyCheat(id: string): void {
+    const rt = this.runtime;
+    const map = this.map;
+    if (!rt || rt.finished || !map) return;
+    switch (id) {
+      case 'god': {
+        this.god = !this.god;
+        this.arsenal.face.god = this.god;
+        this.audio.sfx('oof');
+        this.hud.pushMessage(this.god ? 'CHEAT: SUDO — privilege escalation engaged' : 'CHEAT: root shell dropped', 'warn');
+        break;
+      }
+      case 'keys': {
+        const roles = new Set<string>();
+        for (const cell of Object.values(map.def.legend)) {
+          if (cell.accessRole) roles.add(cell.accessRole);
+        }
+        for (const role of roles) rt.grantRole(role);
+        this.audio.sfx('pickup');
+        this.hud.pushMessage('CHEAT: HUNTER2 — all access granted (it shows as *******)', 'warn');
+        break;
+      }
+      case 'map': {
+        rt.revealAll();
+        rt.revealAllSecretDoors();
+        this.audio.sfx('pickup');
+        this.hud.pushMessage('CHEAT: WIRESHARK — full capture (map + secrets revealed)', 'warn');
+        break;
+      }
+      case 'music': {
+        this.audio.startMusic('rick');
+        this.hud.pushMessage('CHEAT: RICKROLL — never gonna give you uptime', 'warn');
+        break;
+      }
+      case 'dns': {
+        this.audio.sfx('oof');
+        this.hud.pushMessage('DIAGNOSTIC COMPLETE: it is always DNS.', 'warn');
+        break;
+      }
+      default:
+        return;
+    }
+    rt.markUnscored(id);
+    this.arsenal.face.grin();
+  }
+
+  /** EGGS: Konami code on the title screen — unlock every mission. */
+  private applyKonami(): void {
+    unlockEverything();
+    this.audio.unlock();
+    this.audio.sfx('win');
+    const el = document.createElement('div');
+    el.textContent = 'ALL MISSIONS UNLOCKED';
+    el.style.cssText =
+      'position:fixed;left:50%;top:14%;transform:translateX(-50%);z-index:99;' +
+      'background:#1a0f08;border:3px solid #ffb010;color:#ffd040;padding:12px 26px;' +
+      'font:bold 20px monospace;letter-spacing:3px;image-rendering:pixelated';
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 2600);
+  }
+
   private hurtPlayer(dmg: number, sourceX: number, sourceY: number, source?: Entity): void {
     const p = this.player;
     const runtime = this.runtime;
     if (!p || !runtime || runtime.finished) return;
+    // EGGS (SUDO): god mode — hits bounce off; the face keeps its grin.
+    if (this.god) {
+      this.audio.sfx('oof');
+      return;
+    }
     const awayX = p.x - sourceX;
     const awayY = p.y - sourceY;
     const distance = Math.hypot(awayX, awayY) || 1;
@@ -1559,6 +1663,33 @@ class Game {
           ls.sort((a, b) => a - b);
           return ls[Math.floor(ls.length / 2)] ?? 0;
         });
+      },
+      /** EGGS: fire a cheat by id or code, e.g. cheat('god') or cheat('SUDO'). */
+      cheat(code: string) {
+        const id = CHEATS.find(
+          (c) => c.id === code.toLowerCase() || c.code === code.toUpperCase(),
+        )?.id;
+        if (!id) return `unknown cheat ${code}`;
+        g.applyCheat(id);
+        return id;
+      },
+      /** EGGS: declared + revealed secrets/eggs, unscored + next-mission flags. */
+      eggs() {
+        const rt = g.runtime;
+        if (!rt) return null;
+        return {
+          unscored: rt.unscored,
+          god: g.god,
+          nextMission: rt.nextMission ?? null,
+          declared: [
+            ...(rt.mission.script?.secrets ?? []).map((s) => s.id),
+            ...(rt.mission.script?.eggs ?? []).map((e) => e.id),
+          ],
+          revealed: rt.revealedSecretIds(),
+        };
+      },
+      unscored() {
+        return g.runtime?.unscored ?? null;
       },
     };
   }

@@ -238,6 +238,8 @@ export function debrief(opts: {
   evidence?: EvidenceEntry[];
   /** Intermission tallies from rt.stats() (Doom intermission parity). */
   stats?: { kills: number; killsTotal: number; secrets: number; secretsTotal: number; time: number; par: number };
+  /** EGGS: a cheat fired during the run — stamp the report UNSCORED. */
+  unscored?: boolean;
   /** Why the mission was lost (integrity vs objective breach). */
   loss?: LossCause | null;
   /** Restart the same mission; falls back to leaving the debrief. */
@@ -277,7 +279,8 @@ export function debrief(opts: {
 
   const firstTry = new Map<string, boolean>();
   let mastery = loadMastery();
-  if (opts.won) {
+  // EGGS: an unscored (cheated) run records no field mastery.
+  if (opts.won && !opts.unscored) {
     const demonstrated = opts.scoreLog
       .filter((event) => event.points > 0 && event.tag !== 'false-positive' && event.tag !== 'priority-miss')
       .flatMap((event) => event.objectives);
@@ -483,7 +486,7 @@ export function debrief(opts: {
     const doneCount = objRows.filter((o) => o.done && !o.failed).length;
     const tallies: [string, number, string][] = [
       ['OBJECTIVES', doneCount, `/${objRows.length}`],
-      ['FIELD SCORE', opts.score, ''],
+      [opts.unscored ? 'FIELD SCORE*' : 'FIELD SCORE', opts.score, ''],
       ...tagRows.filter((r) => r.tag !== 'priority-miss' || r.count).map((r): [string, number, string] => [
         r.tag === 'false-positive' ? 'FALSE POS.' : r.tag === 'priority-miss' ? 'OUT OF ORDER' : 'WRONG CALLS', r.count, '']),
       ['EVIDENCE', entries.length, ''],
@@ -491,7 +494,8 @@ export function debrief(opts: {
     const stats = opts.stats;
     const tally: Page = {
       label: tallies.map(([l, v, suf]) => `${l} ${v}${suf}`).join(', ') +
-        (stats ? ` | ${statsLine(stats)}` : ''),
+        (stats ? ` | ${statsLine(stats)}` : '') +
+        (opts.unscored ? ' | UNSCORED — CHEATS ACTIVE' : ''),
       draw: (gg, t) => {
         if (stats) {
           // STATS_Y sits below the title (~30) and above the first tally row

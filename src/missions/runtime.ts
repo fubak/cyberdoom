@@ -83,6 +83,10 @@ export class MissionRuntime {
   private visitElapsed = 0;
 
   finished: 'won' | 'lost' | null = null;
+  /** EGGS: any cheat fired — the run completes but scores nothing. */
+  unscored = false;
+  /** EGGS: secret exit taken — debrief routes to this hidden mission's briefing. */
+  nextMission?: string;
 
   constructor(mission: Mission, private bus: EventBus) {
     this.mission = mission;
@@ -385,6 +389,7 @@ export class MissionRuntime {
       const e = this.byId(entityId);
       if (!e) return;
       e.state.revealed = true;
+      if (e.def.egg) this.revealEgg(e.def.egg);
       if (!e.def.inspect) return;
       const info = e.def.inspect;
       this.message(`CASE FILE: ${info.label.slice(0, 29)}`);
@@ -464,6 +469,7 @@ export class MissionRuntime {
     this.bus.on('interact', ({ entityId }) => {
       const e = this.byId(entityId);
       if (!e || !e.alive) return;
+      if (e.def.egg) this.revealEgg(e.def.egg);
 
       // ENEMIES-owned (ransomware seal): an encrypted console is unusable until
       // the ransomware that sealed it is killed (ai.ts clears state.sealedBy).
@@ -639,7 +645,7 @@ export class MissionRuntime {
       if (e) this.applyRoleGrant(e);
     });
 
-    this.bus.on('reach-exit', () => {
+    this.bus.on('reach-exit', ({ secretTo }) => {
       const exit = this.objectives.find((o) => o.def.kind === 'reach-exit');
       if (!exit) return;
       const unfinished = this.requiredObjectives().find(
@@ -651,6 +657,16 @@ export class MissionRuntime {
           this.message(`Exit locked: ${unfinished.def.text}`, 'warn');
         }
         return;
+      }
+      // EGGS: a secret-exit pad routes onward to a bonus mission, like E1M9.
+      if (secretTo) {
+        this.nextMission = secretTo;
+        this.scoreLog.push({
+          text: `SECRET ROUTE — ${secretTo.toUpperCase()} unlocked`,
+          points: 0,
+          good: true,
+          objectives: [],
+        });
       }
       exit.done = true;
       exit.progress = exit.target;
@@ -885,6 +901,43 @@ export class MissionRuntime {
     }
   }
 
+  /** EGGS (WIRESHARK): reveal every hidden door on the automap too. */
+  revealAllSecretDoors(): void {
+    for (let y = 0; y < this.mission.map.grid.length; y++) {
+      for (let x = 0; x < this.mission.map.grid[y].length; x++) {
+        const cell = this.mission.map.legend[this.mission.map.grid[y][x]];
+        if (cell?.secret && cell.doorId) this.revealedSecretDoors.add(cell.doorId);
+      }
+    }
+  }
+
+  /** EGGS: reveal a declared egg (entity-flagged discovery) once. */
+  revealEgg(id: string): void {
+    const egg = this.mission.script?.eggs?.find((e) => e.id === id);
+    if (!egg || this.revealedSecrets.has(id)) return;
+    this.revealedSecrets.add(id);
+    this.message(`A secret is revealed! ${egg.label}`, 'good');
+    this.log(`Secret revealed: ${egg.label}`, 25);
+  }
+
+  /** EGGS (debug): ids of every revealed secret/egg so far. */
+  revealedSecretIds(): string[] {
+    return [...this.revealedSecrets];
+  }
+
+  /** EGGS: a cheat fired — the run completes but the debrief says UNSCORED. */
+  markUnscored(reason: string): void {
+    this.message(`CHEAT ACTIVE — this run is UNSCORED`, 'warn');
+    if (this.unscored) return;
+    this.unscored = true;
+    this.scoreLog.push({
+      text: `CHEAT ACTIVE: ${reason} — run unscored`,
+      points: 0,
+      good: false,
+      objectives: [],
+    });
+  }
+
   private updateTriggers(w: UpdateWorld): void {
     for (const trigger of this.mission.script?.triggers ?? []) {
       if (this.firedTriggers.has(trigger.id)) continue;
@@ -1026,7 +1079,8 @@ export class MissionRuntime {
       kills: threats.filter((e) => this.cleaned.has(e.def.id)).length,
       killsTotal: threats.length,
       secrets: this.revealedSecrets.size,
-      secretsTotal: this.mission.script?.secrets?.length ?? 0,
+      secretsTotal: (this.mission.script?.secrets?.length ?? 0) +
+        (this.mission.script?.eggs?.length ?? 0),
       time: this.elapsed,
       par: this.mission.script?.par ?? 0,
     };
