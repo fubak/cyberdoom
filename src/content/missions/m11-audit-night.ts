@@ -121,11 +121,7 @@ export const m11: Mission = {
         'LT-118 laptop + dock     ASSIGNED    K. Marsh\n' +
         '(+ 6 more rows)\n' +
         'Stale register: verify every row against the floor.\n' +
-        'ASSET LIFECYCLE: every asset needs an acquisition/procurement record,\n' +
-        'assignment and accounting (a named owner + classification), monitoring/\n' +
-        'asset tracking (inventory + enumeration), and a disposal/decommissioning\n' +
-        'path - sanitization or destruction with certification, plus the data\n' +
-        'retention schedule stating what data retention law requires.'
+        'Disposal path needs sanitization or destruction with certification.'
     },
     {
       id: 'audit-signin', kind: 'console', x: 10.5, y: 18.5, sprite: 'console',
@@ -136,7 +132,7 @@ export const m11: Mission = {
         detail: 'Escorted-access register for the media vault. Signing in issues a time-boxed AUDIT role, logged to your badge — least privilege for the night.',
         category: 'legit', objectives: ['4.2'],
       },
-      log: 'Signed in: AUDIT role granted until 08:00. Media-vault reader now accepts your badge + token.\nAAA BROKER: RADIUS handles network authentication over 802.1X port control; TACACS+ covers device-admin sessions. Authentication proves who, authorization scopes what, accounting writes it down - that record supports non-repudiation.',
+      log: 'Signed in: AUDIT role granted until 08:00. Media-vault reader now accepts your badge + token.\nAAA: authentication proves who, authorization scopes what, accounting writes it down - that record supports non-repudiation.',
     },
     {
       id: 'attest-console', kind: 'console', x: 29.5, y: 18.5, sprite: 'console',
@@ -151,17 +147,8 @@ export const m11: Mission = {
         '- Media dispositions logged with certificates of destruction\n' +
         '- Legal-hold data preserved under LIT-88\n' +
         '- Data-subject requests answered and filed\n' +
-        '- Pen-test scope issued (unknown environment)\n' +
         'Signed: control owner, 06:12.\n' +
-        'COMPLIANCE DOCKET: compliance reporting splits internal reporting\n' +
-        'and external reporting; non-compliance\n' +
-        'costs fines, sanctions, reputational damage, loss of license and\n' +
-        'contractual impacts. Monitoring = due diligence and due care, attestation\n' +
-        'and acknowledgement on the record, with automation where it fits.\n' +
-        'Privacy: the data subject owns their data; the controller decides how it\n' +
-        'is used, the processor acts on the controller\u2019s behalf; ownership, a\n' +
-        'data inventory and retention schedule make the right to be forgotten\n' +
-        'executable.',
+        'Attestation on the record.'
     },
     // --- War room: the three data-subject requests ---
     {
@@ -286,7 +273,7 @@ export const m11: Mission = {
         detail: 'The team starts from public information only.',
         category: 'legit', objectives: ['5.5'],
       },
-      log: 'Unknown-environment (black-box) engagement issued: the red team starts from public information only, matching the external attacker the committee wants measured.\nAUDIT MAP: internal audits and audit-committee self-assessments check our own controls; external work is regulatory examinations or an independent third-party audit. Pen tests split offensive (attack), defensive (validate), integrated (purple), and physical (doors and badges); reconnaissance is passive reconnaissance (OSINT, never touching) or active reconnaissance (scanning the target). This penetration testing is how audits get teeth.',
+      log: 'Unknown-environment (black-box) engagement issued: the red team starts from public information only, matching the external attacker the committee wants measured.\nRecon stays passive until the rules of engagement are signed.',
     },
     // --- War room: the auditors themselves (5.5 evidence) ---
     {
@@ -1035,7 +1022,7 @@ export const m11Teach: MissionTeaching = {
       missed: 'A shortcut was logged. Formatting is not sanitization, degaussing does nothing to flash, unknown media gets destroyed not donated, and compliance answers need signed evidence — not vibes.',
     },
   },
-  examTip: 'Match sanitization to the media (degauss magnetic, crypto-erase or destroy flash), never destroy data under legal hold, and let retention obligations bound the right to be forgotten. Owner decides, custodian implements; controller determines why, processor obeys.',
+  examTip: 'Match sanitization to the media (degauss magnetic, crypto-erase or destroy flash), never destroy data under legal hold, and let retention obligations bound the right to be forgotten. Owner decides, custodian implements; controller determines why, processor obeys.\nFIELD NOTES: the asset lifecycle is acquisition/procurement, assignment and accounting (named owner plus classification), monitoring and asset tracking, then disposal/decommissioning with certification - data retention law bounds what you may destroy. Compliance reporting splits internal reporting and external reporting; non-compliance costs fines, sanctions, reputational damage, loss of license and contractual impacts; due diligence and due care show up as attestation and acknowledgement on the record. Audit map: internal audits and a self-assessment check your own controls; regulatory examinations or an independent third-party audit come from outside; reconnaissance is passive or active reconnaissance; government entities can sit over the owners and controllers of data.'
 };
 
 // F1: encounter pacing — opening skirmish, vault/server reveals, hall pack,

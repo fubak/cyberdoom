@@ -100,7 +100,7 @@ export const m06: Mission = {
         category: 'legit',
         objectives: ['1.4'],
       },
-      log: 'Certificate A installed on the TLS gateway. Clients validate the chain to a trusted root.\nPKI NOTES: the public key infrastructure binds an identity to a key pair - public key shared, private key secret. A certificate signing request (CSR) goes to the certificate authority; the chain ends at the root of trust. Digital signatures prove integrity and non-repudiation. A third-party certificate from a public CA beats self-signed for anything clients must trust cold. Wildcard certs (*.example) cover first-level subdomains only. Revocation is published two ways: the certificate revocation list (CRL) and OCSP status checks.'
+      log: 'Certificate A installed on the TLS gateway; clients validate the chain to a trusted root.\nLeaf -> Issuing CA 2 -> GlobalTrust root of trust. OCSP good.'
     },
     {
       id: 'cert-b',
@@ -177,7 +177,7 @@ export const m06: Mission = {
         category: 'legit',
         objectives: ['1.4'],
       },
-      log: 'New 3,072-bit key pair generated in the HSM. Replacement certificate issued with the new key. Old key retired.\nKEY STORE MAP: the hardware security module (HSM) generates and guards CA keys; trusted platform modules (TPM) and the secure enclave hold device keys and attest boot state; a key management system rotates everything on schedule; key escrow keeps a recoverable copy with the registrar for legal cases; key exchange uses asymmetric crypto to agree a symmetric session key. Algorithm and key length both set strength.'
+      log: 'New 3,072-bit key pair generated in the HSM; private keys never leave it. Replacement certificate issued with the new key. Old key retired.\nKey escrow on file with the registrar per policy.'
     },
     {
       id: 'renew-same',
@@ -221,7 +221,7 @@ export const m06: Mission = {
         category: 'legit',
         objectives: ['1.4'],
       },
-      log: 'Encryption is reversible: steal the database and the key and you have every password.\nLEVELS MATTER: full-disk encryption on laptops, volume on servers, partition on dual-boot kiosks, file-level encryption on shares, database encryption and record-level encryption on PII columns, transport encryption for anything moving. Symmetric AES is fast; asymmetric public/private key pairs exchange and sign.'
+      log: 'Encryption is reversible: steal the database and the key and you have every password.\nLEVELS: transport encryption for anything moving; database and record-level encryption on the PII columns.'
     },
     {
       id: 'pw-bcrypt',
@@ -281,7 +281,7 @@ export const m06: Mission = {
         category: 'legit',
         objectives: ['3.3'],
       },
-      log: 'Card numbers replaced with tokens; only the token vault can map them back. Refunds keep working.\nOBFUSCATION TOOLKIT: tokenization swaps values for tokens, data masking shows only what is needed (last-4), steganography hides data inside images. None of these is encryption - do not confuse them.\nIDENTITY LAYER: SSO portal does federation - SAML assertions to partners, OAuth tokens to the mobile app, OpenID Connect (OIDC) on top for sign-in, LDAP binds the directory. New hires pass identity proofing first; passwordless sign-in uses security keys plus biometrics; a password manager covers legacy apps, and privileged access runs through password vaulting and just-in-time, ephemeral credentials. Models applied here: mandatory access control on the vault, discretionary on team shares, role-based on jobs, rule-based time-of-day restrictions, and attribute-based on clearance. Access is attested quarterly; standards-based interoperability is why federation works.'
+      log: 'Card numbers replaced with tokens; only the token vault can map them back. Refunds keep working.\nReminder: tokenization and data masking are not encryption - do not sign off on "encrypted" claims.'
     },
     {
       id: 'backup-disk',
@@ -296,7 +296,7 @@ export const m06: Mission = {
         category: 'legit',
         objectives: ['3.3'],
       },
-      log: 'Full-disk encryption enabled on the backup drives: data at rest is unreadable without the key.\nDATA CLASSIFICATION: labels such as public, private, sensitive, confidential, restricted and critical - each organization defines its own tiers and handling rules. Regulated data (financial information, legal information) and trade secrets get the strongest handling. States: data at rest, data in transit, data in use. Sovereignty and geolocation drive geographic restrictions; protect with encryption, hashing, masking, tokenization, obfuscation, segmentation and permission restrictions.\nLEDGER PILOT: blockchain entries sit on an open public ledger - tamper-evident, but public; never store secrets there.'
+      log: 'Full-disk encryption enabled on the backup drives: data at rest is unreadable without the key.\nHandling label: restricted - encrypt at rest and in transit.'
     },
     {
       id: 'vault-exit-console',
@@ -641,7 +641,7 @@ export const m06Teach: MissionTeaching = {
     },
   },
   examTip:
-    'Revoke + rekey on compromise; expired or self-signed = untrusted; passwords are salted and stretched hashes, not encryption; tokenization keeps real card numbers out of downstream systems.',
+    'Revoke + rekey on compromise; expired or self-signed = untrusted; passwords are salted and stretched hashes, not encryption; tokenization keeps real card numbers out of downstream systems.\nFIELD NOTES: the public key infrastructure binds an identity to a key pair - public key shared, private key secret; a certificate signing request goes to the certificate authority and chains to a root of trust; a third-party certificate from a public CA beats self-signed for anything clients must trust cold; wildcard certs cover first-level subdomains only; revocation is CRL or OCSP. Key custody: a trusted platform module and the secure enclave hold device keys, the key management system rotates them, key escrow is the recoverable copy, and algorithm plus key length set strength. Levels: full-disk, partition, file-level encryption, database encryption and record-level, transport. Obfuscation is not encryption: masking, steganography, blockchain entries on an open public ledger. Data states and handling: geographic restrictions and permission restrictions follow sovereignty. Identity stack: SSO does federation - SAML, OAuth, OpenID Connect on LDAP - plus identity proofing, passwordless sign-in, biometrics, a password manager, just-in-time ephemeral credentials, attestation, and standards-based interoperability.'
 };
 
 // F1: encounter pacing — opening skirmish, room reveals, seal finale, supplies.

@@ -120,7 +120,7 @@ export const m02: Mission = {
     {
       id: 'iam-netops', kind: 'console', x: 22.5, y: 11.5, sprite: 'console', tags: ['jit-netops'],
       grants: { resource: 'role:netops', amount: 1 },
-      log: 'IAM KIOSK: JIT request NETOPS for CHG-4471 approved.\nScope: switch room. Expires when the task closes.\nJust-in-time permissions issued as ephemeral credentials - no standing privilege.\nZT GATEWAY: the control plane authenticates the subject/system first; a policy engine scores adaptive identity and posture per request; the policy administrator pushes policy-driven access control; the policy enforcement point gates every data-plane session - no implicit trust zones, and threat scope reduction throughout.',
+      log: 'IAM KIOSK: JIT request NETOPS for CHG-4471 approved.\nScope: switch room; issued as ephemeral credentials, expires when the task closes.\nZT GATEWAY: the policy engine scores posture per request; the policy enforcement point gates each session.',
       inspect: { label: 'IAM kiosk: request NETOPS (switch room)', detail: 'Just-in-time, ticket-scoped access request.', category: 'legit', objectives: ['4.6'] },
     },
     {
@@ -131,7 +131,7 @@ export const m02: Mission = {
     {
       id: 'auth-log', kind: 'console', x: 26.5, y: 11.5, sprite: 'console', tags: ['auth-log'],
       implicates: ['greg'],
-      log: 'SERVER AUTH LOG (24 h)\n212 logins as "admin" from 4 different workstations\n0 logins by named accounts\nAAA review: authentication proves who, authorization scopes what, accounting records it. A shared "admin" account means authenticating people fails - no attribution. Authenticate people and systems separately - authenticating systems is as important as authenticating people - under an explicit authorization model. The CIA triad - confidentiality, integrity, and availability - is the frame every control defends.',
+      log: 'SERVER AUTH LOG (24 h)\n212 logins as "admin" from 4 different workstations\n0 logins by named accounts\nAAA REVIEW: authentication proves who, authorization scopes what, accounting records it. A shared "admin" account means no attribution and no non-repudiation.',
       inspect: {
         label: 'Server authentication log',
         detail: 'Per-account logins on the servers the sysadmin team manages. Named-account accountability is what shared passwords destroy.',
@@ -189,7 +189,7 @@ export const m02: Mission = {
     },
     {
       id: 'mfa-phish', kind: 'console', x: 28.5, y: 13.5, sprite: 'console', tags: ['phish-prompt'],
-      log: 'POP-UP: "Session expired. Sign in to SW-B portal: sw-b-portal.netops-login.co. Touch your key to continue."\nReal MFA needs independent factors: something you know (password), something you have (a hard token, a soft token, or a security key), something you are (biometrics), or somewhere you are (location).',
+      log: 'POP-UP: "Session expired. Sign in to SW-B portal: sw-b-portal.netops-login.co. Touch your key to continue."\nReal MFA needs independent factors: something you know, something you have, something you are, or somewhere you are.',
       inspect: {
         label: 'Sign-in prompt (sw-b-portal.netops-login.co)',
         detail: 'Kiosk browser opened a sign-in page by itself. The domain is not the company IdP; it was registered 2 days ago.',
@@ -423,7 +423,7 @@ export const m02Teach: MissionTeaching = {
       missed: 'You reported someone for something they did not do. Report what you observed, not a guess.',
     },
   },
-  examTip: 'Exam clue words: "only what the job requires" = least privilege. "Assigned by job role" = RBAC. "Cannot prove who did it" = a non-repudiation / accounting failure, usually caused by shared accounts.',
+  examTip: 'Exam clue words: "only what the job requires" = least privilege. "Assigned by job role" = RBAC. "Cannot prove who did it" = a non-repudiation / accounting failure, usually caused by shared accounts.\nFIELD NOTES: AAA = authentication, authorization, and accounting - authenticating people and authenticating systems both matter under an explicit authorization model, all inside the confidentiality, integrity, and availability triad. Zero trust pieces the exam names: control plane and data plane, adaptive identity, threat scope reduction, policy-driven access control set by a policy administrator, and no implicit trust zone anywhere. Gap analysis is how you find where the model is missing. Physical controls: bollards, fencing, lighting, video surveillance, a security guard, access badges, an access control vestibule, and door sensors - infrared, pressure sensor, microwave sensor, ultrasonic sensor. IAM lifecycle: provisioning grants, de-provisioning removes, permission assignments match the job. Factor gear: hard token vs soft token vs security keys; something you are = biometrics; somewhere you are = location; attribute-based rules can add time-of-day restrictions.'
 };
 
 // F1: encounter pacing — opening skirmish, room ambushes, supplies.

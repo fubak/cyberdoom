@@ -118,21 +118,7 @@ export const m07: Mission = {
         'One broadcast domain: every host can reach every host.\n' +
         'REDESIGN: screened subnet for WEB-01, an isolated DB zone,\n' +
         'a jump-server admin path, and SCADA in its own ICS zone.\n' +
-        'OT access granted for the controller cage.\n' +
-        'ARCH BRIEF: on-premises core plus cloud burst under a responsibility matrix;\n' +
-        'hybrid considerations: third-party vendors see only their share.\n' +
-        'App tier runs infrastructure as code (IaC), serverless jobs and microservices;\n' +
-        'compute is containerization over virtualization; IoT on its own VLAN;\n' +
-        'physical isolation - the air-gapped SCADA/ICS cell runs RTOS embedded systems;\n' +
-        'logical segmentation everywhere else via software-defined networking (SDN);\n' +
-        'centralized policy, decentralized enforcement, high availability pairs.\n' +
-        'Considerations: availability, resilience, cost, responsiveness, scalability,\n' +
-        'ease of deployment, risk transference, ease of recovery, patch availability,\n' +
-        'inability to patch (OT), power and compute.\n' +
-        'WLAN NOTE: a wireless site survey was run before AP placement - the heat map\n' +
-        'shows dead zones by the server room; WPA3-Enterprise with 802.1X/EAP-TLS\n' +
-        'into RADIUS (TACACS+ covers device admin); cryptographic protocols and\n' +
-        'authentication protocols are pinned by policy.',
+        'OT access granted for the controller cage.'
     },
     // --- device audit (tag: device-review) ---
     {
@@ -225,12 +211,7 @@ export const m07: Mission = {
       log:
         'Wrong call: an edge firewall guards inbound internet traffic but leaves every zone-to-zone path inside the plant unfiltered. ' +
         'The flat LAN stays flat.\n' +
-        'EDGE STACK: a next-generation firewall (NGFW) does layer 4 ports plus layer 7 app-ID;\n' +
-        'unified threat management (UTM) bundles IPS and web filtering; the web application\n' +
-        'firewall (WAF) guards the storefront; site-to-site VPN tunnels run IPSec, remote access\n' +
-        'uses TLS tunneling; SD-WAN and secure access service edge (SASE) connect the branches.\n' +
-        'Port security on every access port: 802.1X with EAP, fail-closed on auth loss -\n' +
-        'never fail-open. Active vs. passive and inline vs. tap: passive sensors and a tap/monitor feed forensics; the IPS sits inline and blocks.',
+        'NOTE: port security fails closed on auth loss - never fail-open.'
     },
     // --- IPS placement (group: ips) ---
     {
@@ -289,9 +270,7 @@ export const m07: Mission = {
         'Direct admin-to-server protocols are policy-dropped; all administrative\n' +
         'sessions now bounce through the jump server with MFA and session logging.\n' +
         'One path to harden and watch.\n' +
-        'Appliance map: the proxy server fronts outbound web, the load balancer spreads\n' +
-        'the API tier, and device placement follows the security zones - connectivity\n' +
-        'inside a zone is easy, between zones it crosses a control.'
+        'Between security zones traffic crosses a control; inside a zone it flows.'
     },
     {
       id: 'rdp-all', kind: 'console', x: 12, y: 24, sprite: 'console',
@@ -889,7 +868,7 @@ export const m07Teach: MissionTeaching = {
     },
   },
   examTip:
-    'Un-patchable means unreachable: segment it into its own zone or air gap it. Firewalls sit on boundaries, IPS sits inline (SPAN/TAP are IDS roles), admins enter through one jump server, and ACLs end in a logged deny-all.',
+    'Un-patchable means unreachable: segment it into its own zone or air gap it. Firewalls sit on boundaries, IPS sits inline (SPAN/TAP are IDS roles), admins enter through one jump server, and access lists (ACLs) end in a logged deny-all.\nFIELD NOTES: architecture vocabulary - on-premises, hybrid and cloud under a responsibility matrix; infrastructure as code, serverless and microservices on containerization or virtualization; software-defined networking for centralized policy with decentralized enforcement; high availability pairs for responsiveness and scalability; weigh ease of deployment, ease of recovery, patch availability and risk transference for the IoT and RTOS embedded tier. Device placement puts the proxy server, load balancer and sensors where zones meet; 802.1X port security with EAP on access ports; active vs. passive and inline vs. tap describe where controls sit. Perimeter gear: next-generation firewall (layer 4 ports, layer 7 app-ID), unified threat management, the web application firewall, VPN tunneling over IPSec or TLS, SD-WAN and secure access service edge for the branches.'
 };
 
 // F1: encounter pacing — live skirmisher, room reveals, supplies.

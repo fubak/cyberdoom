@@ -99,10 +99,10 @@ export const m01: Mission = {
     {
       id: 'sec-desk', kind: 'console', x: 3.5, y: 9.5, sprite: 'console',
       tags: ['security-desk'], accepts: 'found-usb', grants: { resource: 'role:itops', amount: 1 },
-      log: 'SECURITY DESK: lost & found / unknown media drop.\nHand over found devices. Do NOT plug them in.\nTHREAT-VECTOR POSTER: watch message-based lures (email, SMS, instant messaging), image-based and file-based attachments, voice-call vishing, removable devices, vulnerable software, unsupported systems, open service ports, default credentials and unsecure networks - wireless, wired or Bluetooth.',
+      log: 'SECURITY DESK: lost & found / unknown media drop.\nHand over found devices. Do NOT plug them in.\nPOSTER: report phishing, vishing and smishing lures; treat unclaimed removable devices as hostile.',
       inspect: {
         label: 'Security Desk',
-        detail: 'Drop point for found or suspicious devices; analyses them in an isolated sandbox. Oversees the lobby physical controls: bollards and fencing outside, the access control vestibule (mantrap) at the door, lighting, video surveillance, a security guard checking access badges, and door sensors: infrared beams, pressure sensor pads, microwave sensor fields and ultrasonic sensors.',
+        detail: 'Drop point for found or suspicious devices; analyses them in an isolated sandbox. By the door: an access control vestibule where a security guard checks access badges.',
         category: 'legit',
         objectives: ['2.2', '5.6'],
       },
@@ -113,7 +113,7 @@ export const m01: Mission = {
       log: 'Spare PC: nobody logged in, front USB port free. Still on the vendor default credentials.',
       inspect: {
         label: 'Unlocked spare PC',
-        detail: 'Logged-in session, no owner, open USB port. Baseline hardening was skipped: default password unchanged, unused ports/protocols enabled, no host-based firewall or HIPS, unnecessary software left installed.',
+        detail: 'Logged-in session, no owner, open USB port. Still on the vendor default password.',
         category: 'legit',
         objectives: ['2.2'],
       },
@@ -409,7 +409,7 @@ export const m01Teach: MissionTeaching = {
       missed: 'You hit a clean host. PRN-02\'s CPU spike was a signed spooler job sent to its own printer, and its pop-up was a toner warning. Acting on one indicator without context wastes response effort and disrupts the user.',
     },
   },
-  examTip: 'Exam questions identify malware by its behavior. Self-spreads with no user action = worm. Disguised and run by the user = trojan. Encrypts files and demands payment = ransomware. Hides and collects data = spyware. Triggers on a condition = logic bomb.',
+  examTip: 'Exam questions identify malware by its behavior. Self-spreads with no user action = worm. Disguised and run by the user = trojan. Encrypts files and demands payment = ransomware. Hides and collects data = spyware. Triggers on a condition = logic bomb.\nFIELD NOTES: other attack indicators the exam names - on-path interception, downgrade attacks, credential replay, forgery, privilege escalation, rootkits and other malicious code. Threat vectors: message-based lures (email, SMS, instant messaging), image-based and file-based attachments, voice calls, removable devices, vulnerable software, unsupported systems and unpatched firmware, open ports, default credentials and unsecure networks including Bluetooth. Baseline hardening = default password changed, disabling ports and protocols not needed, removal of unnecessary software, host-based firewall plus host-based intrusion prevention (HIPS). Resilience = high availability through clustering and load balancing with fail over tested. Awareness program topics: recognizing a phishing attempt, situational awareness, password management, removable media handling, operational security and the policy handbook.'
 };
 
 // — rF2 landmarks: the east server hall reads as the NOC (grid floor, bright,

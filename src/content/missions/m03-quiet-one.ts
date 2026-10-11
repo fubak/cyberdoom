@@ -136,19 +136,19 @@ export const m03: Mission = {
     {
       id: 'badge-log', kind: 'console', x: 23.5, y: 27.5, sprite: 'console', tags: ['badge-log', 'evidence'],
       implicates: ['dana', 'marcus'],
-      log: 'BADGE LOG: after-hours entries, last 7 days\nSun 03:12 R.KELL (R&D lead): R&D wing (usual Mon-Fri 09-17)\nThu 23:44 D.ORTIZ (Dev): lobby exit, release week\nS.PATEL, J.LEE: none\nSIEM indicators on RKELL-LT: out-of-cycle logging 03:12, impossible-travel alert (VPN from two cities 9 min apart), concurrent session usage, blocked content (2 uploads stopped at the web filter), and missing logs for the exact window above. The published/documented pattern matches the Meridian leak.',
+      log: 'BADGE LOG: after-hours entries, last 7 days\nSun 03:12 R.KELL (R&D lead): R&D wing (usual Mon-Fri 09-17)\nThu 23:44 D.ORTIZ (Dev): lobby exit, release week\nS.PATEL, J.LEE: none\nSIEM flags on RKELL-LT: out-of-cycle logging 03:12 and an impossible-travel alert - VPN from two cities 9 min apart.',
       inspect: { label: 'Physical access control log', detail: 'Badge reader events for every door.', category: 'legit', objectives: ['4.9'] },
     },
     {
       id: 'legal', kind: 'console', x: 36.5, y: 27.5, sprite: 'console', tags: ['case'],
       grants: { resource: 'role:investigator', amount: 1 },
-      log: 'LEGAL/HR: case #883 opened on documented after-hours access.\nInvestigator access to DLP and endpoint logs approved. Legal hold: preserve all evidence.\nDIGITAL FORENSICS PROTOCOL: acquisition images first (write-blocked), a chain-of-custody form per item, preservation before analysis, and e-discovery packaging for counsel. Reporting goes to legal only.',
+      log: 'LEGAL/HR: case #883 opened on documented after-hours access.\nInvestigator access to DLP and endpoint logs approved.\nLegal hold in effect: image and preserve everything - acquisition first, chain-of-custody form per item, e-discovery packaging for counsel.',
       inspect: { label: 'Legal / HR case desk', detail: 'Investigations into employees need a documented reason and authorization.', category: 'legit', objectives: ['4.9'] },
     },
     {
       id: 'dlp', kind: 'console', x: 37.5, y: 4.5, sprite: 'console', tags: ['evidence'],
       implicates: ['dana'],
-      log: 'DLP ALERTS: overnight\nSun 03:31 rkell: 1,284 files / 40 GB read from \\\\designs\\confidential (role share: \\\\designs\\atlas)\nspatel: ~300 HR records/day inside HRIS (no outbound transfer)\nCLASSIFICATION: \\\\designs\\confidential holds trade secrets and intellectual property - critical/restricted data, mostly non-human-readable CAD blobs. The copy onto USB is data exfiltration: data in transit leaving control.',
+      log: 'DLP ALERTS: overnight\nSun 03:31 rkell: 1,284 files / 40 GB read from \\\\designs\\confidential (role share: \\\\designs\\atlas)\nspatel: ~300 HR records/day inside HRIS (no outbound transfer)\nThe \\\\confidential share holds trade secrets; bulk copy onto USB is data exfiltration.',
       inspect: { label: 'DLP console', detail: 'Data-loss-prevention alerts on outbound transfers.', category: 'legit', objectives: ['4.9'] },
     },
     {
@@ -159,7 +159,7 @@ export const m03: Mission = {
     },
     {
       id: 'report-console', kind: 'console', x: 37.5, y: 18.5, sprite: 'console', tags: ['report-console'],
-      log: 'INSIDER REPORT: press E on the employee to mark them, then file here. The case needs all three evidence sources.\nSOURCES AVAILABLE: badge logs, endpoint logs, application logs, OS security logs, firewall logs, IPS/IDS logs, network logs, packet captures, vulnerability scans, automated reports, dashboards and metadata.\nTHREAT-ACTOR POSTER: nation-state, organized crime, hacktivist, insider threat, unskilled attacker, shadow IT. Attributes: internal vs external actor, resources and funding, level of sophistication. Motives: data exfiltration, espionage, service disruption, blackmail, financial gain, philosophical or political beliefs, ethical, revenge, disruption/chaos, even war.\nATTACK PATTERNS: physical - brute force, RFID cloning, environmental; network - distributed denial-of-service (amplified/reflected), DNS attacks, wireless, on-path, credential replay, malicious code; application - injection, buffer overflow, replay, privilege escalation, forgery, directory traversal; cryptographic - downgrade, collision, birthday; password - spraying and brute force.',
+      log: 'INSIDER REPORT: press E on the employee to mark them, then file here. The case needs all three evidence sources.\nSOURCES: badge, endpoint, application and firewall logs, plus packet captures.\nWhat you file goes to Legal/HR and the SOC.',
       inspect: { label: 'Case reporting console', detail: 'Files the insider report to Legal/HR and the SOC.', category: 'legit', objectives: ['4.9'] },
     },
     { id: 'trojan-floor', kind: 'enemy', x: 16.5, y: 9.5, sprite: 'trojan', ai: 'wander', hp: 3, infected: true, tags: ['malware'],
@@ -405,7 +405,7 @@ export const m03Teach: MissionTeaching = {
       missed: 'You did not collect all three sources. One log alone has an innocent explanation; correlation is what makes it actionable.',
     },
   },
-  examTip: 'For investigation questions, pick the data source that actually recorded the event. USB copy = endpoint logs. Who entered the building = badge/physical logs. What crossed the network = firewall/NetFlow/packet capture. Who logged in where = OS security logs.',
+  examTip: 'For investigation questions, pick the data source that actually recorded the event. USB copy = endpoint logs. Who entered the building = badge/physical logs. What crossed the network = firewall/NetFlow/packet capture. Who logged in where = OS security logs.\nFIELD NOTES: actor attributes the exam tests - internal vs external actor, resources and funding, level of sophistication; motives include espionage, service disruption, blackmail and even ethical claims, and shadow IT counts as an internal actor. More indicators: physical attacks include RFID cloning; network includes distributed denial-of-service (amplified and reflected) and DNS attacks; missing logs are themselves an indicator, as is matching a published/documented insider pattern; cryptographic attacks cover collision and birthday. Evidence work: digital forensics runs acquisition then preservation then analysis; automated reports keep the dashboards honest. Data labels: human-readable vs non-human-readable files, and regulated data such as legal information gets the strongest handling.'
 };
 
 setMapCell(m03.map, 8, 10, 'B');
