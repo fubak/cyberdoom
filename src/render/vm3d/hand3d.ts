@@ -254,7 +254,7 @@ export class LiveHand {
   /**
    * Numeric damped-IK: pull finger f's tip to `target`. Non-thumb fingers get
    * three dof (mcp/pip/abd — dip rides the coupling); the thumb gets mcp/pip.
-   * ≤ 14 iterations, ≤ 2 mm residual for reachable targets — the contact-test
+   * ≤ 24 iterations, ≤ 2 mm residual for reachable targets — the contact-test
    * budget. Returns the final tip→target distance in metres.
    */
   ikTo(f: FingerName, target: THREE.Vector3, weight = 1): number {
@@ -270,7 +270,7 @@ export class LiveHand {
     const jac = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
     const h = 0.5; // degrees for the finite difference
     const read = () => ({ mcp: this.curls[f].mcp, pip: this.curls[f].pip, abd: this.curls[f].abd ?? 0 });
-    for (let iter = 0; iter < 14; iter++) {
+    for (let iter = 0; iter < 24; iter++) {
       const c0 = read();
       this.tipWorld(f, base);
       err.copy(target).sub(base);

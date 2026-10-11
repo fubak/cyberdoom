@@ -162,7 +162,7 @@ const GRIP_L_CURLS: Partial<Record<FingerName, Curl>> = {
   index: { mcp: 58, pip: 62, abd: -6 },
   middle: { mcp: 62, pip: 66, abd: 0 },
   ring: { mcp: 66, pip: 72, abd: 5 },
-  pinky: { mcp: 70, pip: 78, abd: 9 },
+  pinky: { mcp: 55, pip: 60, abd: 9 },
   thumb: { mcp: 16, pip: 24 },
 };
 const GRIP_R_CURLS: Partial<Record<FingerName, Curl>> = {
@@ -184,13 +184,24 @@ const L_GRIP = { wristSocket: 'gripL.wrist', curls: GRIP_L_CURLS, ik: [
   ikc('pinky', 'gripL.tip.pinky'),
 ] };
 const R_GRIP = { wristSocket: 'gripR.wrist', curls: GRIP_R_CURLS, ik: [
-  ikc('thumb', 'gripR.tip.thumb'),
+  ikc('thumb', 'gripR.tip.thumb', 0.5),
   ikc('index', 'gripR.tip.index'),
   ikc('middle', 'gripR.tip.middle'),
   ikc('ring', 'gripR.tip.ring'),
   ikc('pinky', 'gripR.tip.pinky'),
 ] };
 const R_HOVER = { wristSocket: 'hoverR.wrist', curls: HOVER_CURLS };
+// fingers lift nearly straight while the wrist slides between keystrokes
+const LIFT_CURLS: Partial<Record<FingerName, Curl>> = {
+  index: { mcp: 22, pip: 24, abd: -4 },
+  middle: { mcp: 24, pip: 26, abd: 0 },
+  ring: { mcp: 26, pip: 28, abd: 5 },
+  pinky: { mcp: 30, pip: 32, abd: 10 },
+  thumb: { mcp: 10, pip: 18 },
+};
+const R_LIFT = { wristSocket: 'hoverR.wrist', curls: LIFT_CURLS };
+// during a strike the other fingers stay lifted clear of the deck
+const PRESS_CURLS: Partial<Record<FingerName, Curl>> = { ...LIFT_CURLS };
 
 // home pose: board low-centre, tilted toward the camera, right end low
 const HOME_POS: V3 = [0.012, -0.148, -0.44];
@@ -229,31 +240,31 @@ export const CLIPS: Record<string, VmClip> = {
       // J (index) down
       tKey({
         t: 0.06,
-        R: { wristSocket: 'hoverR.wrist', curls: HOVER_CURLS, ik: [ikc('index', 'key.j')] },
+        R: { wristSocket: 'pressR.wrist', curls: { ...PRESS_CURLS, index: { mcp: 14, pip: 16 } }, ik: [ikc('index', 'key.j')] },
         keys: { j: 1 },
       }),
-      tKey({ t: 0.11, keys: { j: 0.15 } }),
+      tKey({ t: 0.11, R: R_LIFT, keys: { j: 0.15 } }),
       // K (middle) down
       tKey({
         t: 0.17,
-        R: { wristSocket: 'hoverR.wrist', curls: HOVER_CURLS, ik: [ikc('middle', 'key.k')] },
+        R: { wristSocket: 'pressR.wristM', curls: { ...PRESS_CURLS, middle: { mcp: 14, pip: 16 } }, ik: [ikc('middle', 'key.k')] },
         keys: { k: 1 },
       }),
-      tKey({ t: 0.22, keys: { k: 0.1 } }),
+      tKey({ t: 0.22, R: R_LIFT, keys: { k: 0.1 } }),
       // L (ring) down
       tKey({
         t: 0.30,
-        R: { wristSocket: 'hoverR.wrist', curls: HOVER_CURLS, ik: [ikc('ring', 'key.l')] },
+        R: { wristSocket: 'pressR.wristR', curls: { ...PRESS_CURLS, ring: { mcp: 14, pip: 16 } }, ik: [ikc('ring', 'key.l')] },
         keys: { l: 1 },
       }),
-      tKey({ t: 0.35, keys: { l: 0.1 } }),
+      tKey({ t: 0.35, R: R_LIFT, keys: { l: 0.1 } }),
       // pinky stretches to Enter
       tKey({
         t: 0.46,
-        R: { wristSocket: 'hoverR.wrist', curls: { ...HOVER_CURLS, pinky: { mcp: 34, pip: 40 } }, ik: [ikc('pinky', 'key.enter')] },
+        R: { wristSocket: 'pressR.wristP', curls: { ...PRESS_CURLS, pinky: { mcp: 34, pip: 40 } }, ik: [ikc('pinky', 'key.enter')] },
         keys: { enter: 1 },
       }),
-      tKey({ t: 0.52, keys: { enter: 0.15 } }),
+      tKey({ t: 0.52, R: R_LIFT, keys: { enter: 0.15 } }),
       // settle home
       tKey({ t: 0.62 }),
     ],

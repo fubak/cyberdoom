@@ -27,6 +27,7 @@ export class Vm3dRig {
     this.spec = spec;
     this.hands = { L: new LiveHand('L', spec), R: new LiveHand('R', spec) };
     this.hands.L.thumbOut = 0.35; // gripping hand wraps its thumb around the board end
+    this.hands.R.thumbOut = 0.6; // typing/backup hand keeps the thumb tucked
     this.arms = {
       L: new LiveArm('L', spec, this.hands.L.palmW),
       R: new LiveArm('R', spec, this.hands.R.palmW),
