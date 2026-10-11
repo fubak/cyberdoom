@@ -109,8 +109,10 @@ export class Vm3dRig {
         hand.group.quaternion.copy(quat);
       }
     }
-    hand.setCurls(rh.curls);
+    // thumbOut must be set before setCurls: the thumb CMC quaternion is
+    // baked from it inside setCurl
     if (rh.thumbOut !== undefined) hand.thumbOut = rh.thumbOut;
+    hand.setCurls(rh.curls);
     for (const c of rh.contacts) {
       const target = c.socket.startsWith('key.')
         ? keyTopWorld(this.board, c.socket.slice(4))

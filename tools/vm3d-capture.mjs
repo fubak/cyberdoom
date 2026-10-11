@@ -85,21 +85,44 @@ for (const gender of ['male', 'female']) {
     } catch (e) { errors.push(`montage ${action}: ${e.message.slice(0, 200)}`); }
   }
   // ---------- grip close-up: 3 views of the two-hand end grip ----------
+  // evidence shots: vm3d scene alone on neutral gray; crop off the bottom
+  // status-bar strip (STATUS_H = 16% of the frame)
+  const vp = p4k.viewportSize();
+  const clip3d = { x: 0, y: 0, width: vp.width, height: Math.floor(vp.height * 0.84) };
+  await p4k.evaluate(() => { document.getElementById('hud').style.display = 'none'; });
   for (const view of ['dorsal', 'side', 'under']) {
     await p4k.evaluate((v) => {
       window.__cd.vm3d.play('swing');
-      window.__cd.vm3d.freeze(0.05);
+      window.__cd.vm3d.freeze(0.08);
       window.__cd.vm3d.gripView(v);
     }, view);
     await p4k.waitForTimeout(300);
-    await p4k.screenshot({ path: `${OUT}/closeup-${gender}-grip-${view}.png` });
+    await p4k.screenshot({ path: `${OUT}/closeup-${gender}-grip-${view}.png`, clip: clip3d });
   }
   try {
     execFileSync('montage', [...['dorsal', 'side', 'under'].map((v) => `${OUT}/closeup-${gender}-grip-${v}.png`),
       '-tile', '3x1', '-geometry', '1280x720+2+2', '-background', '#222',
       `${OUT}/closeup-${gender}-grip.png`]);
   } catch (e) { errors.push(`montage closeup: ${e.message.slice(0, 200)}`); }
-  await p4k.evaluate(() => { window.__cd.vm3d.gripView(null); window.__cd.vm3d.freeze(null); window.__cd.vm3d.force(null); });
+  // ---------- idle-L close-up: the support grip on the board's left end ----------
+  for (const view of ['dorsal', 'side', 'under']) {
+    await p4k.evaluate((v) => {
+      window.__cd.vm3d.freeze(null);
+      window.__cd.vm3d.force(null);
+      window.__cd.vm3d.gripView(v);
+    }, view);
+    await p4k.waitForTimeout(900); // let the swing clip finish and revert to idle
+    await p4k.screenshot({ path: `${OUT}/closeup-${gender}-idleL-${view}.png`, clip: clip3d });
+  }
+  try {
+    execFileSync('montage', [...['dorsal', 'side', 'under'].map((v) => `${OUT}/closeup-${gender}-idleL-${v}.png`),
+      '-tile', '3x1', '-geometry', '1280x720+2+2', '-background', '#222',
+      `${OUT}/closeup-${gender}-idleL.png`]);
+  } catch (e) { errors.push(`montage idleL: ${e.message.slice(0, 200)}`); }
+  await p4k.evaluate(() => {
+    window.__cd.vm3d.gripView(null); window.__cd.vm3d.freeze(null); window.__cd.vm3d.force(null);
+    document.getElementById('hud').style.display = '';
+  });
   await p4k.close();
   await b4k.close();
 

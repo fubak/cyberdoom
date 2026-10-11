@@ -169,31 +169,33 @@ const HOVER_CURLS: Partial<Record<FingerName, Curl>> = {
 // BOTH hands for the swing's bat grip — no fingertip IK, the fixed curls
 // wrap the fingers around the board's left end on their own.
 const FIST_CURLS: Partial<Record<FingerName, Curl>> = {
-  index: { mcp: 88, pip: 104, abd: -4 },
-  middle: { mcp: 90, pip: 106, abd: 0 },
-  ring: { mcp: 90, pip: 104, abd: 5 },
-  pinky: { mcp: 88, pip: 100, abd: 9 },
-  thumb: { mcp: 38, pip: 45 },
+  index: { mcp: 62, pip: 104, abd: -4 },
+  middle: { mcp: 64, pip: 106, abd: 0 },
+  ring: { mcp: 64, pip: 104, abd: 5 },
+  pinky: { mcp: 58, pip: 100, abd: 9 },
+  // thumb.abd = CMC opposition wrap: lays the distal pad across the
+  // flexed index/middle phalanges (power grip) instead of an OK loop
+  thumb: { mcp: 40, pip: 50, abd: 90 },
 };
 // the left hand's permanent end-grip hold: same closed-grip geometry as the
 // fist relaxed ~18% (support grip, thumb over the top edge)
 const HOLD_L_CURLS: Partial<Record<FingerName, Curl>> = {
-  index: { mcp: 72, pip: 85, abd: -4 },
-  middle: { mcp: 74, pip: 87, abd: 0 },
-  ring: { mcp: 74, pip: 85, abd: 5 },
-  pinky: { mcp: 72, pip: 82, abd: 9 },
-  thumb: { mcp: 31, pip: 37 },
+  index: { mcp: 58, pip: 93, abd: -4 },
+  middle: { mcp: 60, pip: 95, abd: 0 },
+  ring: { mcp: 60, pip: 93, abd: 5 },
+  pinky: { mcp: 58, pip: 90, abd: 9 },
+  thumb: { mcp: 37, pip: 46, abd: 84 },
 };
 
 const ikc = (finger: FingerName, socket: string, weight?: number): IkContact => ({ finger, socket, weight });
 // support grip for idle/type — relaxed closed hand on the board's left end
-const L_GRIP = { wristSocket: 'gripL.wrist', curls: HOLD_L_CURLS, thumbOut: 0.45 };
+const L_GRIP = { wristSocket: 'gripL.wrist', curls: HOLD_L_CURLS, thumbOut: 0.3 };
 // swing grip: both fists stacked along the board's left end
-const L_FIST = { wristSocket: 'gripL.wrist', curls: FIST_CURLS, thumbOut: 0.3 };
+const L_FIST = { wristSocket: 'gripL.wrist', curls: FIST_CURLS, thumbOut: 0.2 };
 // right hand cups the end face: thumb wrapped flat against the palm
-const R_GRIP = { wristSocket: 'gripR.wrist', thumbOut: 0.0, curls: {
+const R_GRIP = { wristSocket: 'gripR.wrist', thumbOut: 0.2, curls: {
   ...FIST_CURLS,
-  thumb: { mcp: 60, pip: 58 },
+  thumb: { mcp: 55, pip: 65, abd: 105 },
 } };
 // home pose: palm down over the home row, all four fingertips resting on
 // J K L ; (the board's home row ends at ENT), thumb near the space bar.

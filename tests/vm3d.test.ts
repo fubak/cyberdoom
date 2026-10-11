@@ -226,8 +226,9 @@ describe('vm3d clip contacts (plan §5)', () => {
     const rig = new Vm3dRig(spec);
     const clip = CLIPS['kbd.swing'];
     const inv = new THREE.Matrix4();
-    // gripped span: after the grab keyframe until the regrip begins
-    for (let t = 0.035; t <= 0.30 + 1e-9; t += 1 / 120) {
+    // gripped span: after the grab blend completes (~40 ms) until the
+    // regrip begins
+    for (let t = 0.05; t <= 0.30 + 1e-9; t += 1 / 120) {
       rig.solve(clip, t);
       rig.board.group.updateWorldMatrix(true, false);
       inv.copy(rig.board.group.matrixWorld).invert();
@@ -237,10 +238,9 @@ describe('vm3d clip contacts (plan §5)', () => {
         const dorsW = new THREE.Vector3(0, 0, 1)
           .applyQuaternion(hand.group.getWorldQuaternion(new THREE.Quaternion()));
         const dorsB = dorsW.clone().transformDirection(inv);
-        // L wraps over the top corner (dorsum up); R cups the end face
-        // (dorsum outboard) — both opposite their wrapped fingertips
-        if (side === 'L') expect(dorsB.y, `swing@${t.toFixed(3)} L dorsum`).toBeGreaterThan(0.15);
-        else expect(dorsB.x, `swing@${t.toFixed(3)} R dorsum`).toBeLessThan(-0.3);
+        // both fists wrap the end face palm-in (+x): dorsum points outboard
+        // (−x), opposite the fingertips curled under the board
+        expect(dorsB.x, `swing@${t.toFixed(3)} ${side} dorsum`).toBeLessThan(-0.3);
         for (const f of ['index', 'middle', 'ring', 'pinky'] as const) {
           const tip = hand.tipWorld(f).applyMatrix4(inv);
           expect(
@@ -296,7 +296,71 @@ describe('vm3d clip contacts (plan §5)', () => {
       expect(
         sep,
         `swing@${t.toFixed(3)} palm centres ${(sep * 1000).toFixed(1)}mm apart`,
-      ).toBeGreaterThanOrEqual(0.7 * (wL + wR) / 2);
+      ).toBeGreaterThanOrEqual(1.0 * (wL + wR) / 2);
+    }
+  });
+
+  it('SWING: thumb lies across the flexed index/middle phalanges (power grip)', () => {
+    const rig = new Vm3dRig(spec);
+    const clip = CLIPS['kbd.swing'];
+    const seg = new THREE.Line3();
+    const cp = new THREE.Vector3();
+    const distSeg = (p: THREE.Vector3, a: THREE.Vector3, b: THREE.Vector3) => {
+      seg.set(a, b);
+      seg.closestPointToPoint(p, true, cp);
+      return p.distanceTo(cp);
+    };
+    for (let t = 0.05; t <= 0.30 + 1e-9; t += 1 / 120) {
+      rig.solve(clip, t);
+      for (const side of ['L', 'R'] as const) {
+        const hand = rig.hands[side];
+        const thumb = hand.tipWorld('thumb');
+        const ij = hand.fingerJointsWorld('index');
+        const mj = hand.fingerJointsWorld('middle');
+        // pad must land on the index/middle proximal or intermediate
+        // phalanx (segments MCP→PIP), never pinch the index tip (no OK loop)
+        const dProx = Math.min(
+          distSeg(thumb, ij[0], ij[1]),
+          distSeg(thumb, ij[1], ij[2]),
+          distSeg(thumb, mj[0], mj[1]),
+          distSeg(thumb, mj[1], mj[2]),
+        );
+        const dITip = thumb.distanceTo(ij[3]);
+        expect(dProx, `swing@${t.toFixed(3)} ${side} thumb on index/middle phalanx`).toBeLessThan(12 * MM);
+        expect(dITip, `swing@${t.toFixed(3)} ${side} thumb near index tip (OK loop)`).toBeGreaterThanOrEqual(18 * MM);
+      }
+    }
+  });
+
+  it('SWING: the board end sits inside each fist trough', () => {
+    const rig = new Vm3dRig(spec);
+    const clip = CLIPS['kbd.swing'];
+    const inv = new THREE.Matrix4();
+    for (let t = 0.035; t <= 0.30 + 1e-9; t += 1 / 120) {
+      rig.solve(clip, t);
+      rig.board.group.updateWorldMatrix(true, false);
+      inv.copy(rig.board.group.matrixWorld).invert();
+      for (const side of ['L', 'R'] as const) {
+        const hand = rig.hands[side];
+        // AABB spanning palm centre + index/middle/ring proximal joints + tips
+        const box = new THREE.Box3();
+        const pcB = hand.palmCentreWorld(new THREE.Vector3()).applyMatrix4(inv);
+        box.expandByPoint(pcB);
+        for (const f of ['index', 'middle', 'ring'] as const) {
+          for (const p of hand.fingerJointsWorld(f)) box.expandByPoint(p.applyMatrix4(inv));
+        }
+        for (const f of ['index', 'middle', 'ring', 'pinky'] as const) {
+          box.expandByPoint(hand.tipWorld(f).applyMatrix4(inv));
+        }
+        // board-edge reference point: the end face centre at the hand's
+        // own z — must sit inside the palm/finger bounded volume
+        const edge = new THREE.Vector3(-0.14, -0.0085, pcB.z);
+        expect(box.containsPoint(edge), `swing@${t.toFixed(3)} ${side} board edge outside the fist`).toBe(true);
+        // the palm hugs the end region: within 15 mm of the end-face
+        // vertical centre and within 5 cm outboard of the end face
+        expect(Math.abs(pcB.y + 0.0085), `swing@${t.toFixed(3)} ${side} palm off the end-face height`).toBeLessThan(15 * MM);
+        expect(pcB.x, `swing@${t.toFixed(3)} ${side} palm detached from the board end`).toBeGreaterThan(-0.19);
+      }
     }
   });
 
@@ -311,7 +375,9 @@ describe('vm3d clip contacts (plan §5)', () => {
       const palmN = new THREE.Vector3(0, 0, -1)
         .applyQuaternion(rig.hands.L.group.getWorldQuaternion(new THREE.Quaternion()))
         .transformDirection(inv);
-      expect(palmN.y, `idle@${t} L palm faces up at the camera`).toBeLessThan(-0.3);
+      // palm faces the end face (+x): the end face is inside the grip, not
+      // an open palm to the camera
+      expect(palmN.x, `idle@${t} L palm faces the board's end face`).toBeGreaterThan(0.5);
       for (const f of ['index', 'middle', 'ring', 'pinky'] as const) {
         const tip = rig.hands.L.tipWorld(f).applyMatrix4(inv);
         expect(tip.y, `idle@${t} L.${f} tip above board top`).toBeLessThan(-0.0005);

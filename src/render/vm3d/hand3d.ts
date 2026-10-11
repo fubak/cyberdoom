@@ -132,6 +132,11 @@ export class LiveHand {
   private readonly thumbTuckAxis: THREE.Vector3;
   private readonly thumbOutAxis: THREE.Vector3;
   private readonly thumbOutSign: number;
+  /** opposition wrap: parent-space axis + sign to lay the thumb across the
+   *  flexed index/middle phalanges; driven by thumb curl `abd`, axis swept
+   *  empirically at construction. */
+  private readonly thumbWrapAxis = new THREE.Vector3(0, 1, 0);
+  private thumbWrapSign = 1;
   private readonly wristBone: THREE.Bone;
 
   constructor(side: 'L' | 'R', spec: HandSpec, size?: number) {
@@ -275,6 +280,57 @@ export class LiveHand {
     this.thumbOutAxis = tMeta.abdAxis.clone();
     // +thumbOut should rotate the tip AWAY from the palm centre: measure it
     this.thumbOutSign = this.abdSignFor(tMeta, this.chains.thumb.tip, palmCentre.clone().sub(tMetaPos).normalize().negate(), toWorldDir);
+    // Opposition wrap: the CMC parent-space axis that swings the thumb tip
+    // onto the flexed index/middle phalanges (power grip). Mirrored glbs
+    // need different axes, so sweep candidates under a reference fist and
+    // keep the best one + the sign that approaches the fingers.
+    {
+      const refFist: Partial<Record<FingerName, Curl>> = {
+        index: { mcp: 80, pip: 104, abd: -4 },
+        middle: { mcp: 82, pip: 106, abd: 0 },
+        ring: { mcp: 82, pip: 104, abd: 5 },
+        pinky: { mcp: 80, pip: 100, abd: 9 },
+        thumb: { mcp: 45, pip: 55 },
+      };
+      const saveOut = this.thumbOut;
+      this.thumbOut = 0.2;
+      this.setCurls(refFist);
+      inner.updateMatrixWorld(true);
+      const target = pos('index-finger-phalanx-intermediate')
+        .lerp(pos('middle-finger-phalanx-intermediate'), 0.4);
+      const tip = this.chains.thumb.tip;
+      const qBase = tMeta.bone.quaternion.clone();
+      const pInv = tMeta.bone.parent!.getWorldQuaternion(new THREE.Quaternion()).invert();
+      const cands = [
+        new THREE.Vector3(0, 1, 1), new THREE.Vector3(0, 1, -1),
+        new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 1),
+        new THREE.Vector3(0, 0, -1),
+      ];
+      let bestAxis = cands[0];
+      let bestW = 80;
+      let bestD = Infinity;
+      let bestAxisL = cands[0];
+      for (const a of cands) {
+        const aL = toWorldDir(a.clone().normalize()).applyQuaternion(pInv).normalize();
+        for (let W = -140; W <= 140; W += 10) {
+          tMeta.bone.quaternion.copy(new THREE.Quaternion().setFromAxisAngle(aL, W * D2R)).multiply(qBase);
+          tMeta.bone.updateMatrixWorld(true);
+          const d = tip.getWorldPosition(new THREE.Vector3()).distanceTo(target);
+          if (d < bestD) { bestD = d; bestAxis = a; bestW = W; bestAxisL = aL; }
+        }
+      }
+      void bestAxis;
+      this.thumbWrapAxis = bestAxisL;
+      this.thumbWrapSign = bestW >= 0 ? 1 : -1;
+      this.thumbOut = saveOut;
+      // restore bind: leftover ref-fist curls would shorten midLen below
+      // and inflate the hand scale
+      for (const f of HAND_FINGERS) {
+        this.curls[f] = clampCurl(f, defaultCurl(f));
+        for (const j of this.chains[f].joints) j.bone.quaternion.copy(j.q0);
+      }
+      inner.updateMatrixWorld(true);
+    }
 
     // ---- mount: scale → reframe inside `group` (the wrist frame) ----
     const scaleWrap = new THREE.Group();
@@ -393,10 +449,10 @@ export class LiveHand {
     fore.name = 'vm3d-forearm';
     fore.quaternion.setFromUnitVectors(Y_AXIS, boneDir);
 
-    // open-ended sleeve tube starting 6 cm behind the wrist (never over
-    // the hand), radius ≤ 1.3× the forearm radius at that point
+    // open-ended sleeve tube starting ~1.5 cm behind the wrist so it
+    // overlaps and hides the wrist seam; radius ≤ 1.3× forearm there
     const jacket = ANALYSTS[this.spec.gender].jacket;
-    const cuffStart = 0.06 / s;
+    const cuffStart = 0.015 / s;
     const rForeAtStart = rw * (1 + 0.2 * (cuffStart / len));
     const cuffLen = len - cuffStart;
     const cuffGeo = new THREE.CylinderGeometry(rForeAtStart * 1.3, rForeAtStart * 1.22, cuffLen, 12, 1, true);
@@ -413,12 +469,17 @@ export class LiveHand {
     this.curls[f] = cc;
     const ch = this.chains[f];
     if (f === 'thumb') {
-      // CMC: out-twist (thumbOut) + tuck toward palm + share of mcp flexion
+      // CMC: out-twist (thumbOut) + tuck toward palm + share of mcp flexion;
+      // `abd` drives the opposition wrap that lays the thumb across the
+      // flexed index/middle phalanges (power grip), applied in parent space
+      // so it reorients where the whole chain curls.
+      const wrap = clampN(c.abd ?? 0, -20, 160);
       const m = ch.joints[0];
       m.bone.quaternion.copy(m.q0)
         .multiply(new THREE.Quaternion().setFromAxisAngle(this.thumbOutAxis, this.thumbOutSign * (this.thumbOut - 1) * 45 * D2R))
         .multiply(new THREE.Quaternion().setFromAxisAngle(this.thumbTuckAxis, (1 - this.thumbOut) * 30 * D2R))
-        .multiply(new THREE.Quaternion().setFromAxisAngle(m.flexAxis, cc.mcp * 0.55 * D2R));
+        .multiply(new THREE.Quaternion().setFromAxisAngle(m.flexAxis, cc.mcp * 0.55 * D2R))
+        .premultiply(new THREE.Quaternion().setFromAxisAngle(this.thumbWrapAxis, this.thumbWrapSign * wrap * D2R));
       ch.joints[1].bone.quaternion.copy(ch.joints[1].q0)
         .multiply(new THREE.Quaternion().setFromAxisAngle(ch.joints[1].flexAxis, cc.mcp * D2R));
       ch.joints[2].bone.quaternion.copy(ch.joints[2].q0)

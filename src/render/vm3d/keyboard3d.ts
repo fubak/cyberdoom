@@ -271,21 +271,19 @@ export class KeyboardRig {
     const d = Math.PI / 180;
     // bat grip: two fists stacked along the board's left short end. The
     // left hand wraps over the top corner: wrist outboard of the end face,
-    // palm down, knuckles over the top, fingers curl down the end face
-    // with tips tucked under the end plane (euler [0,-90,-90]). The right
-    // hand cups the end face from outboard-behind: palm into the face,
-    // fingers down and under the bottom (euler [0,90,180]). One fist
-    // above/front, one below/behind — no fingertip IK, fixed fist curls.
-    this.addSocket('gripL.wrist', [-0.210, 0.015, 0.040], [0, -90, -90]);
-    this.addSocket('gripR.wrist', [-0.175, 0.050, -0.080], [0, 90, 180]);
+    // bat grip: palm against the board's left end face (palm-in +x), fingers
+    // run down the face and curl under the bottom; hands stacked along the
+    // edge — L at the front corner (z+0.05), R at the back corner (z-0.05).
+    this.addSocket('gripL.wrist', [-0.181, 0.045, 0.050], [-155, -90, 0]);
+    this.addSocket('gripR.wrist', [-0.181, 0.045, -0.050], [-155, -90, 0]);
     // mid-air waypoint above the grip end, in the same palm-down grip
     // orientation: the hand lifts off the end without twisting so its
     // joints never sweep through the case
-    this.addSocket('wayR.wrist', [-0.185, 0.130, -0.010], [0, -90, -90]);
+    this.addSocket('wayR.wrist', [-0.190, 0.130, -0.010], [-155, -90, 0]);
     // low pull-back beside the end face, in the same cup-grip
     // orientation: the tucked hand slides off behind the end without
     // twisting so its joints never sweep the case
-    this.addSocket('wayR2.wrist', [-0.195, 0.060, -0.095], [0, 90, 180]);
+    this.addSocket('wayR2.wrist', [-0.210, 0.100, -0.050], [-155, -90, 0]);
     // high point above the right-hand side of the deck: regrip finishes by
     // dropping straight down onto the home row, not swooping under the lip
     this.addSocket('wayR3.wrist', [0.060, 0.150, 0.050], [0, 90, -180]);
