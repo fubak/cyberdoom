@@ -3,7 +3,7 @@
 // Usage: node tools/hands-capture.mjs [baseUrl] [outDir]
 import { chromium } from 'playwright';
 
-const BASE = process.argv[2] || 'http://localhost:5173';
+const BASE = process.argv[2] || 'http://localhost:5174';
 const OUT = process.argv[3] || '/tmp/ev';
 const TOOLS = [1, 2, 3, 4, 5, 6, 7, 8];
 const NAMES = { 1: 'keyboard', 2: 'mouse', 3: 'usb', 4: 'badge', 5: 'tap', 6: 'edr', 7: 'mfa', 8: 'patch' };

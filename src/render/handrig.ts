@@ -25,13 +25,19 @@ import { RES } from './res';
 
 export type FingerName = 'thumb' | 'index' | 'middle' | 'ring' | 'pinky';
 
-/** Joint angles in degrees for one finger (thumb reuses mcp/pip as MCP/IP). */
+/**
+ * Joint angles in degrees for one finger. For the thumb the fields carry the
+ * spec's four DOFs: `abd` = cmcAbd (palmar abduction 0..60),
+ * `cmcFlex` = opposition sweep across the palm (0..45), `mcp`, `pip` = IP.
+ */
 export interface Curl {
-  /** spread sideways at the MCP joint */
+  /** spread sideways at the MCP joint (thumb: palmar abduction) */
   abd?: number;
+  /** thumb only: opposition sweep across the palm (0..45) */
+  cmcFlex?: number;
   mcp: number;
   pip: number;
-  /** defaults to 2/3 of pip */
+  /** defaults to 2/3 of pip (spec: use 0.4·pip for a finger touching a surface) */
   dip?: number;
 }
 
@@ -55,11 +61,6 @@ export interface Place {
   arm?: V3;
   /** Extra thumb-only orientation: rotate the whole thumb chain this far toward the palm. */
   thumbTuck?: number;
-  /**
-   * Scales the thumb metacarpal's viewer-facing (+z) component (0..1).
-   * Lower keeps the thumb low at steep palms-down pitches.
-   */
-  thumbOut?: number;
 }
 
 export interface RigFrame {
@@ -71,17 +72,75 @@ export interface RigFrame {
   persp?: number;
 }
 
-// —— anthropometric constants (fractions of middle-finger length) ————————————
+// —— anthropometric constants (fractions of middle-finger length M) —————————
+// Spec §3 proportions, per analyst.
 
-export const FINGER_LEN: Record<Exclude<FingerName, 'thumb'>, number> = {
-  index: 0.96,
-  middle: 1.0,
-  ring: 0.95,
-  pinky: 0.79,
+export interface HandProp {
+  fingerLen: Record<Exclude<FingerName, 'thumb'>, number>;
+  /** proximal : middle : distal, normalised. */
+  phalanx: [number, number, number];
+  /** wrist crease → MCP row, ×M. */
+  palmL: number;
+  /** palm width at the MCP row, ×M. */
+  palmW: number;
+  /** palm thickness, ×M. */
+  palmT: number;
+  /** proximal phalanx diameter ×M, per finger. */
+  diam: Record<Exclude<FingerName, 'thumb'>, number>;
+  /** thumb diameter ×M. */
+  thumbD: number;
+  /** distal⌀ / proximal⌀. */
+  taper: number;
+  /** fingertip cap radius as a fraction of distal diameter. */
+  tipCap: number;
+  /** MCP knuckle bump: radius ×prox⌀, lift above dorsum ×r. */
+  knuckle: { r: number; lift: number };
+  /** PIP bump radius ×local⌀ (shown when pip ≥ 30). */
+  pipBump: number;
+  /** nail size in 1× px at L=190: [w,h] fingers, [w,h] pinky. */
+  nail: { w: number; h: number; pw: number; ph: number };
+  /** wrist diameter ×M. */
+  wristD: number;
+}
+
+export const PROP: Record<Gender, HandProp> = {
+  male: {
+    fingerLen: { index: 0.95, middle: 1.0, ring: 0.96, pinky: 0.78 },
+    phalanx: [1 / 2.06, 0.62 / 2.06, 0.44 / 2.06],
+    palmL: 1.05,
+    palmW: 0.88,
+    palmT: 0.30,
+    diam: { index: 0.21, middle: 0.21, ring: 0.19, pinky: 0.17 },
+    thumbD: 0.26,
+    taper: 0.78,
+    tipCap: 0.85,
+    knuckle: { r: 0.62, lift: 0.25 },
+    pipBump: 0.56,
+    nail: { w: 2, h: 3, pw: 2, ph: 2 },
+    wristD: 0.62,
+  },
+  female: {
+    fingerLen: { index: 0.96, middle: 1.0, ring: 0.95, pinky: 0.76 },
+    phalanx: [1 / 2.08, 0.63 / 2.08, 0.45 / 2.08],
+    palmL: 1.0,
+    palmW: 0.76,
+    palmT: 0.24,
+    diam: { index: 0.17, middle: 0.17, ring: 0.16, pinky: 0.14 },
+    thumbD: 0.21,
+    taper: 0.72,
+    tipCap: 1.0,
+    knuckle: { r: 0.45, lift: 0.15 },
+    pipBump: 0.48,
+    nail: { w: 2, h: 4, pw: 2, ph: 2 },
+    wristD: 0.52,
+  },
 };
-/** proximal : middle : distal ≈ 1 : .62 : .45, normalised. */
-export const PHALANX = [1 / 2.07, 0.62 / 2.07, 0.45 / 2.07];
-export const PALM_LEN = 1.1;
+
+/** Back-compat constants (male values). */
+export const FINGER_LEN = PROP.male.fingerLen;
+export const PHALANX = PROP.male.phalanx;
+export const PALM_LEN = PROP.male.palmL;
+
 /** metacarpal-base x offset as a fraction of palm width (right hand; thumb side −x). */
 export const MCP_X: Record<Exclude<FingerName, 'thumb'>, number> = {
   index: -0.32,
@@ -90,14 +149,25 @@ export const MCP_X: Record<Exclude<FingerName, 'thumb'>, number> = {
   pinky: 0.29,
 };
 /** thumb metacarpal base: [x×palmW, y×palmLen, z] — the thenar eminence. */
-export const THUMB_BASE: V3 = [-0.42, 0.34, 0.1];
+export const THUMB_BASE: V3 = [-0.32, 0.16, 0.1];
 export const THUMB_LEN = 0.62;
+
+/**
+ * `Place.size` is the middle-finger length M for the MALE hand; the female
+ * hand is scaled so both reach the spec's wrist→tip length L at the same
+ * anchor (male L = 2.05·M, female = 2.00·M).
+ */
+export function sizeForGender(size: number, gender: Gender): number {
+  return size * ((1 + PROP.male.palmL) / (1 + PROP[gender].palmL));
+}
 
 export const JOINT_LIMITS = {
   mcp: [-10, 90],
   abd: [-15, 15],
   pip: [0, 110],
   dip: [0, 80],
+  thumbAbd: [0, 60],
+  thumbFlex: [0, 45],
   thumbMcp: [-10, 60],
   thumbIp: [-15, 80],
 } as const;
@@ -106,14 +176,16 @@ const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v
 
 /** Apply the joint limits + the 2/3 DIP coupling. Exported for tests. */
 export function clampCurl(f: FingerName, c: Curl): Required<Curl> {
-  const abd = clamp(c.abd ?? 0, JOINT_LIMITS.abd[0], JOINT_LIMITS.abd[1]);
   const isThumb = f === 'thumb';
+  const alim = isThumb ? JOINT_LIMITS.thumbAbd : JOINT_LIMITS.abd;
+  const abd = clamp(c.abd ?? 0, alim[0], alim[1]);
+  const cmcFlex = clamp(c.cmcFlex ?? 0, JOINT_LIMITS.thumbFlex[0], JOINT_LIMITS.thumbFlex[1]);
   const mlim = isThumb ? JOINT_LIMITS.thumbMcp : JOINT_LIMITS.mcp;
   const mcp = clamp(c.mcp, mlim[0], mlim[1]);
   const plim = isThumb ? JOINT_LIMITS.thumbIp : JOINT_LIMITS.pip;
   const pip = clamp(c.pip, plim[0], plim[1]);
   const dip = clamp(c.dip ?? (pip * 2) / 3, JOINT_LIMITS.dip[0], JOINT_LIMITS.dip[1]);
-  return { abd, mcp, pip, dip };
+  return { abd, cmcFlex, mcp, pip, dip };
 }
 
 // —— small local rot helpers (degrees; match model.ts's Ry·Rx·Rz order) ——————
@@ -163,37 +235,52 @@ function capsule(out: Prim[], a: V3, b: V3, r0: number, r1: number, col: string)
   }
 }
 
+/**
+ * Shared thumb-chain math (spec: cmcAbd palmar abduction 0..60, cmcFlex
+ * opposition 0..45, mcp, ip). At cmcAbd 0 the metacarpal hugs the radial
+ * palm edge alongside the index; abduction lifts it toward the viewer (+z)
+ * and drops it; opposition sweeps it across the palm centre (+x for the
+ * right hand). mcp/ip flex draws the chain back toward the palm.
+ */
+export function thumbChain(palmW: number, palmL: number, mx: number, cc: Required<Curl>): { base: V3; d0: V3; d1: V3; d2: V3 } {
+  const a = cc.abd / 60; // palmar abduction 0..1
+  const f = cc.cmcFlex / 45; // opposition 0..1
+  const base: V3 = [THUMB_BASE[0] * palmW * mx, THUMB_BASE[1] * palmL, THUMB_BASE[2] * palmW];
+  const d0 = norm([
+    -0.30 * mx + f * 0.45 * mx,
+    0.34 - 0.62 * a - 0.22 * f,
+    0.08 + 0.30 * a + 0.15 * f,
+  ]);
+  const d1 = norm([d0[0] + (cc.mcp / 60) * 1.35 * mx, d0[1] - cc.mcp / 70, d0[2] - (cc.mcp / 60) * 0.4]);
+  const d2 = norm([d1[0] + (cc.pip / 80) * 0.85 * mx, d1[1] - cc.pip / 100, d1[2] - (cc.pip / 80) * 0.35]);
+  return { base, d0, d1, d2 };
+}
+
 /** World-space joints of one finger: [mcpBase, pip, dip, tip]. Exported for tests. */
-export function fingerJoints(f: FingerName, c: Curl, size: number, mirror: boolean, palmW: number, palmL: number): V3[] {
+export function fingerJoints(f: FingerName, c: Curl, size: number, mirror: boolean, prop: HandProp): V3[] {
   const cc = clampCurl(f, c);
   const mx = mirror ? -1 : 1;
+  const palmW = size * prop.palmW;
+  const palmL = size * prop.palmL;
   let base: V3;
   let len: number;
   if (f === 'thumb') {
-    base = [THUMB_BASE[0] * palmW * mx, THUMB_BASE[1] * palmL, THUMB_BASE[2] * palmW];
-    len = THUMB_LEN * size;
-  } else {
-    base = [MCP_X[f] * palmW * mx, palmL * 0.88, 0];
-    len = FINGER_LEN[f] * size;
+    const tg = thumbChain(palmW, palmL, mx, cc);
+    const ls = [THUMB_LEN * size * prop.phalanx[0], THUMB_LEN * size * prop.phalanx[1], THUMB_LEN * size * prop.phalanx[2]];
+    const p1 = add(tg.base, mul(tg.d0, ls[0]));
+    const p2 = add(p1, mul(tg.d1, ls[1]));
+    const p3 = add(p2, mul(tg.d2, ls[2]));
+    return [tg.base, p1, p2, p3];
   }
+  base = [MCP_X[f] * palmW * mx, palmL * 0.88, 0];
+  len = prop.fingerLen[f] * size;
   // direction of each phalanx: curl rotates about x toward the palm (-z);
   // abduction spreads about z in the palm plane
   const dir = (theta: number): V3 => {
     const d = rotX([0, 1, 0], -theta);
     return rotZ(d, cc.abd * mx);
   };
-  const l1 = len * PHALANX[0], l2 = len * PHALANX[1], l3 = len * PHALANX[2];
-  if (f === 'thumb') {
-    // thumb: metacarpal points out/forward, MCP + IP flex draw it across the
-    // object's near side (toward -x and slightly back toward the palm)
-    const d0 = norm([-0.72 * mx, 0.18, 0.66]);
-    const d1 = norm([d0[0] + (cc.mcp / 60) * 0.85 * mx, d0[1] - cc.mcp / 110, d0[2] - (cc.mcp / 60) * 0.3]);
-    const d2 = norm([d1[0] + (cc.pip / 80) * 0.65 * mx, d1[1] - cc.pip / 120, d1[2] - (cc.pip / 80) * 0.35]);
-    const p1 = add(base, mul(d0, l1));
-    const p2 = add(p1, mul(d1, l2));
-    const p3 = add(p2, mul(d2, l3));
-    return [base, p1, p2, p3];
-  }
+  const l1 = len * prop.phalanx[0], l2 = len * prop.phalanx[1], l3 = len * prop.phalanx[2];
   const p1 = add(base, mul(dir(cc.mcp), l1));
   const p2 = add(p1, mul(dir(cc.mcp + cc.pip), l2));
   const p3 = add(p2, mul(dir(cc.mcp + cc.pip + cc.dip), l3));
@@ -222,11 +309,12 @@ export function handPrims(
   meta?: HandMeta,
 ): Prim[] {
   const fem = spec.gender === 'female';
+  const prop = PROP[spec.gender];
   const sk = skinRamp(spec.skin);
-  const size = p.size;
-  const palmW = size * (fem ? 0.84 : 0.95);
-  const palmL = size * PALM_LEN;
-  const palmT = size * (fem ? 0.24 : 0.3);
+  const size = sizeForGender(p.size, spec.gender);
+  const palmW = size * prop.palmW;
+  const palmL = size * prop.palmL;
+  const palmT = size * prop.palmT;
   const mx = p.mirror ? -1 : 1;
   const yaw = p.yaw ?? 0;
   const pitch = p.pitch ?? 0;
@@ -234,8 +322,6 @@ export function handPrims(
   const put = (v: V3): V3 => add(orient(v, yaw, pitch, roll), p.wrist);
 
   const out: Prim[] = [];
-  // every digit must stay ≥ ~3 px wide at bake res; Vega's hand is finer
-  const r0 = Math.max(1.7, size * (fem ? 0.062 : 0.075));
 
   // palm: ONE solid volume — a rounded slab plus thenar/hypothenar bulges and
   // a continuous knuckle ridge the fingers grow out of
@@ -304,12 +390,14 @@ export function handPrims(
   const joints: Record<FingerName, V3[]> = {} as Record<FingerName, V3[]>;
   for (const f of fingers) {
     const curl = clampCurl(f, p.fingers?.[f] ?? defaultCurl(f));
-    const jp = fingerJoints(f, curl, size, !!p.mirror, palmW, palmL);
+    const jp = fingerJoints(f, curl, size, !!p.mirror, prop);
     // hand-local → bake space
     const wj = jp.map(put);
     joints[f] = wj;
-    const fr = f === 'thumb' ? r0 * 1.22 : r0;
-    const radii = [fr, fr * 0.93, fr * 0.85, fr * 0.62];
+    const fd = f === 'thumb' ? prop.thumbD : prop.diam[f as keyof typeof prop.diam];
+    const fr = Math.max(1.7, (size * fd) / 2);
+    const t3 = Math.pow(prop.taper, 1 / 3);
+    const radii = [fr, fr * t3, fr * t3 * t3, fr * prop.taper * prop.tipCap];
     for (let s = 0; s < 3; s++) {
       capsule(out, wj[s], wj[s + 1], radii[s], radii[s + 1], sk.base);
       // knuckle bump where two phalanges meet
@@ -337,9 +425,8 @@ export function handPrims(
 
 /** World-space joints per finger for a placed hand (same math as handPrims). */
 export function handJoints(p: Place, spec: { gender: Gender; skin: SkinTone }): Record<FingerName, V3[]> {
-  const fem = spec.gender === 'female';
-  const palmW = p.size * (fem ? 0.84 : 0.95);
-  const palmL = p.size * PALM_LEN;
+  const prop = PROP[spec.gender];
+  const size = sizeForGender(p.size, spec.gender);
   const yaw = p.yaw ?? 0;
   const pitch = p.pitch ?? 0;
   const roll = p.roll ?? 0;
@@ -347,9 +434,51 @@ export function handJoints(p: Place, spec: { gender: Gender; skin: SkinTone }): 
   const joints = {} as Record<FingerName, V3[]>;
   for (const f of ['index', 'middle', 'ring', 'pinky', 'thumb'] as FingerName[]) {
     const curl = clampCurl(f, p.fingers?.[f] ?? defaultCurl(f));
-    joints[f] = fingerJoints(f, curl, p.size, !!p.mirror, palmW, palmL).map(put);
+    joints[f] = fingerJoints(f, curl, size, !!p.mirror, prop).map(put);
   }
   return joints;
+}
+
+// —— pose blending (spec §5.3) ————————————————————————————————————————————
+
+/** Partial hand deltas applied on top of a rest pose (angles are targets). */
+export interface HandDelta {
+  wrist?: V3; /** additive offset in bake px */
+  yaw?: number;
+  pitch?: number;
+  roll?: number;
+  /** multiply `size` (anticipation/recession scale moves). */
+  sizeMul?: number;
+  fingers?: Partial<Record<FingerName, Partial<Curl>>>;
+}
+
+/** Blend one Place toward a delta: scalars move by u, curls lerp to targets. */
+export function blendPlace(p: Place, d: HandDelta, u: number): Place {
+  const q: Place = { ...p, wrist: [...p.wrist] as V3, fingers: { ...p.fingers } };
+  if (d.wrist) q.wrist = [q.wrist[0] + d.wrist[0] * u, q.wrist[1] + d.wrist[1] * u, q.wrist[2] + d.wrist[2] * u];
+  if (d.yaw) q.yaw = (q.yaw ?? 0) + d.yaw * u;
+  if (d.pitch) q.pitch = (q.pitch ?? 0) + d.pitch * u;
+  if (d.roll) q.roll = (q.roll ?? 0) + d.roll * u;
+  if (d.sizeMul) q.size = q.size * (1 + (d.sizeMul - 1) * u);
+  if (d.fingers) {
+    for (const [f, t] of Object.entries(d.fingers) as [FingerName, Partial<Curl>][]) {
+      const base = q.fingers?.[f] ?? defaultCurl(f);
+      const c: Curl = { ...base };
+      for (const k of ['abd', 'cmcFlex', 'mcp', 'pip', 'dip'] as const) {
+        if (t[k] !== undefined) c[k] = (base[k] ?? (k === 'dip' ? (base.pip * 2) / 3 : 0)) + (t[k]! - (base[k] ?? (k === 'dip' ? (base.pip * 2) / 3 : 0))) * u;
+      }
+      q.fingers![f] = c;
+    }
+  }
+  return q;
+}
+
+/** Blend a whole frame: per-hand deltas applied at blend factor u. */
+export function blendFrame(frame: RigFrame, deltas: (HandDelta | undefined)[], u: number): RigFrame {
+  return {
+    ...frame,
+    hands: frame.hands.map((h, i) => (deltas[i] ? blendPlace(h, deltas[i]!, u) : h)),
+  };
 }
 
 /** Approx dorsal direction: rotate a small normal-ish vector by the palm orient only. */
@@ -363,11 +492,11 @@ function put2Dorsal(put: (v: V3) => V3, local: V3): V3 {
 /** Neutral relaxed curl per finger — a loose resting hand. */
 export function defaultCurl(f: FingerName): Curl {
   switch (f) {
-    case 'thumb': return { abd: 8, mcp: 18, pip: 20 };
-    case 'index': return { abd: 6, mcp: 42, pip: 46 };
-    case 'middle': return { abd: 0, mcp: 48, pip: 50 };
-    case 'ring': return { abd: -6, mcp: 54, pip: 56 };
-    case 'pinky': return { abd: -12, mcp: 62, pip: 64 };
+    case 'thumb': return { abd: 30, cmcFlex: 10, mcp: 8, pip: 12 };
+    case 'index': return { abd: 6, mcp: 26, pip: 30, dip: 12 };
+    case 'middle': return { abd: 0, mcp: 30, pip: 34, dip: 14 };
+    case 'ring': return { abd: -6, mcp: 38, pip: 44, dip: 18 };
+    case 'pinky': return { abd: -12, mcp: 46, pip: 52, dip: 22 };
   }
 }
 
