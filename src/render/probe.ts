@@ -126,6 +126,11 @@ export interface LightProbeResult {
   /** Centre-band luma standing inside the darkest straight run of the map. */
   dark: number;
   darkLight: number;
+  /** Fraction of the whole 3D view below 16/255 luma in the darkest run — the
+   *  void metric: Doom's darkest gameplay frames stay ~26%, so the gate is 28%. */
+  darkFrac: number;
+  /** p10 luma of the whole darkest-run view (darker tail than darkFrac alone). */
+  darkP10: number;
   line: { x: number; y: number; dx: number; dy: number; light: number } | null;
   images?: string[];
 }
@@ -207,12 +212,27 @@ export async function lightProbe(
     }
     let dark = 0;
     let darkLight = 0;
+    let darkFrac = 0;
+    let darkP10 = 0;
     const dline = darkestLine(map, 6);
     if (dline) {
       await stand(dline.x + 0.5, dline.y + 0.5, Math.atan2(dline.dy, dline.dx));
       const d = await r.captureView();
       dark = bandLuma(d, ...DARK_BAND);
       darkLight = dline.light;
+      // whole-view luminance histogram of the darkest staged view: how much
+      // of the frame is a sub-16/255 void. This is the F5 gate metric — the
+      // previous "centre band <= 16" target overshot into unreadable black.
+      const lum: number[] = [];
+      let under = 0;
+      for (let i = 0; i < d.data.length; i += 4) {
+        const l = luma(d.data, i);
+        lum.push(l);
+        if (l < 16) under++;
+      }
+      lum.sort((x, y) => x - y);
+      darkFrac = under / lum.length;
+      darkP10 = Math.round(lum[Math.floor(lum.length * 0.1)] ?? 0);
       if (withImages) images.push(toUrl(d));
     }
     return {
@@ -222,6 +242,8 @@ export async function lightProbe(
       dist: lineDist,
       dark: +dark.toFixed(1),
       darkLight: +darkLight.toFixed(2),
+      darkFrac: +darkFrac.toFixed(3),
+      darkP10,
       line,
       ...(withImages ? { images } : {}),
     };
@@ -326,6 +348,13 @@ async function probeOnLine(
   target.state.speedMul = 0;
   const savedHurtT = target.hurtT;
   target.hurtT = 0;
+  // the gate measures a revealed threat's readability: a still-disguised
+  // trojan renders dim like the pickup it imitates, and a stealthy rootkit
+  // is invisible until revealed — staging as revealed is the honest test
+  const savedRevealedTrojan = target.state.revealedTrojan;
+  const savedRevealedRootkit = target.state.revealedRootkit;
+  target.state.revealedTrojan = true;
+  target.state.revealedRootkit = true;
   try {
     for (let i = 0; i < 4; i++) {
       place();
@@ -378,6 +407,8 @@ async function probeOnLine(
   } finally {
     target.state.speedMul = savedSpeedMul;
     target.hurtT = savedHurtT;
+    target.state.revealedTrojan = savedRevealedTrojan;
+    target.state.revealedRootkit = savedRevealedRootkit;
     r.debugHidden.clear();
     r.debugSprite.delete(id);
     r.debugSuppressFx = false;
