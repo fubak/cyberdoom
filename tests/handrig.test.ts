@@ -3,9 +3,6 @@ import { installFakeCanvas } from './fakecanvas';
 installFakeCanvas();
 import { clampCurl, fingerJoints, handJoints, FINGER_LEN, PHALANX, JOINT_LIMITS, bakeRig, type Place, type FingerName } from '../src/render/handrig';
 import { POSES, TOOL_HANDS } from '../src/render/handposes';
-import { handCycleFrame } from '../src/render/handcycles';
-import { PROP } from '../src/render/handrig';
-import { CYCLE_MS } from '../src/render/vmotion';
 import { SKIN_TONES } from '../src/tools/look';
 import { rasterize, type Prim, type V3 } from '../src/render/model';
 import { fingertipLayout, jointLayout } from '../src/render/handmesh';
@@ -20,18 +17,19 @@ const skin = SKIN_TONES[1];
 const eq = (x: Uint8ClampedArray, y: Uint8ClampedArray) => x.length === y.length && x.every((v, i) => v === y[i]);
 
 /** fingertip in viewmodel units (x rel centre, y above the status-bar line) */
-function vmTip(pose: string | { w: number; h: number; hands: Place[] }, handIdx: number, finger: FingerName, gender: Gender = 'male', at?: [number, number]): [number, number] {
-  const fr = typeof pose === 'string' ? POSES[pose] : pose;
+function vmTip(pose: string, handIdx: number, finger: FingerName, gender: Gender = 'male'): [number, number] {
+  const fr = POSES[pose];
   const cx = (fr.w / 2) * RES;
   const p = fr.hands[handIdx];
-  const q2: Place = {
+  const q: Place = {
     ...p,
     wrist: [p.wrist[0] * RES - cx, p.wrist[1] * RES, p.wrist[2] * RES],
     size: p.size * RES,
   };
-  const j2 = handJoints(q2, { gender, skin })[finger][3];
-  const at2 = at ?? TOOL_HANDS[typeof pose === 'string' ? (pose.split('.')[0] === 'kbd' ? 'keyboard' : pose.split('.')[0]) : 'keyboard'].at;
-  return [at2[0] + j2[0] / RES, at2[1] + j2[1] / RES];
+  const j = handJoints(q, { gender, skin })[finger][3];
+  const tool = pose.split('.')[0] === 'kbd' ? 'keyboard' : pose.split('.')[0];
+  const at = TOOL_HANDS[tool].at;
+  return [at[0] + j[0] / RES, at[1] + j[1] / RES];
 }
 
 describe('hand rig joint limits + DIP coupling', () => {
@@ -58,18 +56,18 @@ describe('hand rig joint limits + DIP coupling', () => {
 });
 
 describe('anthropometric finger lengths', () => {
-  it('matches the spec ratios: index .95, ring .96, pinky .78 of middle', () => {
-    expect(FINGER_LEN.index).toBeCloseTo(0.95, 2);
+  it('matches the anatomical ratios: index .96, ring .95, pinky .79 of middle', () => {
+    expect(FINGER_LEN.index).toBeCloseTo(0.96, 2);
     expect(FINGER_LEN.middle).toBeCloseTo(1.0, 2);
-    expect(FINGER_LEN.ring).toBeCloseTo(0.96, 2);
-    expect(FINGER_LEN.pinky).toBeCloseTo(0.78, 2);
-    // phalanx 1 : 0.62 : 0.44
+    expect(FINGER_LEN.ring).toBeCloseTo(0.95, 2);
+    expect(FINGER_LEN.pinky).toBeCloseTo(0.79, 2);
+    // phalanx 1 : 0.62 : 0.45
     expect(PHALANX[1] / PHALANX[0]).toBeCloseTo(0.62, 2);
-    expect(PHALANX[2] / PHALANX[0]).toBeCloseTo(0.44, 2);
+    expect(PHALANX[2] / PHALANX[0]).toBeCloseTo(0.45, 2);
   });
 
   it('finger chain tip = base + phalanx lengths along the curl', () => {
-    const jp = fingerJoints('middle', { abd: 0, mcp: 0, pip: 0, dip: 0 }, 10, false, PROP.male);
+    const jp = fingerJoints('middle', { abd: 0, mcp: 0, pip: 0, dip: 0 }, 10, false, 9, 11);
     const d = (a: number[], b: number[]) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
     expect(d(jp[1], jp[0])).toBeCloseTo(10 * PHALANX[0], 5);
     expect(d(jp[2], jp[1])).toBeCloseTo(10 * PHALANX[1], 5);
@@ -77,20 +75,18 @@ describe('anthropometric finger lengths', () => {
   });
 });
 
-describe('keystroke cycles put the striking fingertip on a keycap', () => {
+describe('keystroke frames put the striking fingertip on a keycap', () => {
   // the keyboard's home-row band in viewmodel units (art rows 5-24, centred)
   const KEY = { x0: -36, x1: 36, y0: 10, y1: 34 };
-  const ms = CYCLE_MS['kbd.type'];
-  const strikes: [number, number, FingerName][] = [
-    [0, 0, 'middle'],
-    [1, 1, 'index'],
-    [2, 1, 'pinky'],
+  const strikes: [string, number, FingerName][] = [
+    ['kbd.typeA', 0, 'index'],
+    ['kbd.typeB', 1, 'middle'],
+    ['kbd.enter', 1, 'ring'],
   ];
-  for (const [variant, hand, finger] of strikes) {
+  for (const [pose, hand, finger] of strikes) {
     for (const gender of ['male', 'female'] as Gender[]) {
-      it(`kbd cycle ${variant} ${gender} ${finger} lands inside the key zone`, () => {
-        const hf = handCycleFrame('keyboard', ms.a + ms.s, variant);
-        const [x, y] = vmTip(hf!.frame, hand, finger, gender, TOOL_HANDS.keyboard.at);
+      it(`${pose} ${gender} ${finger} lands inside the key zone`, () => {
+        const [x, y] = vmTip(pose, hand, finger, gender);
         expect(x).toBeGreaterThanOrEqual(KEY.x0);
         expect(x).toBeLessThanOrEqual(KEY.x1);
         expect(y).toBeGreaterThanOrEqual(KEY.y0);
@@ -102,12 +98,10 @@ describe('keystroke cycles put the striking fingertip on a keycap', () => {
 
 describe('mouse click keeps the index fingertip over the left button', () => {
   const BTN = { x0: -10, x1: 0, y0: 16, y1: 30 };
-  const ms = CYCLE_MS.mouse;
-  for (const frame of ['mouse.rest', 'mouse.click']) {
+  for (const pose of ['mouse.rest', 'mouse.click']) {
     for (const gender of ['male', 'female'] as Gender[]) {
-      it(`${frame} ${gender} index over the left button`, () => {
-        const hf = handCycleFrame('mouse', frame === 'mouse.rest' ? null : ms.a + ms.s, 0);
-        const [x, y] = vmTip(hf!.frame, 0, 'index', gender, TOOL_HANDS.mouse.at);
+      it(`${pose} ${gender} index over the left button`, () => {
+        const [x, y] = vmTip(pose, 0, 'index', gender);
         expect(x).toBeGreaterThanOrEqual(BTN.x0);
         expect(x).toBeLessThanOrEqual(BTN.x1);
         expect(y).toBeGreaterThanOrEqual(BTN.y0);
@@ -205,11 +199,10 @@ describe('thumb stays below the index MCP on grip poses (no hook)', () => {
           const j = jointLayout(q, { gender, skin: SKIN_TONES[1] });
           const thumb = j.thumb;
           const idxMcp = j.index[0];
-          // thumb lobe may protrude on the thenar side (spec T2) but must not
-          // reach past the ulnar edge — a ~1 palm-span allowance on each side
+          // palm span = projected x range of the four finger MCPs, padded 15%
           const xs = [j.index[0].x, j.middle[0].x, j.ring[0].x, j.pinky[0].x];
           const lo = Math.min(...xs), hi = Math.max(...xs);
-          const pad = hi - lo;
+          const pad = (hi - lo) * 0.15 + 2;
           for (const pt of [thumb[3], thumb[2]]) {
             expect(pt.y).toBeLessThanOrEqual(idxMcp.y);
             expect(pt.x).toBeGreaterThanOrEqual(lo - pad);
@@ -219,4 +212,29 @@ describe('thumb stays below the index MCP on grip poses (no hook)', () => {
       });
     }
   }
+});
+
+describe('use cycles emit only named poses (motion is draw-space offsets)', () => {
+  it('rest at t=null and after the cycle ends; use pose inside strike/hold', async () => {
+    const { handCycleFrame, CYCLES } = await import('../src/render/handcycles');
+    for (const [tool, th] of Object.entries(TOOL_HANDS)) {
+      const def = (CYCLES as Record<string, { ms: { a: number; s: number; h: number; r: number } }[]>)[tool][0];
+      expect(handCycleFrame(tool, null, 0)!.key).toBe(th.rest);
+      const strike = handCycleFrame(tool, def.ms.a + def.ms.s, 0)!;
+      expect(th.use).toContain(strike.key);
+      const done = handCycleFrame(tool, def.ms.a + def.ms.s + def.ms.h + def.ms.r + 400, 0)!;
+      expect(done.key).toBe(th.rest);
+    }
+  });
+  it('every sampled cycle frame is a POSES entry (the bake key set is main\'s)', async () => {
+    const { handCycleFrame, CYCLES } = await import('../src/render/handcycles');
+    for (const [tool, defs] of Object.entries(CYCLES)) {
+      const ms = (defs as { ms: { a: number; s: number; h: number; r: number } }[])[0].ms;
+      for (const t of [0, ms.a / 2, ms.a, ms.a + ms.s, ms.a + ms.s + ms.h / 2, ms.a + ms.s + ms.h + ms.r]) {
+        const hf = handCycleFrame(tool, t, 0)!;
+        expect(Object.keys(POSES)).toContain(hf.key);
+        expect(hf.frame).toBe(POSES[hf.key]);
+      }
+    }
+  });
 });

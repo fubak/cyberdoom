@@ -1,64 +1,50 @@
-import { blendPlace, type HandDelta, type RigFrame } from './handrig';
-import { cyclePoint, fingerDrift, fidgetAt, settle } from './vmotion';
-import { POSES, TOOL_HANDS, type CycleDef } from './handposes';
+import type { RigFrame } from './handrig';
+import { cyclePoint, fingerDrift, fidgetAt, settle, type CycleMs } from './vmotion';
+import { POSES, TOOL_HANDS } from './handposes';
 
 /**
- * USE-CYCLE + IDLE pose engine (spec §5). Given a tool and a time, produce a
- * blended RigFrame (rest + deltas) plus the hand-level move offset and the
- * held object's lagged offset. Baking stays lazy: frame names quantize the
- * cycle into ≤10 keyed steps so PartCache dedups them.
+ * USE-CYCLE + IDLE pose engine on top of main's pose table. A use cycle is a
+ * timed walk through anticipation → strike → hold → recover that picks one of
+ * the tool's named poses (rest or a `use` pose) and adds continuous draw-space
+ * offsets — anticipation pullback, strike travel, release/return springs — so
+ * the motion animates while the baked art stays exactly main's sprites.
+ * Frame keys reduce to the pose name itself, so the PartCache holds the same
+ * sprite set main does.
  */
 
 const lerp = (a: number, b: number, u: number) => a + (b - a) * u;
 
-/** Merge two deltas channel-wise, a→b by u. */
-export function mergeDelta(a: HandDelta | undefined, b: HandDelta | undefined, u: number): HandDelta {
-  const out: HandDelta = {};
-  if (a?.wrist || b?.wrist) {
-    const aw = a?.wrist ?? [0, 0, 0], bw = b?.wrist ?? [0, 0, 0];
-    out.wrist = [lerp(aw[0], bw[0], u), lerp(aw[1], bw[1], u), lerp(aw[2], bw[2], u)];
-  }
-  for (const k of ['yaw', 'pitch', 'roll'] as const) {
-    if (a?.[k] !== undefined || b?.[k] !== undefined) out[k] = lerp(a?.[k] ?? 0, b?.[k] ?? 0, u);
-  }
-  if (a?.sizeMul !== undefined || b?.sizeMul !== undefined) out.sizeMul = lerp(a?.sizeMul ?? 1, b?.sizeMul ?? 1, u);
-  const fa = a?.fingers ?? {}, fb = b?.fingers ?? {};
-  const names = new Set([...Object.keys(fa), ...Object.keys(fb)]);
-  if (names.size) {
-    out.fingers = {};
-    for (const n of names) {
-      const ca = (fa as Record<string, Partial<import('./handrig').Curl>>)[n] ?? {};
-      const cb = (fb as Record<string, Partial<import('./handrig').Curl>>)[n] ?? {};
-      const f: Partial<import('./handrig').Curl> = {};
-      for (const k of ['abd', 'cmcFlex', 'mcp', 'pip', 'dip'] as const) {
-        if (ca[k] !== undefined || cb[k] !== undefined) f[k] = lerp(ca[k] ?? cb[k]!, cb[k] ?? ca[k]!, u);
-      }
-      (out.fingers as Record<string, Partial<import('./handrig').Curl>>)[n] = f;
-    }
-  }
-  return out;
+export interface CycleDef {
+  ms: CycleMs;
+  /** anticipation pullback offset [dx, dy, scale] (1x px). */
+  moveA?: [number, number, number];
+  /** strike/hold travel offset [dx, dy, scale]. */
+  moveS?: [number, number, number];
+  /** late-hold partial release of the held object's offset. */
+  release?: { at: number; move: [number, number, number] };
 }
 
-/** Split a delta into wrist/orient channels vs finger channels. */
-function wristOnly(d: HandDelta | undefined): HandDelta | undefined {
-  if (!d) return undefined;
-  const { wrist, yaw, pitch, roll, sizeMul } = d;
-  const out: HandDelta = {};
-  if (wrist) out.wrist = wrist;
-  if (yaw !== undefined) out.yaw = yaw;
-  if (pitch !== undefined) out.pitch = pitch;
-  if (roll !== undefined) out.roll = roll;
-  if (sizeMul !== undefined) out.sizeMul = sizeMul;
-  return out;
-}
-function fingersOnly(d: HandDelta | undefined): HandDelta | undefined {
-  return d?.fingers ? { fingers: d.fingers } : undefined;
-}
+/** Per-tool cycle timing + offsets (spec §5 table; art untouched). */
+export const CYCLES: Record<string, CycleDef[]> = {
+  keyboard: [
+    { ms: { a: 30, s: 50, h: 55, r: 110 }, moveA: [0, -3, 1], moveS: [0, 3, 1] },
+    { ms: { a: 30, s: 50, h: 55, r: 110 }, moveA: [0, -3, 1], moveS: [0, 3, 1] },
+    { ms: { a: 80, s: 90, h: 180, r: 260 }, moveA: [0, -7, 0.97], moveS: [2, 9, 1.04], release: { at: 110, move: [1, 5, 1.02] } },
+  ],
+  mouse: [{ ms: { a: 40, s: 60, h: 80, r: 140 }, moveA: [0, -3, 1], moveS: [1, 3, 1] }],
+  usb: [{ ms: { a: 110, s: 120, h: 120, r: 300 }, moveA: [-3, 4, 0.95], moveS: [4, -11, 1.06], release: { at: 70, move: [2, -8, 1.04] } }],
+  badge: [{ ms: { a: 110, s: 140, h: 230, r: 300 }, moveA: [2, -3, 0.96], moveS: [7, 7, 1.07], release: { at: 140, move: [5, 4, 1.05] } }],
+  mfa: [{ ms: { a: 60, s: 70, h: 70, r: 160 }, moveA: [-2, -3, 1], moveS: [3, 3, 1] }],
+  patch: [{ ms: { a: 110, s: 140, h: 210, r: 300 }, moveA: [-3, 4, 0.95], moveS: [5, -9, 1.05], release: { at: 130, move: [3, -6, 1.03] } }],
+  tap: [{ ms: { a: 80, s: 100, h: 100, r: 240 }, moveA: [0, 2, 0.96], moveS: [0, -4, 1.05], release: { at: 60, move: [0, -2, 1.03] } }],
+  edr: [{ ms: { a: 60, s: 80, h: 110, r: 220 }, moveA: [-2, 1, 0.97], moveS: [3, -3, 1.05] }],
+};
 
-/** Where a cycle is at t ms: stage, blended per-hand delta, hand move [dx,dy,scale]. */
+/** Where a cycle is at t ms: stage, use-pose weight, hand move [dx,dy,scale]. */
 export interface CycleEval {
   stage: 'idle' | 'anticip' | 'strike' | 'hold' | 'recover' | 'done';
-  deltas: (HandDelta | undefined)[];
+  /** 0 = rest pose, 1 = use pose; snaps on once the strike lands. */
+  useU: number;
   move: [number, number, number];
 }
 
@@ -68,48 +54,35 @@ export function evalCycle(def: CycleDef, tMs: number, lagMs = 0, zeta = 0.85): C
   const mvS = def.moveS ?? [0, 0, 1];
   switch (cp.stage) {
     case 'idle':
-      return { stage: 'idle', deltas: [], move: [0, 0, 1] };
-    case 'anticip': {
-      const u = cp.u;
-      return { stage: 'anticip', deltas: [], move: [mvA[0] * u, mvA[1] * u, 1 + (mvA[2] - 1) * u] };
-    }
-    case 'strike': {
-      const u = cp.u; // outBack — overshoots past 1
+      return { stage: 'idle', useU: 0, move: [0, 0, 1] };
+    case 'anticip':
+      return { stage: 'anticip', useU: 0, move: [mvA[0] * cp.u, mvA[1] * cp.u, 1 + (mvA[2] - 1) * cp.u] };
+    case 'strike':
+      // the strike pose lands partway through the travel, not at t=0
       return {
         stage: 'strike',
-        deltas: def.impact.map((d) => (d ? mergeDelta(undefined, d, u) : undefined)),
-        move: [lerp(mvA[0], mvS[0], u), lerp(mvA[1], mvS[1], u), lerp(mvA[2], mvS[2], u)],
+        useU: cp.u > 0.35 ? 1 : 0,
+        move: [lerp(mvA[0], mvS[0], cp.u), lerp(mvA[1], mvS[1], cp.u), lerp(mvA[2], mvS[2], cp.u)],
       };
-    }
     case 'hold': {
-      let deltas = def.impact;
+      let move = mvS;
       if (def.release && cp.t >= def.release.at) {
         const u = Math.min(1, (cp.t - def.release.at) / 60);
-        deltas = def.impact.map((d, i) => mergeDelta(d, def.release!.deltas[i], u));
+        move = [lerp(mvS[0], def.release.move[0], u), lerp(mvS[1], def.release.move[1], u), lerp(mvS[2], def.release.move[2], u)];
       }
-      return { stage: 'hold', deltas, move: [...mvS] };
+      return { stage: 'hold', useU: 1, move };
     }
     case 'recover': {
-      // spring(22,ζ) back to rest; fingers trail the wrist by 40 ms (cp.fingerU)
-      const uW = cp.u;
-      const uF = lagMs === 0 && zeta === 0.85 ? cp.fingerU : settle(Math.max(0, (cp.t - 40) / 1000), 22, zeta);
-      const u = lagMs === 0 && zeta === 0.85 ? uW : settle(cp.t / 1000, 22, zeta);
+      // spring back; the use pose releases early while the offset eases out
+      const u = settle(cp.t / 1000, 22, zeta);
       return {
         stage: 'recover',
-        deltas: def.impact.map((d) => {
-          if (!d) return undefined;
-          // wrist channels settle on the wrist clock, fingers on the lagged one
-          const w = wristOnly(d);
-          const f = fingersOnly(d);
-          const scaledW = w ? mergeDelta(undefined, w, u) : undefined;
-          const scaledF = f ? mergeDelta(undefined, f, uF) : undefined;
-          return mergeDelta(scaledW, scaledF, 1);
-        }),
+        useU: cp.u > 0.55 ? 0 : 1,
         move: [mvS[0] * u, mvS[1] * u, 1 + (mvS[2] - 1) * u],
       };
     }
     default:
-      return { stage: 'done', deltas: [], move: [0, 0, 1] };
+      return { stage: 'done', useU: 0, move: [0, 0, 1] };
   }
 }
 
@@ -129,52 +102,29 @@ const RDELAY = 20;
 export function handCycleFrame(toolId: string, tMs: number | null, variant: number): HandFrame | null {
   const th = TOOL_HANDS[toolId];
   if (!th) return null;
-  const rest = POSES[th.rest];
-  const def = th.cycles[variant % th.cycles.length];
+  const defs = CYCLES[toolId] ?? [{ ms: { a: 60, s: 80, h: 100, r: 220 } }];
+  const def = defs[variant % defs.length];
   if (tMs === null || tMs < 0) {
-    return { key: th.rest, frame: rest, move: [0, 0, 1], objMove: [0, 0, 1], stage: 'idle' };
+    return { key: th.rest, frame: POSES[th.rest], move: [0, 0, 1], objMove: [0, 0, 1], stage: 'idle' };
   }
   const ev = evalCycle(def, tMs);
   const evObj = evalCycle(def, tMs, RDELAY, 0.6);
-  const qi = quantize(ev, def, tMs);
-  const frame: RigFrame = {
-    ...rest,
-    hands: rest.hands.map((p, i) => (ev.deltas[i] ? blendPlace(p, ev.deltas[i]!, 1) : p)),
-  };
-  const key = `${th.rest}.v${variant}.s${ev.stage}.q${qi}`;
-  return { key, frame, move: ev.move, objMove: evObj.move, stage: ev.stage };
+  // frame == one of main's named poses, so the pose name is the bake key:
+  // the PartCache holds exactly main's sprite set
+  const poseName = ev.useU >= 0.5 ? th.use[variant % th.use.length] : th.rest;
+  return { key: poseName, frame: POSES[poseName], move: ev.move, objMove: evObj.move, stage: ev.stage };
 }
 
-/** Bake-step index per stage: A 0-1, S 2-4, H 5, R 6-9 (spec §5.3 cache steps). */
-function quantize(ev: CycleEval, def: CycleDef, tMs: number): number {
-  switch (ev.stage) {
-    case 'anticip': {
-      const u = def.ms.a > 0 ? tMs / def.ms.a : 1;
-      return u < 0.5 ? 0 : 1;
-    }
-    case 'strike': {
-      const u = (tMs - def.ms.a) / def.ms.s;
-      return 2 + Math.min(2, Math.max(0, Math.floor(u * 3)));
-    }
-    case 'hold': return 5;
-    case 'recover': {
-      const tr = tMs - def.ms.a - def.ms.s - def.ms.h;
-      const marks = [0, 40, 120, 260];
-      let q = 6;
-      for (let i = 0; i < marks.length; i++) if (tr >= marks[i]) q = 6 + i;
-      return q;
-    }
-    default: return 0;
-  }
+/** Number of use-cycle variants a tool exposes (for variant rotation). */
+export function cycleVariants(toolId: string): number {
+  return CYCLES[toolId]?.length ?? 1;
 }
 
 /**
  * Idle modifiers (spec §5.4): finger drift + seeded fidgets as continuous
  * composite offsets — NOT pose deltas. Re-baking a sprite per idle phase
- * (the old `i${t}` key exploded the PartCache into ~70 poses/tool and
- * stalled a frame on every phase change) is worse than a 1-2px whole-hand
- * micro-shift, which is all the drift reads as at bake res anyway.
- * Returns [dx, dy, rollDeg] in 1x px. t is seconds.
+ * is worse than a 1-2px whole-hand micro-shift, which is all the drift reads
+ * as at bake res anyway. Returns [dx, dy, rollDeg] in 1x px. t is seconds.
  */
 export function idleFrame(t: number, seed: number): { move: [number, number, number] } {
   const dr = fingerDrift(t);

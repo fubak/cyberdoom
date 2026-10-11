@@ -3,7 +3,7 @@ import {
   bobOffsets, CYCLE_MS, cyclePoint, fidgetAt, inQuad, outBack, settle,
   spring, springStep, swayTarget, SWAY, type CycleMs,
 } from '../src/render/vmotion';
-import { TOOL_HANDS } from '../src/render/handposes';
+import { CYCLES } from '../src/render/handcycles';
 
 /**
  * Spec §6 acceptance tests T8/T9/T10 — the motion layer is closed-form and
@@ -42,8 +42,8 @@ describe('T8: use-cycle continuity', () => {
 
   it('never moves more than 20 px between adjacent 60 Hz frames', () => {
     for (const [id, ms] of Object.entries(CYCLE_MS)) {
-      const th = TOOL_HANDS[id === 'kbd.type' || id === 'kbd.enter' ? 'keyboard' : id];
-      const def = th.cycles[0];
+      const defs = CYCLES[id === 'kbd.type' || id === 'kbd.enter' ? 'keyboard' : id];
+      const def = id === 'kbd.enter' ? defs[defs.length - 1] : defs[0];
       const ev = (t: number) => {
         const cp = cyclePoint(def.ms, t);
         const mvA = def.moveA ?? [0, 0, 1] as [number, number, number];

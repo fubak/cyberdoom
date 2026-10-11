@@ -4,7 +4,7 @@ import { currentSkin } from '../tools/look';
 import { outlineNative, painter, type Painter } from './hires';
 import { RES } from './res';
 import { bakeRig } from './handrig';
-import { handCycleFrame, idleFrame } from './handcycles';
+import { handCycleFrame, idleFrame, cycleVariants } from './handcycles';
 import { breath } from './vmotion';
 import { TOOL_HANDS } from './handposes';
 
@@ -31,7 +31,7 @@ const cache = new Map<string, Art>();
 export const VIEWMODEL_SCALE = 1;
 
 /** External hand-motion inputs written by main.ts each frame (§5.5/§5.6). */
-export const handMods = { roll: 0, bobPitch: 0, seed: 1 };
+export const handMods = { roll: 0, bobPitch: 0, seed: 1, still: false };
 
 function paint(w: number, h: number, ox: number, fn: (px: Px, P: Painter) => void): Art {
   const P = painter(w, h);
@@ -248,7 +248,7 @@ export function drawToolViewmodel(
   let dy: number;
   // the held object trails the hand: cycle move sampled 20 ms late (looser ζ)
   const _anchor0 = TOOL_HANDS[tool.id];
-  const _lag = _anchor0 && anim ? handCycleFrame(tool.id, anim.sinceUse * 1000, Math.floor(_time * 0.6) % _anchor0.cycles.length)?.objMove : null;
+  const _lag = _anchor0 && anim ? handCycleFrame(tool.id, anim.sinceUse * 1000, Math.floor(_time * 0.6) % cycleVariants(tool.id))?.objMove : null;
   if (_lag && ph) {
     dx = Math.round(_lag[0]);
     dy = Math.round(_lag[1]);
@@ -317,12 +317,12 @@ export function drawToolViewmodel(
   {
     const anchor = TOOL_HANDS[tool.id];
     if (anchor) {
-      const variant = Math.floor(_time * 0.6) % anchor.cycles.length;
+      const variant = Math.floor(_time * 0.6) % cycleVariants(tool.id);
       const hf = handCycleFrame(tool.id, ph ? anim!.sinceUse * 1000 : null, variant);
       if (hf) {
         const frame = hf.frame;
         const key = hf.key;
-        const idleM = hf.stage === 'idle' || hf.stage === 'done' ? idleFrame(_time, handMods.seed).move : [0, 0, 0];
+        const idleM = !handMods.still && (hf.stage === 'idle' || hf.stage === 'done') ? idleFrame(_time, handMods.seed).move : [0, 0, 0];
         const sp = bakeRig(key, frame, { gender, skin: currentSkin() });
         const sw = sp.c.width / RES;
         const sh = sp.c.height / RES;
@@ -334,7 +334,7 @@ export function drawToolViewmodel(
         hy = Math.max(hy, Math.ceil(line - (sp.top / RES) * hs));
         // sway roll + bob pitch + idle roll applied continuously at draw:
         // rotating the canvas is free; baking per-degree variants is not
-        const rot = (handMods.roll + handMods.bobPitch + idleM[2]) * (Math.PI / 180);
+        const rot = handMods.still ? 0 : (handMods.roll + handMods.bobPitch + idleM[2]) * (Math.PI / 180);
         if (Math.abs(rot) > 1e-4 && 'rotate' in g) {
           const gg = g as CanvasRenderingContext2D;
           gg.save();

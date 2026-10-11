@@ -516,6 +516,14 @@ class Game {
     // warm the mission's tier on the worker so Deploy hits a cached buffer
     this.audio.prefetchMusic(musicTierFor(m.difficulty));
     this.setScreen('briefing', screens.briefing(m, () => this.deploy(id), () => this.showMissionSelect()));
+    // warm the WebGL hand-bake path during briefing: the first bake carries
+    // a one-time renderer/shader init that must not land inside deploy→play
+    this.scheduleIdle(() => {
+      try {
+        const th = TOOL_HANDS.keyboard;
+        bakeRig(th.rest, POSES[th.rest], { gender: this.gender, skin: currentSkin() });
+      } catch { /* lazy bake covers it */ }
+    });
   }
 
   private showPause(): void {
@@ -744,24 +752,30 @@ class Game {
     if (p && p.id === id && !p.ready) {
       const gen = this.prepGen;
       this.setScreen('loading', screens.loadingScreen(() => this.abortLoad(id, gen)));
-      // two rAFs: let the plate paint, then finish remaining prep synchronously
-      requestAnimationFrame(() =>
-        requestAnimationFrame(() => {
-          if (this.prepGen !== gen || this.screen !== 'loading') return;
-          try {
-            let steps = 0;
-            while (!p.ready) {
-              this.prepStep(p);
-              if (++steps > 400) throw new Error('mission prep did not finish');
-            }
-            if (this.prepGen !== gen || this.screen !== 'loading') return;
-            this.startMission(id);
-          } catch (err) {
-            console.error(err);
-            this.abortLoad(id, gen);
+      // two rAFs: let the plate paint, then finish prep in ~24ms slices per
+      // frame — a monolithic drain piles every warm (e.g. hand bakes) into
+      // one giant stall frame
+      let steps = 0;
+      const drain = () => {
+        if (this.prepGen !== gen || this.screen !== 'loading') return;
+        try {
+          const t0 = performance.now();
+          while (!p.ready && performance.now() - t0 < 24) {
+            this.prepStep(p);
+            if (++steps > 400) throw new Error('mission prep did not finish');
           }
-        }),
-      );
+          if (!p.ready) {
+            requestAnimationFrame(drain);
+            return;
+          }
+          if (this.prepGen !== gen || this.screen !== 'loading') return;
+          this.startMission(id);
+        } catch (err) {
+          console.error(err);
+          this.abortLoad(id, gen);
+        }
+      };
+      requestAnimationFrame(() => requestAnimationFrame(drain));
       return;
     }
     this.startMission(id);
@@ -859,6 +873,17 @@ class Game {
     if (!DEBUG) this.input.requestLock();
     this.hud.clearMessages();
     this.hud.pushMessage(`${mission.title} — good luck, analyst`, 'info');
+    // finish warming the tool hand bakes in idle slices during play so a
+    // first equip never stalls a frame on the WebGL mesh bake
+    let hw = 0;
+    const warmTools = Object.keys(TOOL_HANDS);
+    const warmStep = () => {
+      if (hw >= warmTools.length || this.screen !== 'play') return;
+      const rest = TOOL_HANDS[warmTools[hw++] as keyof typeof TOOL_HANDS].rest;
+      try { bakeRig(rest, POSES[rest], { gender: this.gender, skin: currentSkin() }); } catch { /* lazy bake covers it */ }
+      if (hw < warmTools.length) this.scheduleIdle(warmStep);
+    };
+    this.scheduleIdle(warmStep);
   }
 
   private endMission(): void {
