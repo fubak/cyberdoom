@@ -36,6 +36,8 @@ export class Player {
   lastHurtFrom: number | undefined;
   private stepReady = false;
   private bobAmt = 0;
+  private bobStopAmt = 0;
+  private bobStopT = 99;
   private turnDir = 0;
   private turnHeld = 0;
   readonly radius = 0.28;
@@ -131,8 +133,21 @@ export class Player {
     this.stepReady = sp > 1 && Math.floor(oldBob / Math.PI) !== Math.floor(this.bob / Math.PI);
     this.t += dt;
     this.hurtT = Math.max(0, this.hurtT - dt);
-    const targetBob = Math.min(1, (sp / MOVE.walkSpeed) ** 2);
-    this.bobAmt += (targetBob - this.bobAmt) * Math.min(1, 12 * dt);
+    // spec §5.5: amt 0.55 walk / 1.0 sprint, chase k=6 while moving; on stop a
+    // critically-damped-ish spring(10,0.9) eases the amplitude back to zero
+    const moving = sp > 0.4;
+    const targetBob = !moving ? 0 : sp > MOVE.walkSpeed ? 1.0 : 0.55;
+    if (moving) {
+      this.bobStopT = 99;
+      this.bobStopAmt = this.bobAmt;
+      this.bobAmt += (targetBob - this.bobAmt) * Math.min(1, 6 * dt);
+    } else {
+      if (this.bobStopT > 60) { this.bobStopT = 0; this.bobStopAmt = this.bobAmt; }
+      this.bobStopT += dt;
+      const w = 14, z = 0.9, wd = w * Math.sqrt(1 - z * z);
+      const e = Math.exp(-z * w * this.bobStopT);
+      this.bobAmt = Math.max(0, this.bobStopAmt * e * (Math.cos(wd * this.bobStopT) + (z * w / wd) * Math.sin(wd * this.bobStopT)));
+    }
   }
 
   private projectVelocity(nx: number, ny: number): void {
@@ -175,11 +190,20 @@ export class Player {
   }
 
   get weaponBobX(): number {
-    return 14 * this.bobAmt * Math.cos((2 * Math.PI * this.t) / 1.83);
+    return 22 * this.bobAmt * Math.cos((2 * Math.PI * this.t) / 1.83);
   }
 
   get weaponBobY(): number {
-    return 14 * this.bobAmt * Math.abs(Math.sin((2 * Math.PI * this.t) / 1.83));
+    return 26 * this.bobAmt * Math.abs(Math.sin((2 * Math.PI * this.t) / 1.83));
+  }
+
+  /** spec §5.5: hand bob pitch ≈ 3°·amt·sin(φ) for the baked roll variants. */
+  get bobPitchDeg(): number {
+    return 3 * this.bobAmt * Math.sin((2 * Math.PI * this.t) / 1.83);
+  }
+
+  get bobAmount(): number {
+    return this.bobAmt;
   }
 
   damage(n: number, fromX?: number, fromY?: number): void {

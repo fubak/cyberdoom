@@ -213,3 +213,28 @@ describe('thumb stays below the index MCP on grip poses (no hook)', () => {
     }
   }
 });
+
+describe('use cycles emit only named poses (motion is draw-space offsets)', () => {
+  it('rest at t=null and after the cycle ends; use pose inside strike/hold', async () => {
+    const { handCycleFrame, CYCLES } = await import('../src/render/handcycles');
+    for (const [tool, th] of Object.entries(TOOL_HANDS)) {
+      const def = (CYCLES as Record<string, { ms: { a: number; s: number; h: number; r: number } }[]>)[tool][0];
+      expect(handCycleFrame(tool, null, 0)!.key).toBe(th.rest);
+      const strike = handCycleFrame(tool, def.ms.a + def.ms.s, 0)!;
+      expect(th.use).toContain(strike.key);
+      const done = handCycleFrame(tool, def.ms.a + def.ms.s + def.ms.h + def.ms.r + 400, 0)!;
+      expect(done.key).toBe(th.rest);
+    }
+  });
+  it('every sampled cycle frame is a POSES entry (the bake key set is main\'s)', async () => {
+    const { handCycleFrame, CYCLES } = await import('../src/render/handcycles');
+    for (const [tool, defs] of Object.entries(CYCLES)) {
+      const ms = (defs as { ms: { a: number; s: number; h: number; r: number } }[])[0].ms;
+      for (const t of [0, ms.a / 2, ms.a, ms.a + ms.s, ms.a + ms.s + ms.h / 2, ms.a + ms.s + ms.h + ms.r]) {
+        const hf = handCycleFrame(tool, t, 0)!;
+        expect(Object.keys(POSES)).toContain(hf.key);
+        expect(hf.frame).toBe(POSES[hf.key]);
+      }
+    }
+  });
+});

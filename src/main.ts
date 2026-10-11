@@ -17,6 +17,9 @@ import { Renderer } from './render/renderer';
 import { prewarmLazySpriteFrames, prioritizeLazySprites, spriteSets } from './render/sprites';
 import { textureRegistry } from './render/textures';
 import { TOOL_FLASH } from './render/viewmodels';
+import { bakeRig } from './render/handrig';
+import { POSES, TOOL_HANDS } from './render/handposes';
+import { currentSkin } from './tools/look';
 import { Hud } from './ui/hud';
 import { Automap } from './ui/automap';
 import { setupPresentation } from './ui/present';
@@ -47,6 +50,8 @@ import { genDebugCompare } from './render/genpool';
  * together through core contracts only.
  */
 
+import { springStep, swayTarget, SWAY, breath as breathF } from './render/vmotion';
+import { handMods } from './render/viewmodels';
 const FIXED_DT = 1 / 60;
 const params = new URLSearchParams(location.search);
 const DEBUG = params.get('debug') === '1';
@@ -161,6 +166,8 @@ class Game {
   probeLock = false;
   /** Viewmodel sway/lag state: lags mouse yaw + strafe, springs back to rest. */
   private vmSway = { x: 0, y: 0 };
+  private swayX = { x: 0, v: 0, acc: 0 };
+  private swayY = { x: 0, v: 0, acc: 0 };
   private lastHurtMessageT = -Infinity;
   private lastHurtT = -Infinity;
   private endTimer: number | null = null;
@@ -509,6 +516,14 @@ class Game {
     // warm the mission's tier on the worker so Deploy hits a cached buffer
     this.audio.prefetchMusic(musicTierFor(m.difficulty));
     this.setScreen('briefing', screens.briefing(m, () => this.deploy(id), () => this.showMissionSelect()));
+    // warm the WebGL hand-bake path during briefing: the first bake carries
+    // a one-time renderer/shader init that must not land inside deploy→play
+    this.scheduleIdle(() => {
+      try {
+        const th = TOOL_HANDS.keyboard;
+        bakeRig(th.rest, POSES[th.rest], { gender: this.gender, skin: currentSkin() });
+      } catch { /* lazy bake covers it */ }
+    });
   }
 
   private showPause(): void {
@@ -579,6 +594,7 @@ class Game {
     texIndex: number;
     stage: number;
     ready: boolean;
+    handWarm: number;
   } | null = null;
 
   private scheduleIdle(cb: () => void): void {
@@ -593,7 +609,7 @@ class Game {
   private prepareMission(id: string): void {
     // palette-recolored threat sets must exist before syncEntities builds meshes
     registerThreatSprites();
-    const p = { id, map: null as WorldMap | null, built: false, textures: [] as Parameters<Renderer['initTexture']>[0][], texIndex: 0, stage: 0, ready: false };
+    const p = { id, map: null as WorldMap | null, built: false, textures: [] as Parameters<Renderer['initTexture']>[0][], texIndex: 0, stage: 0, ready: false, handWarm: 0 };
     this.prepared = p;
     const step = () => {
       if (this.prepared !== p || p.ready) return; // superseded or finished
@@ -659,8 +675,19 @@ class Game {
       }
       case 6: // HUD glyph/bar caches
         this.warmHud(mission);
-        p.ready = true;
+        p.stage++;
         break;
+      case 7: { // hand bakes: one tool's rest pose per idle slice so equipping
+        // a tool never stalls a frame on the WebGL mesh bake
+        const tools = Object.keys(TOOL_HANDS);
+        if (p.handWarm >= tools.length) {
+          p.ready = true;
+          break;
+        }
+        const rest = TOOL_HANDS[tools[p.handWarm++] as keyof typeof TOOL_HANDS].rest;
+        try { bakeRig(rest, POSES[rest], { gender: this.gender, skin: currentSkin() }); } catch { /* bake warms lazily at draw */ }
+        break;
+      }
     }
   }
 
@@ -725,24 +752,30 @@ class Game {
     if (p && p.id === id && !p.ready) {
       const gen = this.prepGen;
       this.setScreen('loading', screens.loadingScreen(() => this.abortLoad(id, gen)));
-      // two rAFs: let the plate paint, then finish remaining prep synchronously
-      requestAnimationFrame(() =>
-        requestAnimationFrame(() => {
-          if (this.prepGen !== gen || this.screen !== 'loading') return;
-          try {
-            let steps = 0;
-            while (!p.ready) {
-              this.prepStep(p);
-              if (++steps > 400) throw new Error('mission prep did not finish');
-            }
-            if (this.prepGen !== gen || this.screen !== 'loading') return;
-            this.startMission(id);
-          } catch (err) {
-            console.error(err);
-            this.abortLoad(id, gen);
+      // two rAFs: let the plate paint, then finish prep in ~24ms slices per
+      // frame — a monolithic drain piles every warm (e.g. hand bakes) into
+      // one giant stall frame
+      let steps = 0;
+      const drain = () => {
+        if (this.prepGen !== gen || this.screen !== 'loading') return;
+        try {
+          const t0 = performance.now();
+          while (!p.ready && performance.now() - t0 < 24) {
+            this.prepStep(p);
+            if (++steps > 400) throw new Error('mission prep did not finish');
           }
-        }),
-      );
+          if (!p.ready) {
+            requestAnimationFrame(drain);
+            return;
+          }
+          if (this.prepGen !== gen || this.screen !== 'loading') return;
+          this.startMission(id);
+        } catch (err) {
+          console.error(err);
+          this.abortLoad(id, gen);
+        }
+      };
+      requestAnimationFrame(() => requestAnimationFrame(drain));
       return;
     }
     this.startMission(id);
@@ -840,6 +873,17 @@ class Game {
     if (!DEBUG) this.input.requestLock();
     this.hud.clearMessages();
     this.hud.pushMessage(`${mission.title} — good luck, analyst`, 'info');
+    // finish warming the tool hand bakes in idle slices during play so a
+    // first equip never stalls a frame on the WebGL mesh bake
+    let hw = 0;
+    const warmTools = Object.keys(TOOL_HANDS);
+    const warmStep = () => {
+      if (hw >= warmTools.length || this.screen !== 'play') return;
+      const rest = TOOL_HANDS[warmTools[hw++] as keyof typeof TOOL_HANDS].rest;
+      try { bakeRig(rest, POSES[rest], { gender: this.gender, skin: currentSkin() }); } catch { /* lazy bake covers it */ }
+      if (hw < warmTools.length) this.scheduleIdle(warmStep);
+    };
+    this.scheduleIdle(warmStep);
   }
 
   private endMission(): void {
@@ -875,16 +919,21 @@ class Game {
       if (!this.paused && !this.dossier.isOpen && this.runtime.finished === null) {
         this.player.angle += mouseDX * 0.0028;
       }
-      // hand sway: the viewmodel lags behind turns and strafes (capped), then
-      // eases back — a light exponential chase reads like a spring return
+      // hand sway (spec §5.6): second-order springs on the fixed 240 Hz step —
+      // x: spring(16,.70) target ±28 from mouse dx + lateral velocity;
+      // y: spring(13,.85) target ±16 from forward velocity. Frame-rate free.
       const latV = -this.player.vx * Math.sin(this.player.angle) + this.player.vy * Math.cos(this.player.angle);
       const fwdV = this.player.vx * Math.cos(this.player.angle) + this.player.vy * Math.sin(this.player.angle);
-      const chaseX = 1 - Math.exp(-dt * 15);
-      const chaseY = 1 - Math.exp(-dt * 11);
-      this.vmSway.x += (Math.max(-12, Math.min(12, -mouseDX * 0.45 - latV * 3.2)) - this.vmSway.x) * chaseX;
-      this.vmSway.y += (Math.max(-8, Math.min(8, -fwdV * 1.6)) - this.vmSway.y) * chaseY;
-      // idle breathing: ~1.4px at 0.25 Hz, deterministic off the sim clock
-      const breath = this.paused ? 0 : Math.sin(this.simT * Math.PI * 0.5) * 1.4;
+      const [swTx, swTy] = swayTarget(this.paused || this.dossier.isOpen ? 0 : mouseDX / Math.max(dt, 1e-4), latV, fwdV, 0);
+      const swX = springStep(this.swayX, swTx, dt, SWAY.xw, SWAY.xz);
+      const swY = springStep(this.swayY, swTy, dt, SWAY.yw, SWAY.yz);
+      this.vmSway.x = swX;
+      this.vmSway.y = swY;
+      // hand roll/scale couple off the sway; bob pitch feeds the baked variants
+      handMods.roll = SWAY.rollK * swX;
+      handMods.bobPitch = this.player.bobPitchDeg;
+      // idle breathing (spec §5.4): 1.6px @ 0.22 Hz + 0.6px @ 0.14 Hz
+      const [, breath] = this.paused ? [0, 0] : breathF(this.simT);
       this.audio.setListener(this.player.x, this.player.y, this.player.angle);
       this.renderer.syncEntities(this.runtime.entities, this.projectiles);
       this.renderer.syncParticles(this.particles.view());
