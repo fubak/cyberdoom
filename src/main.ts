@@ -492,15 +492,16 @@ class Game {
     if (relock && this.screen === 'play') this.input.requestLock();
   }
 
-  /** Pointer lock belongs to live play only (not debug mode, menus, overlays). */
+  /** Pointer lock belongs to live play only (not menus or overlays). */
   private lockWanted(): boolean {
-    return !DEBUG && this.screen === 'play' && !this.paused &&
+    return this.screen === 'play' && !this.paused &&
       !!this.runtime && !this.runtime.finished &&
       !this.automap.isOpen && !this.dossier.isOpen;
   }
 
   /** Our own exits so the lock-loss handler can tell them from the browser's. */
   private releaseLock(): void {
+    if (!document.pointerLockElement) return;
     this.releasedLock = true;
     document.exitPointerLock?.();
   }
