@@ -3,7 +3,7 @@ import type { SkinTone } from '../tools/look';
 import { ANALYSTS } from '../tools/look';
 import { shade } from '../tools/pixel';
 import { PartCache } from './hires';
-import { limb, rasterize, type Prim, type V3 } from './model';
+import { rasterize, type Prim, type V3 } from './model';
 import { RES } from './res';
 
 /**
@@ -138,6 +138,25 @@ const norm = (a: V3): V3 => {
   return [a[0] / l, a[1] / l, a[2] / l];
 };
 
+/**
+ * Densely-overlapped tapered ellipsoid chain: spheres step at ~0.4×radius so
+ * the segment reads as ONE smooth form (no beading) and tapers r0 → r1.
+ */
+function capsule(out: Prim[], a: V3, b: V3, r0: number, r1: number, col: string): void {
+  const len = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+  const n = Math.max(1, Math.ceil(len / (Math.min(r0, r1) * 0.38)));
+  for (let k = 0; k <= n; k++) {
+    const t = k / n;
+    const r = r0 + (r1 - r0) * t;
+    out.push({
+      shape: 'ell',
+      c: [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t],
+      r: [r, r, r * 0.94],
+      col,
+    });
+  }
+}
+
 /** World-space joints of one finger: [mcpBase, pip, dip, tip]. Exported for tests. */
 export function fingerJoints(f: FingerName, c: Curl, size: number, mirror: boolean, palmW: number, palmL: number): V3[] {
   const cc = clampCurl(f, c);
@@ -209,28 +228,37 @@ export function handPrims(
   const put = (v: V3): V3 => add(orient(v, yaw, pitch, roll), p.wrist);
 
   const out: Prim[] = [];
-  const r0 = size * (fem ? 0.062 : 0.075);
+  // every digit must stay ≥ ~3 px wide at bake res; Vega's hand is finer
+  const r0 = Math.max(1.7, size * (fem ? 0.062 : 0.075));
 
-  // palm: a rounded box + thenar (thumb-side) and hypothenar bulges
-  const palmC = put([0, palmL * 0.46, 0]);
+  // palm: ONE solid volume — a rounded slab plus thenar/hypothenar bulges and
+  // a continuous knuckle ridge the fingers grow out of
+  const palmC = put([0, palmL * 0.44, 0]);
   out.push({
     shape: 'box',
     c: palmC,
-    r: [palmW / 2, palmL * 0.48, palmT / 2],
+    r: [palmW / 2, palmL * 0.46, palmT / 2],
     yaw: -yaw, pitch: -pitch, roll: -roll,
     col: sk.base,
   });
   const thenar = put([THUMB_BASE[0] * palmW * mx * 0.9, palmL * 0.22, palmT * 0.18]);
-  out.push({ shape: 'ell', c: thenar, r: [palmW * 0.22, palmL * 0.3, palmT * 0.62], col: sk.base });
+  out.push({ shape: 'ell', c: thenar, r: [palmW * 0.24, palmL * 0.3, palmT * 0.62], col: sk.base });
   const hypo = put([palmW * 0.36 * mx, palmL * 0.3, 0]);
-  out.push({ shape: 'ell', c: hypo, r: [palmW * 0.18, palmL * 0.3, palmT * 0.5], col: sk.base });
-
-  // tendons on the back of the hand: three faint ridges fanning to the knuckles
-  for (const fx of [-0.2, 0.02, 0.22]) {
-    const a = put([fx * palmW * mx, palmL * 0.32, palmT * 0.5]);
-    const b = put([(fx * 1.6) * palmW * mx, palmL * 0.88, palmT * 0.52]);
-    limb(out, a, b, size * 0.016, sk.sh);
-  }
+  out.push({ shape: 'ell', c: hypo, r: [palmW * 0.2, palmL * 0.3, palmT * 0.52], col: sk.base });
+  // knuckle ridge: fills the gaps between the metacarpal bases so the fingers
+  // don't look like separate pegs stuck on the palm edge
+  out.push({
+    shape: 'ell',
+    c: put([0, palmL * 0.84, 0]),
+    r: [palmW * 0.44, palmL * 0.14, palmT * 0.52],
+    col: sk.base,
+  });
+  out.push({
+    shape: 'ell',
+    c: put([0, palmL * 0.86, palmT * 0.14]),
+    r: [palmW * 0.4, palmL * 0.1, palmT * 0.44],
+    col: shade(sk.base, 1.08),
+  });
 
   // wrist + forearm
   const wristC = put([0, -size * 0.04, 0]);
@@ -241,15 +269,9 @@ export function handPrims(
     const len = Math.hypot(to[0] - wristC[0], to[1] - wristC[1], to[2] - wristC[2]);
     const skinEnd = add(wristC, mul(dir, len * 0.3));
     const jacket = ANALYSTS[spec.gender].jacket;
-    // skin wrist, then sleeve widening toward the elbow
-    limb(out, wristC, skinEnd, palmW * 0.38, sk.base);
-    const n = 6;
-    for (let i = 0; i <= n; i++) {
-      const t = 0.28 + (i / n) * 0.72;
-      const c = add(wristC, mul(dir, len * t));
-      const r = palmW * (0.42 + t * 0.3);
-      out.push({ shape: 'ell', c, r: [r, r * 0.95, r * 0.8], col: t < 0.42 ? shade(jacket, 1.15) : jacket });
-    }
+    // skin wrist, then ONE smooth tapered sleeve toward the elbow
+    capsule(out, wristC, skinEnd, palmW * 0.42, palmW * 0.38, sk.base);
+    capsule(out, skinEnd, to, palmW * 0.5, palmW * 0.74, jacket);
     // cuff: darker band + Ray's hi-vis stripe, Vega's smartwatch
     const cuffC = add(wristC, mul(dir, len * 0.3));
     const cr = palmW * 0.52;
@@ -280,21 +302,21 @@ export function handPrims(
     // hand-local → bake space
     const wj = jp.map(put);
     joints[f] = wj;
-    const fr = f === 'thumb' ? r0 * 1.25 : r0;
-    const radii = [fr, fr * 0.93, fr * 0.85];
+    const fr = f === 'thumb' ? r0 * 1.22 : r0;
+    const radii = [fr, fr * 0.93, fr * 0.85, fr * 0.62];
     for (let s = 0; s < 3; s++) {
-      limb(out, wj[s], wj[s + 1], radii[s], sk.base);
-      // knuckle bump + dorsal crease shadow
-      if (s < 2) out.push({ shape: 'ell', c: wj[s + 1], r: [radii[s] * 1.06, radii[s] * 1.06, radii[s] * 1.06], col: sk.base });
+      capsule(out, wj[s], wj[s + 1], radii[s], radii[s + 1], sk.base);
+      // knuckle bump where two phalanges meet
+      if (s < 2) out.push({ shape: 'ell', c: wj[s + 1], r: [radii[s] * 1.05, radii[s] * 1.05, radii[s] * 1.05], col: sk.base });
     }
     // nail: small flattened box on the distal phalanx dorsal face
     const tipDir = norm([wj[3][0] - wj[2][0], wj[3][1] - wj[2][1], wj[3][2] - wj[2][2]]);
     const dorsal = put2Dorsal(put, f === 'thumb' ? [0, 0.3, 1] : [0, -0.15, 1]);
-    const nailC = add(add(wj[3], mul(tipDir, -size * 0.045)), mul(dorsal, radii[2] * 0.55));
+    const nailC = add(add(wj[3], mul(tipDir, -size * 0.045)), mul(dorsal, radii[3] * 0.55));
     out.push({
       shape: 'box',
       c: nailC,
-      r: [radii[2] * 0.55, radii[2] * 0.42, radii[2] * 0.16],
+      r: [radii[3] * 0.55, radii[3] * 0.42, Math.max(0.9, radii[3] * 0.2)],
       col: nail,
     });
   }

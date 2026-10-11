@@ -126,13 +126,11 @@ function mouseArt(fire: boolean): Art {
     px('#1a1c22', 33, 16, 4, 8);
     px('#2458d8', 34, 17, 2, 6);
     px('#8ab4ff', 34, 17, 2, 1);
-    // contact shadow + desk surface the mouse rests on
-    px('#1a1410', 24, 50, 30, 3);
-    for (let r = 0; r < 12; r++) {
-      const sh = 34 - r;
-      px(`#${(0x2e + sh).toString(16)}${(0x20 + (sh >> 1)).toString(16)}18`, 8, 54 + r * 2.4, 56, 3);
-    }
-    px('#4a3820', 6, 53, 60, 1);
+    // contact shadow + thin dark mousepad in perspective (wider toward camera)
+    px('#14100e', 22, 50, 34, 3);
+    px('#242228', 4, 54, 64, 4);
+    px('#1a181e', 0, 58, 72, 6);
+    px('#2a2830', 0, 58, 72, 1);
   });
 }
 

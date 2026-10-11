@@ -879,8 +879,10 @@ class Game {
       // eases back — a light exponential chase reads like a spring return
       const latV = -this.player.vx * Math.sin(this.player.angle) + this.player.vy * Math.cos(this.player.angle);
       const fwdV = this.player.vx * Math.cos(this.player.angle) + this.player.vy * Math.sin(this.player.angle);
-      this.vmSway.x += (Math.max(-12, Math.min(12, -mouseDX * 0.45 - latV * 3.2)) - this.vmSway.x) * 0.22;
-      this.vmSway.y += (Math.max(-8, Math.min(8, -fwdV * 1.6)) - this.vmSway.y) * 0.18;
+      const chaseX = 1 - Math.exp(-dt * 15);
+      const chaseY = 1 - Math.exp(-dt * 11);
+      this.vmSway.x += (Math.max(-12, Math.min(12, -mouseDX * 0.45 - latV * 3.2)) - this.vmSway.x) * chaseX;
+      this.vmSway.y += (Math.max(-8, Math.min(8, -fwdV * 1.6)) - this.vmSway.y) * chaseY;
       // idle breathing: ~1.4px at 0.25 Hz, deterministic off the sim clock
       const breath = this.paused ? 0 : Math.sin(this.simT * Math.PI * 0.5) * 1.4;
       this.audio.setListener(this.player.x, this.player.y, this.player.angle);
