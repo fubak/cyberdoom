@@ -287,7 +287,11 @@ export class LiveHand {
     });
 
     // ---- forearm + sleeve cuff parented to the wrist bone ----
-    this.buildWristTail(toWorldDir, skinMat);
+    this.buildWristTail(
+      (jn, vLocal) => toBoneLocal(jn, vLocal),
+      skinMat,
+      s,
+    );
 
     for (const f of HAND_FINGERS) this.curls[f] = clampCurl(f, defaultCurl(f));
     this.setCurls({});
@@ -349,26 +353,39 @@ export class LiveHand {
    * Parented to the wrist bone — rides every hand pose.
    */
   private buildWristTail(
-    toWorldDir: (v: THREE.Vector3) => THREE.Vector3,
+    toBoneLocal: (boneName: string, vLocal: THREE.Vector3) => THREE.Vector3,
     skinMat: THREE.Material,
+    s: number,
   ): void {
-    // forearm direction in frame-local space: opposite the finger direction
-    // blended toward −z (arms exit behind/below the hand, not through it)
-    const dirL = new THREE.Vector3(0, -1, -0.35).normalize();
-    const bindQ = this.wristBone.getWorldQuaternion(new THREE.Quaternion());
-    const boneDir = toWorldDir(dirL).applyQuaternion(bindQ.clone().invert()).normalize();
-    const s0 = this.size / 0.086; // roughly metres; tuned visually anyway
-    const len = 0.10 * s0;
-    const rw = this.palmW * 0.36;
+    // arm axis in frame-local space: −y, exactly opposite the finger
+    // chain (+y). NOTE: use the inner-space bind quats — the wrist bone's
+    // live world quat already contains the frame/scale parents.
+    const dirL = new THREE.Vector3(0, -1, 0);
+    const boneDir = toBoneLocal('wrist', dirL).normalize();
+    const len = 0.40 / s;                    // forearm always exits the frame
+    const rw = this.palmW * 0.36 / s;        // wrist cross-section radius
 
-    const foreGeo = new THREE.CylinderGeometry(rw * 0.82, rw * 1.15, len, 12, 1);
-    foreGeo.translate(0, len / 2, 0);
+    // tapered forearm: wrist radius at the wrist, +20 % toward the elbow;
+    // both end caps are hidden (wrist cap inside the wrist, elbow cap
+    // far off-screen)
+    // bury the wrist end 8 mm inside the wrist so the cap rim can never
+    // peek onto the finger side of the wrist plane
+    const foreGeo = new THREE.CylinderGeometry(rw * 1.2, rw, len, 12, 1);
+    foreGeo.translate(0, len / 2 + 0.008 / s, 0);
     const fore = new THREE.Mesh(foreGeo, skinMat);
+    fore.name = 'vm3d-forearm';
     fore.quaternion.setFromUnitVectors(Y_AXIS, boneDir);
-    const cuffGeo = new THREE.CylinderGeometry(rw * 1.22, rw * 1.32, len * 0.45, 12, 1);
-    cuffGeo.translate(0, len * 0.45 / 2 + len * 0.42, 0);
+
+    // open-ended sleeve tube starting 6 cm behind the wrist (never over
+    // the hand), radius ≤ 1.3× the forearm radius at that point
     const jacket = ANALYSTS[this.spec.gender].jacket;
+    const cuffStart = 0.06 / s;
+    const rForeAtStart = rw * (1 + 0.2 * (cuffStart / len));
+    const cuffLen = len - cuffStart;
+    const cuffGeo = new THREE.CylinderGeometry(rForeAtStart * 1.3, rForeAtStart * 1.22, cuffLen, 12, 1, true);
+    cuffGeo.translate(0, cuffStart + cuffLen / 2, 0);
     const cuff = new THREE.Mesh(cuffGeo, new THREE.MeshStandardMaterial({ color: shade(jacket, 0.7), roughness: 0.85, metalness: 0 }));
+    cuff.name = 'vm3d-sleeve';
     cuff.quaternion.copy(fore.quaternion);
     this.wristBone.add(fore, cuff);
   }

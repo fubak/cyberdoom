@@ -327,11 +327,12 @@ export const CLIPS: Record<string, VmClip> = {
       { t: 0.024, root: { pos: [0.042, -0.137, -0.436], rot: [26, -4, -16] }, L: L_GRIP, R: R_WAY2 },
       { t: 0.03, root: { pos: [0.05, -0.135, -0.435], rot: [26, -6, -18] }, L: L_GRIP, R: R_GRIP },
       // wind-up peak at the 60 ms windup: held end high right, rolled back
-      { t: 0.06, root: { pos: [0.17, -0.08, -0.40], rot: [34, -28, -46] }, L: L_GRIP, R: R_GRIP },
-      // impact: board whips across to the lower left, tipped toward camera
-      { t: 0.105, root: { pos: [-0.21, -0.05, -0.38], rot: [8, 42, 22] }, L: L_GRIP, R: R_GRIP },
-      // follow-through: carried to the far left edge
-      { t: 0.17, root: { pos: [-0.25, -0.10, -0.43], rot: [4, 48, 12] }, L: L_GRIP, R: R_GRIP },
+      { t: 0.06, root: { pos: [0.13, -0.10, -0.41], rot: [30, -20, -36] }, L: L_GRIP, R: R_GRIP },
+      // impact: board whips across to the lower left but the stacked grip
+      // stays in frame (never leaves the view)
+      { t: 0.105, root: { pos: [-0.08, 0.005, -0.36], rot: [14, 30, 22] }, L: L_GRIP, R: R_GRIP },
+      // follow-through: carried left and up, grip still visible
+      { t: 0.17, root: { pos: [-0.11, -0.03, -0.40], rot: [8, 34, 12] }, L: L_GRIP, R: R_GRIP },
       // recover and regrip
       { t: 0.30, root: { pos: [-0.06, -0.14, -0.44], rot: [18, 16, -2] }, L: L_GRIP, R: R_GRIP },
       { t: 0.335, root: { pos: [-0.034, -0.141, -0.431], rot: [21, 13, -3] }, L: L_GRIP, R: R_WAY2 },

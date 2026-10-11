@@ -113,6 +113,38 @@ describe('vm3d clip contacts (plan §5)', () => {
       }
     });
 
+    it(`${name}: no forearm/sleeve vertex sits on the finger side of the wrist`, () => {
+      const rig = new Vm3dRig(spec);
+      const steps = 20;
+      const inv = new THREE.Matrix4();
+      for (let i = 0; i <= steps; i++) {
+        const t = (i / steps) * clip.duration;
+        rig.solve(clip, t);
+        for (const side of ['L', 'R'] as const) {
+          const hand = rig.hands[side];
+          hand.group.updateWorldMatrix(true, true);
+          inv.copy(hand.group.matrixWorld).invert();
+          // wrist plane: through the wrist, normal along wrist → middle MCP
+          const n = hand.fingerJointsWorld('middle')[0]
+            .applyMatrix4(inv).normalize();
+          for (const meshName of ['vm3d-forearm', 'vm3d-sleeve']) {
+            const mesh = hand.group.getObjectByName(meshName) as THREE.Mesh | undefined;
+            expect(mesh, `${side} has ${meshName}`).toBeTruthy();
+            const posAttr = mesh!.geometry.getAttribute('position');
+            const v = new THREE.Vector3();
+            for (let vi = 0; vi < posAttr.count; vi++) {
+              v.fromBufferAttribute(posAttr, vi);
+              mesh!.localToWorld(v).applyMatrix4(inv);
+              expect(
+                v.dot(n),
+                `${name}@${t.toFixed(3)} ${side}.${meshName} vertex on finger side`,
+              ).toBeLessThan(0.001);
+            }
+          }
+        }
+      }
+    });
+
     it(`${name}: no hand joint sits inside the board's solid AABB`, () => {
       const rig = new Vm3dRig(spec);
       const steps = 40;
