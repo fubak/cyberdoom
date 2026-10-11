@@ -222,6 +222,34 @@ describe('vm3d clip contacts (plan §5)', () => {
     expect(r600.rootRot[0]).toBeCloseTo(24, 3);
   });
 
+  it('SWING: fingertips wrap under the board (opposite side of mid-plane from the dorsum)', () => {
+    const rig = new Vm3dRig(spec);
+    const clip = CLIPS['kbd.swing'];
+    const inv = new THREE.Matrix4();
+    const midY = -0.017 / 2; // case mid-plane (board-local)
+    // gripped span: after the grab keyframe until the regrip begins
+    for (let t = 0.035; t <= 0.30 + 1e-9; t += 1 / 120) {
+      rig.solve(clip, t);
+      rig.board.group.updateWorldMatrix(true, false);
+      inv.copy(rig.board.group.matrixWorld).invert();
+      for (const side of ['L', 'R'] as const) {
+        const hand = rig.hands[side];
+        // dorsum direction (frame +z) in board-local space
+        const dorsW = new THREE.Vector3(0, 0, 1)
+          .applyQuaternion(hand.group.getWorldQuaternion(new THREE.Quaternion()));
+        const dorsB = dorsW.clone().transformDirection(inv);
+        expect(dorsB.y, `swing@${t.toFixed(3)} ${side} dorsum below mid-plane`).toBeGreaterThan(0.15);
+        for (const f of ['index', 'middle', 'ring', 'pinky'] as const) {
+          const tip = hand.tipWorld(f).applyMatrix4(inv);
+          expect(
+            tip.y,
+            `swing@${t.toFixed(3)} ${side}.${f} tip not wrapped under`,
+          ).toBeLessThan(midY);
+        }
+      }
+    }
+  });
+
   it('SWING: each palm centre stays within 1 cm of its board-end grip socket', () => {
     const rig = new Vm3dRig(spec);
     const clip = CLIPS['kbd.swing'];

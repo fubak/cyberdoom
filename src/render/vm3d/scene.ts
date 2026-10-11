@@ -90,13 +90,13 @@ export class Vm3d {
     this.spec = spec;
     this.rig = new Vm3dRig(spec);
     this.scene.add(this.rig.root, this.rig.stage);
-    this.key = new THREE.PointLight('#fff2e2', 2.2, 4, 1.8);
+    this.key = new THREE.PointLight('#fdf6ec', 2.2, 4, 1.8);
     this.key.position.set(0.25, 0.35, 0.15);
-    this.fill = new THREE.DirectionalLight('#ffb88a', 0.55);
+    this.fill = new THREE.DirectionalLight('#e8c8a8', 0.45);
     this.fill.position.set(-0.4, -0.2, 0.3);
     this.hemi = new THREE.HemisphereLight('#b8c4de', '#3a2a22', 0.5);
-    this.flashLight = new THREE.PointLight('#ffc85a', 0, 2.5, 2);
-    this.flashLight.position.set(0, -0.05, -0.3);
+    this.flashLight = new THREE.PointLight('#ffc85a', 0, 3.5, 2);
+    this.flashLight.position.set(0, 0.02, -0.6);
     this.scene.add(this.key, this.fill, this.hemi, this.flashLight);
     ensureHandAssets(); // kick the glb fetch at startup; hands join when ready
   }
@@ -224,7 +224,7 @@ export class Vm3d {
     if (f.flash && f.flash.sinceUse >= f.flash.windup && f.flash.sinceUse - f.flash.windup < 0.09) {
       const u = 1 - (f.flash.sinceUse - f.flash.windup) / 0.09;
       this.flashLight.color.setRGB(f.flash.rgb[0] / 255, f.flash.rgb[1] / 255, f.flash.rgb[2] / 255);
-      this.flashLight.intensity = 5 * u;
+      this.flashLight.intensity = 1.6 * u;
       if (f.toolId === 'keyboard') this.rig.board.flashKeys(u);
       else this.rig.board.clearFlash();
     } else {

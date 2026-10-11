@@ -293,7 +293,7 @@ export class LiveHand {
 
     // ---- materials ----
     const skinMat = new THREE.MeshStandardMaterial({
-      color: new THREE.Color(spec.skin.base), roughness: 0.7, metalness: 0,
+      color: new THREE.Color(spec.skin.base), roughness: 0.92, metalness: 0,
     });
     inner.traverse((o) => {
       const m = o as THREE.Mesh;

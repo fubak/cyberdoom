@@ -159,18 +159,18 @@ const HOVER_CURLS: Partial<Record<FingerName, Curl>> = {
 };
 // the left hand's permanent end-grip curl; IK puts the tips on the board
 const GRIP_L_CURLS: Partial<Record<FingerName, Curl>> = {
-  index: { mcp: 70, pip: 80, abd: -4 },
-  middle: { mcp: 74, pip: 84, abd: 0 },
-  ring: { mcp: 78, pip: 88, abd: 4 },
-  pinky: { mcp: 70, pip: 80, abd: 8 },
-  thumb: { mcp: 16, pip: 22 },
+  index: { mcp: 78, pip: 92, dip: 60, abd: -4 },
+  middle: { mcp: 82, pip: 95, dip: 64, abd: 0 },
+  ring: { mcp: 84, pip: 95, dip: 64, abd: 4 },
+  pinky: { mcp: 80, pip: 90, dip: 60, abd: 8 },
+  thumb: { mcp: 30, pip: 24 },
 };
 const GRIP_R_CURLS: Partial<Record<FingerName, Curl>> = {
-  index: { mcp: 72, pip: 82, abd: -5 },
-  middle: { mcp: 76, pip: 86, abd: 0 },
-  ring: { mcp: 80, pip: 90, abd: 5 },
-  pinky: { mcp: 74, pip: 82, abd: 9 },
-  thumb: { mcp: 18, pip: 26 },
+  index: { mcp: 80, pip: 94, dip: 62, abd: -5 },
+  middle: { mcp: 84, pip: 97, dip: 66, abd: 0 },
+  ring: { mcp: 86, pip: 97, dip: 66, abd: 5 },
+  pinky: { mcp: 82, pip: 92, dip: 62, abd: 9 },
+  thumb: { mcp: 32, pip: 26 },
 };
 
 const ikc = (finger: FingerName, socket: string, weight?: number): IkContact => ({ finger, socket, weight });

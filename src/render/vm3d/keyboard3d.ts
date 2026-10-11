@@ -269,21 +269,22 @@ export class KeyboardRig {
 
   private buildSockets(): void {
     const d = Math.PI / 180;
-    // left grip: wrist just left of the board's left end, palm wrapping the end
-    // fingers point forward under the lip, thumb over the top edge
-    this.addSocket('gripL.wrist', [-0.155, 0.045, 0.000], [30, -50, -70]);
-    this.addSocket('gripL.tip.thumb', [-0.082, 0.153, 0.002]);
-    this.addSocket('gripL.tip.index', [-0.064, 0.061, -0.006]);
-    this.addSocket('gripL.tip.middle', [-0.064, 0.042, -0.001]);
-    this.addSocket('gripL.tip.ring', [-0.078, 0.035, 0.009]);
-    this.addSocket('gripL.tip.pinky', [-0.087, 0.019, 0.033]);
-    // swing grip (right hand stacks on top of the left at the same end)
-    this.addSocket('gripR.wrist', [-0.170, 0.062, 0.008], [30, -50, -70]);
-    this.addSocket('gripR.tip.thumb', [-0.053, 0.091, -0.044]);
-    this.addSocket('gripR.tip.index', [-0.075, 0.077, -0.009]);
-    this.addSocket('gripR.tip.middle', [-0.085, 0.062, 0.010]);
-    this.addSocket('gripR.tip.ring', [-0.098, 0.050, 0.023]);
-    this.addSocket('gripR.tip.pinky', [-0.097, 0.039, 0.028]);
+    // left grip: fist wrapped around the board's left end like a bat handle —
+    // knuckles hang over the front edge, fingers curl under the bottom face,
+    // thumb wraps over the top edge
+    this.addSocket('gripL.wrist', [-0.152, 0.005, 0.020], [60, -15, -120]);
+    this.addSocket('gripL.tip.thumb', [-0.075, 0.012, 0.050]);
+    this.addSocket('gripL.tip.index', [-0.081, -0.013, 0.061]);
+    this.addSocket('gripL.tip.middle', [-0.089, -0.031, 0.057]);
+    this.addSocket('gripL.tip.ring', [-0.105, -0.036, 0.056]);
+    this.addSocket('gripL.tip.pinky', [-0.130, -0.048, 0.063]);
+    // swing grip: right hand stacked just inboard of the left at the same end
+    this.addSocket('gripR.wrist', [-0.112, 0.008, 0.035], [60, -15, -120]);
+    this.addSocket('gripR.tip.thumb', [-0.025, 0.010, 0.045]);
+    this.addSocket('gripR.tip.index', [-0.034, -0.011, 0.067]);
+    this.addSocket('gripR.tip.middle', [-0.056, -0.022, 0.073]);
+    this.addSocket('gripR.tip.ring', [-0.072, -0.033, 0.074]);
+    this.addSocket('gripR.tip.pinky', [-0.081, -0.043, 0.071]);
     // mid-air waypoint above the grip end: swing grab/release routes the
     // hand over the board so finger joints never cross the case
     this.addSocket('wayR.wrist', [-0.175, 0.130, 0.020], [0, 90, -180]);

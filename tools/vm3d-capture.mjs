@@ -79,6 +79,9 @@ for (const gender of ['male', 'female']) {
       // downscale tiles to 1920 wide for a 4x2 sheet
       execFileSync('montage', [...frames, '-tile', '4x2', '-geometry', '1920x1080+2+2',
         '-background', '#111', `${OUT}/sheet-4k-${gender}-${action}.png`]);
+      // review montage: same 8 frames downscaled to 960x540 each
+      execFileSync('montage', [...frames, '-tile', '4x2', '-geometry', '960x540+2+2',
+        '-background', '#111', `${OUT}/montage-${gender}-${action}.png`]);
     } catch (e) { errors.push(`montage ${action}: ${e.message.slice(0, 200)}`); }
   }
   await p4k.evaluate(() => { window.__cd.vm3d.freeze(null); window.__cd.vm3d.force(null); });
