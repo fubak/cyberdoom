@@ -129,6 +129,8 @@ class Game {
   private role = 'analyst';
   private overlay: HTMLElement | null = null;
   private pauseNode: HTMLElement | null = null;
+  private hadLock = false;
+  private releasedLock = false;
   private paused = false;
   private prepGen = 0;
   private cross!: HTMLElement;
@@ -202,7 +204,7 @@ class Game {
     // title/menus for seconds before the first level render, plenty of idle
     prewarmLazySpriteFrames();
     this.renderer.canvas.classList.add('gl');
-    this.input = new Input(this.renderer.canvas, () => this.audio.unlock());
+    this.input = new Input(this.renderer.canvas, () => this.audio.unlock(), () => this.lockWanted());
     this.hud = new Hud(viewport);
     this.automap = new Automap(this.hud.canvas);
     window.addEventListener('keydown', (event) => {
@@ -242,6 +244,25 @@ class Game {
       else if (overlay === 'automap') this.automap.close();
     });
     window.addEventListener('blur', () => this.automap.close());
+    // Unexpected pointer-lock loss (Esc eaten by the browser, alt-tab, an OS
+    // popup) pauses the run instead of leaving an unsteerable live game.
+    document.addEventListener('pointerlockchange', () => {
+      const locked = document.pointerLockElement === this.renderer.canvas;
+      const lost = this.hadLock && !locked;
+      this.hadLock = locked;
+      const ours = this.releasedLock;
+      this.releasedLock = false;
+      if (!lost || ours) return;
+      if (this.lockWanted()) this.showPause();
+    });
+    // While paused, a click on the dimmed area outside the menu resumes and
+    // relocks; clicks on the menu buttons reach them normally.
+    document.addEventListener('mousedown', (e) => {
+      if (!this.paused || e.button !== 0) return;
+      const target = e.target as Element | null;
+      if (target?.closest?.('button, a, input, select, textarea')) return;
+      this.hidePause(true);
+    });
     const cross = document.createElement('div');
     cross.id = 'crosshair';
     viewport.appendChild(cross);
@@ -429,7 +450,7 @@ class Game {
   private showMissionSelect(): void {
     this.audio.stopAmbience();
     this.audio.stopMusic();
-    document.exitPointerLock?.();
+    this.releaseLock();
     this.automap.close();
     this.setScreen('mission-select', screens.missionSelect((id) => this.showBriefing(id), () => this.showCharSelect()));
   }
@@ -445,7 +466,7 @@ class Game {
     this.paused = true;
     this.automap.close();
     this.dossier.enabled = false;
-    document.exitPointerLock?.();
+    this.releaseLock();
     this.pauseNode = pauseMenu({
       musicVol: this.musicVol,
       onMusicVol: (v) => {
@@ -476,6 +497,20 @@ class Game {
     if (this.screen === 'play') this.dossier.enabled = true;
     this.syncChrome();
     if (relock && this.screen === 'play') this.input.requestLock();
+  }
+
+  /** Pointer lock belongs to live play only (not menus or overlays). */
+  private lockWanted(): boolean {
+    return this.screen === 'play' && !this.paused &&
+      !!this.runtime && !this.runtime.finished &&
+      !this.automap.isOpen && !this.dossier.isOpen;
+  }
+
+  /** Our own exits so the lock-loss handler can tell them from the browser's. */
+  private releaseLock(): void {
+    if (!document.pointerLockElement) return;
+    this.releasedLock = true;
+    document.exitPointerLock?.();
   }
 
   /** Crosshair only while actively looking around a mission. */
@@ -666,7 +701,7 @@ class Game {
   private showDebrief(): void {
     const rt = this.runtime!;
     const mission = rt.mission;
-    document.exitPointerLock?.();
+    this.releaseLock();
     this.setScreen('debrief', screens.debrief({
       mission,
       won: rt.finished === 'won',

@@ -28,8 +28,15 @@ export class Input {
   private lockPressActive = false;
   private suppressMouseUntilUp = false;
   private unlockedAudio = false;
+  private lockRetryTimer: ReturnType<typeof setTimeout> | null = null;
+  private lockRetried = false;
 
-  constructor(private canvas: HTMLElement, private unlockAudio: () => void = () => {}) {
+  constructor(
+    private canvas: HTMLElement,
+    private unlockAudio: () => void = () => {},
+    /** True while a click on the page should re-capture the pointer. */
+    private lockWanted: () => boolean = () => false,
+  ) {
     window.addEventListener('keydown', (e) => {
       if (e.repeat) return;
       this.unlockOnce();
@@ -54,6 +61,7 @@ export class Input {
     canvas.addEventListener('mousedown', (e) => {
       if (e.button !== 0) return;
       if (!this.pointerLocked) {
+        if (!this.lockWanted()) return;
         this.lockPressActive = true;
         this.suppressMouseUntilUp = true;
         this.mouseDown = false;
@@ -64,6 +72,20 @@ export class Input {
       if (this.suppressMouseUntilUp) return;
       this.mouseDown = true;
       this.pendingFire = true;
+    });
+    // Relock from anywhere on the page (letterbox, black margins) — not just
+    // the canvas — so a lost lock always restores with one click. Presses on
+    // interactive/menu elements are left for those controls.
+    document.addEventListener('mousedown', (e) => {
+      if (e.button !== 0 || this.pointerLocked || this.lockPressActive || !this.lockWanted()) return;
+      const target = e.target as Element | null;
+      if (target?.closest?.('button, a, input, select, textarea, .screen')) return;
+      this.lockPressActive = true;
+      this.suppressMouseUntilUp = true;
+      this.mouseDown = false;
+      this.pendingFire = false;
+      this.lockRetried = false;
+      this.requestLock();
     });
     window.addEventListener('mouseup', (e) => {
       if (e.button === 0) {
@@ -86,7 +108,17 @@ export class Input {
       this.pendingFire = false;
       this.mouseDown = false;
       if (buttonActive) this.suppressMouseUntilUp = true;
+      if (this.pointerLocked) {
+        this.lockRetried = false;
+        if (this.lockRetryTimer !== null) {
+          clearTimeout(this.lockRetryTimer);
+          this.lockRetryTimer = null;
+        }
+      }
     });
+    // Chrome refuses a relock for ~1 s after an Esc exit: one delayed retry
+    // (still covered by the click's transient activation), never a loop.
+    document.addEventListener('pointerlockerror', () => this.scheduleLockRetry());
   }
 
   private unlockOnce(): void {
@@ -139,9 +171,19 @@ export class Input {
 
   requestLock(): void {
     try {
-      void Promise.resolve(this.canvas.requestPointerLock?.()).catch(() => {});
+      void Promise.resolve(this.canvas.requestPointerLock?.()).catch(() => this.scheduleLockRetry());
     } catch {
       // Pointer lock may be denied before a trusted user gesture.
     }
+  }
+
+  /** One deferred relock attempt per press while the game still wants the pointer. */
+  private scheduleLockRetry(): void {
+    if (this.lockRetried || this.lockRetryTimer !== null || this.pointerLocked || !this.lockWanted()) return;
+    this.lockRetried = true;
+    this.lockRetryTimer = setTimeout(() => {
+      this.lockRetryTimer = null;
+      if (!this.pointerLocked && this.lockWanted()) this.requestLock();
+    }, 1100);
   }
 }
