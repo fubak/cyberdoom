@@ -273,6 +273,11 @@ export class KeyboardRig {
     // the end face (palm-in +x), fingers running down the face and curling
     // under the bottom (the approved idle pose — do not retune here).
     this.addSocket('gripL.wrist', [-0.177, -0.006, 0.050], [-70, 90, -180]);
+    // swing variant of the left end pinch: same contact point and wrap,
+    // rolled 140° about the end-face normal so the anatomical forearm
+    // direction runs down-left and the sleeve exits the left half of the
+    // frame instead of crossing to the right edge
+    this.addSocket('batL.wrist', [-0.177, -0.006, 0.050], [70, 90, -180]);
     // bat grip (swing): two fists stacked along the board's left end like a
     // bat handle — L keeps its end-face hold (nearer the end, never lets
     // go), R wraps the top face directly inboard of it, fists touching.

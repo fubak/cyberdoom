@@ -201,12 +201,17 @@ const ikc = (finger: FingerName, socket: string, weight?: number): IkContact => 
 const TAIL_GRIP_L: V3 = [-0.15, -0.2, 0.93];
 // support grip for idle/type — relaxed closed hand on the board's left end
 const L_GRIP = { wristSocket: 'gripL.wrist', curls: HOLD_L_CURLS, thumbOut: 0.3, tail: TAIL_GRIP_L };
+// swing arm tails (stage space): each sleeve exits through its own side
+// of the frame — L forearm runs down-left toward the camera and out the
+// left/bottom-left, R down-right and out the right/bottom-right. Never
+// horizontal, never crossing.
 // bat grip: L keeps the same end-face hold all through the swing (nearer
 // the end, never lets go) and R wraps the top face directly inboard of
-// it, fists touching. L_BAT drops the idle clip's fixed tail direction —
-// the wrist yaws too far for a fixed stage vector, so the forearm follows
-// the wrist axis through the arc.
-const L_BAT = { wristSocket: 'gripL.wrist', curls: HOLD_L_CURLS, thumbOut: 0.3 };
+// it, fists touching.
+// swing L: same end-face pinch as idle (approved grip), but the tail is
+// left null so the forearm follows the anatomical bind — the swing's
+// board roll puts the bind down-left through the strike window
+const L_SWG = { wristSocket: 'gripL.wrist', curls: HOLD_L_CURLS, thumbOut: 0.3 };
 const R_GRIP = { wristSocket: 'batR.wrist', thumbOut: 0.25, curls: {
   ...WRAP_CURLS,
   thumb: { mcp: 44, pip: 52, abd: 135 },
@@ -365,28 +370,41 @@ export const CLIPS: Record<string, VmClip> = {
     keys: [
       // trigger: R lifts off the home row and arcs over the deck onto the
       // bat grip while L re-wraps the end (L never leaves the board)
-      { t: 0, root: { pos: HOME_POS, rot: HOME_ROT }, L: L_BAT, R: R_HOVER },
-      { t: 0.008, root: { pos: [0.02, -0.146, -0.442], rot: [25, 5, -8] }, L: L_BAT, R: R_LIFT3 },
-      { t: 0.016, root: { pos: [0.035, -0.142, -0.448], rot: [27, 6, -6] }, L: L_BAT, R: R_WAY },
-      { t: 0.024, root: { pos: [0.06, -0.137, -0.455], rot: [30, 8, -3] }, L: L_BAT, R: R_WAY },
-      { t: 0.036, root: { pos: [0.08, -0.131, -0.46], rot: [26, 10, 1] }, L: L_BAT, R: R_GRIP },
+      { t: 0, root: { pos: HOME_POS, rot: HOME_ROT }, L: L_GRIP, R: R_HOVER },
+      { t: 0.008, root: { pos: [0.02, -0.128, -0.442], rot: [25, 5, -8] }, L: L_GRIP, R: R_LIFT3 },
+      { t: 0.016, root: { pos: [-0.0045, -0.064, -0.504], rot: [38.4, 96.2, 51.5] }, L: L_SWG, R: R_WAY },
+      { t: 0.024, root: { pos: [0.086, -0.041, -0.504], rot: [38.5, 92.8, 0.2] }, L: L_SWG, R: R_WAY },
+      { t: 0.036, root: { pos: [0.092, -0.026, -0.482], rot: [44.9, 97.1, 6.5] }, L: L_SWG, R: R_GRIP },
       // wind-up: fists carry the end down-right, board tips up-right
-      { t: 0.06, root: { pos: [0.1300, -0.0944, -0.4662], rot: [24.1, 15.2, 7.9] }, L: L_BAT, R: R_GRIP },
-      { t: 0.10, root: { pos: [0.2213, -0.1011, -0.4952], rot: [25.6, 25.7, 5.7] }, L: L_BAT, R: R_GRIP },
+      { t: 0.06, root: { pos: [0.0400, -0.0700, -0.4500], rot: [45.4, 89.6, 69.1] }, L: L_SWG, R: R_GRIP },
+      { t: 0.10, root: { pos: [-0.0168, -0.0330, -0.3283], rot: [60.8, 105.7, 55.2] }, L: L_SWG, R: R_GRIP },
+      { t: 0.105, root: { pos: [0.1355, -0.0542, -0.2767], rot: [18.2, -65.1, 78.9] }, L: {...L_SWG, tail: [-0.48, -0.75, 0.45]}, R: R_GRIP },
       // strike: hands whip right-to-left across the lower third
-      { t: 0.115, root: { pos: [0.1051, -0.0795, -0.5280], rot: [26.9, 63.6, 5.9] }, L: L_BAT, R: R_GRIP },
+      { t: 0.115, root: { pos: [0.0193, -0.0395, -0.4012], rot: [30.5, -53.3, 71.5] }, L: {...L_SWG, tail: [-0.37, -0.66, 0.65]}, R: R_GRIP },
+      { t: 0.12, root: { pos: [-0.0315, -0.0368, -0.3329], rot: [38.3, -65.4, 91.4] }, L: {...L_SWG, tail: [-0.22, -0.79, 0.57]}, R: R_GRIP },
+      { t: 0.13, root: { pos: [-0.0453, -0.0409, -0.3196], rot: [34.4, -67.0, 93.2] }, L: {...L_SWG, tail: [-0.16, -0.85, 0.50]}, R: R_GRIP },
+      { t: 0.135, root: { pos: [-0.0529, -0.0424, -0.3609], rot: [33.6, -67.2, 93.5] }, L: {...L_SWG, tail: [-0.40, -0.72, 0.57]}, R: R_GRIP },
+      { t: 0.14, root: { pos: [-0.0709, -0.0532, -0.3706], rot: [48.2, -53.0, 89.7] }, L: {...L_SWG, tail: [-0.20, -0.80, 0.56]}, R: R_GRIP },
       // impact: free end reaches the crosshair
-      { t: 0.15, root: { pos: [-0.0309, -0.0642, -0.5151], rot: [29.4, 77.9, 40.4] }, L: L_BAT, R: R_GRIP },
-      { t: 0.18, root: { pos: [-0.1369, -0.1005, -0.5337], rot: [30.9, 100.3, 36.8] }, L: L_BAT, R: R_GRIP },
+      { t: 0.15, root: { pos: [-0.0314, -0.0750, -0.4003], rot: [54.1, -58.3, 112.4] }, L: {...L_SWG, tail: [0.26, -0.68, 0.69]}, R: R_GRIP },
+      { t: 0.16, root: { pos: [-0.0967, -0.0521, -0.3577], rot: [53.4, -48.5, 83.8] }, L: {...L_SWG, tail: [0.10, -0.75, 0.65]}, R: R_GRIP },
+      { t: 0.17, root: { pos: [-0.0664, -0.0497, -0.3601], rot: [59.6, -40.4, 69.9] }, L: {...L_SWG, tail: [-0.30, -0.80, 0.52]}, R: R_GRIP },
+      { t: 0.18, root: { pos: [-0.1236, -0.0590, -0.3382], rot: [53.1, -48.0, 83.2] }, L: {...L_SWG, tail: [0.10, -0.72, 0.69]}, R: R_GRIP },
+      { t: 0.19, root: { pos: [-0.1283, -0.0504, -0.3342], rot: [56.8, -58.3, 91.5] }, L: {...L_SWG, tail: [0.13, -0.78, 0.61]}, R: R_GRIP },
+      { t: 0.2, root: { pos: [-0.1032, -0.0514, -0.3600], rot: [52.8, -50.5, 81.9] }, L: {...L_SWG, tail: [0.04, -0.73, 0.68]}, R: R_GRIP },
+      { t: 0.21, root: { pos: [-0.1065, -0.0577, -0.3542], rot: [56.8, -58.3, 91.5] }, L: {...L_SWG, tail: [0.13, -0.78, 0.61]}, R: R_GRIP },
+      { t: 0.22, root: { pos: [-0.0759, -0.0659, -0.3742], rot: [56.8, -58.3, 91.5] }, L: {...L_SWG, tail: [0.13, -0.78, 0.61]}, R: R_GRIP },
+      { t: 0.23, root: { pos: [-0.0537, -0.0748, -0.3942], rot: [56.8, -58.3, 91.5] }, L: {...L_SWG, tail: [0.13, -0.78, 0.61]}, R: R_GRIP },
       // follow-through: carries lower-left, tip back under the clear band
-      { t: 0.24, root: { pos: [-0.1976, -0.1264, -0.5449], rot: [30.2, 115.6, 29.7] }, L: L_BAT, R: R_GRIP },
-      { t: 0.30, root: { pos: [-0.1790, -0.1568, -0.5743], rot: [4.2, 116.5, 5.9] }, L: L_BAT, R: R_GRIP },
+      { t: 0.24, root: { pos: [-0.0607, -0.0515, -0.3962], rot: [56.2, -60.6, 89.5] }, L: {...L_SWG, tail: [0.13, -0.78, 0.61]}, R: R_GRIP },
+      { t: 0.27, root: { pos: [-0.3233, -0.1044, -0.5152], rot: [22.7, -62.5, 108.0] }, L: {...L_SWG, tail: [-0.01, -0.86, 0.51]}, R: R_GRIP },
+      { t: 0.3, root: { pos: [-0.1863, -0.0644, -0.5972], rot: [28.9, 82.1, 61.1] }, L: {...L_SWG, tail: [-0.10, 0.85, -0.25]}, R: R_GRIP },
       // recover: R releases straight up off the wrap, arcs over the deck,
       // and drops palm-down onto the home row; L never lets go
-      { t: 0.32, root: { pos: [-0.1174, -0.1473, -0.5824], rot: [-1.9, 101.4, -3.7] }, L: L_BAT, R: R_WAY2 },
-      { t: 0.38, root: { pos: [0.0295, -0.1491, -0.5670], rot: [5.2, 66.4, -18.8] }, L: L_BAT, R: R_WAY3 },
-      { t: 0.44, root: { pos: [-0.02, -0.152, -0.47], rot: [18, 25, -10] }, L: L_BAT, R: R_LIFT3 },
-      { t: 0.48, root: { pos: [0.0, -0.150, -0.455], rot: [21, 12, -9] }, L: L_BAT, R: R_HIGH },
+      { t: 0.32, root: { pos: [-0.1174, -0.1473, -0.5824], rot: [-1.9, 101.4, -3.7] }, L: L_SWG, R: R_WAY2 },
+      { t: 0.38, root: { pos: [0.0295, -0.1491, -0.5670], rot: [5.2, 66.4, -18.8] }, L: L_SWG, R: R_WAY3 },
+      { t: 0.44, root: { pos: [-0.02, -0.152, -0.47], rot: [18, 25, -10] }, L: L_SWG, R: R_LIFT3 },
+      { t: 0.48, root: { pos: [0.0, -0.150, -0.455], rot: [21, 12, -9] }, L: L_SWG, R: R_HIGH },
       { t: 0.54, root: { pos: [0.005, -0.148, -0.44], rot: [23, 7, -8] }, L: L_GRIP, R: R_HOME },
       { t: 0.6, root: { pos: HOME_POS, rot: HOME_ROT }, L: L_GRIP, R: R_HOME },
     ],

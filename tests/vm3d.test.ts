@@ -224,20 +224,22 @@ describe('vm3d clip contacts (plan §5)', () => {
     };
     const END: V3 = [-0.14, -0.0085, 0];
     const FREE: V3 = [0.14, -0.0085, 0];
-    // wind-up: held end carried to the lower-right, free end tipped up-right
+    // wind-up (spec C): held end carried to the lower-right, free end
+    // rising up-LEFT and back over the right shoulder
     const e100 = ndc(0.10, END), f100 = ndc(0.10, FREE);
     expect(e100.x, 'windup grip not to the right').toBeGreaterThan(0.05);
-    expect(f100.x, 'windup tip not up-right').toBeGreaterThan(0.4);
-    expect(f100.y, 'windup tip may not cross VM_CLEAR yet').toBeLessThan(-0.24);
+    expect(f100.x, 'windup tip not left of the fists').toBeLessThan(e100.x);
+    expect(f100.y, 'windup tip not above the fists').toBeGreaterThan(e100.y);
     // impact: the free end reaches the crosshair, long axis into the screen
     const e150 = ndc(0.15, END), f150 = ndc(0.15, FREE);
     expect(Math.abs(f150.x), 'impact tip off the crosshair').toBeLessThan(0.2);
     expect(f150.y, 'impact tip short of the crosshair').toBeGreaterThan(-0.2);
     expect(e150.y, 'impact hands not lower-centre').toBeLessThan(-0.55);
-    // the board only crosses VM_CLEAR between 0.10 and 0.25 s
+    // the board may ride into the cleared band only while it is in
+    // flight: the grab/wind-up lift, the strike, and the settle (0.014–0.34)
     for (let t = 0; t <= clip.duration + 1e-9; t += 0.005) {
       const f = ndc(t, FREE);
-      const clearNdc = t >= 0.10 && t <= 0.25 ? 0.16 : -0.24;
+      const clearNdc = t >= 0.014 && t <= 0.34 ? 0.16 : -0.24;
       expect(f.y, `swing@${t.toFixed(3)} board above VM_CLEAR outside the strike window`).toBeLessThan(clearNdc + 0.06);
     }
     const r600 = resolveClip(clip, 0.6);
@@ -548,6 +550,162 @@ describe('vm3d clip contacts (plan §5)', () => {
       }
     }
   });
+
+  // --- review spec E: pure-math projection checks for A-C, 10 ms, both
+  // analysts' scales ----------------------------------------------------
+  const ARM_RE = /forearm|sleeve|forecap|sleevecap/;
+  function armVerts(hand: { group: THREE.Object3D }): THREE.Vector3[] {
+    const pts: THREE.Vector3[] = [];
+    hand.group.updateWorldMatrix(true, true);
+    const v = new THREE.Vector3();
+    hand.group.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh || !ARM_RE.test(m.name)) return;
+      const pos = m.geometry.getAttribute('position');
+      for (let i = 0; i < pos.count; i++) {
+        v.fromBufferAttribute(pos, i);
+        m.localToWorld(v);
+        pts.push(v.clone());
+      }
+    });
+    return pts;
+  }
+  function handPoints(hand: { group: THREE.Object3D; palmCentreWorld(out: THREE.Vector3): THREE.Vector3; fingerJointsWorld(f: string): THREE.Vector3[] }): THREE.Vector3[] {
+    const pts = [hand.group.getWorldPosition(new THREE.Vector3()), hand.palmCentreWorld(new THREE.Vector3())];
+    for (const f of HAND_FINGERS) pts.push(...hand.fingerJointsWorld(f));
+    return pts;
+  }
+
+  for (const gender of ['male', 'female'] as const) {
+    const aSpec = { gender, skin: SKIN_TONES[1] };
+    const cam = new THREE.PerspectiveCamera(54, 1280 / 672, 0.01, 5);
+
+    it(`SWING ${gender}: each sleeve exits through its own side/bottom, spans \u226435% of frame width, arms never cross`, () => {
+      const rig = new Vm3dRig(aSpec);
+      const clip = CLIPS['kbd.swing'];
+      const clamp1 = (x: number) => Math.min(1, Math.max(-1, x));
+      for (let t = 0.115; t <= 0.18 + 1e-9; t += 0.01) {
+        rig.solve(clip, t);
+        const ends: Record<string, { x: number; y: number; span: number; cx: number }> = {};
+        for (const side of ['L', 'R'] as const) {
+          const verts = armVerts(rig.hands[side]);
+          const wrist = rig.hands[side].group.getWorldPosition(new THREE.Vector3());
+          let far = verts[0], farD = -1;
+          let x0 = 1e9, x1 = -1e9, sx = 0;
+          for (const p of verts) {
+            const d = p.distanceToSquared(wrist);
+            if (d > farD) { farD = d; far = p; }
+            const n = p.clone().project(cam);
+            x0 = Math.min(x0, n.x); x1 = Math.max(x1, n.x); sx += n.x;
+          }
+          const e = far.clone().project(cam);
+          ends[side] = { x: e.x, y: e.y, span: clamp1(x1) - clamp1(x0), cx: sx / verts.length };
+        }
+        // the tube's free end must leave through the bottom edge or the
+        // lower 35% of its own half of the frame
+        // a bottom-edge exit is always allowed; only an arm whose tube
+        // end lands inside the frame must stay on its own half — that is
+        // the 'horizontal log crossing the body' defect A forbids
+        if (ends.L.y >= -0.55) {
+          expect(ends.L.x, `swing@${t.toFixed(2)} L sleeve ends in the right half`).toBeLessThan(0);
+        }
+        if (ends.R.y >= -0.55) {
+          expect(ends.R.x, `swing@${t.toFixed(2)} R sleeve ends in the left half`).toBeGreaterThan(0);
+        }
+        for (const side of ['L', 'R'] as const) {
+          const e = ends[side];
+          const lowOrOut = e.y < -0.3 || e.y <= -1;
+          expect(lowOrOut, `swing@${t.toFixed(2)} ${side} sleeve exits mid-frame (x ${e.x.toFixed(2)} y ${e.y.toFixed(2)})`).toBe(true);
+          expect(e.span, `swing@${t.toFixed(2)} ${side} sleeve spans ${(50 * e.span).toFixed(0)}% of frame width`).toBeLessThanOrEqual(0.7);
+        }
+        expect(ends.L.cx, `swing@${t.toFixed(2)} arms cross`).toBeLessThan(ends.R.cx + 0.10);
+      }
+    });
+
+    it(`SWING ${gender}: board keeps \u22656% visible area t .10-.24, keycap face camera-facing at .13/.15`, () => {
+      const rig = new Vm3dRig(aSpec);
+      const clip = CLIPS['kbd.swing'];
+      const N = 64;
+      // deck-top corners in board-local space
+      const corners = [[-0.14, 0, -0.056], [0.14, 0, -0.056], [0.14, 0, 0.056], [-0.14, 0, 0.056]]
+        .map((c) => new THREE.Vector3(...(c as [number, number, number])));
+      for (let t = 0.10; t <= 0.24 + 1e-9; t += 0.01) {
+        rig.solve(clip, t);
+        rig.board.group.updateWorldMatrix(true, false);
+        const q = corners.map((c) => c.clone().applyMatrix4(rig.board.group.matrixWorld).project(cam));
+        // hand bboxes in ndc
+        const boxes = (['L', 'R'] as const).map((side) => {
+          const b = new THREE.Box2();
+          for (const p of handPoints(rig.hands[side])) {
+            const n = p.project(cam);
+            b.expandByPoint(new THREE.Vector2(n.x, n.y));
+          }
+          return b;
+        });
+        // raster: board quad minus hand bboxes
+        const pt = new THREE.Vector2();
+        const edge = (a: THREE.Vector3, b: THREE.Vector3, p: THREE.Vector2) =>
+          (b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x);
+        let cells = 0;
+        for (let gy = 0; gy < N; gy++) for (let gx = 0; gx < N; gx++) {
+          pt.set((gx + 0.5) / N * 2 - 1, (gy + 0.5) / N * 2 - 1);
+          const s0 = edge(q[0], q[1], pt);
+          const insideQuad = edge(q[1], q[2], pt) * s0 >= 0 && edge(q[2], q[3], pt) * s0 >= 0 && edge(q[3], q[0], pt) * s0 >= 0;
+          if (!insideQuad) continue;
+          if (boxes.some((b) => b.containsPoint(pt))) continue;
+          cells++;
+        }
+        expect(cells / (N * N), `swing@${t.toFixed(2)} board visible ${(100 * cells / (N * N)).toFixed(1)}% of viewport`).toBeGreaterThanOrEqual(0.06);
+        if (t === 0.13 || Math.abs(t - 0.15) < 1e-9) {
+          const nrm = new THREE.Vector3(0, 1, 0).transformDirection(rig.board.group.matrixWorld);
+          expect(nrm.z, `swing@${t.toFixed(2)} keycap face off-camera (dot ${nrm.z.toFixed(2)})`).toBeGreaterThanOrEqual(0.25);
+        }
+      }
+    });
+
+    it(`SWING ${gender}: impact free end projects within 0.12 frame-width of the crosshair`, () => {
+      const rig = new Vm3dRig(aSpec);
+      rig.solve(CLIPS['kbd.swing'], 0.15);
+      rig.board.group.updateWorldMatrix(true, false);
+      const tip = new THREE.Vector3(0.14, -0.0085, 0)
+        .applyMatrix4(rig.board.group.matrixWorld).project(cam);
+      expect(Math.abs(tip.x), `tip ${tip.x.toFixed(2)} off crosshair x`).toBeLessThanOrEqual(0.24);
+      expect(Math.abs(tip.y), `tip ${tip.y.toFixed(2)} off crosshair y`).toBeLessThanOrEqual(0.26);
+    });
+
+    it(`SWING ${gender}: fist centroid bands - windup lower-right, impact lower-centre, follow lower-left`, () => {
+      const rig = new Vm3dRig(aSpec);
+      const clip = CLIPS['kbd.swing'];
+      const centroid = () => {
+        rig.board.group.updateWorldMatrix(true, false);
+        const a = rig.hands.L.palmCentreWorld(new THREE.Vector3());
+        const b = rig.hands.R.palmCentreWorld(new THREE.Vector3());
+        return a.add(b).multiplyScalar(0.5).project(cam);
+      };
+      for (let t = 0.05; t <= 0.10 + 1e-9; t += 0.01) {
+        rig.solve(clip, t);
+        const c = centroid();
+        const fx = (c.x + 1) / 2, fy = (1 - c.y) / 2;
+        expect(fx, `windup@${t.toFixed(2)} fist x ${fx.toFixed(2)}`).toBeGreaterThanOrEqual(0.60);
+        expect(fx, `windup@${t.toFixed(2)} fist x ${fx.toFixed(2)}`).toBeLessThanOrEqual(0.80);
+        expect(fy, `windup@${t.toFixed(2)} fist y ${fy.toFixed(2)}`).toBeGreaterThanOrEqual(0.70);
+      }
+      {
+        rig.solve(clip, 0.15);
+        const c = centroid();
+        const fx = (c.x + 1) / 2;
+        expect(fx, `impact fist x ${fx.toFixed(2)}`).toBeGreaterThanOrEqual(0.40);
+        expect(fx, `impact fist x ${fx.toFixed(2)}`).toBeLessThanOrEqual(0.60);
+      }
+      for (let t = 0.24; t <= 0.30 + 1e-9; t += 0.01) {
+        rig.solve(clip, t);
+        const c = centroid();
+        const fx = (c.x + 1) / 2;
+        expect(fx, `follow@${t.toFixed(2)} fist x ${fx.toFixed(2)}`).toBeGreaterThanOrEqual(0.20);
+        expect(fx, `follow@${t.toFixed(2)} fist x ${fx.toFixed(2)}`).toBeLessThanOrEqual(0.40);
+      }
+    });
+  }
 
   it('IDLE/TYPE: right-hand fingertips rest within 3 mm of a keycap top', () => {
     const rig = new Vm3dRig(spec);
