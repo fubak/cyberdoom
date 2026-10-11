@@ -348,6 +348,13 @@ async function probeOnLine(
   target.state.speedMul = 0;
   const savedHurtT = target.hurtT;
   target.hurtT = 0;
+  // the gate measures a revealed threat's readability: a still-disguised
+  // trojan renders dim like the pickup it imitates, and a stealthy rootkit
+  // is invisible until revealed — staging as revealed is the honest test
+  const savedRevealedTrojan = target.state.revealedTrojan;
+  const savedRevealedRootkit = target.state.revealedRootkit;
+  target.state.revealedTrojan = true;
+  target.state.revealedRootkit = true;
   try {
     for (let i = 0; i < 4; i++) {
       place();
@@ -400,6 +407,8 @@ async function probeOnLine(
   } finally {
     target.state.speedMul = savedSpeedMul;
     target.hurtT = savedHurtT;
+    target.state.revealedTrojan = savedRevealedTrojan;
+    target.state.revealedRootkit = savedRevealedRootkit;
     r.debugHidden.clear();
     r.debugSprite.delete(id);
     r.debugSuppressFx = false;
