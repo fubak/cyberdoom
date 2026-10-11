@@ -7,8 +7,10 @@
 // (never a pure-black void). Also runs the light-diminishing probe per mission:
 // the same lit wall at ~10 tiles must render <=70% of its ~2-tile luma, the
 // darkest straight run's centre band must stay shadow-dark but readable
-// (12-46/255 median), and at most 28% of the whole 3D view may sit below
-// 16/255 luma (the F5 void gate: Doom's darkest gameplay frames are ~26%).
+// (12-46/255 median), and the share of the whole 3D view under 16/255 must
+// sit in [12%, 28%] — the F5 two-sided gloom gate: Doom's darkest gameplay
+// frames are ~26% near-black, but a flat grey room with no true dark fails
+// just as a void does.
 // Mid and late missions (m04+) must contain at least one strobing light sector.
 import { chromium } from '@playwright/test';
 
@@ -52,7 +54,7 @@ for (const m of MISSIONS) {
     }
   }
   const lp = await page.evaluate(() => window.__cd.lightProbe(10));
-  const lOk = (lp.line ? lp.ratio <= 0.7 : true) && lp.dark >= 12 && lp.dark <= 46 && lp.darkFrac <= 0.28;
+  const lOk = (lp.line ? lp.ratio <= 0.7 : true) && lp.dark >= 12 && lp.dark <= 46 && lp.darkFrac >= 0.12 && lp.darkFrac <= 0.28;
   if (!lOk) fail++;
   const strobe = await page.evaluate(() => window.__cd.strobeInfo());
   const midLate = +m.slice(1) >= 4;
@@ -63,7 +65,7 @@ for (const m of MISSIONS) {
 console.table(rows);
 console.table(lightRows);
 if (errors.length) console.log('page errors:\n' + errors.join('\n'));
-console.log(fail || errors.length ? `FAIL: ${fail} probe(s) below target` : 'PASS: contrast >= 3:1, p10 >= 8, far/near <= 0.7, dark 12-46, darkFrac <= 0.28, strobes on m04+');
+console.log(fail || errors.length ? `FAIL: ${fail} probe(s) below target` : 'PASS: contrast >= 3:1, p10 >= 8, far/near <= 0.7, dark 12-46, darkFrac 0.12-0.28, strobes on m04+');
 await page.close();
 if (!process.env.CDP_URL) await browser.close();
 process.exit(fail || errors.length ? 1 : 0);
