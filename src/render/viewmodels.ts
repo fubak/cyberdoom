@@ -4,7 +4,9 @@ import { currentSkin } from '../tools/look';
 import { outlineNative, painter, type Painter } from './hires';
 import { RES } from './res';
 import { bakeRig } from './handrig';
-import { POSES, TOOL_HANDS, handPoseFor } from './handposes';
+import { handCycleFrame, idleFrame } from './handcycles';
+import { breath } from './vmotion';
+import { TOOL_HANDS } from './handposes';
 
 /**
  * LOOK: Doom-style first-person tool viewmodels. Each tool is pixel-painted
@@ -27,6 +29,9 @@ const cache = new Map<string, Art>();
 
 /** Overall on-screen size of the bespoke viewmodels (1 = native 1:1 pixels). */
 export const VIEWMODEL_SCALE = 1;
+
+/** External hand-motion inputs written by main.ts each frame (§5.5/§5.6). */
+export const handMods = { roll: 0, bobPitch: 0, seed: 1 };
 
 function paint(w: number, h: number, ox: number, fn: (px: Px, P: Painter) => void): Art {
   const P = painter(w, h);
@@ -241,9 +246,13 @@ export function drawToolViewmodel(
   const pose = POSE[tool.id] ?? POSE.usb;
   let dx = 0;
   let dy: number;
-  if (ph) {
-    // windup (k<0) pulls back a touch; impact drives the strike UP and back
-    // toward the camera, Doom-style — never down under the status bar
+  // the held object trails the hand: cycle move sampled 20 ms late (looser ζ)
+  const _anchor0 = TOOL_HANDS[tool.id];
+  const _lag = _anchor0 && anim ? handCycleFrame(tool.id, anim.sinceUse * 1000, Math.floor(_time * 0.6) % _anchor0.cycles.length)?.objMove : null;
+  if (_lag && ph) {
+    dx = Math.round(_lag[0]);
+    dy = Math.round(_lag[1]);
+  } else if (ph) {
     const k = ph.k;
     const s = k >= 0 ? pose.strike : pose.wind;
     dx = Math.round(s[0] * Math.abs(k));
@@ -303,22 +312,38 @@ export function drawToolViewmodel(
       }
     }
   }
-  // articulated rig hands over the tool: nearest baked pose for the phase,
-  // sharing the art's bob/strike/switch offsets so the grip tracks the object
+  // articulated rig hands over the tool: use-cycle pose + idle micro-motion,
+  // tracking the lagged object offsets so the grip follows the tool
   {
-    const hName = handPoseFor(tool.id, ph?.phase ?? null, ph?.u ?? 0);
     const anchor = TOOL_HANDS[tool.id];
-    if (hName && anchor) {
-      const fr = POSES[hName];
-      if (fr) {
-        const sp = bakeRig(hName, fr, { gender, skin: currentSkin() });
+    if (anchor) {
+      const variant = Math.floor(_time * 0.6) % anchor.cycles.length;
+      const hf = handCycleFrame(tool.id, ph ? anim!.sinceUse * 1000 : null, variant);
+      if (hf) {
+        let frame = hf.frame;
+        let key = hf.key;
+        if (hf.stage === 'idle' || hf.stage === 'done') {
+          const idl = idleFrame(frame, _time, handMods.seed, variant);
+          frame = idl.frame;
+          key += idl.key;
+        }
+        // sway-roll + bob-pitch quantize into baked variants (±4° / ±3° steps)
+        const rb = Math.round(handMods.roll / 4) * 4;
+        const pb = Math.round(handMods.bobPitch / 3) * 3;
+        if (rb || pb) {
+          frame = { ...frame, hands: frame.hands.map((p) => ({ ...p, roll: (p.roll ?? 0) + rb + pb })) };
+          key += `.r${rb}p${pb}`;
+        }
+        const sp = bakeRig(key, frame, { gender, skin: currentSkin() });
         const sw = sp.c.width / RES;
         const sh = sp.c.height / RES;
-        const hx = Math.round(w / 2 + anchor.at[0] - sw / 2 + bx + dx);
-        let hy = Math.round(h - anchor.at[1] - sh + dyDown + drop);
+        const [brx, bry] = breath(_time);
+        const hs = hf.move[2];
+        const hx = Math.round(w / 2 + anchor.at[0] - (sw * hs) / 2 + bx + dx + hf.move[0] + brx * 0.5 + 1);
+        let hy = Math.round(h - anchor.at[1] - sh * hs + dyDown + drop + hf.move[1] + bry);
         // never let the hand's first opaque row cross the clearance line
-        hy = Math.max(hy, Math.ceil(line - sp.top / RES));
-        g.drawImage(sp.c as CanvasImageSource, hx, hy, sw, sh);
+        hy = Math.max(hy, Math.ceil(line - (sp.top / RES) * hs));
+        g.drawImage(sp.c as CanvasImageSource, hx, hy, sw * hs, sh * hs);
       }
     }
   }

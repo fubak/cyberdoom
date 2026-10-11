@@ -47,6 +47,8 @@ import { genDebugCompare } from './render/genpool';
  * together through core contracts only.
  */
 
+import { springStep, swayTarget, SWAY, breath as breathF } from './render/vmotion';
+import { handMods } from './render/viewmodels';
 const FIXED_DT = 1 / 60;
 const params = new URLSearchParams(location.search);
 const DEBUG = params.get('debug') === '1';
@@ -161,6 +163,8 @@ class Game {
   probeLock = false;
   /** Viewmodel sway/lag state: lags mouse yaw + strafe, springs back to rest. */
   private vmSway = { x: 0, y: 0 };
+  private swayX = { x: 0, v: 0, acc: 0 };
+  private swayY = { x: 0, v: 0, acc: 0 };
   private lastHurtMessageT = -Infinity;
   private lastHurtT = -Infinity;
   private endTimer: number | null = null;
@@ -875,16 +879,21 @@ class Game {
       if (!this.paused && !this.dossier.isOpen && this.runtime.finished === null) {
         this.player.angle += mouseDX * 0.0028;
       }
-      // hand sway: the viewmodel lags behind turns and strafes (capped), then
-      // eases back — a light exponential chase reads like a spring return
+      // hand sway (spec §5.6): second-order springs on the fixed 240 Hz step —
+      // x: spring(16,.70) target ±28 from mouse dx + lateral velocity;
+      // y: spring(13,.85) target ±16 from forward velocity. Frame-rate free.
       const latV = -this.player.vx * Math.sin(this.player.angle) + this.player.vy * Math.cos(this.player.angle);
       const fwdV = this.player.vx * Math.cos(this.player.angle) + this.player.vy * Math.sin(this.player.angle);
-      const chaseX = 1 - Math.exp(-dt * 15);
-      const chaseY = 1 - Math.exp(-dt * 11);
-      this.vmSway.x += (Math.max(-12, Math.min(12, -mouseDX * 0.45 - latV * 3.2)) - this.vmSway.x) * chaseX;
-      this.vmSway.y += (Math.max(-8, Math.min(8, -fwdV * 1.6)) - this.vmSway.y) * chaseY;
-      // idle breathing: ~1.4px at 0.25 Hz, deterministic off the sim clock
-      const breath = this.paused ? 0 : Math.sin(this.simT * Math.PI * 0.5) * 1.4;
+      const [swTx, swTy] = swayTarget(this.paused || this.dossier.isOpen ? 0 : mouseDX / Math.max(dt, 1e-4), latV, fwdV, 0);
+      const swX = springStep(this.swayX, swTx, dt, SWAY.xw, SWAY.xz);
+      const swY = springStep(this.swayY, swTy, dt, SWAY.yw, SWAY.yz);
+      this.vmSway.x = swX;
+      this.vmSway.y = swY;
+      // hand roll/scale couple off the sway; bob pitch feeds the baked variants
+      handMods.roll = SWAY.rollK * swX;
+      handMods.bobPitch = this.player.bobPitchDeg;
+      // idle breathing (spec §5.4): 1.6px @ 0.22 Hz + 0.6px @ 0.14 Hz
+      const [, breath] = this.paused ? [0, 0] : breathF(this.simT);
       this.audio.setListener(this.player.x, this.player.y, this.player.angle);
       this.renderer.syncEntities(this.runtime.entities, this.projectiles);
       this.renderer.syncParticles(this.particles.view());
