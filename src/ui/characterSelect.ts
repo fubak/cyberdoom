@@ -208,6 +208,7 @@ export function characterSelect(onPick: (g: Gender) => void, onBack: () => void,
       playTool('menu-move');
       playVoice(gd, 'ready');
       faces[gd].grin();
+      faces[gd].talk();
     }
   };
   const pickSkin = (id: string) => {

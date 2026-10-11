@@ -1,10 +1,10 @@
 import type { Gender, ToolDef, ViewmodelAnim } from '../core/types';
 import { fireFlash, fireLamp, usePhase, vmLine } from '../tools/anim';
 import { currentSkin } from '../tools/look';
-import { shade } from '../tools/pixel';
-import { ANALYSTS } from '../tools/look';
-import { cylTone, outlineNative, painter, type Painter } from './hires';
+import { outlineNative, painter, type Painter } from './hires';
 import { RES } from './res';
+import { bakeRig } from './handrig';
+import { POSES, TOOL_HANDS, handPoseFor } from './handposes';
 
 /**
  * LOOK: Doom-style first-person tool viewmodels. Each tool is pixel-painted
@@ -27,18 +27,6 @@ const cache = new Map<string, Art>();
 
 /** Overall on-screen size of the bespoke viewmodels (1 = native 1:1 pixels). */
 export const VIEWMODEL_SCALE = 1;
-
-/** Hand palette from the player's chosen skin tone (independent of gender). */
-const SKIN: Record<Gender, string[]> = new Proxy({} as Record<Gender, string[]>, {
-  get: () => {
-    const s = currentSkin();
-    return [s.highlight, s.base, s.shadow, shade(s.shadow, 0.7)];
-  },
-});
-const CUFF: Record<Gender, string[]> = {
-  male: ['#3a62c8', '#1a3a8a', '#0c1c4a'],
-  female: ['#2aa8a0', '#147a74', '#0a4440'],
-};
 
 function paint(w: number, h: number, ox: number, fn: (px: Px, P: Painter) => void): Art {
   const P = painter(w, h);
@@ -80,111 +68,9 @@ function tintFlash(a: Art, rgb: string): Art {
   return { c, ox: a.ox, top: a.top, bot: a.bot };
 }
 
-/** Fabric weave: a sparse diagonal twill in the shadow tone, one native pixel wide. */
-function weave(P: Painter, x: number, y: number, w: number, h: number, col: string): void {
-  const k = P.k;
-  P.g.fillStyle = col;
-  for (let yy = Math.round(y * k); yy < Math.round((y + h) * k); yy++)
-    for (let xx = Math.round(x * k); xx < Math.round((x + w) * k); xx++) if ((xx + yy * 3) % 7 === 0) P.g.fillRect(xx, yy, 1, 1);
-}
-
-/**
- * One finger seen from the back, tip up: rounded tip, lit-cylinder shading,
- * nail, two knuckle creases, a little skin texture, shadow where it meets the palm.
- */
-function finger(P: Painter, x: number, y: number, w: number, h: number, s: string[], nail: string | null, seed: number, flip = false): void {
-  const u = 1 / P.k;
-  const r = w / 2;
-  P.ell(x + r, y + r, r, r, s[1]);
-  P.rect(x, y + r, w, h - r, s[1]);
-  const cols = Math.round(w * P.k);
-  for (let i = 0; i < cols; i++) {
-    const tone = cylTone(s, (i + 0.5) / cols, flip);
-    if (tone === s[1]) continue;
-    const dx = ((i + 0.5) * u - r) / r;
-    const capTop = y + r - Math.sqrt(Math.max(0, 1 - dx * dx)) * r;
-    P.rect(x + i * u, capTop + u, u, y + h - capTop - u, tone);
-  }
-  P.dots(x + u, y + r, w - 2 * u, h - r, shade(s[1], 0.92), 0.05, seed);
-  if (nail) {
-    const nw = w * 0.6;
-    const nx = x + (w - nw) / 2;
-    P.ell(nx + nw / 2, y + nw / 2 + u, nw / 2, nw / 2, nail);
-    P.rect(nx, y + nw / 2 + u, nw, Math.max(u * 2, w * 0.4), nail);
-    P.rect(nx, y + nw / 2 + u + Math.max(u * 2, w * 0.4), nw, u, shade(nail, 0.7));
-    P.rect(nx + u, y + 2 * u, u, nw * 0.6, shade(nail, 1.55));
-  }
-  for (const f of [0.46, 0.72]) {
-    const yc = y + h * f;
-    P.line([[x + w * 0.22, yc], [x + w * 0.5, yc + u], [x + w * 0.78, yc]], s[2]);
-    P.rect(x + w * 0.3, yc - 2 * u, w * 0.34, u, s[0]);
-  }
-  P.rect(x, y + h - 2 * u, w, 2 * u, s[3]);
-}
-
-/** Jacket cuff: weave, stitched hem, far-side shadow; Ray's hi-vis stripe. */
-function cuff(P: Painter, x: number, y: number, w: number, h: number, gender: Gender, mirror: boolean): void {
-  const cf = CUFF[gender];
-  const u = 1 / P.k;
-  P.rect(x, y, w, h, cf[1]);
-  weave(P, x, y, w, h, shade(cf[1], 0.82));
-  P.rect(x, y, w, 0.75, cf[0]);
-  P.rect(x, y + 0.75, w, u, shade(cf[0], 1.25));
-  for (let i = 0.5; i < w - 0.5; i += 1.25) P.rect(x + i, y + 1.75, 0.5, u, shade(cf[0], 1.15));
-  P.rect(mirror ? x : x + w - 3, y + 2, 3, h - 2, cf[2]);
-  P.rect(mirror ? x + 3 : x + w - 3 - u, y + 2, u, h - 2, shade(cf[2], 0.8));
-  P.rect(x, y + h - 1.5, w, 1.5, cf[2]);
-  if (gender === 'male') {
-    P.rect(x, y + 5, w, 1, ANALYSTS.male.accent);
-    P.rect(x, y + 5, w, u, shade(ANALYSTS.male.accent, 1.4));
-    P.dots(x, y + 5, w, 1, '#ffffff', 0.12, 3);
-  }
-}
-
-/** Lit forearm (cylinder across `w`), skin texture, Vega's smartwatch. */
-function forearm(P: Painter, x: number, y: number, w: number, h: number, gender: Gender, mirror: boolean, watchY?: number): void {
-  const s = SKIN[gender];
-  const u = 1 / P.k;
-  const cols = Math.round(w * P.k);
-  for (let i = 0; i < cols; i++) P.rect(x + i * u, y, u, h, cylTone(s, (i + 0.5) / cols, mirror));
-  P.dots(x, y, w, h, shade(s[1], 0.9), 0.05, 11);
-  if (gender === 'male') P.dots(x + w * 0.2, y + 2, w * 0.6, h - 4, shade(s[3], 0.8), 0.018, 5);
-  if (gender === 'female' && watchY !== undefined) {
-    P.rect(x, watchY, w, 2.5, '#14161c');
-    P.rect(x, watchY, w, u, '#3a3e48');
-    const wx = x + w / 2 - 4;
-    P.rect(wx, watchY - 1.5, 8, 5.5, '#20242c');
-    P.rect(wx + u, watchY - 1.5, 8 - 2 * u, u, '#5a6070');
-    P.rect(wx + 1, watchY - 0.5, 6, 3.5, '#0b2a2a');
-    P.rect(wx + 1.5, watchY, 2.25, 0.75, ANALYSTS.female.accent);
-    P.rect(wx + 1.5, watchY + 1.25, 4, u * 2, shade(ANALYSTS.female.accent, 0.7));
-    P.rect(wx + 4.5, watchY, 1, 0.75, '#ff5a7a');
-  }
-}
-
-/** A hand gripping from below: fingers wrap forward over an object edge. */
-function hand(P: Painter, x: number, y: number, gender: Gender, mirror = false): void {
-  const s = SKIN[gender];
-  const fem = gender === 'female';
-  const fw = fem ? 4 : 5;
-  const nail = fem ? '#c83a6a' : shade(s[0], 1.06);
-  forearm(P, x + 2, y + 10, 18, 30, gender, mirror, 21);
-  cuff(P, x, y + 26, 22, 14, gender, mirror);
-  // shadow between and under the fingers
-  P.rect(x + 1, y + 3, fw * 4, 9, s[3]);
-  const lift = [0.75, 0, 0.25, 1.25];
-  for (let i = 0; i < 4; i++) {
-    const j = mirror ? 3 - i : i;
-    finger(P, x + 1 + i * fw, y + lift[j], fw - 0.5, 12 - lift[j], s, nail, i + 1, mirror);
-  }
-  // thumb
-  const tx = mirror ? x + 18 : x - 3;
-  finger(P, tx, y + 4, 6, 9, s, nail, 9, mirror);
-}
-
-function keyboardArt(gender: Gender, fire: boolean): Art {
+function keyboardArt(fire: boolean): Art {
   // compact board (~25% of view width with hands), like Doom's pistol-sized footprint
-  return paint(80, 50, 40, (px, P) => {
+  return paint(80, 50, 40, (px, _P) => {
     for (let r = 0; r < 22; r++) {
       const inset = Math.floor((22 - r) * 0.3);
       px(r < 2 ? '#8a92a8' : '#3a404c', 10 + inset, 2 + r, 60 - inset * 2, 1);
@@ -218,14 +104,11 @@ function keyboardArt(gender: Gender, fire: boolean): Art {
     }
     px(fire ? '#8aff9a' : '#2ad83a', 60, 3, 2, 1);
     px('#ffd040', 56, 3, 2, 1);
-    hand(P, 3, 12, gender, false);
-    hand(P, 55, 12, gender, true);
   });
 }
 
-function mouseArt(gender: Gender, fire: boolean): Art {
-  const s = SKIN[gender];
-  return paint(72, 84, 36, (px, P) => {
+function mouseArt(fire: boolean): Art {
+  return paint(72, 84, 36, (px, _P) => {
     // cable going up/forward
     px('#3a404c', 34, 0, 2, 14);
     px('#5a6070', 34, 0, 1, 14);
@@ -243,28 +126,18 @@ function mouseArt(gender: Gender, fire: boolean): Art {
     px('#1a1c22', 33, 16, 4, 8);
     px('#2458d8', 34, 17, 2, 6);
     px('#8ab4ff', 34, 17, 2, 1);
-    // palm over the shell
-    const fem = gender === 'female';
-    const nail = fem ? '#c83a6a' : shade(s[0], 1.06);
-    const pc = Math.round(36 * P.k);
-    for (let i = 0; i < pc; i++) P.rect(18 + i / P.k, 40, 1 / P.k, 22, cylTone(s, (i + 0.5) / pc));
-    P.dots(18, 40, 36, 22, shade(s[1], 0.9), 0.05, 21);
-    for (let i = 0; i < 3; i++) P.ell(24.5 + i * 9, 43, 2.4, 1.1, s[0]);
-    P.rect(19, 40, 34, 2, s[3]);
-    for (let i = 0; i < 3; i++) {
-      const fy = 26 + (fire && i === 0 ? 2 : 0);
-      finger(P, 21 + i * 9, fy, 7, 16, s, nail, i + 31);
-    }
-    finger(P, 12, 44, 8, 12, s, nail, 39);
-    forearm(P, 22, 60, 26, 10, gender, false, 62);
-    cuff(P, 18, 68, 36, 16, gender, false);
+    // contact shadow + thin dark mousepad in perspective (wider toward camera)
+    px('#14100e', 22, 50, 34, 3);
+    px('#242228', 4, 54, 64, 4);
+    px('#1a181e', 0, 58, 72, 6);
+    px('#2a2830', 0, 58, 72, 1);
   });
 }
 
-function usbArt(gender: Gender, fire: boolean): Art {
+function usbArt(fire: boolean): Art {
   // the scanner is the shotgun-equivalent: a big chunky stick ~17% of view
   // width, connector up, hard-edged flash blooming off the tip on the fire frame
-  return paint(92, 58, 46, (px, P) => {
+  return paint(92, 58, 46, (px, _P) => {
     const cx = 46;
     if (fire) {
       px('#5affff', cx - 6, 2, 12, 9);
@@ -295,12 +168,11 @@ function usbArt(gender: Gender, fire: boolean): Art {
     // blue brand stripe
     px('#2458d8', cx - 22, 46, 44, 3);
     px('#8ab4ff', cx - 22, 46, 44, 1);
-    hand(P, cx - 24, 38, gender, false);
   });
 }
 
-function badgeArt(gender: Gender, fire: boolean): Art {
-  return paint(84, 80, 42, (px, P) => {
+function badgeArt(fire: boolean): Art {
+  return paint(84, 80, 42, (px, _P) => {
     // lanyard clip (the strap runs down behind the card)
     px('#c81e14', 38, 0, 6, 4);
     px('#ff7a5a', 38, 0, 2, 4);
@@ -323,7 +195,6 @@ function badgeArt(gender: Gender, fire: boolean): Art {
       px('#5aff6a', 40, 44, 22, 3);
       px('#c8ffb0', 40, 44, 22, 1);
     }
-    hand(P, 24, 44, gender, false);
   });
 }
 
@@ -334,7 +205,7 @@ function art(tool: ToolDef, gender: Gender, mode: 0 | 1 | 2): Art | null {
   if (!a) {
     const maker = { keyboard: keyboardArt, mouse: mouseArt, usb: usbArt, badge: badgeArt }[tool.id];
     if (!maker) return null;
-    a = maker(gender, mode > 0);
+    a = maker(mode > 0);
     if (mode === 2) a = tintFlash(a, TOOL_FLASH[tool.id] ?? '255,255,255');
     cache.set(key, a);
   }
@@ -364,21 +235,24 @@ export function drawToolViewmodel(
   const lit = !!ph && ph.phase === 'impact' && ph.u < 0.85;
   const fire = lit || (!!ph && (ph.phase === 'impact' || (ph.phase === 'recover' && ph.u < 0.25))) || (!ph && cooldownFrac > 0.55);
   const a = art(tool, gender, lit ? 2 : fire ? 1 : 0);
+  // shared bob/strike/switch offsets for the art AND the rig-hand overlay
+  const bx = Math.round(Math.sin(bob) * 6);
+  const byy = Math.round(Math.abs(Math.cos(bob)) * 3);
+  const pose = POSE[tool.id] ?? POSE.usb;
+  let dx = 0;
+  let dy: number;
+  if (ph) {
+    // windup (k<0) pulls back a touch; impact drives the strike UP and back
+    // toward the camera, Doom-style — never down under the status bar
+    const k = ph.k;
+    const s = k >= 0 ? pose.strike : pose.wind;
+    dx = Math.round(s[0] * Math.abs(k));
+    dy = Math.round(s[1] * Math.abs(k));
+  } else dy = -Math.round(cooldownFrac * 5); // recoil settle rides up, not down
+  const drop = Math.round((anim?.lower ?? 0) * ((a?.c.height ?? 60) + 10));
+  // actual downward travel the art got after the sink cap (hands track it)
+  let dyDown = byy + dy;
   if (a) {
-    const bx = Math.round(Math.sin(bob) * 6);
-    const byy = Math.round(Math.abs(Math.cos(bob)) * 3);
-    const pose = POSE[tool.id] ?? POSE.usb;
-    let dx = 0;
-    let dy: number;
-    if (ph) {
-      // windup (k<0) pulls back a touch; impact drives the strike UP and back
-      // toward the camera, Doom-style — never down under the status bar
-      const k = ph.k;
-      const s = k >= 0 ? pose.strike : pose.wind;
-      dx = Math.round(s[0] * Math.abs(k));
-      dy = Math.round(s[1] * Math.abs(k));
-    } else dy = -Math.round(cooldownFrac * 5); // recoil settle rides up, not down
-    const drop = Math.round((anim?.lower ?? 0) * (a.c.height + 10));
     const side = SIDE[tool.id] ?? 0;
     const S = VIEWMODEL_SCALE * (SIZE[tool.id] ?? 1);
     // the lit frame swells ~5% toward the camera for one frame of punch
@@ -393,10 +267,10 @@ export function drawToolViewmodel(
     // never raise so far that the peak clears the viewmodel line
     let y0 = h + BLEED - bot;
     y0 = Math.max(y0, line - top + Math.ceil(lift));
-    // downward motion (bob + pose dips) is capped so the art can never sink
-    // more than SINK px under the bar — the tool rests on the bar, not in it
-    const roomDown = h + SINK - (y0 + bot);
-    const dyDown = Math.min(byy + dy, roomDown);
+    // downward motion (bob + pose dips) is capped so the art's opaque bottom
+    // can never dip under the bar — the tool rests on the bar, not in it
+    const roomDown = h + BLEED - (y0 + bot);
+    dyDown = Math.min(byy + dy, roomDown);
     g.imageSmoothingEnabled = false;
     const y = y0 + dyDown + drop - (ch - (a.c.height / RES) * S);
     g.drawImage(a.c, Math.round(w / 2 - (a.ox - side) * S + bx + dx), y, cw, ch);
@@ -429,6 +303,25 @@ export function drawToolViewmodel(
       }
     }
   }
+  // articulated rig hands over the tool: nearest baked pose for the phase,
+  // sharing the art's bob/strike/switch offsets so the grip tracks the object
+  {
+    const hName = handPoseFor(tool.id, ph?.phase ?? null, ph?.u ?? 0);
+    const anchor = TOOL_HANDS[tool.id];
+    if (hName && anchor) {
+      const fr = POSES[hName];
+      if (fr) {
+        const sp = bakeRig(hName, fr, { gender, skin: currentSkin() });
+        const sw = sp.c.width / RES;
+        const sh = sp.c.height / RES;
+        const hx = Math.round(w / 2 + anchor.at[0] - sw / 2 + bx + dx);
+        let hy = Math.round(h - anchor.at[1] - sh + dyDown + drop);
+        // never let the hand's first opaque row cross the clearance line
+        hy = Math.max(hy, Math.ceil(line - sp.top / RES));
+        g.drawImage(sp.c as CanvasImageSource, hx, hy, sw, sh);
+      }
+    }
+  }
   if (anim && !anim.lower && tool.drawFx) {
     // tool fx live in the band under the line, so flashes and pulses never cover the aim area
     g.save();
@@ -449,8 +342,6 @@ export function drawToolViewmodel(
 
 /** Opaque art may rest this far under the bar line (the Doom bottom-crop look). */
 const BLEED = 1;
-/** Hard limit: art never sinks more than this below the bar at any phase. */
-const SINK = 4;
 /** Lit-frame scale punch (art swells toward the camera at the impact flash). */
 const LIT_SWELL = 1.05;
 

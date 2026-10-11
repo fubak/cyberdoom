@@ -159,6 +159,8 @@ class Game {
   private simT = 0;
   /** Debug: freeze sim ticks while look probes capture frames (?debug=1 only). */
   probeLock = false;
+  /** Viewmodel sway/lag state: lags mouse yaw + strafe, springs back to rest. */
+  private vmSway = { x: 0, y: 0 };
   private lastHurtMessageT = -Infinity;
   private lastHurtT = -Infinity;
   private endTimer: number | null = null;
@@ -873,6 +875,16 @@ class Game {
       if (!this.paused && !this.dossier.isOpen && this.runtime.finished === null) {
         this.player.angle += mouseDX * 0.0028;
       }
+      // hand sway: the viewmodel lags behind turns and strafes (capped), then
+      // eases back — a light exponential chase reads like a spring return
+      const latV = -this.player.vx * Math.sin(this.player.angle) + this.player.vy * Math.cos(this.player.angle);
+      const fwdV = this.player.vx * Math.cos(this.player.angle) + this.player.vy * Math.sin(this.player.angle);
+      const chaseX = 1 - Math.exp(-dt * 15);
+      const chaseY = 1 - Math.exp(-dt * 11);
+      this.vmSway.x += (Math.max(-12, Math.min(12, -mouseDX * 0.45 - latV * 3.2)) - this.vmSway.x) * chaseX;
+      this.vmSway.y += (Math.max(-8, Math.min(8, -fwdV * 1.6)) - this.vmSway.y) * chaseY;
+      // idle breathing: ~1.4px at 0.25 Hz, deterministic off the sim clock
+      const breath = this.paused ? 0 : Math.sin(this.simT * Math.PI * 0.5) * 1.4;
       this.audio.setListener(this.player.x, this.player.y, this.player.angle);
       this.renderer.syncEntities(this.runtime.entities, this.projectiles);
       this.renderer.syncParticles(this.particles.view());
@@ -908,8 +920,8 @@ class Game {
         face: (g, x, y) => ars.drawFace(g, x, y, integrity),
         // lower/raise on switch comes from anim.lower; death drops the hands off-screen
         viewmodelOffset: {
-          x: this.player.weaponBobX,
-          y: this.player.weaponBobY + (lostEnd ? 240 : 0) + Math.round(this.feel.viewKick * 22),
+          x: this.player.weaponBobX + Math.round(this.vmSway.x),
+          y: this.player.weaponBobY + (lostEnd ? 240 : 0) + Math.round(this.feel.viewKick * 22) + Math.round(this.vmSway.y + breath),
         },
         credentials: this.runtime.roles[this.runtime.roles.length - 1] ?? this.role,
         objectives: this.runtime.objectiveSummary(),

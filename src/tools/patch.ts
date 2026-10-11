@@ -2,7 +2,6 @@ import type { ToolDef, ToolUseContext } from '../core/types';
 import { impactBurst, usePhase, tipY } from './anim';
 import { bevel, rect } from './pixel';
 import { drawText } from './pixelfont';
-import { fist, handLook, sleeve } from './shared';
 import { mouseTool } from './mouse';
 import { usbTool } from './usb';
 
@@ -32,8 +31,7 @@ export const patchTool: ToolDef = {
     use: 'At arm\'s length, install the security update on a clean workstation to close its known vulnerability. It cannot remove malware that is already running: clean the host first, then patch it.',
     lesson: 'Patching removes the vulnerability; it does not evict an attacker already inside. Clean, then patch, then verify: that is remediation followed by hardening.',
   },
-  drawViewmodel(g, w, h, _bob, gender, _cd, anim) {
-    const look = handLook(gender, anim);
+  drawViewmodel(g, w, h, _bob, _gender, _cd, anim) {
     const ph = usePhase(anim?.sinceUse ?? 9, WINDUP);
     // impact thrusts the disk UP into the bay; windup dips only a hair
     const push = ph.k > 0 ? ph.k * 12 : ph.k * 1;
@@ -53,9 +51,6 @@ export const patchTool: ToolDef = {
       rect(g, x0 + 5, y0 + 20, 34, 20, 'rgba(255,220,150,0.5)');
       rect(g, x0 + 12, y0, 22, 2, '#ffe8b0');
     }
-    // hand pinching the bottom edge
-    sleeve(g, x0 + 18, y0 + 62, 22, 1, look, h);
-    fist(g, x0 + 14, y0 + 32, 26, look, 1);
   },
   drawFx(g, w, h, anim) {
     impactBurst(g, w / 2, tipY(h), anim.sinceConfirm, anim.confirmGood, 1, 'patch');

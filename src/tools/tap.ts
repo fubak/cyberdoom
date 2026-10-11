@@ -2,7 +2,6 @@ import type { Entity, ToolDef, ToolUseContext } from '../core/types';
 import { hash, impactBurst, usePhase, tipY } from './anim';
 import { bevel, glow, rect } from './pixel';
 import { drawText } from './pixelfont';
-import { fist, handLook, sleeve } from './shared';
 
 const WINDUP = 0.1;
 const RANGE = 12;
@@ -33,8 +32,7 @@ export const tapTool: ToolDef = {
     use: 'Sweeps a cone and copies the traffic of every host in view, then shows you the raw flows. It decides nothing: read the flows and make the call yourself (MOUSE flags a captured host in one click). It cannot block or clean.',
     lesson: 'A tap or SPAN port only delivers a copy of traffic. Detection is a separate job (an IDS or an analyst reading the capture), and only inline devices such as an IPS can block. Packet captures are a key data source for an investigation.',
   },
-  drawViewmodel(g, w, _h, _bob, gender, _cd, anim) {
-    const look = handLook(gender, anim);
+  drawViewmodel(g, w, _h, _bob, _gender, _cd, anim) {
     const ph = usePhase(anim?.sinceUse ?? 9, WINDUP);
     const t = anim?.time ?? 0;
     const sweep = ph.phase !== 'idle';
@@ -75,10 +73,6 @@ export const tapTool: ToolDef = {
     // capture buffer LEDs
     const ammo = anim?.ammo ?? 0;
     for (let i = 0; i < 6; i++) rect(g, x0 + 5 + i * 6, y0 + 30, 4, 2, i < Math.ceil(ammo / 2) ? '#ffb000' : '#3a2a10');
-    sleeve(g, x0 - 2, y0 + 50, 12, -1, look, _h);
-    sleeve(g, x0 + 50, y0 + 50, 12, 1, look, _h);
-    fist(g, x0 - 7, y0 + 16, 10, look, -1);
-    fist(g, x0 + 45, y0 + 16, 10, look, 1);
   },
   drawFx(g, w, _h, anim) {
     const ph = usePhase(anim.sinceUse, WINDUP);

@@ -2,7 +2,6 @@ import type { ToolDef, ToolUseContext } from '../core/types';
 import { hash, impactBurst, screenFlash, usePhase, tipY } from './anim';
 import { bevel, glow, poly, rect } from './pixel';
 import { drawText } from './pixelfont';
-import { fist, handLook, sleeve } from './shared';
 
 const WINDUP = 0.45;
 const RADIUS = 6.5;
@@ -31,8 +30,7 @@ export const edrTool: ToolDef = {
     use: 'Charge, then release a containment pulse that isolates every infected endpoint and malware process near you. It needs no line of sight, because the agent already runs on each endpoint. Charges are very scarce.',
     lesson: 'EDR agents watch endpoint behaviour continuously and can respond automatically by killing processes or isolating hosts. That containment step is part of incident response.',
   },
-  drawViewmodel(g, w, _h, _bob, gender, _cd, anim) {
-    const look = handLook(gender, anim);
+  drawViewmodel(g, w, _h, _bob, _gender, _cd, anim) {
     const ph = usePhase(anim?.sinceUse ?? 9, WINDUP);
     const t = anim?.time ?? 0;
     const shake = ph.phase === 'wind' ? Math.round((hash(Math.floor(t * 60)) - 0.5) * 3 * ph.u) : 0;
@@ -56,10 +54,6 @@ export const edrTool: ToolDef = {
     // cells
     for (let i = 0; i < 4; i++) rect(g, x0 + 5 + i * 7, y0 + 34, 6, 3, (anim?.ammo ?? 0) > i ? '#5df2ff' : '#203040');
     drawText(g, 'EDR', x0 + 34, y0 + 33, '#7a8aa0');
-    sleeve(g, x0 - 3, y0 + 54, 12, -1, look, _h);
-    sleeve(g, x0 + 59, y0 + 54, 12, 1, look, _h);
-    fist(g, x0 - 8, y0 + 14, 11, look, -1);
-    fist(g, x0 + 53, y0 + 14, 11, look, 1);
   },
   drawFx(g, w, h, anim) {
     const ph = usePhase(anim.sinceUse, WINDUP);
