@@ -9,7 +9,7 @@ import type { SealTarget } from './engine/ai';
 import { enemyInTheWay, exitEdge } from './engine/interact';
 import { doorUseHint, resolveUse, type UseTargetContext } from './engine/useTarget';
 import { Audio, type MusicTier } from './engine/audio';
-import { Feel } from './engine/feel';
+import { Feel, FlashRateLimiter } from './engine/feel';
 import { CueGate, spawnCueText } from './engine/spawnCue';
 import { ParticleSystem } from './engine/fx';
 import { lightProbe, lookProbe, placeThreat } from './render/probe';
@@ -187,6 +187,9 @@ class Game {
   private wormBudget = { remaining: 0 };
   /** Kill hit-stop: remaining sim-time freeze (seconds). */
   private hitStopT = 0;
+  /** WCAG 2.3.1: shared budget for all full-screen flashes (muzzle flood,
+   *  landed-hit bloom, pain wash) — at most 3 per second, always. */
+  private flashLimit = new FlashRateLimiter(3);
   private musicVol = loadMusicVol();
 
   constructor(app: HTMLElement) {
@@ -280,7 +283,7 @@ class Game {
       // attack tools flood — inspect/utility tools (mouse, badge, mfa) keep
       // just the small kick.
       const rgb = TOOL_FIRE_RGB[toolId];
-      if (rgb && ATTACK_TOOLS.has(toolId))
+      if (rgb && ATTACK_TOOLS.has(toolId) && this.flashLimit.allow(this.simT))
         this.renderer.fireLight(rgb[0], rgb[1], rgb[2], toolId === 'edr' ? 2.0 : 1.5);
       this.feel.kick(TOOL_KICK[toolId] ?? 1);
     });
@@ -294,6 +297,7 @@ class Game {
           this.particles.burst(e.x, e.y, 0.4, 'kill', bloodOf(e));
           // a bigger threat-coloured flash marks the kill from the hit sparks
           this.particles.flash(e.x, e.y, 0.5, bloodOf(e));
+          this.impactBloom(e.x, e.y, bloodOf(e));
           // kill punctuation: a ~70 ms sim-time hit-stop plus a camera punch
           this.feel.punch(1);
           this.hitStopT = Math.max(this.hitStopT, 0.07);
@@ -310,10 +314,13 @@ class Game {
         this.particles.toolImpact('edr', e.x, e.y, 0.4);
         this.edrPulseCount += 8;
       } else if (!((this.toolFxUntil.get(entityId) ?? -Infinity) >= this.simT)) {
-        this.particles.burst(e.x, e.y, 0.4, 'hit', bloodOf(e));
+        // directional shards spraying away from the shooter — a lighter echo
+        // of the kill burst, keyed off the hit coordinates
+        this.particles.burst(e.x, e.y, 0.4, 'hit', bloodOf(e), e.x - fromX, e.y - fromY);
       }
       // threat-coloured light burst at the impact point, so a connected hit reads instantly
       this.particles.flash(e.x, e.y, 0.45, bloodOf(e));
+      this.impactBloom(e.x, e.y, bloodOf(e));
       this.audio.sfx(`pain-${e.def.threat ?? e.def.sprite}`, { x: e.x, y: e.y });
     });
     this.bus.on('tool-hit', ({ toolId, entityId, good }) => {
@@ -770,7 +777,8 @@ class Game {
         y: this.player.prevY + (this.player.y - this.player.prevY) * alpha + shake.y,
         angle: this.player.angle + shake.yaw,
         dz: lostEnd ? -(EYE_HEIGHT - 0.15) * this.deathDrop : this.player.viewBobZ - this.feel.punchDip,
-        roll: lostEnd ? this.deathRoll : 0,
+        roll: (lostEnd ? this.deathRoll : 0) + this.feel.hurtRoll,
+        pitch: this.feel.hurtPitch,
         hurt: this.feel.red,
         hurtSide: this.feel.hurtSide,
         bonus: this.feel.bonusAmt,
@@ -937,6 +945,7 @@ class Game {
         this.audio.sfx(`fire-${e.def.threat ?? e.def.sprite}`, { x: e.x, y: e.y });
       },
       onGrowl: (e) => this.audio.sfx(`growl-${e.def.threat ?? e.def.sprite}`, { x: e.x, y: e.y, gain: 0.6 }),
+      onIdle: (e) => this.audio.sfx(`idle-${e.def.threat ?? e.def.sprite}`, { x: e.x, y: e.y, gain: 0.5 }),
       onEnemyMelee: (e, target, dmg) => {
         // infighting: the attacker's melee lands on its grudge target
         this.particles.pop(e.x, e.y, muzzleHeight(e));
@@ -945,7 +954,8 @@ class Game {
         if (result === 'killed') {
           this.bus.emit('cleaned', { entityId: target.def.id });
         } else {
-          this.particles.burst(target.x, target.y, 0.4, 'hit', bloodOf(target));
+          this.particles.burst(target.x, target.y, 0.4, 'hit', bloodOf(target), target.x - e.x, target.y - e.y);
+          this.impactBloom(target.x, target.y, bloodOf(target));
           this.audio.sfx(`pain-${target.def.threat ?? target.def.sprite}`, { x: target.x, y: target.y });
           target.state.grudgeId = e.def.id;
           target.state.grudgeT = 8;
@@ -1009,7 +1019,8 @@ class Game {
         // hostile fire struck another enemy — damage it and turn it on the shooter
         const srcId = projectile.source?.startsWith('enemy:') ? projectile.source.slice(6) : null;
         const result = damageEntity(hit, projectile.damage ?? 8, projectile.dx, projectile.dy);
-        this.particles.burst(x, y, 0.4, 'hit', bloodOf(hit));
+        this.particles.burst(x, y, 0.4, 'hit', bloodOf(hit), projectile.dx, projectile.dy);
+        this.impactBloom(x, y, bloodOf(hit));
         if (result === 'killed') {
           this.bus.emit('cleaned', { entityId: hit.def.id });
         } else {
@@ -1097,6 +1108,12 @@ class Game {
     }
   }
 
+  /** Landed-hit world bloom at the hit point — the WCAG 2.3.1 flash budget
+   *  caps the full-screen component; the sprite flash stays ungated. */
+  private impactBloom(x: number, y: number, blood: [number, number, number]): void {
+    if (this.flashLimit.allow(this.simT)) this.renderer.impactLight(x, y, blood[0], blood[1], blood[2], 0.9);
+  }
+
   private hurtPlayer(dmg: number, sourceX: number, sourceY: number, source?: Entity): void {
     const p = this.player;
     const runtime = this.runtime;
@@ -1112,7 +1129,9 @@ class Game {
       -1,
       Math.min(1, (sourceDx * -Math.sin(p.angle) + sourceDy * Math.cos(p.angle)) / distance),
     );
-    this.feel.hurt(dmg, side);
+    // the pain wash is a full-screen flash: it shares the WCAG 2.3.1 budget
+    // with the fire flood and the hit bloom; the view kick always lands
+    this.feel.hurt(dmg, side, this.flashLimit.allow(this.simT));
     this.audio.sfx('hurt');
     let da = Math.atan2(sourceY - p.y, sourceX - p.x) - p.angle;
     da = Math.atan2(Math.sin(da), Math.cos(da));
@@ -1154,7 +1173,8 @@ class Game {
         if (result === 'killed') {
           this.bus.emit('cleaned', { entityId: hit.def.id });
         } else {
-          this.particles.burst(x, y, 0.4, 'hit', bloodOf(hit));
+          this.particles.burst(x, y, 0.4, 'hit', bloodOf(hit), dx, dy);
+          this.impactBloom(x, y, bloodOf(hit));
           if (hit.def.kind === 'enemy') this.audio.sfx(`pain-${hit.def.threat ?? hit.def.sprite}`, { x: hit.x, y: hit.y });
         }
       } else {
@@ -1415,9 +1435,17 @@ class Game {
       setIntegrity(v: number) {
         if (g.player) g.player.integrity = Math.max(1, Math.min(100, v));
       },
-      /** Trigger the portrait's hurt reaction (dir -1/0/1 = glance left/center/right). */
-      hurt(dir: number) {
-        g.arsenal.hurt(dir);
+      /** Take a real hit (dir -1/0/1 = attacker left/center/right): runs the
+       *  same hurtPlayer path as enemy damage — integrity loss, pain wash,
+       *  view kick, portrait reaction — so debug stills match play. */
+      hurt(dir: number, dmg = 8) {
+        const p = g.player;
+        if (!p) {
+          g.arsenal.hurt(dir);
+          return;
+        }
+        const a = p.angle + dir * 0.9;
+        g.hurtPlayer(dmg, p.x + Math.cos(a) * 1.2, p.y + Math.sin(a) * 1.2);
       },
       /** LOOK: threat-readability probe (see tools/look-contrast.mjs). */
       probe(kind: string, dist: number, withImages = false) {

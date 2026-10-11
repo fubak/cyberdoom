@@ -61,6 +61,7 @@ const VOICE_CAP_ALIAS: Record<string, string> = {
   attack: 'bite',
   fire: 'enemy-fire',
   growl: 'growl',
+  idle: 'growl',
 };
 
 export function voiceCapFor(name: string): number {
@@ -679,9 +680,16 @@ export class Audio {
     const o = opts;
     const dur = opts.dur;
     try {
-    const voice = /^(growl|pain|death|attack|fire)-([a-z]+)$/.exec(name);
+    const voice = /^(growl|idle|pain|death|attack|fire)-([a-z]+)$/.exec(name);
     if (voice) {
-      this.enemyVoice(voice[1] as 'growl' | 'pain' | 'death' | 'attack' | 'fire', voice[2], o);
+      // `idle-<threat>` is the threat's growl timbre dropped to mutter level:
+      // an unalerted, off-screen vocalization that carries through corridors.
+      const idle = voice[1] === 'idle';
+      this.enemyVoice(
+        (idle ? 'growl' : voice[1]) as 'growl' | 'pain' | 'death' | 'attack' | 'fire',
+        voice[2],
+        idle ? { ...o, gain: (o.gain ?? 1) * 0.55 } : o,
+      );
     } else {
     switch (name) {
       case 'fire':

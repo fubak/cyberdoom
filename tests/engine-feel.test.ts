@@ -223,7 +223,7 @@ describe('Doom enemy AI', () => {
     hurt.hp = 2;
     expect(damageEntity(hurt, 1, 1, 0)).toBe('hurt');
     expect(hurt.hp).toBe(1);
-    expect(hurt.hurtT).toBe(0.25);
+    expect(hurt.hurtT).toBe(0.1);
 
     const killed = enemy('killed', 'worm');
     expect(damageEntity(killed, 1, 1, 0)).toBe('killed');
@@ -236,14 +236,19 @@ describe('Doom enemy AI', () => {
     hurtEntity(stunned, 1, 0, () => 0.1);
     expect(stunned.state.mode).toBe('pain');
     expect(stunned.state.painT).toBe(0.2);
-    expect(stunned.hurtT).toBe(0.25);
-    expect(stunned.state.knockVx).toBe(1.5);
+    expect(stunned.hurtT).toBe(0.1);
+    // melee-range (<2 tiles) knockback is reduced so follow-up swings connect
+    expect(stunned.state.knockVx).toBe(0.55);
 
     const unstunned = enemy('unstunned', 'worm');
     hurtEntity(unstunned, 1, 0, () => 0.99);
     expect(unstunned.state.mode).toBe('chase');
-    expect(unstunned.hurtT).toBe(0.25);
-    expect(unstunned.state.knockVx).toBe(1.5);
+    expect(unstunned.hurtT).toBe(0.1);
+    expect(unstunned.state.knockVx).toBe(0.55);
+
+    const ranged = enemy('ranged', 'worm');
+    hurtEntity(ranged, 3, 0, () => 0.99);
+    expect(ranged.state.knockVx).toBe(1.5); // ranged hits keep the full shove
 
     const trojan = enemy('trojan', 'trojan');
     hurtEntity(trojan, 1, 0, () => 0.5);
@@ -251,7 +256,7 @@ describe('Doom enemy AI', () => {
     const ransomware = enemy('ransomware', 'ransomware');
     hurtEntity(ransomware, 1, 0, () => 0.5);
     expect(ransomware.state.mode).toBe('chase');
-    expect(ransomware.hurtT).toBe(0.25);
+    expect(ransomware.hurtT).toBe(0.1);
   });
 
   it('preserves a windup after a non-stunning hit and records the rootkit hurt time', () => {
@@ -293,10 +298,19 @@ describe('Doom enemy AI', () => {
     const player = new Player(7, 2.5, 0);
     const open = enemy('open', 'worm', 4.5, 2.5);
     open.def.ai = 'stand';
-    hurtEntity(open, 1, 0, () => 0.99);
+    hurtEntity(open, 3, 0, () => 0.99); // attacker 3 tiles out: full knockback
     for (let i = 0; i < 120; i++) updateEntities([open], map, player, 1 / 60, hooks());
     expect(open.x - 4.5).toBeGreaterThanOrEqual(0.25);
     expect(open.x - 4.5).toBeLessThanOrEqual(0.35);
+
+    // a melee-range hit keeps the target inside the keyboard's 1.5-tile arc:
+    // ~0.1 tiles of shove instead of being punched out of reach
+    const melee = enemy('melee', 'worm', 4.5, 3.5);
+    melee.def.ai = 'stand';
+    hurtEntity(melee, 1, 0, () => 0.99);
+    for (let i = 0; i < 120; i++) updateEntities([melee], map, player, 1 / 60, hooks());
+    expect(melee.x - 4.5).toBeGreaterThanOrEqual(0.07);
+    expect(melee.x - 4.5).toBeLessThanOrEqual(0.16);
 
     const blocked = enemy('blocked', 'worm', 7.6, 2.5);
     blocked.def.ai = 'stand';
@@ -397,7 +411,7 @@ describe('Doom enemy AI', () => {
     hurtEntity(hurt, 1, 0, () => 0.1);
     updateEntities([hurt], map, new Player(7, 2.5, 0), 0.1, hooks());
     expect(hurt.state.mode).toBe('pain');
-    expect(hurt.hurtT).toBeCloseTo(0.15);
+    expect(hurt.hurtT).toBeCloseTo(0);
     expect(hurt.x).toBeGreaterThan(2.5);
     const near = enemy('near', 'worm', 2.5, 2.5);
     const far = enemy('far', 'worm', 7.5, 2.5);
