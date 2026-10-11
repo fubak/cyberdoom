@@ -211,7 +211,7 @@ export const m07: Mission = {
       log:
         'Wrong call: an edge firewall guards inbound internet traffic but leaves every zone-to-zone path inside the plant unfiltered. ' +
         'The flat LAN stays flat.\n' +
-        'NOTE: port security fails closed on auth loss - never fail-open.'
+        'NOTE: this access port fails closed on auth loss: confidentiality over availability.'
     },
     // --- IPS placement (group: ips) ---
     {

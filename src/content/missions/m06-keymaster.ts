@@ -177,7 +177,7 @@ export const m06: Mission = {
         category: 'legit',
         objectives: ['1.4'],
       },
-      log: 'New 3,072-bit key pair generated in the HSM; private keys never leave it. Replacement certificate issued with the new key. Old key retired.\nKey escrow on file with the registrar per policy.'
+      log: 'New 3,072-bit key pair generated in the HSM; private keys never leave it. Replacement certificate issued with the new key. Old key retired.\nKey escrow held by a trusted third-party escrow agent per policy.'
     },
     {
       id: 'renew-same',
@@ -641,7 +641,7 @@ export const m06Teach: MissionTeaching = {
     },
   },
   examTip:
-    'Revoke + rekey on compromise; expired or self-signed = untrusted; passwords are salted and stretched hashes, not encryption; tokenization keeps real card numbers out of downstream systems.\nFIELD NOTES: the public key infrastructure binds an identity to a key pair - public key shared, private key secret; a certificate signing request goes to the certificate authority and chains to a root of trust; a third-party certificate from a public CA beats self-signed for anything clients must trust cold; wildcard certs cover first-level subdomains only; revocation is CRL or OCSP. Key custody: a trusted platform module and the secure enclave hold device keys, the key management system rotates them, key escrow is the recoverable copy, and algorithm plus key length set strength. Levels: full-disk, partition, file-level encryption, database encryption and record-level, transport. Obfuscation is not encryption: masking, steganography, blockchain entries on an open public ledger. Data states and handling: geographic restrictions and permission restrictions follow sovereignty. Identity stack: SSO does federation - SAML, OAuth, OpenID Connect on LDAP - plus identity proofing, passwordless sign-in, biometrics, a password manager, just-in-time ephemeral credentials, attestation, and standards-based interoperability.'
+    'Revoke + rekey on compromise; expired or self-signed = untrusted; passwords are salted and stretched hashes, not encryption; tokenization keeps real card numbers out of downstream systems.\nFIELD NOTES: the public key infrastructure binds an identity to a key pair - public key shared, private key secret; a certificate signing request goes to the certificate authority and chains to a root of trust; a third-party certificate from a public CA beats self-signed for anything clients must trust cold; wildcard certs cover first-level subdomains only; revocation is CRL or OCSP. Key custody: a trusted platform module and the secure enclave hold device keys, the key management system rotates them, key escrow is the recoverable copy, and algorithm plus key length set strength. Levels: full-disk, partition, file-level encryption, database encryption and record-level, transport. Obfuscation is not encryption: masking, tokenization, steganography. Blockchain is an open public ledger: integrity, not secrecy. Data states and handling: geographic restrictions follow data sovereignty; permission restrictions follow need to know. Identity stack: SSO does federation - SSO/federation via SAML or OAuth with OpenID Connect; LDAP is the directory behind it - plus identity proofing, passwordless sign-in, biometrics, a password manager, just-in-time ephemeral credentials, attestation, and standards-based interoperability.'
 };
 
 // F1: encounter pacing — opening skirmish, room reveals, seal finale, supplies.

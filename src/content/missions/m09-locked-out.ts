@@ -427,7 +427,7 @@ export const m09Teach: MissionTeaching = {
       missed: 'You did not reach the exit.',
     },
   },
-  examTip: 'Incident response order on the exam: preparation, detection, analysis, containment, eradication, recovery, lessons learned. Ransomware recovery = offline/immutable backups, not replicas.\nFIELD NOTES: resilience menu - continuity of operations runbook, capacity planning for people and tech, platform diversity and multi-cloud systems, offsite copies and journaling for point-in-time recovery, a generator and UPS for outages, and test cadence from tabletop exercise to parallel processing simulation. Sources the SOC correlates: IPS/IDS logs and vulnerability scans on top of firewall, endpoint and application logs.'
+  examTip: 'Incident response order on the exam: preparation, detection, analysis, containment, eradication, recovery, lessons learned. Ransomware recovery = offline/immutable backups, not replicas.\nFIELD NOTES: resilience menu - continuity of operations runbook, capacity planning for people and tech, platform diversity and multi-cloud systems, offsite copies and journaling for point-in-time recovery, a generator and UPS for outages, and testing by tabletop exercise, simulation, failover and parallel processing. Sources the SOC correlates: IPS/IDS logs and vulnerability scans on top of firewall, endpoint and application logs.'
 };
 
 setMapCell(m09.map, 17, 15, '3');
