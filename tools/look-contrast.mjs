@@ -5,10 +5,11 @@
 // >=3:1 luminance contrast against its background and >=400 projected sprite
 // px at 15 tiles, and the darkest 10% of the 3D view (no sprite) has luma >= 8
 // (never a pure-black void). Also runs the light-diminishing probe per mission:
-// the same lit wall at ~10 tiles must render <=70% of its ~2-tile luma, and the
-// darkest straight run must read near-Doom-black (<=16/255 centre-band luma —
-// dark pockets are shadows, not grey rooms). Mid and late missions (m04+) must
-// contain at least one strobing light sector.
+// the same lit wall at ~10 tiles must render <=70% of its ~2-tile luma, the
+// darkest straight run's centre band must stay shadow-dark but readable
+// (12-46/255 median), and at most 28% of the whole 3D view may sit below
+// 16/255 luma (the F5 void gate: Doom's darkest gameplay frames are ~26%).
+// Mid and late missions (m04+) must contain at least one strobing light sector.
 import { chromium } from '@playwright/test';
 
 const base = (process.argv[2] ?? 'http://localhost:5173').replace(/\/$/, '');
@@ -16,7 +17,7 @@ const base = (process.argv[2] ?? 'http://localhost:5173').replace(/\/$/, '');
 // lit wall, so a dist-10 threat can read ~2.4:1 — a placement-lit backdrop,
 // not darkness drama. m09/m11 still assert the strobing sectors (every
 // mid/late mission m04+ gets 2).
-const MISSIONS = ['m01', 'm03', 'm09', 'm11'];
+const MISSIONS = ['m01', 'm03', 'm09', 'm11', 'm12'];
 const KINDS = ['worm', 'trojan', 'ransomware', 'rootkit', 'logicbomb', 'rat'];
 const DISTS = [6, 10, 15];
 
@@ -51,18 +52,18 @@ for (const m of MISSIONS) {
     }
   }
   const lp = await page.evaluate(() => window.__cd.lightProbe(10));
-  const lOk = (lp.line ? lp.ratio <= 0.7 : true) && lp.dark <= 16;
+  const lOk = (lp.line ? lp.ratio <= 0.7 : true) && lp.dark >= 12 && lp.dark <= 46 && lp.darkFrac <= 0.28;
   if (!lOk) fail++;
   const strobe = await page.evaluate(() => window.__cd.strobeInfo());
   const midLate = +m.slice(1) >= 4;
   const sOk = !midLate || strobe.phases >= 1;
   if (!sOk) fail++;
-  lightRows.push({ mission: m, near2: lp.near, far10: lp.far, ratio: lp.ratio, dark: lp.dark, darkLight: lp.darkLight, strobe: strobe.phases, ok: lOk && sOk });
+  lightRows.push({ mission: m, near2: lp.near, far10: lp.far, ratio: lp.ratio, dark: lp.dark, darkLight: lp.darkLight, darkFrac: lp.darkFrac, darkP10: lp.darkP10, strobe: strobe.phases, ok: lOk && sOk });
 }
 console.table(rows);
 console.table(lightRows);
 if (errors.length) console.log('page errors:\n' + errors.join('\n'));
-console.log(fail || errors.length ? `FAIL: ${fail} probe(s) below target` : 'PASS: contrast >= 3:1, p10 >= 8, far/near <= 0.7, dark <= 16, strobes on m04+');
+console.log(fail || errors.length ? `FAIL: ${fail} probe(s) below target` : 'PASS: contrast >= 3:1, p10 >= 8, far/near <= 0.7, dark 12-46, darkFrac <= 0.28, strobes on m04+');
 await page.close();
 if (!process.env.CDP_URL) await browser.close();
 process.exit(fail || errors.length ? 1 : 0);

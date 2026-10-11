@@ -117,19 +117,16 @@ void main() {
       fl = r < 0.3 ? 0.4 : 1.0;
     }
     float s = abs(vShade) * uLight * fl * sfl;
-    // Doom-style distance diminishing: a lit face is about half as bright by
-    // ~10 tiles and near-black before the fog plane; dark sectors crush far
-    // sooner (their falloff rate rises as s drops, like Doom's colormap
-    // running out of bands): dim sectors read as near-black within ~4 tiles
-    // while lit faces still carry most of their light to ~10. uFloor is the
-    // only minimum — sprites keep their own readability floors while
-    // walls/flats may fall to real darkness.
-    // past ~8 tiles the falloff steepens into Doom's stepped colormap crush:
-    // lit faces carry ~68% at 8 tiles then drop to near-black before 10, so
-    // long corridors end in darkness instead of grey haze. Gameplay-critical
-    // sprites keep their own uFloor readability minimums.
-    float fade = 0.115 + max(0.0, 0.62 - s) * 2.6 + max(0.0, vDist - 8.0) * 0.04;
-    float dim = s * (1.6 - vDist * fade);
+    // Doom-style distance diminishing. In lit rooms the falloff starts right
+    // at the camera so corridors gradient into depth (Doom's stepped colormap):
+    // a lit face is near-full at ~2 tiles, ~60% by ~6 and ~30% at ~10, then a
+    // steeper far crush beyond ~11 tiles ends long runs in gloom instead of
+    // grey haze. Dark sectors' falloff rate rises as s drops (their colormap
+    // runs out of bands sooner), so they still crush to the floor — but the
+    // floor itself keeps floor and wall geometry legible instead of voiding
+    // to black. Gameplay-critical sprites keep their own uFloor minimums.
+    float fade = 0.1 + max(0.0, 0.62 - s) * 1.35 + max(0.0, vDist - 11.0) * 0.05;
+    float dim = s * (1.3 - vDist * fade);
     L = max(dim, uFloor);
     L = clamp(L, 0.0, 1.0);
     // banded like a 24-step colormap
@@ -315,11 +312,12 @@ function flatUv(rot: number, mirror: boolean): number[][] {
 const DIRS: [number, number][] = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 
 /**
- * Minimum light on world geometry (walls, flats, doors). Kept just above
- * zero so dark sectors can go near-black at range — the post pass's black
- * lift still keeps a whisper of texel structure, Doom-COLORMAP style.
+ * Minimum light on world geometry (walls, flats, doors). Band-quantised to
+ * 4/24 ≈ 0.167 in the shader: dark sectors read as gloom with legible floor
+ * and wall structure — Doom's darkest gameplay frames keep ~1/4 of pixels
+ * under 16/255, not the void the old 0.02 floor produced.
  */
-const WORLD_FLOOR = 0.02;
+const WORLD_FLOOR = 0.15;
 
 interface SpriteState {
   mesh: THREE.Mesh;
@@ -549,6 +547,9 @@ export class Renderer {
     // per-mission look identity: wall-variant mix, decal pool, hue tint, floor
     const theme = lookTheme(missionId, _def.look?.theme);
     const tintV = new THREE.Vector3(...theme.tint);
+    // per-tier accent on lit fixtures: lamp cells multiply by the theme accent
+    // so early tiers glow green, mid reads steel-blue and late alarms red.
+    const accentV = new THREE.Vector3(...theme.accent);
     const seed = hashStr(missionId ?? 'cyberdoom');
     this.computeLight(map, _def, entityDefs, missionId);
     const lightAt = (x: number, y: number) => this.tileLight(x, y);
@@ -700,16 +701,19 @@ export class Renderer {
             ? 'ceil-light-off'
             : ch % 9 === 0
               ? 'ceil-duct'
-              : 'ceil';
+              : ch % 9 === 3
+                ? 'ceil-vent'
+                : 'ceil';
         const ncv = variantCount(ceilTex);
         if (ncv > 1 && (ch >>> 6) % ncv > 0) ceilTex = `${ceilTex}:v${(ch >>> 6) % ncv}`;
+        const isLamp = this.lamps.has(key);
         // Ceiling shade tapers with sector light: dim corridors keep a
         // slightly deeper ceiling than before (shadows, not grey rooms),
         // while lit halls get a brighter, visibly authored ceiling — this is
         // what keeps start-view/main-hall ceilings off flat black without
         // lifting the readability floor in dark pockets.
         const ceilFactor = (v: number) => (v < 0.55 ? 0.74 : 0.74 + (v - 0.55) * 0.5);
-        builder(`c:${ceilTex}`, textureOr(ceilTex, 'ceil')).quad(
+        builder(`${isLamp ? 'l' : 'c'}:${ceilTex}`, textureOr(ceilTex, 'ceil')).quad(
           [[tx, H, ty], [tx + 1, H, ty], [tx + 1, H, ty + 1], [tx, H, ty + 1]],
           flatUv((ch >>> 3) % 4, ((ch >>> 5) & 1) === 1),
           s.map((v) => v * ceilFactor(v) * faceShade(ch)),
@@ -719,8 +723,8 @@ export class Renderer {
         if (cell.kind === 'exit') this.addStatic('fx-exit', tx + 0.5, ty + 0.5, H - 0.26, L);
       }
     }
-    for (const { tex, b } of builders.values()) {
-      this.levelGroup.add(new THREE.Mesh(b.build(), worldMaterial(tex, 1, WORLD_FLOOR, tintV)));
+    for (const [key, { tex, b }] of builders) {
+      this.levelGroup.add(new THREE.Mesh(b.build(), worldMaterial(tex, 1, WORLD_FLOOR, key.startsWith('l:') ? accentV : tintV)));
     }
   }
 
@@ -924,16 +928,17 @@ export class Renderer {
         }
         const base = map.lightAt(x, y);
         let v = Math.min(1, base * (0.45 + 0.8 * best));
-        // Darkness drama: crush dim sectors toward black — Doom's colormap
+        // Darkness drama: crush dim sectors toward gloom — Doom's colormap
         // loses whole bands in shadow, so a 0.3 sector is a shadow, not a
-        // grey room. Continuous below ~0.5 light, identity above.
+        // grey room. Continuous below ~0.5 light, identity above. The 0.09
+        // floor (plus the shader's world floor) keeps pocket geometry legible.
         v *= Math.min(1, 0.45 + 1.1 * v);
-        this.light[y * w + x] = Math.max(0.035, v);
+        this.light[y * w + x] = Math.max(0.09, v);
       }
     }
     for (const key of pocket) {
       const [x, y] = key.split(',').map(Number);
-      this.light[y * w + x] = Math.min(this.light[y * w + x], 0.05);
+      this.light[y * w + x] = Math.min(this.light[y * w + x], 0.07);
       // the open cell at the pocket's mouth dims too, so the threshold into
       // the nook fades rather than snapping — but the mouth stays lit enough
       // to read as the light source at the pocket's edge (the Doom doorway).

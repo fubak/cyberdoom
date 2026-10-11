@@ -842,6 +842,26 @@ export function buildTextures(jobs = false): void {
       g.fillStyle = p.rnd() < 0.5 ? '#6c5a46' : '#211b16';
       g.fillRect(x, y, (p.rnd() < 0.25 ? 2 : 1) / p.s, 1 / p.s);
     }
+    // traffic wear path: a polished, slightly darker lane crossing the cell
+    // diagonally — mid-frequency floor detail that reads as walked-on at 4K
+    {
+      const wy = 14 + p.rnd() * 30;
+      for (let x = 0; x < 64; x++) {
+        const y = Math.round(wy + Math.sin(x / 14) * 3);
+        g.fillStyle = `rgba(20,14,8,${0.16 + 0.1 * Math.sin((x + 3) / 9)})`;
+        g.fillRect(x, y, 1, 3);
+        g.fillStyle = 'rgba(210,190,160,0.10)';
+        g.fillRect(x, y - 1, 1, 1);
+      }
+      // two parallel drag scuffs inside the lane
+      for (let x = 8; x < 56; x++) {
+        const y = Math.round(wy + Math.sin(x / 14) * 3);
+        if (p.rnd() < 0.4) {
+          g.fillStyle = 'rgba(12,8,4,0.5)';
+          g.fillRect(x, y + 1, 1, 1);
+        }
+      }
+    }
     g.fillStyle = '#16171b';
     g.fillRect(0, 0, 64, 1);
     g.fillRect(0, 0, 1, 64);
@@ -876,6 +896,26 @@ export function buildTextures(jobs = false): void {
         g.fillRect(x + 24, y + 25, 4, 1);
         g.fillStyle = '#c84830';
         g.fillRect(x + 24, y + 27, 4, 1);
+      }
+      // brushed wear arcs per plate: curved scuff fans near panel corners
+      // (mid-frequency metal wear — the deck reads walked-on, not noise)
+      for (let k = 0; k < 3; k++) {
+        const cx = x + 6 + p.rnd() * 18;
+        const cy = y + 6 + p.rnd() * 18;
+        const r0 = 3 + p.rnd() * 5;
+        const a0 = p.rnd() * Math.PI * 2;
+        for (let i = 0; i < 9; i++) {
+          const a = a0 + (i / 9) * 1.4;
+          g.fillStyle = `rgba(180,195,215,${(0.10 + p.rnd() * 0.08).toFixed(2)})`;
+          g.fillRect(cx + Math.cos(a) * r0, cy + Math.sin(a) * r0, 1, 1);
+        }
+      }
+      // panel lift-hole marks on two plate corners
+      for (const [lx, ly] of [[x + 3, y + 27], [x + 27, y + 3]] as const) {
+        g.fillStyle = '#0a0c10';
+        g.fillRect(lx, ly, 2, 1);
+        g.fillStyle = '#8a96a8';
+        g.fillRect(lx, ly - 1 / p.s, 2, 1 / p.s);
       }
     }
     g.fillStyle = '#101218';
@@ -970,6 +1010,31 @@ export function buildTextures(jobs = false): void {
       g.fillRect(x, 19, 3, 1);
       rivet(g, x + 1, 21);
     }
+    grime(p, 'rgba(0,0,0,0.4)', 60);
+  });
+
+  // Recessed vent cell: mixed into plain ceilings next to the duct cells so
+  // big overhead runs break up with authored fixtures, not tile wallpaper.
+  flat('ceil-vent', (p) => {
+    ceilBase(p);
+    const { g } = p;
+    // recessed square grille, off-centre
+    g.fillStyle = '#14161c';
+    g.fillRect(14, 18, 36, 28);
+    g.fillStyle = '#3a3f4a';
+    g.fillRect(14, 18, 36, 1);
+    g.fillRect(14, 18, 1, 28);
+    g.fillStyle = '#08090c';
+    g.fillRect(14, 45, 36, 1);
+    g.fillRect(49, 18, 1, 28);
+    for (let y = 21; y < 44; y += 3) {
+      g.fillStyle = '#0a0b0e';
+      g.fillRect(16, y, 32, 2);
+      g.fillStyle = '#565e6c';
+      g.fillRect(16, y, 32, 1);
+    }
+    for (const [x, y] of [[15, 19], [48, 19], [15, 44], [48, 44]]) rivet(g, x, y);
+    drip(g, 20, 47, 12, '20,18,14');
     grime(p, 'rgba(0,0,0,0.4)', 60);
   });
 
@@ -1178,6 +1243,54 @@ function doorPlateDecal(doorId: string): void {
   }, false);
 }
 
+/**
+ * Per-tier status-pip panel decal, painted lazily per theme name: a small
+ * wall-mounted indicator strip whose LEDs carry the theme's accent colour
+ * (green early, blue mid, red/amber late) on the fullbright glow layer —
+ * the little coloured fixtures that break the cyan monotone per mission tier.
+ */
+function statusDecal(themeName: string): void {
+  const accent = THEMES[themeName]?.accent ?? THEMES.office.accent;
+  makeTexture(`decal-status:${themeName}`, TEX.wallW / RES, TEX.wallH / RES, (p) => {
+    const { g, glow } = p;
+    const u = 1 / p.s;
+    const [ar, ag, ab] = accent;
+    const lit = `rgb(${Math.min(255, ar * 235) | 0},${Math.min(255, ag * 235) | 0},${Math.min(255, ab * 235) | 0})`;
+    const dim = `rgb(${Math.min(255, ar * 92) | 0},${Math.min(255, ag * 92) | 0},${Math.min(255, ab * 92) | 0})`;
+    // mounting shadow + housing plate with a screw head per corner
+    g.fillStyle = 'rgba(4,5,8,0.5)';
+    g.fillRect(19, 21, 27, 15);
+    bevel(g, 18, 20, 27, 15, '#141820', '#4a5262', '#07080c');
+    // label etch on the plate's left half
+    g.fillStyle = '#0a0d12';
+    g.fillRect(20, 22, 12, 11);
+    drawText(g, 'ST', 21, 23, '#7f8a9c', 'tiny', null);
+    // three status pips: two lit in the accent colour, one dark
+    for (let k = 0; k < 3; k++) {
+      const x = 34 + k * 4;
+      g.fillStyle = '#06070a';
+      g.fillRect(x - u, 23 - u, 3 + 2 * u, 3 + 2 * u);
+      const on = k !== 2;
+      g.fillStyle = on ? lit : dim;
+      g.fillRect(x, 23, 3, 3);
+      if (on) {
+        g.fillStyle = '#ffffff';
+        g.fillRect(x, 23, 1, 1);
+        glow.fillStyle = '#fff';
+        glow.fillRect(x, 23, 3, 3);
+      }
+    }
+    // thin accent strip under the pips — a lit status bar, not a poster
+    g.fillStyle = dim;
+    g.fillRect(34, 29, 10, 2);
+    g.fillStyle = lit;
+    g.fillRect(34, 29, 10, u);
+    glow.fillStyle = '#fff';
+    glow.fillRect(34, 29, 10, u);
+    for (const [x, y] of [[19, 21], [43, 21], [19, 33], [43, 33]]) rivet(g, x, y);
+  }, false);
+}
+
 /** Security-awareness poster decal: banner word + badge icon + slogan. */
 function posterDecal(word: string): void {
   makeTexture(`decal-poster:${word}`, TEX.wallW / RES, TEX.wallH / RES, (p) => {
@@ -1211,6 +1324,7 @@ export function decalTexture(id: string): THREE.Texture | null {
   if (!t) {
     if (id.startsWith('decal-sign:')) signDecal(id.slice(11));
     else if (id.startsWith('decal-poster:')) posterDecal(id.slice(13));
+    else if (id.startsWith('decal-status:')) statusDecal(id.slice(13));
     t = textureRegistry.get(id);
   }
   if (!t && id.startsWith('decal-door:')) {
@@ -1230,21 +1344,29 @@ export interface WallTheme {
   tint: [number, number, number];
   /** Flat id used wherever a floor cell uses the plain 'floor' texture. */
   floor: string;
+  /** Accent colour multiply for emissive fixtures (lit ceiling panels) and
+   *  status-pip decals — the per-tier accent that breaks the cyan monotone:
+   *  green early, cool blue mid, amber/red alarm late. */
+  accent: [number, number, number];
 }
 
 const THEMES: Record<string, WallTheme> = {
-  // warm office (early tier): beige wainscot walls, PHISH posters, OPS placards
-  office: { alts: ['wall-tech', 'wall-panel2'], decals: ['decal-vent', 'decal-cable', 'decal-poster:PHISH', 'decal-sign:OPS'], tint: [1.14, 1.0, 0.84], floor: 'floor' },
+  // warm office (early tier): beige wainscot walls, PHISH posters, OPS placards,
+  // green status lamps — healthy-corporate early-tier accent
+  office: { alts: ['wall-tech', 'wall-panel2'], decals: ['decal-vent', 'decal-cable', 'decal-poster:PHISH', 'decal-sign:OPS', 'decal-status:office'], tint: [1.14, 1.0, 0.84], floor: 'floor', accent: [0.62, 1.12, 0.7] },
   // green bullpen (early tier): olive utility brick, SEC placards, 2FA posters
-  bullpen: { alts: ['wall-tech', 'wall-panel2', 'wall-brick2'], decals: ['decal-cable', 'decal-vent', 'decal-sign:SEC', 'decal-poster:2FA'], tint: [0.94, 1.08, 0.85], floor: 'floor' },
-  // cold machine room (mid tier): ribbed walls, IDC placards, raised deck floor
-  datacenter: { alts: ['wall-ribs'], decals: ['decal-cable', 'decal-vent', 'decal-sign:IDC', 'decal-poster:SIEM'], tint: [0.82, 0.97, 1.18], floor: 'floor-grid' },
-  // violet-tinted SOC/NOC (late tier): SOC placards, SIEM posters, deck floor
-  noc: { alts: ['wall-tech', 'wall-panel2'], decals: ['decal-cable', 'decal-sign:SOC', 'decal-poster:SIEM', 'decal-vent'], tint: [0.94, 0.9, 1.16], floor: 'floor-grid' },
-  // rust-amber plant (mid/late tier): ribbed + utility brick walls, CAUTION placards, worn concrete
-  industrial: { alts: ['wall-ribs', 'wall-brick2'], decals: ['decal-haz', 'decal-vent', 'decal-sign:SUB', 'decal-poster:LOCK'], tint: [1.16, 0.95, 0.74], floor: 'floor-rust' },
-  // red-lit secure enclave (late tier): AUTH placards, hazard warnings
-  vault: { alts: ['wall-ribs'], decals: ['decal-haz', 'decal-sign:AUTH', 'decal-poster:LOCK', 'decal-vent'], tint: [1.2, 0.88, 0.9], floor: 'floor-grid' },
+  bullpen: { alts: ['wall-tech', 'wall-panel2', 'wall-brick2'], decals: ['decal-cable', 'decal-vent', 'decal-sign:SEC', 'decal-poster:2FA', 'decal-status:bullpen'], tint: [0.94, 1.08, 0.85], floor: 'floor', accent: [0.6, 1.14, 0.62] },
+  // cold machine room (mid tier): ribbed walls, IDC placards, raised deck floor,
+  // steel-blue fixture glow
+  datacenter: { alts: ['wall-ribs'], decals: ['decal-cable', 'decal-vent', 'decal-sign:IDC', 'decal-poster:SIEM', 'decal-status:datacenter'], tint: [0.82, 0.97, 1.18], floor: 'floor-grid', accent: [0.62, 0.86, 1.22] },
+  // violet-tinted SOC/NOC (late tier): SOC placards, SIEM posters, deck floor,
+  // red alert lighting
+  noc: { alts: ['wall-tech', 'wall-panel2'], decals: ['decal-cable', 'decal-sign:SOC', 'decal-poster:SIEM', 'decal-vent', 'decal-status:noc'], tint: [0.94, 0.9, 1.16], floor: 'floor-grid', accent: [1.24, 0.58, 0.5] },
+  // rust-amber plant (mid/late tier): ribbed + utility brick walls, CAUTION placards, worn concrete,
+  // amber sodium-vapour fixtures
+  industrial: { alts: ['wall-ribs', 'wall-brick2'], decals: ['decal-haz', 'decal-vent', 'decal-sign:SUB', 'decal-poster:LOCK', 'decal-status:industrial'], tint: [1.16, 0.95, 0.74], floor: 'floor-rust', accent: [1.22, 0.9, 0.52] },
+  // red-lit secure enclave (late tier): AUTH placards, hazard warnings, red alert glow
+  vault: { alts: ['wall-ribs'], decals: ['decal-haz', 'decal-sign:AUTH', 'decal-poster:LOCK', 'decal-vent', 'decal-status:vault'], tint: [1.2, 0.88, 0.9], floor: 'floor-grid', accent: [1.26, 0.56, 0.46] },
 };
 
 const THEME_NAMES = Object.keys(THEMES);

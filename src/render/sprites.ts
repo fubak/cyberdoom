@@ -1357,9 +1357,9 @@ export function buildSprites(jobs = false): void {
   // Doom teleport-fog flash where a threat materialises (ambushes, worm
   // copies): a tall searing column that collapses inward, a ground-flash
   // ring, and thrown sparks — big and fullbright enough to read at range.
-  // a tall searing column that collapses inward — 2.1 world units (>=1.5x the
-  // biggest threat) so an ambush can't be missed — a ground-flash ring, and
-  // thrown sparks — big and fullbright enough to read at range.
+  // The column is authored, not a white pole: a domed top, ragged dithered
+  // edges, horizontal scanline bands and interior flecks, so it still reads
+  // as an energy effect when the frame edge clips it.
   makeSet('fx-spawn', 24, 84, 2.1, 'static', [0, 1, 2, 3].map((f) => ({
     key: `f${f}`,
     draw: (p: PaintCtx) => {
@@ -1367,13 +1367,42 @@ export function buildSprites(jobs = false): void {
       const top = 3 + f * 8;
       const bot = 82 - f * 3;
       const half = 11 - f * 2;
-      // outer fog column
-      g.fillStyle = f < 2 ? '#4fd4ff' : '#2a88c0';
-      g.fillRect(12 - half, top + 4, half * 2, bot - top - 4);
-      // searing core — nearly the whole column is fullbright
-      lit(p, f === 0 ? '#ffffff' : '#d8f8ff', 12 - half * 0.55, top, half * 1.1, bot - top);
+      const x0 = 12 - half;
+      const x1 = 12 + half;
+      // outer fog column: mid cyan with darker edge columns — brightness steps
+      // stand in for alpha falloff, so clipped silhouettes read soft, not cut
+      g.fillStyle = f < 2 ? '#3fc4f0' : '#2a88c0';
+      g.fillRect(x0 + 1, top + 4, half * 2 - 2, bot - top - 4);
+      g.fillStyle = f < 2 ? '#2a88c0' : '#1c5e88';
+      g.fillRect(x0, top + 4, 1, bot - top - 4);
+      g.fillRect(x1 - 1, top + 4, 1, bot - top - 4);
+      // ragged edge dither: sparse stray texels past the core edges so the
+      // column boundary is fuzzy, never a straight guillotine line
+      for (let y = top + 5; y < bot - 2; y += 2) {
+        if ((y * 7 + f * 5) % 3 !== 0) {
+          g.fillStyle = '#5ac8f0';
+          g.fillRect(x0 - 1, y, 1, 1);
+          g.fillRect(x1, y + 1, 1, 1);
+        }
+      }
+      // scanline bands across the column (CRT teleport shimmer)
+      for (let y = top + 7 + (f % 2); y < bot - 3; y += 5) {
+        g.fillStyle = 'rgba(8,24,36,0.55)';
+        g.fillRect(x0, y, half * 2, 1);
+      }
+      // domed cap: bright rounded top instead of a flat cut
+      pxEllipse(g, 12, top + 4, Math.max(2, half - 3), 3, f === 0 ? '#e8fcff' : '#7fe8ff');
+      // searing core — bright middle column, fullbright
+      lit(p, f === 0 ? '#ffffff' : '#d8f8ff', 12 - half * 0.45, top + 2, half * 0.9, bot - top - 2);
       p.glow.fillStyle = '#fff';
-      p.glow.fillRect(12 - half * 0.8, top + 1, half * 1.6, (bot - top) * (0.8 - f * 0.12));
+      p.glow.fillRect(12 - half * 0.6, top + 2, half * 1.2, (bot - top) * (0.72 - f * 0.12));
+      // interior flecks: data shards swirling inside the beam
+      for (let i = 0; i < 18; i++) {
+        const fx = x0 + 2 + ((i * 7 + f * 11) % Math.max(4, half * 2 - 4));
+        const fy = top + 5 + ((i * 13 + f * 9) % Math.max(6, bot - top - 10));
+        g.fillStyle = i % 3 === 0 ? '#ffffff' : '#a8ecff';
+        g.fillRect(fx, fy, 1, i % 2 ? 2 : 1);
+      }
       // ground-flash ring
       lit(p, f < 2 ? '#b8f4ff' : '#5ac8f0', 12 - 11 + f * 3, 80 + f, 22 - f * 6, 2);
       // thrown sparks

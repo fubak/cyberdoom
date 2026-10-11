@@ -126,6 +126,11 @@ export interface LightProbeResult {
   /** Centre-band luma standing inside the darkest straight run of the map. */
   dark: number;
   darkLight: number;
+  /** Fraction of the whole 3D view below 16/255 luma in the darkest run — the
+   *  void metric: Doom's darkest gameplay frames stay ~26%, so the gate is 28%. */
+  darkFrac: number;
+  /** p10 luma of the whole darkest-run view (darker tail than darkFrac alone). */
+  darkP10: number;
   line: { x: number; y: number; dx: number; dy: number; light: number } | null;
   images?: string[];
 }
@@ -207,12 +212,27 @@ export async function lightProbe(
     }
     let dark = 0;
     let darkLight = 0;
+    let darkFrac = 0;
+    let darkP10 = 0;
     const dline = darkestLine(map, 6);
     if (dline) {
       await stand(dline.x + 0.5, dline.y + 0.5, Math.atan2(dline.dy, dline.dx));
       const d = await r.captureView();
       dark = bandLuma(d, ...DARK_BAND);
       darkLight = dline.light;
+      // whole-view luminance histogram of the darkest staged view: how much
+      // of the frame is a sub-16/255 void. This is the F5 gate metric — the
+      // previous "centre band <= 16" target overshot into unreadable black.
+      const lum: number[] = [];
+      let under = 0;
+      for (let i = 0; i < d.data.length; i += 4) {
+        const l = luma(d.data, i);
+        lum.push(l);
+        if (l < 16) under++;
+      }
+      lum.sort((x, y) => x - y);
+      darkFrac = under / lum.length;
+      darkP10 = Math.round(lum[Math.floor(lum.length * 0.1)] ?? 0);
       if (withImages) images.push(toUrl(d));
     }
     return {
@@ -222,6 +242,8 @@ export async function lightProbe(
       dist: lineDist,
       dark: +dark.toFixed(1),
       darkLight: +darkLight.toFixed(2),
+      darkFrac: +darkFrac.toFixed(3),
+      darkP10,
       line,
       ...(withImages ? { images } : {}),
     };
