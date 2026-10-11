@@ -51,8 +51,9 @@ export function barTextBox(t: BarText): { x: number; y: number; w: number; h: nu
 
 /** RESOURCES column: one labelled row per ammo type, Doom RES table style. */
 export const RES_ROW_TOP = 1;
-// 6px pitch keeps the last row (DISK) a clear 5px off the bar's bottom edge.
-export const RES_ROW_PITCH = 6;
+// 5.5px pitch keeps four labelled rows readable while lifting the last row
+// (DISK) ~7px clear of the bar's bottom edge and the well's bright bevel.
+export const RES_ROW_PITCH = 5.5;
 export function resRowY(i: number): number {
   return BASE_H - BASE_STATUS + RES_ROW_TOP + i * RES_ROW_PITCH;
 }

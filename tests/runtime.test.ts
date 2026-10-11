@@ -514,7 +514,7 @@ describe('MissionRuntime', () => {
     }));
   });
 
-  it('blocks manual patching before inspection and credits cleanObjectives after inspection', () => {
+  it('interact on an uninspected workstation inspects it — never fires a scored removal', () => {
     const state = setup(mission({
       entities: [{
         id: 'host', kind: 'workstation', x: 2, y: 2, sprite: 'workstation-infected',
@@ -526,14 +526,17 @@ describe('MissionRuntime', () => {
         tag: 'infected', requiresInspect: true,
       }],
     }));
+    // E/Space interacts or inspects; it must not run the scored blind-removal
+    // path ("Scanned an unconfirmed host" stays behind tool actions on LMB).
+    const host = state.rt.byId('host')!;
+    expect(state.rt.interactHint(host)).toBe('INSPECT HOST');
     state.bus.emit('interact', { entityId: 'host' });
+    expect(state.rt.interactHint(host)).toBe('MANUAL CLEANUP');
+    expect(state.rt.byId('host')!.state.revealed).toBe(true);
     expect(state.rt.byId('host')).toMatchObject({ alive: true, infected: true, hp: 3 });
-    expect(state.rt.scoreLog).toContainEqual(expect.objectContaining({
-      text: 'Scanned an unconfirmed host: inspect it (MOUSE) before removing anything',
-      points: -10,
-    }));
+    expect(state.rt.scoreLog.every((event) => !event.text.includes('unconfirmed host'))).toBe(true);
 
-    state.bus.emit('inspect', { entityId: 'host' });
+    // second press, now inspected: the prompt-visible manual cleanup runs
     state.bus.emit('interact', { entityId: 'host' });
     expect(state.rt.byId('host')).toMatchObject({ alive: false, infected: false });
     expect(state.rt.objectives[0]).toMatchObject({ progress: 1, done: true });

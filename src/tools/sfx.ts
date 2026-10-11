@@ -8,7 +8,7 @@ import type { Gender } from '../core/types';
 
 export type ToolSound =
   | 'kb-swing' | 'kb-impact' | 'mouse-click' | 'mouse-flag' | 'usb-fire' | 'usb-hit'
-  | 'badge-swipe' | 'badge-ok' | 'badge-deny' | 'tap-sweep' | 'edr-charge' | 'edr-blast'
+  | 'badge-swipe' | 'badge-ok' | 'badge-deny' | 'door-clunk' | 'tap-sweep' | 'edr-charge' | 'edr-blast'
   | 'dry' | 'lower' | 'raise' | 'new-tool' | 'ammo' | 'menu-move' | 'menu-pick' | 'menu-back'
   | 'fizzle' | 'confirm' | 'mfa-beep' | 'patch-insert' | 'patch-fire';
 
@@ -165,6 +165,12 @@ export function playTool(s: ToolSound): void {
     case 'badge-swipe': S.noise(0.09, 0.4, 1500, 3); S.tone(400, 700, 0.06, 'sine', 0.2); break;
     case 'badge-ok': S.tone(988, 988, 0.08, 'square', 0.28, 0.08); S.tone(1319, 1319, 0.14, 'square', 0.28, 0.17); break;
     case 'badge-deny': S.tone(180, 170, 0.32, 'sawtooth', 0.45, 0.08); S.tone(186, 176, 0.32, 'square', 0.3, 0.08); break;
+    case 'door-clunk':
+      // heavy bolt retracting after the reader accepts — low thud + metallic clack
+      S.noise(0.07, 0.8, 900, 1, 0.3, 'lowpass');
+      S.tone(110, 48, 0.14, 'triangle', 0.7, 0.3);
+      S.noise(0.03, 0.5, 3400, 2, 0.36, 'highpass');
+      break;
     case 'tap-sweep':
       S.noise(0.02, 0.55, 6200, 1, 0, 'highpass');
       for (let i = 0; i < 6; i++) S.tone(700 + i * 260, 900 + i * 260, 0.03, 'square', 0.16, i * 0.035);

@@ -103,6 +103,7 @@ export class Hud {
   private objShowT = 0;
   private lastObjKey = '';
   private objIdx = 0;
+  private pickup: { text: string; t: number } | null = null;
 
   constructor(container: HTMLElement) {
     this.canvas = document.createElement('canvas');
@@ -137,8 +138,20 @@ export class Hud {
     if (this.messages.length > 3) this.messages.shift();
   }
 
+  /**
+   * Pickup lines get their own pinned lane above the ticker: they stay up
+   * for ~1.9 s no matter how much chatter lands behind them, so a tool's
+   * 'PICKED UP …' or 'YOU GOT THE …' can't be displaced by the tool
+   * explanation pages that arrive in the same moment.
+   */
+  pushPickup(text: string): void {
+    this.pickup = { text, t: 1.9 };
+    this.pushMessage(text, 'good');
+  }
+
   clearMessages(): void {
     this.messages = [];
+    this.pickup = null;
     this.objShowT = 3.5;
     this.lastObjKey = '';
   }
@@ -153,6 +166,7 @@ export class Hud {
       this.look = [0, -1, 0, 1][Math.floor(Math.random() * 4)];
       this.lookT = 0.8 + Math.random() * 1.6;
     }
+    if (this.pickup && (this.pickup.t -= dt) <= 0) this.pickup = null;
     for (const m of this.messages) m.t -= dt;
     this.messages = this.messages.filter((m) => m.t > 0);
   }
@@ -249,7 +263,211 @@ export class Hud {
     else if (this.objShowT > 0 && opts.objectives[this.objIdx]) this.drawObjectiveStrip(opts.objectives, this.objIdx);
     else this.drawTicker();
     if (opts.prompt) this.drawPrompt(opts.prompt);
+    // tool use effects live in the aim space: drawn last so the beam/ring/
+    // LED reads on top of the viewmodel and the tool's own screen flash,
+    // like Doom's tracer + wall impact drawn over the gun sprite
+    if (opts.anim) this.drawUseFx(opts.tool, opts.anim);
     this.drawBar(opts);
+  }
+
+  /**
+   * ARSENAL: per-tool use effect drawn in the aim space itself — a USB scan
+   * beam that ends in a ring on the target, a badge reader LED at the door,
+   * an inspect bracket, the tap clipping onto the cable, the patch writing
+   * its progress bar. Timed to the same windup->impact->recover clock as the
+   * viewmodel (anim.sinceUse), tinted by the hit verdict once it lands, and
+   * kept short (~0.3-0.5 s) so threats stay readable through it.
+   */
+  private drawUseFx(tool: ToolDef, anim: ViewmodelAnim): void {
+    if ((anim.lower ?? 0) > 0) return;
+    const t = anim.sinceUse - (tool.windup ?? 0);
+    if (t < 0) return;
+    const g = this.g;
+    const cx = BASE_W / 2;
+    const cy = (BASE_H - BASE_STATUS) / 2;
+    g.save();
+    g.beginPath();
+    g.rect(0, 0, BASE_W, BASE_H - BASE_STATUS);
+    g.clip();
+    try {
+    const px = (c: string, x: number, y: number, w: number, h: number, a = 1): void => {
+      if (a <= 0) return;
+      g.globalAlpha = Math.min(1, a);
+      g.fillStyle = c;
+      g.fillRect(x, y, w, h);
+      g.globalAlpha = 1;
+    };
+    /** Stroked square ring centred at (x, y): dark underlay so it reads on the flash. */
+    const ring = (c: string, r: number, thick: number, a = 1, atX = cx, atY = cy): void => {
+      for (const [cc, rr, th] of [['#0a0e18', r + 2, thick + 2], [c, r, thick]] as const) {
+        const rw = rr * 2, rh = rr * 1.24;
+        px(cc, atX - rr, atY - rh / 2, rw, th, a);
+        px(cc, atX - rr, atY + rh / 2 - th, rw, th, a);
+        px(cc, atX - rr, atY - rh / 2, th, rh, a);
+        px(cc, atX + rr - th, atY - rh / 2, th, rh, a);
+      }
+    };
+    const verdict =
+      anim.sinceConfirm >= 0 && anim.sinceConfirm < 0.7 ? (anim.confirmGood ? '#4aff5a' : '#ff4a3a') : null;
+
+    switch (tool.id) {
+      case 'usb': {
+        // scan beam: a bright step-tracer from the stick tip up to the aim
+        // point, closing in a contracting scan ring on the target
+        if (t > 0.55) return;
+        const u = t / 0.55;
+        const fade = u < 0.62 ? 1 : 1 - (u - 0.62) / 0.38;
+        // the stick's raised tip sits centre-low; beam steps up to the aim
+        const ox = cx + 8, oy = cy + 92;
+        const reach = Math.min(1, u * 2.4); // beam extends over the first ~40%
+        const ex = ox + (cx - ox) * reach, ey = oy + (cy - oy) * reach;
+        g.globalAlpha = fade;
+        g.strokeStyle = '#0a0e18';
+        g.lineWidth = 7;
+        g.beginPath(); g.moveTo(ox, oy); g.lineTo(ex, ey); g.stroke();
+        g.strokeStyle = verdict ?? '#5ff0ff';
+        g.lineWidth = 3;
+        g.beginPath(); g.moveTo(ox, oy); g.lineTo(ex, ey); g.stroke();
+        g.globalAlpha = 1;
+        // packets riding the beam
+        for (let i = 0; i < 4; i++) {
+          const s = (i * 0.28 + t * 4) % 1;
+          if (s > reach) continue;
+          px('#e8ffff', ox + (cx - ox) * s - 2, oy + (cy - oy) * s - 2, 5, 5, fade);
+        }
+        if (reach >= 1) {
+          const r = 34 - 18 * Math.min(1, (u - 0.4) * 2.2);
+          ring(verdict ?? '#5ff0ff', r, 3, fade);
+          ring('#0a0e18', r + 7, 2, 0.6 * fade);
+          if (u > 0.45) px(verdict ?? '#b8ffff', cx - 2, cy - 2, 5, 5, fade);
+        }
+        return;
+      }
+      case 'mouse': {
+        // inspect bracket contracting onto the target + a scan line sweep;
+        // turns green/red once the verdict lands
+        if (t > 0.55) return;
+        const u = t / 0.55;
+        const d = Math.round(44 - 22 * Math.min(1, u * 1.8));
+        const c = verdict ?? '#ffd040';
+        const fade = u < 0.7 ? 1 : 1 - (u - 0.7) / 0.3;
+        // chunky corner brackets: dark underlay + bright leg
+        for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]] as const) {
+          const bx = cx + sx * d;
+          const by = cy + sy * Math.round(d * 0.62);
+          for (const [cc, off, w] of [['#0a0e18', 1, 12], [c, 0, 10]] as const) {
+            px(cc, Math.min(bx - sx * off, bx - sx * (off + w)), by - 2, w + 2, 4, fade);
+            px(cc, bx - 2, Math.min(by - sy * off, by - sy * (off + w * 0.7)), 4, w * 0.7 + 2, fade);
+          }
+        }
+        if (u < 0.55) {
+          // horizontal sweep line inside the bracket box
+          const sy = Math.round(cy - d * 0.62 + 6 + (d * 1.24 - 12) * (u / 0.55));
+          px('#fff0a0', cx - d + 4, sy, d * 2 - 8, 3, 0.95);
+        }
+        if (verdict) ring(verdict, d + 5, 2, 0.9 * fade);
+        return;
+      }
+      case 'badge': {
+        // RFID wave arcs from the card up to the reader + a reader plate at
+        // the aim point whose LED flips amber -> green/red with the verdict
+        if (t > 0.6) return;
+        const u = t / 0.6;
+        const fade = u < 0.7 ? 1 : 1 - (u - 0.7) / 0.3;
+        // card sits raised at right-of-centre; arcs sweep up-left to the reader
+        const ox = cx + 150, oy = cy + 150;
+        for (let i = 0; i < 4; i++) {
+          const p = (i / 4 + t * 2.4) % 1;
+          const ax = ox + (cx - ox) * p, ay = oy + (cy - oy) * p;
+          px(i === 0 ? '#e8ffff' : '#8fd8ff', ax - 3, ay - 3, 6, 6, (1 - p * 0.7) * fade);
+        }
+        // reader plate on the door at the aim point
+        const led = verdict ?? (Math.floor(anim.time * 8) % 2 ? '#ffb830' : '#7a4a08');
+        const pFade = fade;
+        px('#0a0e18', cx - 13, cy - 17, 26, 34, pFade);
+        px('#2a3038', cx - 10, cy - 14, 20, 28, pFade);
+        px('#161a20', cx - 10, cy - 14, 20, 4, pFade);
+        px(led, cx - 5, cy - 7, 10, 10, pFade);
+        px('#0a0e18', cx - 5, cy + 6, 10, 3, pFade);
+        px('#0a0e18', cx - 5, cy + 11, 10, 3, pFade);
+        if (verdict) ring(verdict, 22, 3, 0.95, cx, cy);
+        return;
+      }
+      case 'mfa': {
+        // token glow: twin gold rings expanding off the aim point + a check
+        // burst when the second factor confirms
+        if (t > 0.65) return;
+        const u = t / 0.65;
+        ring('#ffd040', 8 + 34 * u, 4, 0.95 * (1 - u * 0.6));
+        ring('#fff0a0', 5 + 20 * u, 2, 0.8 * (1 - u * 0.5));
+        if (anim.sinceConfirm >= 0 && anim.confirmGood) {
+          const k = Math.min(1, anim.sinceConfirm / 0.12);
+          // chunky check mark at the aim point
+          for (let i = 0; i < 7 * k; i++) px('#4aff5a', cx - 12 + i * 2.6, cy - 2 + i * 1.9, 5, 5, 1);
+          for (let i = 0; i < 12 * k; i++) px('#4aff5a', cx + 6 + i * 2.1, cy + 8 - i * 2.4, 5, 5, 1);
+          ring('#4aff5a', 14 + anim.sinceConfirm * 60, 3, 1 - anim.sinceConfirm * 1.4);
+        }
+        return;
+      }
+      case 'tap': {
+        // the tap clips onto the trunk cable at the aim point, then packets
+        // stream down toward the unit
+        if (t > 0.6) return;
+        const u = t / 0.6;
+        const fade = u < 0.75 ? 1 : 1 - (u - 0.75) / 0.25;
+        // cable crossing the aim point
+        px('#101318', cx - 48, cy + 10, 96, 10, fade);
+        px('#3a3f4a', cx - 48, cy + 11, 96, 8, fade);
+        px('#5a6274', cx - 48, cy + 11, 96, 2, fade);
+        // clip drops on during the first 30%
+        const dy = Math.round(-26 + 26 * Math.min(1, u / 0.3));
+        px('#0a0e18', cx - 11, cy - 16 + dy, 22, 16, fade);
+        px('#c8a020', cx - 9, cy - 14 + dy, 18, 12, fade);
+        px('#ffd040', cx - 9, cy - 14 + dy, 18, 4, fade);
+        px('#4aff5a', cx - 2, cy - 11 + dy, 4, 4, fade);
+        // packets streaming out of the clip
+        for (let i = 0; i < 5; i++) {
+          const s = (i * 0.22 + t * 2.6) % 1;
+          px('#5ff0ff', cx - 4 + (i % 3) * 3, cy + 20 + s * 42, 6, 4, (1 - s) * fade);
+        }
+        return;
+      }
+      case 'patch': {
+        // the disk writes to the host: a big progress bar filling at the aim
+        // point with rising data ticks
+        if (t > 0.7) return;
+        const u = t / 0.7;
+        const fade = u < 0.8 ? 1 : 1 - (u - 0.8) / 0.2;
+        const fill = Math.min(1, u / 0.75);
+        px('#0a0e18', cx - 26, cy - 9, 52, 18, fade);
+        px(verdict ?? '#c8c0b0', cx - 24, cy - 7, 48, 14, fade * 0.4);
+        // frame
+        px(verdict ?? '#c8c0b0', cx - 26, cy - 9, 52, 2, fade);
+        px(verdict ?? '#c8c0b0', cx - 26, cy + 7, 52, 2, fade);
+        px(verdict ?? '#c8c0b0', cx - 26, cy - 9, 2, 18, fade);
+        px(verdict ?? '#c8c0b0', cx + 24, cy - 9, 2, 18, fade);
+        px(verdict ?? '#4aff5a', cx - 24, cy - 7, 48 * fill, 14, 0.95 * fade);
+        // rising write ticks
+        for (let i = 0; i < 4; i++) {
+          const s = (i * 0.3 + t * 3.4) % 1;
+          px('#8aff9a', cx - 20 + i * 13, cy - 16 - s * 12, 4, 4, (1 - s) * fade);
+        }
+        return;
+      }
+      case 'keyboard': {
+        // quick strike burst at the impact point
+        if (t > 0.32) return;
+        const u = t / 0.32;
+        ring(verdict ?? '#f4f4f0', 7 + 22 * u, 3, 1 - u);
+        ring(verdict ?? '#8fd8ff', 3 + 12 * u, 2, 0.8 * (1 - u));
+        return;
+      }
+      default:
+        return; // edr's containment pulse already owns its feedback
+    }
+    } finally {
+      g.restore();
+    }
   }
 
   /**
@@ -262,6 +480,20 @@ export class Hud {
    */
   private drawTicker(): void {
     let y = 1;
+    if (this.pickup) {
+      // pinned pickup lane: gold-edged plate, holds for ~1.9 s, blink-fades out
+      const p = this.pickup;
+      if (!(p.t < 0.4 && Math.floor(p.t * 20) % 2 === 0)) {
+        const text = wrapText(p.text.toUpperCase(), 54, 1)[0];
+        const w = measureText(text, 'tiny');
+        this.g.fillStyle = 'rgba(30,24,6,0.72)';
+        this.g.fillRect(1, y, w + 9, 7);
+        this.g.fillStyle = '#ffd040';
+        this.g.fillRect(1, y, 2, 7);
+        drawText(this.g, text, 6, y + 1, '#fff0a0', 'tiny', null);
+      }
+      y += 9;
+    }
     for (const row of tickerRows(this.messages)) {
       if (row.t < 0.4 && Math.floor(row.t * 20) % 2 === 0) {
         y += 7;

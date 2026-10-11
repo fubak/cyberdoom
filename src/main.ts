@@ -403,7 +403,7 @@ class Game {
         text = this.arsenal.grant(resource, amount);
       }
       this.audio.sfx('pickup', this.player ? { x: this.player.x, y: this.player.y } : {});
-      this.hud.pushMessage(text, 'good');
+      this.hud.pushPickup(text);
     });
     this.bus.on('reach-exit', () => this.audio.sfx('win'));
     this.bus.on('ambush-spawn', ({ entityId }) => {
@@ -1142,7 +1142,7 @@ class Game {
           text = this.arsenal.grant(resource, amount);
         }
         this.bus.emit('pickup', { entityId: e.def.id });
-        this.hud.pushMessage(text, 'good');
+        this.hud.pushPickup(text);
       }
     }
     const cell = map.cellAtF(p.x, p.y);

@@ -484,6 +484,16 @@ export class MissionRuntime {
         return;
       }
 
+      // E/Space interacts or inspects — it never performs a scored tool
+      // action. On an uninspected workstation the press reads the host's
+      // indicators (the same 'inspect' a MOUSE click performs); the removal
+      // path that follows a blind act stays behind LMB only, so an interact
+      // can never produce the "scanned an unconfirmed host" penalty.
+      if (e.def.kind === 'workstation' && !e.def.tags?.includes('triage') && !e.def.accepts && !e.state.revealed) {
+        this.bus.emit('inspect', { entityId: e.def.id });
+        return;
+      }
+
       if (e.def.kind === 'workstation' && e.def.tags?.includes('triage')) {
         if (this.guardUninspectedTriage(e)) return;
         if (e.infected) {
@@ -818,7 +828,7 @@ export class MissionRuntime {
 
     if (e.def.kind === 'workstation') {
       // infected is only visible once the renderer reveals the infected sprite
-      if (!e.state.revealed) return `INSPECT FIRST (MOUSE ${mouseTool.slot})`;
+      if (!e.state.revealed) return 'INSPECT HOST';
       if (e.infected) return this.callPending(e.def.id) ? 'MAKE THE CALL (CASE FILE L)' : 'MANUAL CLEANUP';
       return null;
     }

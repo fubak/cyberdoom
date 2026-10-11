@@ -77,11 +77,16 @@ describe('statusBarText layout', () => {
       expect(p.y + p.h).toBeLessThanOrEqual(BAR_BOTTOM);
       expect(p.x).toBeGreaterThanOrEqual(BAR_LEFT);
       expect(p.x + p.w).toBeLessThanOrEqual(BAR_RIGHT);
+      // every row, plate included, clears the well's bottom bevel (>=6px of bar edge)
+      expect(p.y + p.h).toBeLessThanOrEqual(BAR_BOTTOM - 6);
       // and the row's text run sits inside its plate, not under the bottom bevel
       const label = ['SCAN', 'PCAP', 'CELL', 'DISK'][i];
       const row = texts.find((t) => t.t === label && t.x === 220)!; // RES label column
       expect(row.y).toBeGreaterThanOrEqual(p.y);
       expect(row.y + row.h).toBeLessThanOrEqual(p.y + p.h);
+      // text plus its 1px shadow keeps >=7px of margin to the bar edge, so the
+      // last row (DISK) reads as inside the panel at every scale
+      expect(row.y + row.h + 1).toBeLessThanOrEqual(BAR_BOTTOM - 7);
     }
   });
 
