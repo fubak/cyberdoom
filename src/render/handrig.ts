@@ -3,6 +3,7 @@ import type { SkinTone } from '../tools/look';
 import { ANALYSTS } from '../tools/look';
 import { shade } from '../tools/pixel';
 import { PartCache } from './hires';
+import { bakeHands } from './handmesh';
 import { rasterize, type Prim, type V3 } from './model';
 import { RES } from './res';
 
@@ -75,17 +76,17 @@ export const FINGER_LEN: Record<Exclude<FingerName, 'thumb'>, number> = {
 };
 /** proximal : middle : distal ≈ 1 : .62 : .45, normalised. */
 export const PHALANX = [1 / 2.07, 0.62 / 2.07, 0.45 / 2.07];
-const PALM_LEN = 1.1;
+export const PALM_LEN = 1.1;
 /** metacarpal-base x offset as a fraction of palm width (right hand; thumb side −x). */
-const MCP_X: Record<Exclude<FingerName, 'thumb'>, number> = {
+export const MCP_X: Record<Exclude<FingerName, 'thumb'>, number> = {
   index: -0.32,
   middle: -0.11,
   ring: 0.11,
   pinky: 0.29,
 };
 /** thumb metacarpal base: [x×palmW, y×palmLen, z] — the thenar eminence. */
-const THUMB_BASE: V3 = [-0.42, 0.34, 0.1];
-const THUMB_LEN = 0.62;
+export const THUMB_BASE: V3 = [-0.42, 0.34, 0.1];
+export const THUMB_LEN = 0.62;
 
 export const JOINT_LIMITS = {
   mcp: [-10, 90],
@@ -401,7 +402,30 @@ export function bakeRig(id: string, frame: RigFrame, spec: { gender: Gender; ski
       };
       prims.push(...handPrims(q, spec));
     }
-    const { rgba } = rasterize(W, H, prims, { view: 0, persp: frame.persp ?? 0 });
+    // Mesh path (browser): real toon-shaded meshes baked to pixels.
+    // Node/test fallback: the prim raster still exercises the same rig math.
+    let rgba: Uint8ClampedArray | Uint8Array;
+    let meshResult: ReturnType<typeof bakeHands> = null;
+    try {
+      meshResult = bakeHands(
+        W, H,
+        frame.hands.map((p) => ({
+          ...p,
+          wrist: [p.wrist[0] * RES - cx, p.wrist[1] * RES, p.wrist[2] * RES],
+          size: p.size * RES,
+          arm: p.arm ? [p.arm[0] * RES - cx, p.arm[1] * RES, p.arm[2] * RES] : undefined,
+        })),
+        spec,
+        frame.persp ?? 0,
+      );
+    } catch {
+      meshResult = null;
+    }
+    if (meshResult) {
+      ({ rgba } = meshResult);
+    } else {
+      ({ rgba } = rasterize(W, H, prims, { view: 0, persp: frame.persp ?? 0 }));
+    }
     const c = document.createElement('canvas');
     c.width = W;
     c.height = H;

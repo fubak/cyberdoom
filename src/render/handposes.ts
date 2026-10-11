@@ -21,7 +21,7 @@ const TYPE = (over: Partial<Record<'index' | 'middle' | 'ring' | 'pinky' | 'thum
   middle: { abd: 0, mcp: 42, pip: 56, ...over.middle },
   ring: { abd: -6, mcp: 46, pip: 60, ...over.ring },
   pinky: { abd: -12, mcp: 52, pip: 64, ...over.pinky },
-  thumb: { abd: 0, mcp: 42, pip: 38, ...over.thumb },
+  thumb: { abd: 0, mcp: 60, pip: 55, ...over.thumb },
 });
 
 const FIST = (tight = 0) => ({
@@ -46,7 +46,7 @@ const CUP = (click = false) => ({
   middle: { abd: -2, mcp: 46, pip: 36, dip: 22 },
   ring: { abd: -10, mcp: 62, pip: 58 },
   pinky: { abd: -16, mcp: 68, pip: 64 },
-  thumb: { abd: 0, mcp: 20, pip: 24 },
+  thumb: { abd: 0, mcp: 60, pip: 62 },
 });
 
 // squeeze a clip/bezel edge

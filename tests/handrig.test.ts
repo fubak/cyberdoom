@@ -4,7 +4,8 @@ installFakeCanvas();
 import { clampCurl, fingerJoints, handJoints, FINGER_LEN, PHALANX, JOINT_LIMITS, bakeRig, type Place, type FingerName } from '../src/render/handrig';
 import { POSES, TOOL_HANDS } from '../src/render/handposes';
 import { SKIN_TONES } from '../src/tools/look';
-import { rasterize, type Prim } from '../src/render/model';
+import { rasterize, type Prim, type V3 } from '../src/render/model';
+import { fingertipLayout } from '../src/render/handmesh';
 import { RES } from '../src/render/res';
 import { vmLine } from '../src/tools/anim';
 import { drawToolViewmodel } from '../src/render/viewmodels';
@@ -160,4 +161,29 @@ describe('baked hand sprites stay under the clearance line', () => {
       expect(bad).toBe(0);
     }
   });
+});
+
+describe('fingertip layout (mesh readability, no WebGL)', () => {
+  const spec = { gender: 'male' as const, skin: SKIN_TONES[1] };
+  // 4+ non-thumb tips, each separated by a readable gap in screen x or y
+  for (const [pose, hand] of [['kbd.rest', 0], ['kbd.rest', 1], ['mouse.rest', 0]] as const) {
+    it(`${pose} hand ${hand}: ≥4 separated digits`, () => {
+      const fr = POSES[pose];
+      const p = fr.hands[hand];
+      const q = { ...p, wrist: [p.wrist[0] * RES, p.wrist[1] * RES, p.wrist[2] * RES] as V3, size: p.size * RES };
+      const tips = fingertipLayout(q, spec);
+      // exclude the thumb (it tucks); index..pinky must be 4 distinct tips
+      const four = tips.slice(0, 4);
+      expect(four.length).toBe(4);
+      for (let i = 0; i < 4; i++)
+        for (let j = i + 1; j < 4; j++) {
+          const dx = Math.abs(four[i].x - four[j].x);
+          const dy = Math.abs(four[i].y - four[j].y);
+          expect(Math.hypot(dx, dy)).toBeGreaterThanOrEqual(4);
+        }
+      // and the four digits span a real width (not a fist blob)
+      const xs = four.map((t) => t.x);
+      expect(Math.max(...xs) - Math.min(...xs)).toBeGreaterThanOrEqual(q.size * 0.5);
+    });
+  }
 });
