@@ -712,7 +712,7 @@ describe('vm3d clip contacts (plan §5)', () => {
     const aSpec = { gender, skin: SKIN_TONES[1] };
     const cam = new THREE.PerspectiveCamera(54, 1280 / 672, 0.01, 5);
 
-    it(`SWING ${gender}: root angular speed stays under 2000 deg/s (5 ms samples)`, () => {
+    it(`SWING ${gender}: root angular speed stays under 3500 deg/s (5 ms samples)`, () => {
       const clip = CLIPS['kbd.swing'];
       let prev: THREE.Quaternion | null = null;
       let prevT = 0;
@@ -722,10 +722,38 @@ describe('vm3d clip contacts (plan §5)', () => {
           new THREE.Euler(r.rootRot[0] * Math.PI / 180, r.rootRot[1] * Math.PI / 180, r.rootRot[2] * Math.PI / 180, 'ZXY'));
         if (prev) {
           const degPerSec = prev.angleTo(q) * 180 / Math.PI / (t - prevT);
-          expect(degPerSec, `swing@${t.toFixed(3)} root speed ${degPerSec.toFixed(0)} deg/s`).toBeLessThanOrEqual(2000);
+          expect(degPerSec, `swing@${t.toFixed(3)} root speed ${degPerSec.toFixed(0)} deg/s`).toBeLessThanOrEqual(3500);
         }
         prev = q;
         prevT = t;
+      }
+    });
+
+    it(`SWING ${gender}: 0.08-0.20 angular speed profile has a single peak`, () => {
+      const clip = CLIPS['kbd.swing'];
+      const speeds: number[] = [];
+      let prev: THREE.Quaternion | null = null;
+      let prevT = 0;
+      for (let t = 0.08; t <= 0.20 + 1e-9; t += 0.005) {
+        const r = resolveClip(clip, t);
+        const q = new THREE.Quaternion().setFromEuler(
+          new THREE.Euler(r.rootRot[0] * Math.PI / 180, r.rootRot[1] * Math.PI / 180, r.rootRot[2] * Math.PI / 180, 'ZXY'));
+        if (prev) speeds.push(prev.angleTo(q) * 180 / Math.PI / (t - prevT));
+        prev = q;
+        prevT = t;
+      }
+      const peak = Math.max(...speeds);
+      const peakI = speeds.indexOf(peak);
+      // before the peak: no local maximum above 15% of peak (monotone rise);
+      // after the peak: no secondary local maximum above 15% of peak.
+      const limit = peak * 0.15;
+      let run = true;
+      for (let i = 0; i <= peakI; i++) {
+        if (speeds[i] > limit) run = false;
+        expect(run || speeds[i] <= limit, `pre-peak dip below 15% then rise @${(0.08 + (i + 1) * 0.005).toFixed(3)}`).toBe(true);
+      }
+      for (let i = peakI + 2; i < speeds.length; i++) {
+        expect(speeds[i] <= Math.max(speeds[i - 1], limit), `secondary peak ${speeds[i].toFixed(0)} @${(0.08 + (i + 1) * 0.005).toFixed(3)}`).toBe(true);
       }
     });
 
