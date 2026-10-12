@@ -123,6 +123,10 @@ navigation, deploy→play, the pause menu, and a full M01 win through
 `?debug=1` hooks. Vitest only picks up `tests/**/*.test.ts`, so the specs
 never run under `npm run test`.
 
+Hand meshes in the 3D viewmodel are the generic WebXR hand models from
+`@webxr-input-profiles/assets` (MIT) — see
+`public/models/hands/LICENSE-webxr-input-profiles.md`.
+
 ## Known limitations
 
 - All performance numbers so far come from SwiftShader software rendering

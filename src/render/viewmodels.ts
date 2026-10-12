@@ -217,6 +217,12 @@ function art(tool: ToolDef, gender: Gender, mode: 0 | 1 | 2): Art | null {
   return a;
 }
 
+/** Tool id the live vm3d layer is rendering this frame (null → sprite path). */
+let vmTool3d: string | null = null;
+export function setVm3dTool(id: string | null): void {
+  vmTool3d = id;
+}
+
 /**
  * Draw the current tool's viewmodel (bespoke art, or the tool's own
  * drawViewmodel) plus its fx, all under the clearance line. Always true.
@@ -234,6 +240,8 @@ export function drawToolViewmodel(
 ): boolean {
   const line = vmLine(h);
   const ph = anim ? usePhase(anim.sinceUse, tool.windup ?? 0) : null;
+  // vm3d renders this tool's art+hands in the 3D pass; keep the 2D fx overlays
+  const live3d = vmTool3d === tool.id;
   // fire cycle: rest art in windup, lit art at the impact flash, fire art
   // through the rest of the strike and early recover — the lit pose holds for
   // ~77 ms of the 90 ms impact window, so >=4 rendered frames at 60 Hz
@@ -261,7 +269,9 @@ export function drawToolViewmodel(
   const drop = Math.round((anim?.lower ?? 0) * ((a?.c.height ?? 60) + 10));
   // actual downward travel the art got after the sink cap (hands track it)
   let dyDown = byy + dy;
-  if (a) {
+  if (live3d) {
+    // live vm3d drew the tool + hands into the 3D pass this frame
+  } else if (a) {
     const side = SIDE[tool.id] ?? 0;
     const S = VIEWMODEL_SCALE * (SIZE[tool.id] ?? 1);
     // the lit frame swells ~5% toward the camera for one frame of punch
@@ -314,7 +324,7 @@ export function drawToolViewmodel(
   }
   // articulated rig hands over the tool: use-cycle pose + idle micro-motion,
   // tracking the lagged object offsets so the grip follows the tool
-  {
+  if (!live3d) {
     const anchor = TOOL_HANDS[tool.id];
     if (anchor) {
       const variant = Math.floor(_time * 0.6) % cycleVariants(tool.id);

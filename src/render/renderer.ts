@@ -421,6 +421,11 @@ export class Renderer {
   }
   debugNoFlash = false;
 
+  /** Live 3D viewmodel layer (vm3d): rendered into `rt` after the world pass,
+   *  depth cleared, so the same post pass gives it the game's pixel grain.
+   *  Skipped while debugNoFlash is set so look probes measure the world only. */
+  viewmodel: { renderInto(r: THREE.WebGLRenderer, w: number, h: number): void } | null = null;
+
   /** LOOK probes: block NEW fx (spawn columns, gib debris, tool trails) and
    *  hide projectile sprites while a probe is mid-capture — a hostile bolt or
    *  a trigger-spawned column can pop between the with/without-sprite frames
@@ -848,6 +853,11 @@ export class Renderer {
   }
 
   private lightAt(x: number, y: number): number {
+    return this.tileLight(Math.floor(x), Math.floor(y));
+  }
+
+  /** Sector light at a world position (~0..1.4); the vm3d key light follows it. */
+  viewmodelLightAt(x: number, y: number): number {
     return this.tileLight(Math.floor(x), Math.floor(y));
   }
 
@@ -1454,6 +1464,12 @@ export class Renderer {
     this.renderer.setRenderTarget(this.rt);
     this.renderer.setViewport(0, 0, VIEW_W, VIEW3D_H);
     this.renderer.render(this.scene, this.camera);
+    if (this.viewmodel && !this.debugNoFlash) {
+      this.renderer.autoClear = false;
+      this.renderer.clearDepth();
+      this.viewmodel.renderInto(this.renderer, VIEW_W, VIEW3D_H);
+      this.renderer.autoClear = true;
+    }
     this.renderer.setRenderTarget(null);
     this.renderer.setViewport(0, 0, VIEW_W, VIEW_H);
     this.renderer.clear();

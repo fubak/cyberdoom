@@ -51,7 +51,8 @@ import { genDebugCompare } from './render/genpool';
  */
 
 import { springStep, swayTarget, SWAY, breath as breathF } from './render/vmotion';
-import { handMods } from './render/viewmodels';
+import { handMods, setVm3dTool } from './render/viewmodels';
+import { Vm3d, vm3dFlashRgb } from './render/vm3d/scene';
 const FIXED_DT = 1 / 60;
 const params = new URLSearchParams(location.search);
 const DEBUG = params.get('debug') === '1';
@@ -127,6 +128,7 @@ class Game {
   private feel = new Feel();
   private particles = new ParticleSystem();
   private renderer!: Renderer;
+  private vm3d: Vm3d | null = null;
   private hud!: Hud;
   private automap!: Automap;
   private dossier!: Dossier;
@@ -218,6 +220,14 @@ class Game {
     app.appendChild(viewport);
     this.composeFrame = setupPresentation(viewport);
     this.renderer = new Renderer(viewport);
+    // live 3D viewmodel layer (keyboard this phase); any failure keeps the
+    // baked-sprite path as the no-WebGL fallback
+    try {
+      this.vm3d = new Vm3d({ gender: this.gender, skin: currentSkin() });
+      this.renderer.viewmodel = this.vm3d.pass;
+    } catch {
+      this.vm3d = null;
+    }
     // warm lazy sprite frames in idle slices from boot — the player sits on
     // title/menus for seconds before the first level render, plenty of idle
     prewarmLazySpriteFrames();
@@ -337,7 +347,8 @@ class Game {
     });
     this.bus.on('objective-done', () => this.audio.sfx('objective'));
     // tool sfx are the arsenal's (per-tool, per-phase); using a tool still wakes nearby enemies
-    this.bus.on('tool-used', ({ toolId }) => {
+    this.bus.on('tool-used', ({ toolId, action }) => {
+      this.vm3d?.onToolUsed(toolId, action);
       if (this.player && this.runtime) alertNear(this.runtime.entities, this.player.x, this.player.y, 8);
       // Doom fire-frame punch: flood walls/floor with tool-coloured light for
       // ~110 ms and jolt the viewmodel down like a recoil kick. Only damaging
@@ -951,6 +962,28 @@ class Game {
         hurtSide: this.feel.hurtSide,
         bonus: this.feel.bonusAmt,
       };
+      if (this.vm3d) {
+        const anim = this.arsenal.anim();
+        const rgb = vm3dFlashRgb(this.arsenal.current.id);
+        this.vm3d.setSpec({ gender: this.gender, skin: currentSkin() });
+        this.vm3d.frame({
+          dt: this.paused || this.probeLock ? 0 : dt,
+          simT: this.simT,
+          toolId: this.arsenal.current.id,
+          lower: anim.lower ?? 0,
+          dropPx: lostEnd ? 240 : 0,
+          swayX: this.player.weaponBobX + this.vmSway.x,
+          swayY: this.player.weaponBobY + this.vmSway.y + this.feel.viewKick * 22,
+          bob: this.player.bob,
+          breath,
+          rollDeg: handMods.roll,
+          bobPitchDeg: handMods.bobPitch,
+          light: this.renderer.viewmodelLightAt(this.player.x, this.player.y),
+          flash: rgb ? { rgb, sinceUse: anim.sinceUse, windup: this.arsenal.current.windup ?? 0 } : null,
+          seed: handMods.seed,
+        });
+      }
+      setVm3dTool(this.vm3d?.handles() ?? null);
       this.renderer.render(this.player, pose);
       const ars = this.arsenal;
       const integrity = this.player.integrity;
@@ -1793,6 +1826,35 @@ class Game {
       },
       unscored() {
         return g.runtime?.unscored ?? null;
+      },
+      /** VM3D: capture hooks — force the next keyboard action and pin the
+       *  clip clock at t seconds (null → live) for deterministic frames. */
+      vm3d: {
+        force(a: string | null) {
+          g.vm3d?.forceAction(a === 'swing' ? 'swing' : a === 'type' ? 'type' : null);
+        },
+        freeze(t: number | null) {
+          g.vm3d?.freeze(t);
+        },
+        /** start a clip immediately, bypassing the arsenal cooldown */
+        play(a: string) {
+          g.vm3d?.play(a === 'swing' ? 'swing' : 'type');
+        },
+        /** anatomy study: pose 'open'|'relaxed'|'typing'|'fist'|'bat', view 'palm'|'back'|'side' */
+        study(pose: string | null, view?: string, side?: string) {
+          g.vm3d?.study(pose, view, side === 'L' ? 'L' : 'R');
+        },
+        /** grip close-up: 'dorsal'|'side'|'under'|null (pair with play+freeze) */
+        gripView(view: string | null) {
+          g.vm3d?.gripCloseup(view === 'dorsal' || view === 'side' || view === 'under' ? view : null);
+        },
+        /** debug: move/rotate a named board socket (pos metres, euler deg ZXY). */
+        socket(name: string, pos?: number[], rot?: number[]) {
+          g.vm3d?.setSocket(name, pos as [number, number, number] | undefined, rot as [number, number, number] | undefined);
+        },
+        state() {
+          return { active: g.vm3d?.handles() ?? null, clipT: g.vm3d?.clipTime() ?? null };
+        },
       },
     };
   }
