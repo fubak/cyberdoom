@@ -119,6 +119,12 @@ export interface SwingSpec {
   /** small roll that keeps the keycap face camera-ish through impact. */
   rollAxis: V3;
   rollDeg: [number, number];
+  /** optional [u0,u1] ease window for theta/roll: outside it the angle is
+   *  pinned to an endpoint, inside it follows a smoothstep — so angular
+   *  speed is zero before u0, rises to one mid-window peak and returns to
+   *  zero by u1 (one continuous arc, single speed bump). */
+  thetaEase?: [number, number];
+  rollEase?: [number, number];
   /** <=5 root-position control points on the warped parameter u. */
   gCtrl: { u: number; pos: V3 }[];
 }
@@ -220,34 +226,30 @@ function resolveHand(a: HandKey | undefined, b: HandKey | undefined, u: number):
   };
 }
 
-/** Centripetal Catmull-Rom through the control points, evaluated at the
- *  warped parameter u (control u values are the knot positions). */
-function catmullRom(ctrl: { u: number; pos: V3 }[], u: number): V3 {
+
+
+/** Piecewise-linear path through the control points. Knots spaced far apart
+ *  read as a smooth arc; knots a few ms apart make a deliberate snap (the
+ *  windup->strike pull) without the overshoot a spline would produce. */
+function posPath(ctrl: { u: number; pos: V3 }[], u: number): V3 {
   if (u <= ctrl[0].u) return ctrl[0].pos;
   if (u >= ctrl[ctrl.length - 1].u) return ctrl[ctrl.length - 1].pos;
   let i = 0;
   while (i < ctrl.length - 2 && ctrl[i + 1].u <= u) i++;
-  const pc = (j: number) => ctrl[Math.max(0, Math.min(ctrl.length - 1, j))].pos;
-  const P0 = pc(i - 1), P1 = pc(i), P2 = pc(i + 1), P3 = pc(i + 2);
-  const t0 = ctrl[i - 1]?.u ?? ctrl[i].u - 0.25;
-  const t1 = ctrl[i].u;
-  const t2 = ctrl[i + 1].u;
-  const t3 = ctrl[i + 2]?.u ?? ctrl[i + 1].u + 0.25;
-  const x = u;
-  const A1 = P1.map((_, c) => ((t1 - x) / (t1 - t0)) * P0[c] + ((x - t0) / (t1 - t0)) * P1[c]);
-  const A2 = P1.map((_, c) => ((t2 - x) / (t2 - t1)) * P1[c] + ((x - t1) / (t2 - t1)) * P2[c]);
-  const A3 = P1.map((_, c) => ((t3 - x) / (t3 - t2)) * P2[c] + ((x - t2) / (t3 - t2)) * P3[c]);
-  const B1 = P1.map((_, c) => ((t2 - x) / (t2 - t0)) * A1[c] + ((x - t0) / (t2 - t0)) * A2[c]);
-  const B2 = P1.map((_, c) => ((t3 - x) / (t3 - t1)) * A2[c] + ((x - t1) / (t3 - t1)) * A3[c]);
-  return P1.map((_, c) => ((t2 - x) / (t2 - t1)) * B1[c] + ((x - t1) / (t2 - t1)) * B2[c]) as V3;
+  const a = ctrl[i], b = ctrl[i + 1];
+  const s = (u - a.u) / Math.max(1e-4, b.u - a.u);
+  return a.pos.map((v, c) => v + (b.pos[c] - v) * s) as V3;
 }
 
 /** Parametric board pose for a 'swing' clip at warped parameter u in 0..1. */
+const easeWindow = (range: [number, number] | undefined, u: number): number =>
+  !range ? u : ease(Math.max(0, Math.min(1, (u - range[0]) / (range[1] - range[0]))));
+
 export function swingPose(spec: SwingSpec, u: number): { pos: V3; rot: V3 } {
-  const th = lerp(spec.theta[0], spec.theta[1], u);
-  const roll = lerp(spec.rollDeg[0], spec.rollDeg[1], u);
+  const th = lerp(spec.theta[0], spec.theta[1], easeWindow(spec.thetaEase, u));
+  const roll = lerp(spec.rollDeg[0], spec.rollDeg[1], easeWindow(spec.rollEase, u));
   const q = mulQ(mulQ(eulerToQuat(spec.baseRot), axisAngleQ(spec.axis, th)), axisAngleQ(spec.rollAxis, roll));
-  return { pos: catmullRom(spec.gCtrl, u), rot: quatToEuler(q) };
+  return { pos: posPath(spec.gCtrl, u), rot: quatToEuler(q) };
 }
 
 /** Sample a clip at time t (seconds) into a pose the rig solver consumes. */
@@ -316,6 +318,16 @@ const HOLD_L_CURLS: Partial<Record<FingerName, Curl>> = {
   thumb: { mcp: 37, pip: 46, abd: 84 },
 };
 
+// swing L hold: the same end-face grip tightened ~8 deg at the knuckles so
+// the smaller (female) fist still wraps past the board's back edge
+const SWING_L_CURLS: Partial<Record<FingerName, Curl>> = {
+  index: { mcp: 45, pip: 95, abd: -4 },
+  middle: { mcp: 47, pip: 97, abd: 0 },
+  ring: { mcp: 47, pip: 95, abd: 5 },
+  pinky: { mcp: 50, pip: 98, abd: 9 },
+  thumb: { mcp: 37, pip: 46, abd: 84 },
+};
+const L_SGRIP = { wristSocket: 'gripLS.wrist', curls: SWING_L_CURLS, thumbOut: 0.3 };
 const ikc = (finger: FingerName, socket: string, weight?: number): IkContact => ({ finger, socket, weight });
 // grip poses roll the metacarpals toward -z, so the anatomical forearm
 // direction is +z (toward the viewer) — tilted laterally so the tube
@@ -472,42 +484,77 @@ export const CLIPS: Record<string, VmClip> = {
     name: 'kbd.swing',
     duration: 0.6,
     kind: 'swing',
+    // two-handed diagonal bat swing at the crosshair. From .03 to .30 the
+    // board + both hands are ONE rigid assembly — the hands ride their grip
+    // sockets with the fingers frozen in the wrap curl, so the clip only
+    // moves the assembly root. Windup (u<=.19): held end low-right, free
+    // end tipped up-left under the clear line. The strike is one continuous
+    // arc: the root path sweeps right→left through the crosshair (~.15)
+    // while the attitude rotates into the impact pose, then both hold for
+    // the follow-through to the lower-left. Rotation happens only inside
+    // thetaEase so angular speed is a single smooth bump.
     swing: {
       tRange: [0.03, 0.3],
-      axis: [0.153, 0.755, 0.637],
-      baseRot: [20, 60, -14],
-      theta: [0, 105],
-      rollAxis: [1, 0, 0],
-      rollDeg: [0, -30],
+      // fixed attitude: the whole sweep is done by the Catmull-Rom root
+      // path (angular speed is zero across the strike — single-peak proof)
+      axis: [-0.553, -0.636, -0.538],
+      baseRot: [151.24, 80.22, 52.22],
+      // last 17.9 deg of the windup rotation lands by u=.15 (t~.07) so the
+      // strike window sees a fixed attitude (zero angular speed)
+      theta: [-17.9, 0],
+      thetaEase: [0, 0.04],
+      rollAxis: [0, 1, 0],
+      rollDeg: [0, 0],
       gCtrl: [
-        { u: 0, pos: [0.17, -0.005, -0.52] },
-        { u: 0.22, pos: [0.19, -0.07, -0.51] },
-        { u: 0.44, pos: [-0.02, -0.04, -0.4] },
-        { u: 0.78, pos: [-0.2, -0.12, -0.36] },
-        { u: 1, pos: [-0.2, -0.14, -0.39] },
+        // windup: deep, grip end low-right, tip under the clear line
+        { u: 0, pos: [0.094, -0.115, -0.42] },
+        { u: 0.16, pos: [0.094, -0.115, -0.42] },
+        // t=.10: the strike pose arrives (board visibly cocked)
+        { u: 0.166, pos: [0.051, -0.0478, -0.2879] },
+        // impact ~t.15: free end on the crosshair, grip end below
+        { u: 0.42, pos: [0.030, -0.0736, -0.2584] },
+        { u: 0.5, pos: [0.016, -0.076, -0.2584] },
+        // follow-through: lower-left
+        { u: 0.65, pos: [-0.115, -0.085, -0.2584] },
+        { u: 1, pos: [-0.115, -0.085, -0.2584] },
       ],
     },
-    // two-handed diagonal bat swing at the crosshair. 0.03-0.30 is a
-    // parametric arc (one fixed swing axis + Catmull-Rom root path); the
-    // keys in that window only steer hand poses/tails — the .03/.30 roots
-    // hold the parametric end poses so the blends join C0.
     keys: [
       // trigger: R lifts off the home row and arcs onto the bat grip while
       // L keeps the end-face hold (L never leaves the board)
-      { t: 0.0, root: { pos: HOME_POS, rot: HOME_ROT }, L: { ...L_GRIP, tail: [0.23, 0, 0.97] }, R: { ...R_HOVER, tail: [0.43, -0.46, 0.78] } },
-      { t: 0.008, root: { pos: [0.044, -0.115, -0.46], rot: [24, 22, -9.5] }, L: { ...L_GRIP, tail: [0.26, -0.3, 0.9] }, R: { ...R_LIFT3, tail: [0.41, -0.62, 0.67] } },
-      { t: 0.02, root: { pos: [0.07, -0.09, -0.47], rot: [22, 40, -12] }, L: { ...L_GRIP, tail: [0.3, -0.35, 0.88] }, R: { ...R_WAY, tail: [0.41, -0.72, 0.56] } },
-      { t: 0.03, root: { pos: [0.17, -0.005, -0.52], rot: [20, 60, -14] }, L: { ...L_GRIP, tail: [0.3, -0.3, 0.9] }, R: { ...R_GRIP, tail: [0.5, -0.75, 0.4] } },
-      { t: 0.1, root: { pos: [0.12, -0.1, -0.48], rot: [35, 86, -14] }, L: { ...L_GRIP, tail: [0.4, -0.4, 0.82] }, R: { ...R_GRIP, tail: [0.6, -0.7, 0.35] } },
-      { t: 0.15, root: { pos: [-0.02, -0.04, -0.4], rot: [51, 112, -23] }, L: { ...L_GRIP, tail: [0.5, -0.35, 0.79] }, R: { ...R_GRIP, tail: [0.6, -0.75, 0.2] } },
-      { t: 0.19, root: { pos: [-0.1, -0.08, -0.38], rot: [58, 140, -40] }, L: { ...L_GRIP, tail: [0.4, -0.6, 0.65] }, R: { ...R_GRIP, tail: [0.55, -0.8, 0.1] } },
-      { t: 0.24, root: { pos: [-0.2, -0.12, -0.36], rot: [61, 153, -48] }, L: { ...L_GRIP, tail: [0.2, -0.9, 0.3] }, R: { ...R_GRIP, tail: [0.5, -0.85, 0] } },
-      { t: 0.3, root: { pos: [-0.2, -0.14, -0.39], rot: [79.3, -62.2, 178.4] }, L: { ...L_GRIP, tail: [-0.4, -0.85, 0.3] }, R: { ...R_GRIP, tail: [0.45, -0.87, -0.1] } },
-      // recover: R lifts off along the board normal, then arcs to home row
-      { t: 0.36, root: { pos: [-0.13, -0.1, -0.42], rot: [50, -140, -70] }, L: { ...L_GRIP, tail: [-0.41, -0.86, 0.3] }, R: { ...R_WAY2, tail: [0.3, -0.9, 0.1] } },
-      { t: 0.44, root: { pos: [-0.01, -0.13, -0.5], rot: [30, -100, -50] }, L: { ...L_GRIP, tail: [-0.1, -0.91, 0.4] }, R: { ...R_WAY2, tail: [0, -0.97, 0.24] } },
-      { t: 0.52, root: { pos: [0.018, -0.15, -0.49], rot: [35, 10, -30] }, L: { ...L_GRIP, tail: [0.19, -0.86, 0.48] }, R: { ...R_WAY3, tail: [-0.11, -0.94, 0.33] } },
-      { t: 0.6, root: { pos: HOME_POS, rot: HOME_ROT }, L: { ...L_GRIP, tail: [0.03, 0.04, 1] }, R: { ...R_HOME, tail: [0.08, -0.64, 0.76] } },
+      { t: 0.0, root: { pos: [0.06, -0.09, -0.42], rot: [-1.3, -67.13, -89.59] }, L: { ...L_SGRIP, tail: [0.87, 0.31, 0.39] }, R: { ...R_HOVER, tail: [0.29, 0.81, 0.51] } },
+      { t: 0.008, root: { pos: [0.08, -0.105, -0.42], rot: [4.95, -78.19, -101.9] }, L: { ...L_SGRIP, tail: [0.91, 0.24, 0.35] }, R: { ...R_LIFT3, tail: [0.46, 0.75, 0.48] } },
+      { t: 0.014, root: { pos: [0.086, -0.108, -0.42], rot: [9.5, -83.5, -107.3] }, L: { ...L_SGRIP, tail: [0.94, 0.17, 0.3] }, R: { ...R_WAY, tail: [0.61, 0.65, 0.44] } },
+      { t: 0.02, root: { pos: [0.09, -0.112, -0.42], rot: [13.32, -87.87, -113.02] }, L: { ...L_SGRIP, tail: [0.97, 0.08, 0.25] }, R: { ...R_WAY, tail: [0.75, 0.54, 0.39] } },
+      { t: 0.026, root: { pos: [0.091, -0.113, -0.42], rot: [15.6, -90.2, -115.5] }, L: { ...L_SGRIP, tail: [0.98, -0.01, 0.19] }, R: { ...R_WAY, tail: [0.86, 0.4, 0.32] } },
+      // rigid assembly owns .03-.30: fixed grip curls, fixed tails; only
+      // the root pose is parametric. The keys here only carry hand data.
+      { t: 0.03, root: { pos: [0.094, -0.115, -0.42], rot: [18.14, -92.18, -118.16] }, L: { ...L_SGRIP, tail: [0.99, -0.1, 0.12] }, R: { ...R_GRIP, tail: [0.9, 0.32, 0.28] } },
+      { t: 0.1, L: { ...L_SGRIP, tail: [0.88, -0.48, 0.04] }, R: { ...R_GRIP, tail: [0.9, 0.32, 0.28] } },
+      { t: 0.15, L: { ...L_SGRIP, tail: [0.88, -0.48, 0.04] }, R: { ...R_GRIP, tail: [0.9, 0.32, 0.28] } },
+      { t: 0.19, L: { ...L_SGRIP, tail: [0.88, -0.48, 0.04] }, R: { ...R_GRIP, tail: [0.9, 0.32, 0.28] } },
+      { t: 0.24, L: { ...L_SGRIP, tail: [0.88, -0.48, 0.04] }, R: { ...R_GRIP, tail: [0.9, 0.32, 0.28] } },
+      { t: 0.3, root: { pos: [-0.115, -0.085, -0.2584], rot: [151.24, 80.22, 52.22] }, L: { ...L_SGRIP, tail: [0.88, -0.48, 0.04] }, R: { ...R_GRIP, tail: [0.9, 0.32, 0.28] } },
+      // recover: R releases straight up off the wrap, then arcs back to the
+      // home row; L never lets go and the board swings back to HOME
+      { t: 0.33, root: { pos: [-0.108, -0.088, -0.27], rot: [28.76, -99.78, -127.78] }, L: { ...L_SGRIP, tail: [0.95, -0.3, 0.01] }, R: { ...R_GRIP, tail: [0.95, 0.3, -0.12] } },
+      { t: 0.345, root: { pos: [-0.1, -0.09, -0.29], rot: [24.32, -96.87, -123.97] }, L: { ...L_SGRIP, tail: [0.98, -0.22, 0.01] }, R: { ...R_GRIP, tail: [0.94, 0.33, -0.03] } },
+      { t: 0.36, root: { pos: [-0.095, -0.093, -0.31], rot: [20.06, -93.73, -120.04] }, L: { ...L_SGRIP, tail: [0.99, -0.13, 0.02] }, R: { ...R_GRIP, tail: [0.9, 0.41, 0.14] } },
+      { t: 0.375, root: { pos: [-0.09, -0.096, -0.325], rot: [16.02, -90.38, -115.96] }, L: { ...L_SGRIP, tail: [1.0, -0.05, 0.03] }, R: { ...R_GRIP, tail: [0.85, 0.48, 0.21] } },
+      { t: 0.39, root: { pos: [-0.084, -0.1, -0.335], rot: [12.21, -86.79, -111.72] }, L: { ...L_SGRIP, tail: [0.98, 0.03, 0.2] }, R: { ...R_GRIP, tail: [0.74, 0.53, 0.42] } },
+      { t: 0.405, root: { pos: [-0.078, -0.104, -0.34], rot: [8.68, -82.98, -107.3] }, L: { ...L_SGRIP, tail: [0.98, 0.11, 0.18] }, R: { ...R_GRIP, tail: [0.55, 0.54, 0.63] } },
+      { t: 0.42, root: { pos: [-0.072, -0.107, -0.345], rot: [5.46, -78.93, -102.69] }, L: { ...L_SGRIP, tail: [0.95, 0.17, 0.25] }, R: { ...R_GRIP, tail: [0.1, 0.55, 0.83] } },
+      // release: R lifts straight off the wrap (wayR2 shares the grip's
+      // wrist orientation, so the forearm direction doesn't snap), then
+      // arcs onto the home row through wayR3; L never lets go
+      { t: 0.4275, root: { pos: [-0.069, -0.108, -0.348], rot: [4.9, -78.1, -102] }, L: { ...L_SGRIP, tail: [0.945, 0.185, 0.265] }, R: { ...R_WAY2, curls: WRAP_CURLS, tail: [0.0, 0.58, 0.81] } },
+      { t: 0.435, root: { pos: [-0.066, -0.11, -0.35], rot: [4.3, -77.3, -100.9] }, L: { ...L_SGRIP, tail: [0.94, 0.2, 0.28] }, R: { ...R_WAY2, curls: WRAP_CURLS, tail: [-0.04, 0.62, 0.78] } },
+      { t: 0.45, root: { pos: [-0.055, -0.114, -0.352], rot: [3.9, -76.7, -100.2] }, L: { ...L_SGRIP, tail: [0.935, 0.21, 0.29] }, R: { ...R_WAY2, curls: WRAP_CURLS, tail: [-0.54, 0.49, 0.68] } },
+      { t: 0.46, root: { pos: [-0.05, -0.118, -0.355], rot: [3.5, -76.1, -99.5] }, L: { ...L_SGRIP, tail: [0.93, 0.22, 0.3] }, R: { ...R_WAY2, curls: WRAP_CURLS, tail: [-0.55, 0.48, 0.68] } },
+      { t: 0.48, root: { pos: [-0.035, -0.125, -0.365], rot: [3.49, -58.9, -80.6] }, L: { ...L_SGRIP, tail: [0.84, 0.33, 0.43] }, R: { ...R_WAY3, curls: WRAP_CURLS, tail: [-0.67, 0.25, 0.7] } },
+      { t: 0.5, root: { pos: [-0.025, -0.13, -0.372], rot: [3.4, -45.5, -68.1] }, L: { ...L_SGRIP, tail: [0.3, 0.35, 0.9] }, R: { ...R_WAY3, curls: WRAP_CURLS, tail: [-0.67, 0.25, 0.7] } },
+      { t: 0.53, root: { pos: [-0.015, -0.135, -0.38], rot: [3.3, -15.9, -33.6] }, L: { ...L_SGRIP, tail: [0.0, 0.35, 0.94] }, R: { ...R_WAY3, tail: [-0.68, -0.66, 0.31] } },
+      { t: 0.6, root: { pos: HOME_POS, rot: HOME_ROT }, L: { ...L_SGRIP, tail: [0.6, -0.25, 0.76] }, R: { ...R_HOME, tail: [-0.54, -0.7, 0.47] } },
     ],
   },
 };

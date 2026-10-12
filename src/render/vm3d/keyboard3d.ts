@@ -278,6 +278,10 @@ export class KeyboardRig {
     // direction runs down-left and the sleeve exits the left half of the
     // frame instead of crossing to the right edge
     this.addSocket('batL.wrist', [-0.177, -0.006, 0.050], [70, 90, -180]);
+    // swing variant rolled ~10deg about the end-face normal so the left
+    // forearm tips far enough downward for the sleeve to exit the bottom
+    // edge on both analysts
+    this.addSocket('gripLS.wrist', [-0.177, 0.009, 0.050], [-60.93, 99.67, -169.68]);
     // bat grip (swing): two fists stacked along the board's left end like a
     // bat handle — L keeps its end-face hold (nearer the end, never lets
     // go), R wraps the top face directly inboard of it, fists touching.
