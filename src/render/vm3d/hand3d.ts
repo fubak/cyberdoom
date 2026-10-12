@@ -435,11 +435,11 @@ export class LiveHand {
     // live world quat already contains the frame/scale parents.
     const dirL = new THREE.Vector3(0, -1, 0);
     const boneDir = toBoneLocal('wrist', dirL).normalize();
-    const len = 0.26 / s;                    // forearm always exits the frame
+    const len = 0.15 / s;                    // forearm always exits the frame
     const rw = this.palmW * 0.36 / s;        // wrist cross-section radius
     const jacket = ANALYSTS[this.spec.gender].jacket;
     const cuffStart = 0.04 / s;
-    const cuffEnd = 0.26 / s;
+    const cuffEnd = 0.15 / s;
 
     // tapered forearm: wrist radius at the wrist, +12 % toward the elbow.
     // It STOPS 14 mm inside the cuff so its far end can never peek out —

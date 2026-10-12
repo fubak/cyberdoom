@@ -326,7 +326,7 @@ export class Vm3d {
     // the swing's strike is the only time the board may reach above
     // VM_CLEAR: the taller band applies exactly while the board is in
     // flight — grab lift through strike and settle (0.014–0.34 s)
-    const crossing = this.clip === CLIPS['kbd.swing'] && this.clipT >= 0.014 && this.clipT <= 0.34;
+    const crossing = this.clip === CLIPS['kbd.swing'] && this.clipT >= 0.10 && this.clipT <= 0.25;
     const bandH = crossing ? Math.floor(h * 0.58) : Math.floor(h * (1 - VM_CLEAR));
     this.cam.aspect = w / h;
     this.cam.updateProjectionMatrix();

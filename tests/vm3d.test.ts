@@ -236,10 +236,10 @@ describe('vm3d clip contacts (plan §5)', () => {
     expect(f150.y, 'impact tip short of the crosshair').toBeGreaterThan(-0.2);
     expect(e150.y, 'impact hands not lower-centre').toBeLessThan(-0.55);
     // the board may ride into the cleared band only while it is in
-    // flight: the grab/wind-up lift, the strike, and the settle (0.014–0.34)
+    // flight: the strike window where the board may cross VM_CLEAR (0.10–0.25)
     for (let t = 0; t <= clip.duration + 1e-9; t += 0.005) {
       const f = ndc(t, FREE);
-      const clearNdc = t >= 0.014 && t <= 0.34 ? 0.16 : -0.24;
+      const clearNdc = t >= 0.10 && t <= 0.25 ? 0.16 : -0.24;
       expect(f.y, `swing@${t.toFixed(3)} board above VM_CLEAR outside the strike window`).toBeLessThan(clearNdc + 0.06);
     }
     const r600 = resolveClip(clip, 0.6);
@@ -703,6 +703,87 @@ describe('vm3d clip contacts (plan §5)', () => {
         const fx = (c.x + 1) / 2;
         expect(fx, `follow@${t.toFixed(2)} fist x ${fx.toFixed(2)}`).toBeGreaterThanOrEqual(0.20);
         expect(fx, `follow@${t.toFixed(2)} fist x ${fx.toFixed(2)}`).toBeLessThanOrEqual(0.40);
+      }
+    });
+  }
+
+  // round-3: one continuous authored arc — sampled every 5 ms over 0–0.60 s
+  for (const gender of ['male', 'female'] as const) {
+    const aSpec = { gender, skin: SKIN_TONES[1] };
+    const cam = new THREE.PerspectiveCamera(54, 1280 / 672, 0.01, 5);
+
+    it(`SWING ${gender}: root angular speed stays under 2000 deg/s (5 ms samples)`, () => {
+      const clip = CLIPS['kbd.swing'];
+      let prev: THREE.Quaternion | null = null;
+      let prevT = 0;
+      for (let t = 0; t <= 0.6 + 1e-9; t += 0.005) {
+        const r = resolveClip(clip, t);
+        const q = new THREE.Quaternion().setFromEuler(
+          new THREE.Euler(r.rootRot[0] * Math.PI / 180, r.rootRot[1] * Math.PI / 180, r.rootRot[2] * Math.PI / 180, 'ZXY'));
+        if (prev) {
+          const degPerSec = prev.angleTo(q) * 180 / Math.PI / (t - prevT);
+          expect(degPerSec, `swing@${t.toFixed(3)} root speed ${degPerSec.toFixed(0)} deg/s`).toBeLessThanOrEqual(2000);
+        }
+        prev = q;
+        prevT = t;
+      }
+    });
+
+    it(`SWING ${gender}: forearm tail direction changes at most 20 deg per 5 ms`, () => {
+      const clip = CLIPS['kbd.swing'];
+      for (const side of ['L', 'R'] as const) {
+        let prev: THREE.Vector3 | null = null;
+        for (let t = 0; t <= 0.6 + 1e-9; t += 0.005) {
+          const r = resolveClip(clip, t);
+          const td = r.hands[side].tailDir;
+          if (!td) { prev = null; continue; }
+          const v = new THREE.Vector3(...td).normalize();
+          if (prev) {
+            const deg = prev.angleTo(v) * 180 / Math.PI;
+            expect(deg, `swing@${t.toFixed(3)} ${side} tail step ${deg.toFixed(1)} deg`).toBeLessThanOrEqual(20);
+          }
+          prev = v;
+        }
+      }
+    });
+
+    it(`SWING ${gender}: fist centroid x is monotone non-increasing apex to follow-through`, () => {
+      const rig = new Vm3dRig(aSpec);
+      const clip = CLIPS['kbd.swing'];
+      let prevFx = Infinity;
+      for (let t = 0.10; t <= 0.30 + 1e-9; t += 0.005) {
+        rig.solve(clip, t);
+        const a = rig.hands.L.palmCentreWorld(new THREE.Vector3());
+        const b = rig.hands.R.palmCentreWorld(new THREE.Vector3());
+        const c = a.add(b).multiplyScalar(0.5).project(cam);
+        const fx = (c.x + 1) / 2;
+        if (prevFx !== Infinity) {
+          expect(fx - prevFx, `swing@${t.toFixed(3)} centroid x reversal ${(fx - prevFx).toFixed(3)}`).toBeLessThanOrEqual(0.01);
+        }
+        prevFx = fx;
+      }
+    });
+
+    it(`SWING ${gender}: hands stay 0.30 m+ from camera, each under 30% of view width, no cap faces camera`, () => {
+      const rig = new Vm3dRig(aSpec);
+      const clip = CLIPS['kbd.swing'];
+      for (let t = 0; t <= 0.6 + 1e-9; t += 0.005) {
+        rig.solve(clip, t);
+        for (const side of ['L', 'R'] as const) {
+          const box = new THREE.Box2();
+          for (const p of handPoints(rig.hands[side])) {
+            expect(p.length(), `swing@${t.toFixed(3)} ${side} hand ${p.z.toFixed(2)} m from camera`).toBeGreaterThanOrEqual(0.30);
+            const n = p.clone().project(cam);
+            box.expandByPoint(new THREE.Vector2(n.x, n.y));
+          }
+          expect(box.max.x - box.min.x, `swing@${t.toFixed(3)} ${side} hand spans ${(50 * (box.max.x - box.min.x)).toFixed(0)}% width`).toBeLessThanOrEqual(0.6);
+          const td = rig.hands[side].tailDir;
+          if (td) {
+            // forearm cap normal is the tail direction; it must not face the camera
+            const capDot = -td.z;
+            expect(capDot, `swing@${t.toFixed(3)} ${side} cap normal to camera ${capDot.toFixed(2)}`).toBeLessThan(0.2);
+          }
+        }
       }
     });
   }
