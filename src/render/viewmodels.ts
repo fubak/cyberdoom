@@ -315,7 +315,7 @@ export function drawToolViewmodel(
   // articulated rig hands over the tool: use-cycle pose + idle micro-motion,
   // tracking the lagged object offsets so the grip follows the tool
   {
-    const anchor = TOOL_HANDS[tool.id];
+    const anchor = SHOW_HANDS ? TOOL_HANDS[tool.id] : undefined;
     if (anchor) {
       const variant = Math.floor(_time * 0.6) % cycleVariants(tool.id);
       const hf = handCycleFrame(tool.id, ph ? anim!.sinceUse * 1000 : null, variant);
@@ -370,6 +370,8 @@ export function drawToolViewmodel(
 
 /** Opaque art may rest this far under the bar line (the Doom bottom-crop look). */
 const BLEED = 1;
+/** Rig hands off: capsule-baked digits read as mitts at this scale — tools draw bare, Doom-style. */
+const SHOW_HANDS = false;
 /** Rig hands render ~22% smaller than authored — grips stay readable without the hand owning the frame. */
 const HAND_SCALE = 0.78;
 /** Extra pixels the hand sprite sinks toward the bar line (Doom keeps hands low). */
