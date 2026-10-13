@@ -84,10 +84,10 @@ export const PHALANX = [1 / 2.07, 0.62 / 2.07, 0.45 / 2.07];
 export const PALM_LEN = 1.1;
 /** metacarpal-base x offset as a fraction of palm width (right hand; thumb side −x). */
 export const MCP_X: Record<Exclude<FingerName, 'thumb'>, number> = {
-  index: -0.32,
-  middle: -0.11,
-  ring: 0.11,
-  pinky: 0.29,
+  index: -0.36,
+  middle: -0.12,
+  ring: 0.13,
+  pinky: 0.34,
 };
 /** thumb metacarpal base: [x×palmW, y×palmLen, z] — the thenar eminence. */
 export const THUMB_BASE: V3 = [-0.42, 0.34, 0.1];
@@ -364,10 +364,10 @@ function put2Dorsal(put: (v: V3) => V3, local: V3): V3 {
 export function defaultCurl(f: FingerName): Curl {
   switch (f) {
     case 'thumb': return { abd: 8, mcp: 18, pip: 20 };
-    case 'index': return { abd: 6, mcp: 42, pip: 46 };
+    case 'index': return { abd: 10, mcp: 42, pip: 46 };
     case 'middle': return { abd: 0, mcp: 48, pip: 50 };
-    case 'ring': return { abd: -6, mcp: 54, pip: 56 };
-    case 'pinky': return { abd: -12, mcp: 62, pip: 64 };
+    case 'ring': return { abd: -9, mcp: 54, pip: 56 };
+    case 'pinky': return { abd: -18, mcp: 62, pip: 64 };
   }
 }
 

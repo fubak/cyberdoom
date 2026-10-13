@@ -17,26 +17,26 @@ const curls = (f: Partial<Record<'thumb' | 'index' | 'middle' | 'ring' | 'pinky'
 
 // typing: palm down on the home row, fingers curved, thumb over the space bar
 const TYPE = (over: Partial<Record<'index' | 'middle' | 'ring' | 'pinky' | 'thumb', Partial<Curl>>> = {}) => ({
-  index: { abd: 6, mcp: 38, pip: 52, ...over.index },
+  index: { abd: 10, mcp: 38, pip: 52, ...over.index },
   middle: { abd: 0, mcp: 42, pip: 56, ...over.middle },
-  ring: { abd: -6, mcp: 46, pip: 60, ...over.ring },
-  pinky: { abd: -12, mcp: 52, pip: 64, ...over.pinky },
+  ring: { abd: -10, mcp: 46, pip: 60, ...over.ring },
+  pinky: { abd: -19, mcp: 52, pip: 64, ...over.pinky },
   thumb: { abd: 0, mcp: 60, pip: 55, ...over.thumb },
 });
 
 const FIST = (tight = 0) => ({
-  index: { abd: 6, mcp: 84 + tight * 4, pip: 96 + tight * 8 },
+  index: { abd: 9, mcp: 84 + tight * 4, pip: 96 + tight * 8 },
   middle: { abd: 0, mcp: 88 + tight * 2, pip: 100 + tight * 8 },
-  ring: { abd: -6, mcp: 90, pip: 102 + tight * 6 },
-  pinky: { abd: -12, mcp: 90, pip: 100 },
+  ring: { abd: -9, mcp: 90, pip: 102 + tight * 6 },
+  pinky: { abd: -18, mcp: 90, pip: 100 },
   thumb: { abd: 0, mcp: 30 + tight * 14, pip: 40 + tight * 20 },
 });
 
 const PINCH = (open = 0) => ({
-  index: { abd: 4, mcp: 80 - open * 10, pip: 85 - open * 8 },
+  index: { abd: 8, mcp: 80 - open * 10, pip: 85 - open * 8 },
   middle: { abd: 0, mcp: 70, pip: 84 },
-  ring: { abd: -8, mcp: 82, pip: 98 },
-  pinky: { abd: -14, mcp: 88, pip: 100 },
+  ring: { abd: -11, mcp: 82, pip: 98 },
+  pinky: { abd: -19, mcp: 88, pip: 100 },
   thumb: { abd: 0, mcp: 44 - open * 10, pip: 42 - open * 8 },
 });
 
@@ -44,17 +44,17 @@ const PINCH = (open = 0) => ({
 const CUP = (click = false) => ({
   index: { abd: 8, mcp: click ? 52 : 40, pip: click ? 42 : 30, dip: click ? 30 : 18 },
   middle: { abd: -2, mcp: 46, pip: 36, dip: 22 },
-  ring: { abd: -10, mcp: 62, pip: 58 },
-  pinky: { abd: -16, mcp: 68, pip: 64 },
+  ring: { abd: -13, mcp: 62, pip: 58 },
+  pinky: { abd: -19, mcp: 68, pip: 64 },
   thumb: { abd: 0, mcp: 38, pip: 44 },
 });
 
 // squeeze a clip/bezel edge
 const GRIP_SIDE = (tight = 0) => ({
-  index: { abd: 8, mcp: 62 + tight * 10, pip: 70 + tight * 10 },
+  index: { abd: 11, mcp: 62 + tight * 10, pip: 70 + tight * 10 },
   middle: { abd: 0, mcp: 66 + tight * 10, pip: 74 + tight * 10 },
-  ring: { abd: -8, mcp: 70 + tight * 10, pip: 78 + tight * 10 },
-  pinky: { abd: -14, mcp: 76 + tight * 10, pip: 82 + tight * 10 },
+  ring: { abd: -11, mcp: 70 + tight * 10, pip: 78 + tight * 10 },
+  pinky: { abd: -19, mcp: 76 + tight * 10, pip: 82 + tight * 10 },
   thumb: { abd: 0, mcp: 26, pip: 30 },
 });
 

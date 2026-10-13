@@ -187,13 +187,13 @@ export interface BuiltHand {
 export function buildHand(p: Place, spec: { gender: Gender; skin: SkinTone }): BuiltHand {
   const fem = spec.gender === 'female';
   const size = p.size;
-  const palmW = size * (fem ? 0.84 : 0.95);
+  const palmW = size * (fem ? 0.8 : 0.88);
   const palmL = size * PALM_LEN;
   const palmT = size * (fem ? 0.24 : 0.3);
   const mx = p.mirror ? -1 : 1;
   const skin = spec.skin.base;
   const jacket = ANALYSTS[spec.gender].jacket;
-  const r0 = Math.max(1.7, size * (fem ? 0.06 : 0.072));
+  const r0 = Math.max(1.7, size * (fem ? 0.05 : 0.058));
 
   const wristG = new THREE.Group();
   wristG.position.set(p.wrist[0], p.wrist[1], p.wrist[2]);
@@ -214,9 +214,12 @@ export function buildHand(p: Place, spec: { gender: Gender; skin: SkinTone }): B
 
   const joints = {} as Record<FingerName, THREE.Vector3[]>;
 
+  // alternating tone so neighbouring digits don't fuse into one silhouette
+  const FINGER_TONE: Record<FingerName, number> = { thumb: 1, index: 1, middle: 0.88, ring: 1, pinky: 0.9 };
   for (const f of HAND_ORDER) {
     const cc = clampCurl(f, { ...defaultCurl(f), ...p.fingers?.[f] });
     const isThumb = f === 'thumb';
+    const fskin = FINGER_TONE[f] === 1 ? skin : shade(skin, FINGER_TONE[f]);
     const len = (isThumb ? THUMB_LEN : FINGER_LEN[f as keyof typeof FINGER_LEN]) * size;
     const ls = [len * PHALANX[0], len * PHALANX[1], len * PHALANX[2]];
     const tg = isThumb ? thumbGeom(p, palmW, palmL, mx, cc.mcp, cc.pip) : null;
@@ -244,7 +247,7 @@ export function buildHand(p: Place, spec: { gender: Gender; skin: SkinTone }): B
       for (let s = 0; s < 3; s++) {
         const jg = new THREE.Group();
         jg.quaternion.copy(qs[s]);
-        jg.add(phalanx(ls[s], radii[s], radii[s + 1], skin));
+        jg.add(phalanx(ls[s], radii[s], radii[s + 1], fskin));
         parent.add(jg);
         const next = new THREE.Group();
         next.position.set(0, ls[s], 0);
@@ -262,7 +265,7 @@ export function buildHand(p: Place, spec: { gender: Gender; skin: SkinTone }): B
         // mcp also carries the abduction spread
         const fq = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -flex * D2R);
         jg.quaternion.copy(s === 0 ? abdQ.clone().multiply(fq) : fq);
-        jg.add(phalanx(ls[s], radii[s], radii[s + 1], skin));
+        jg.add(phalanx(ls[s], radii[s], radii[s + 1], fskin));
         parent.add(jg);
         const next = new THREE.Group();
         next.position.set(0, ls[s], 0);
@@ -375,8 +378,8 @@ export function bakeHands(
   r.setSize(W, H, false);
 
   const scene = new THREE.Scene();
-  scene.add(new THREE.AmbientLight(0xffffff, 0.7));
-  const key = new THREE.DirectionalLight(0xfff2e0, 1.7);
+  scene.add(new THREE.AmbientLight(0xffffff, 0.48));
+  const key = new THREE.DirectionalLight(0xfff2e0, 1.9);
   key.position.set(-0.8, 2.1, 1.1);
   scene.add(key);
   const fill = new THREE.DirectionalLight(0xbfd4ff, 0.4);
@@ -467,8 +470,7 @@ function postPass(
 ): void {
   // finger seams ride just under the skin shadow tone so they read as
   // separations between digits, not cuts
-  const SEAM = hexRgb(shade(spec.skin.shadow, 0.6));
-  const CREASE = hexRgb(shade(spec.skin.shadow, 0.72));
+  const SEAM = hexRgb(shade(spec.skin.shadow, 0.7));
   const px = (x: number, y: number, c: number[]) => {
     if (x < 0 || x >= W || y < 0 || y >= H) return;
     const i = (y * W + x) * 4;
@@ -492,23 +494,8 @@ function postPass(
         for (let i = 0; i <= n; i++) {
           const t = 0.35 + (i / n) * 0.65; // keep the web near the knuckles
           const xi = Math.round(x0 + (x1 - x0) * t), yi = Math.round(y0 + (y1 - y0) * t);
-          // 2px-wide seam: at 4x bake and ~200px draw this is still sub-pixel
-          for (let ox = -1; ox <= 0; ox++) if (opaque(xi + ox, yi)) px(xi + ox, yi, SEAM);
-        }
-      }
-      // knuckle creases: short dashes across the finger, perpendicular to its
-      // screen-space direction, stamped at the PIP and DIP joints
-      for (const f of ['index', 'middle', 'ring', 'pinky'] as FingerName[]) {
-        const js = b.joints[f].map((j) => j.clone().project(cam));
-        const to2 = (v: THREE.Vector3) => [((v.x + 1) / 2) * W, ((1 - v.y) / 2) * H] as const;
-        for (let s = 1; s <= 2; s++) {
-          const [ax, ay] = to2(js[s - 1]), [bx, by] = to2(js[s]);
-          const dl = Math.hypot(bx - ax, by - ay) || 1;
-          const nx = -(by - ay) / dl, ny = (bx - ax) / dl; // across the finger
-          for (let o = -2; o <= 2; o++) {
-            const xi = Math.round(bx + nx * o), yi = Math.round(by + ny * o);
-            if (opaque(xi, yi)) px(xi, yi, CREASE);
-          }
+          // 3px-wide seam: reads as an actual gap at draw scale
+          for (let ox = -1; ox <= 1; ox++) if (opaque(xi + ox, yi)) px(xi + ox, yi, SEAM);
         }
       }
     }
@@ -536,7 +523,7 @@ function postPass(
  */
 export function jointLayout(p: Place, spec: { gender: Gender; skin: SkinTone }): Record<FingerName, { x: number; y: number }[]> {
   const fem = spec.gender === 'female';
-  const palmW = p.size * (fem ? 0.84 : 0.95);
+  const palmW = p.size * (fem ? 0.8 : 0.88);
   const palmL = p.size * PALM_LEN;
   const mx = p.mirror ? -1 : 1;
   const size = p.size;
