@@ -327,9 +327,11 @@ export function drawToolViewmodel(
         const sw = sp.c.width / RES;
         const sh = sp.c.height / RES;
         const [brx, bry] = breath(_time);
-        const hs = hf.move[2];
+        // hands are an accent, not the hero: draw them smaller and sunk lower
+        // toward the bar so the tool silhouette owns the centre of the view
+        const hs = hf.move[2] * HAND_SCALE;
         const hx = Math.round(w / 2 + anchor.at[0] - (sw * hs) / 2 + bx + dx + hf.move[0] + brx * 0.5 + 1 + idleM[0]);
-        let hy = Math.round(h - anchor.at[1] - sh * hs + dyDown + drop + hf.move[1] + bry + idleM[1]);
+        let hy = Math.round(h - anchor.at[1] - sh * hs + dyDown + drop + hf.move[1] + bry + idleM[1] + HAND_SINK);
         // never let the hand's first opaque row cross the clearance line
         hy = Math.max(hy, Math.ceil(line - (sp.top / RES) * hs));
         // sway roll + bob pitch + idle roll applied continuously at draw:
@@ -368,6 +370,10 @@ export function drawToolViewmodel(
 
 /** Opaque art may rest this far under the bar line (the Doom bottom-crop look). */
 const BLEED = 1;
+/** Rig hands render ~22% smaller than authored — grips stay readable without the hand owning the frame. */
+const HAND_SCALE = 0.78;
+/** Extra pixels the hand sprite sinks toward the bar line (Doom keeps hands low). */
+const HAND_SINK = 4;
 /** Lit-frame scale punch (art swells toward the camera at the impact flash). */
 const LIT_SWELL = 1.05;
 

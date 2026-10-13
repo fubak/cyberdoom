@@ -35,8 +35,9 @@ const Y_AXIS = new THREE.Vector3(0, 1, 0);
 let gradient: THREE.DataTexture | null = null;
 function gradientMap(): THREE.DataTexture {
   if (!gradient) {
-    // 5 toon steps; NearestFilter gives the banded retro ramp
-    const data = new Uint8Array([150, 195, 255, 255]);
+    // 4 toon steps; NearestFilter gives the banded retro ramp.
+    // Low steps carry real depth so fingers/knuckles read instead of blobbing.
+    const data = new Uint8Array([95, 150, 205, 255]);
     gradient = new THREE.DataTexture(data, 4, 1, THREE.RedFormat);
     gradient.minFilter = THREE.NearestFilter;
     gradient.magFilter = THREE.NearestFilter;
@@ -466,7 +467,8 @@ function postPass(
 ): void {
   // finger seams ride just under the skin shadow tone so they read as
   // separations between digits, not cuts
-  const SEAM = hexRgb(shade(spec.skin.shadow, 0.82));
+  const SEAM = hexRgb(shade(spec.skin.shadow, 0.6));
+  const CREASE = hexRgb(shade(spec.skin.shadow, 0.72));
   const px = (x: number, y: number, c: number[]) => {
     if (x < 0 || x >= W || y < 0 || y >= H) return;
     const i = (y * W + x) * 4;
@@ -490,7 +492,23 @@ function postPass(
         for (let i = 0; i <= n; i++) {
           const t = 0.35 + (i / n) * 0.65; // keep the web near the knuckles
           const xi = Math.round(x0 + (x1 - x0) * t), yi = Math.round(y0 + (y1 - y0) * t);
-          if (opaque(xi, yi)) px(xi, yi, SEAM);
+          // 2px-wide seam: at 4x bake and ~200px draw this is still sub-pixel
+          for (let ox = -1; ox <= 0; ox++) if (opaque(xi + ox, yi)) px(xi + ox, yi, SEAM);
+        }
+      }
+      // knuckle creases: short dashes across the finger, perpendicular to its
+      // screen-space direction, stamped at the PIP and DIP joints
+      for (const f of ['index', 'middle', 'ring', 'pinky'] as FingerName[]) {
+        const js = b.joints[f].map((j) => j.clone().project(cam));
+        const to2 = (v: THREE.Vector3) => [((v.x + 1) / 2) * W, ((1 - v.y) / 2) * H] as const;
+        for (let s = 1; s <= 2; s++) {
+          const [ax, ay] = to2(js[s - 1]), [bx, by] = to2(js[s]);
+          const dl = Math.hypot(bx - ax, by - ay) || 1;
+          const nx = -(by - ay) / dl, ny = (bx - ax) / dl; // across the finger
+          for (let o = -2; o <= 2; o++) {
+            const xi = Math.round(bx + nx * o), yi = Math.round(by + ny * o);
+            if (opaque(xi, yi)) px(xi, yi, CREASE);
+          }
         }
       }
     }
