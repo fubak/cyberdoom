@@ -527,20 +527,20 @@ const ratModel: Model = (pose) => {
   // dead: upturned rat — flopped on its back, legs curled stiff in the
   // air, antenna-tail slack on the floor
   if (pose.kind === 'dead') {
-    out.push(ell([0, 7, 0], [9.5, 6, 8.5], '#426a4d', { pitch: 2.4 }));
-    out.push(ell([0, 8.5, -2], [8.5, 6.5, 8], '#3a5c46', { pitch: 2.4 }));
-    out.push(ell([0, 11, 0], [6.5, 4, 6], '#5a7a5c', { pitch: 2.4 }));
-    out.push(ell([0, 4.5, 9], [5.5, 4, 5], '#3a5c44', { pitch: 2.2 }));
-    out.push(ell([0, 3, 13], [3, 2.2, 3.5], '#33553d', { pitch: 2.2 }));
+    out.push(ell([0, 7, 0], [9.5, 6, 8.5], '#4d7a58', { pitch: 2.4 }));
+    out.push(ell([0, 8.5, -2], [8.5, 6.5, 8], '#456c50', { pitch: 2.4 }));
+    out.push(ell([0, 11, 0], [6.5, 4, 6], '#649068', { pitch: 2.4 }));
+    out.push(ell([0, 4.5, 9], [5.5, 4, 5], '#456a4f', { pitch: 2.2 }));
+    out.push(ell([0, 3, 13], [3, 2.2, 3.5], '#3d6147', { pitch: 2.2 }));
     out.push(ell([0, 2.2, 15.5], [1.4, 1.4, 1.6], '#2a0e0e'));
     for (const sx of [-1, 1]) out.push(ell([sx * 3.8, 6.8, 9.5], [2.2, 1.2, 2.4], '#8a2f2f', { pitch: 2.2 }));
     for (const sx of [1, -1]) {
-      limb(out, [sx * 6, 9, -4], [sx * 11, 14, -6], 1.15, '#33553d');
-      limb(out, [sx * 6, 9, 4], [sx * 11, 15, 6], 1.15, '#33553d');
-      out.push(ell([sx * 11, 15, 6], [2.2, 1.6, 2.2], '#16281c'));
-      out.push(ell([sx * 11, 14, -6], [2.2, 1.6, 2.2], '#16281c'));
+      limb(out, [sx * 6, 9, -4], [sx * 11, 14, -6], 1.15, '#3d6147');
+      limb(out, [sx * 6, 9, 4], [sx * 11, 15, 6], 1.15, '#3d6147');
+      out.push(ell([sx * 11, 15, 6], [2.2, 1.6, 2.2], '#1d3325'));
+      out.push(ell([sx * 11, 14, -6], [2.2, 1.6, 2.2], '#1d3325'));
     }
-    limb(out, [0, 2.5, -8], [3, 1.6, -18], 1.15, '#4a5e4a');
+    limb(out, [0, 2.5, -8], [3, 1.6, -18], 1.15, '#566e58');
     limb(out, [3, 1.6, -18], [6, 1.2, -25], 0.85, '#8a5a50');
     return out;
   }
@@ -551,22 +551,22 @@ const ratModel: Model = (pose) => {
   // hindquarters low, shoulders hunched high — the classic rodent arch
   const hq: V3 = [0, 15 + bob * 0.4 + rear * 0.3, -8];
   const sh: V3 = [0, 27 + bob + rear, 3];
-  out.push(ell(hq, [9.5, 7.5, 8.5], '#426a4d'));
-  out.push(ell([0, 20 + bob * 0.6 + rear * 0.6, -1.5], [8.5, 8, 8], '#3a5c46'));
-  out.push(ell(sh, [7.5, 7, 7], '#3a5c44', { roll: pain ? (pk(pose) === 1 ? -0.18 : 0.18) : 0 }));
+  out.push(ell(hq, [9.5, 7.5, 8.5], '#4d7a58'));
+  out.push(ell([0, 20 + bob * 0.6 + rear * 0.6, -1.5], [8.5, 8, 8], '#456c50'));
+  out.push(ell(sh, [7.5, 7, 7], '#456a4f', { roll: pain ? (pk(pose) === 1 ? -0.18 : 0.18) : 0 }));
   // dorsal ridge: hackle spikes along the arch
   for (let i = 0; i < 5; i++) {
     const t = i / 4;
-    out.push(ell([0, 21 + t * 9 + bob * 0.7 + rear * (0.4 + t * 0.6), -9 + t * 11], [1.1, 3.6 - t, 1.4], '#1e3828', { pitch: -0.5 }));
+    out.push(ell([0, 21 + t * 9 + bob * 0.7 + rear * (0.4 + t * 0.6), -9 + t * 11], [1.1, 3.6 - t, 1.4], '#28422f', { pitch: -0.5 }));
   }
   // head slung low and forward: pointed snout, glowing cursor-slit eyes
   const hy = 18 + bob + rear;
   const hz = 12;
-  out.push(ell([0, hy, hz], [5.5, 4.5, 5], '#3a5c44', { pitch: pain ? -0.5 : 0 }));
-  out.push(ell([0, hy - 1.6, hz + 5.5], [3.6, 2.8, 3.4], '#33553d'));
+  out.push(ell([0, hy, hz], [5.5, 4.5, 5], '#456a4f', { pitch: pain ? -0.5 : 0 }));
+  out.push(ell([0, hy - 1.6, hz + 5.5], [3.6, 2.8, 3.4], '#3d6147'));
   // tall thin ears with lit tips — the remote-receiver tell
   for (const sx of [-1, 1]) {
-    out.push(ell([sx * 3.2, hy + 5.5, hz - 1.5], [1.1, 2.8, 0.8], '#1e3828', { roll: sx * 0.4 }));
+    out.push(ell([sx * 3.2, hy + 5.5, hz - 1.5], [1.1, 2.8, 0.8], '#28422f', { roll: sx * 0.4 }));
     out.push(ell([sx * 3.7, hy + 7.8, hz - 1.7], [0.7, 0.9, 0.5], '#40e8ff', { glow: true }));
   }
   for (const sx of [-1, 1]) {
@@ -582,9 +582,9 @@ const ratModel: Model = (pose) => {
       const hip: V3 = [sx * (front ? 5.5 : 7.5), (front ? sh[1] : hq[1]) - 1.5, hipZ];
       const knee: V3 = [sx * (front ? 11 : 13), hip[1] - 5.5, hipZ + (front ? 2.5 : -2) + swing * 0.6];
       const foot: V3 = [sx * (front ? 9.5 : 12), 1.2 + Math.max(0, swing) * 0.7 + (pain && front ? 8 : 0), hipZ + (front ? 6 : -6) + swing];
-      limb(out, hip, knee, 1.15, '#33553d');
-      limb(out, knee, foot, 0.95, '#3d6147');
-      out.push(ell(foot, [1.7, 1, 2.1], '#16281c'));
+      limb(out, hip, knee, 1.15, '#3d6147');
+      limb(out, knee, foot, 0.95, '#467254');
+      out.push(ell(foot, [1.7, 1, 2.1], '#1d3325'));
     }
   }
   // whip antenna-tail: curls high above the rump, blinking beacon tip —
@@ -593,10 +593,12 @@ const ratModel: Model = (pose) => {
   const tailA: V3 = [0, hq[1] + 3, -14];
   const tailB: V3 = [wag * 0.6, 36 + bob * 0.5, -20];
   const tailC: V3 = [wag, 50 + bob * 0.5 + rear * 0.3, -21];
-  limb(out, tailA, tailB, 1.15, '#1e3828');
-  limb(out, tailB, tailC, 0.85, '#33553d');
-  const led = pose.kind !== 'walk' || pose.k % 2 === 0;
-  if (led || atk >= 0) out.push(ell(tailC, [1.7, 1.7, 1.7], atk === 1 ? '#ffe040' : '#40e8ff', { glow: true }));
+  limb(out, tailA, tailB, 1.15, '#28422f');
+  limb(out, tailB, tailC, 0.85, '#3d6147');
+  // beacon tip always lit (it pulses by colour, not by blinking off) — the
+  // rat's far-readability on lit walls depends on it never going dark
+  const ledHot = pose.kind !== 'walk' || pose.k % 2 === 0;
+  out.push(ell(tailC, [1.7, 1.7, 1.7], atk === 1 ? '#ffe040' : ledHot ? '#40e8ff' : '#1899c8', { glow: true }));
   return out;
 };
 
