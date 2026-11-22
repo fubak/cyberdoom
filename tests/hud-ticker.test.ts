@@ -1,9 +1,44 @@
 import { describe, expect, it } from 'vitest';
+import { ellipsizeWords, wrapText } from '../src/render/font';
 import { tickerRows } from '../src/ui/hud';
 
 const msg = (text: string, kind = 'info', n = 1) => ({ text, kind, t: 5, n });
 
 describe('tickerRows', () => {
+  it('ellipsizes at whole-word boundaries, with a character fallback for one long word', () => {
+    const original = 'alpha bravo charlie';
+    const clipped = ellipsizeWords(original, 13);
+    const visible = clipped.slice(0, -1);
+    const visibleWords = visible.split(/\s+/);
+
+    expect(clipped).toBe('alpha bravo…');
+    expect(clipped.length).toBeLessThanOrEqual(13);
+    expect(visibleWords).toEqual(original.split(/\s+/).slice(0, visibleWords.length));
+    expect(ellipsizeWords('extraordinary', 6)).toBe('extra…');
+  });
+
+  it('truncates wrapText at a whole-word prefix', () => {
+    const original = 'ONE TWO THREE FOUR FIVE SIX SEVEN';
+    const lines = wrapText(original, 10, 2);
+    const visible = lines.join(' ').slice(0, -1);
+    const visibleWords = visible.split(/\s+/);
+
+    expect(lines).toHaveLength(2);
+    expect(lines[1]).toContain('…');
+    expect(visibleWords).toEqual(original.split(/\s+/).slice(0, visibleWords.length));
+  });
+
+  it('truncates a ticker row at a whole-word prefix when older text runs out of rows', () => {
+    const original = 'alpha bravo charlie delta echo foxtrot golf hotel of india juliet kilo lima mike november oscar papa quebec romeo sierra tango uniform victor whiskey xray yankee zulu';
+    const rows = tickerRows([msg(original), msg('newer')], 2);
+    const clipped = rows.find((row) => row.line.endsWith('…'))!.line;
+    const visible = clipped.slice(0, -1);
+    const visibleWords = visible.split(/\s+/);
+
+    expect(rows).toHaveLength(2);
+    expect(visibleWords).toEqual(original.toUpperCase().split(/\s+/).slice(0, visibleWords.length));
+  });
+
   it('renders every word of a 140-char message across its wrapped lines', () => {
     const text =
       'CASE ON WS-EAST-12: 1/2 SOURCES — HAVE: firewall egress log matched outbound exfil window; NEED: badge reader pull for the same window to corroborate';

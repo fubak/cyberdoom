@@ -1,5 +1,5 @@
 import type { Gender, ToolDef, ToolHint, ViewmodelAnim } from '../core/types';
-import { drawBigText, drawChunky, drawText, measureChunky, measureText, wrapText } from '../render/font';
+import { drawBigText, drawChunky, drawText, ellipsizeWords, measureChunky, measureText, wrapText } from '../render/font';
 import { VIEW_H, VIEW_W } from '../render/renderer';
 import { roleColor } from '../render/textures';
 import { drawToolViewmodel } from '../render/viewmodels';
@@ -78,7 +78,7 @@ export function tickerRows(
     const lines = wrapText(text, 52, 3);
     const take = Math.min(lines.length, maxRows - rows);
     const shown = lines.slice(0, take);
-    if (lines.length > take) shown[shown.length - 1] = `${shown[shown.length - 1].slice(0, -1)}…`;
+    if (lines.length > take) shown[shown.length - 1] = ellipsizeWords(shown[shown.length - 1], 52);
     blocks.unshift({ lines: shown, kind: m.kind, t: m.t });
     rows += take;
   }
