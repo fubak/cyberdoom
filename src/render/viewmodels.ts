@@ -258,30 +258,21 @@ function keyboardArt(frame: KeyboardFrame, gender: Gender, skin: SkinTone): Art 
       handShape(highlight, [[134, 40], [137, 38], [141, 38], [143, 40], [140, 41], [136, 42]], mirror);
       handLine([[142, 42], [143, 46], [141, 50]], deep, mirror, 0.8);
 
-      const fingers = [
-        { y: 39.4, outerReach: 9, tipInset: 4 },
-        { y: 44.1, outerReach: 7.8, tipInset: 4 },
-        { y: 48.2, outerReach: 6.4, tipInset: 3.6 },
-        { y: 52, outerReach: 5.6, tipInset: 2.9 },
-      ];
-      for (const finger of fingers) {
-        const { y, outerReach, tipInset } = finger;
+      for (let i = 0; i < 4; i++) {
+        const y = 40 + i * 4.1;
         const boardEdge = 80 + 32 + ((y - 19) / 34) * 15;
-        const tipX = boardEdge - tipInset;
-        const startX = boardEdge + outerReach;
+        const tipX = boardEdge - 2.2;
         handShape(deep, [
-          [startX, y - 1.2], [boardEdge + 2, y - 1.4], [boardEdge - 0.4, y - 1.1],
-          [tipX, y - 0.8], [tipX + 0.3, y + 0.8], [boardEdge + 0.7, y + 1.2], [startX, y + 0.9],
+          [tipX + 1, y - 1.4], [tipX + 5, y - 1.7], [134, y - 1.8],
+          [138, y - 1.1], [139, y], [137, y + 1.2], [134, y + 1.6], [tipX + 1, y + 1.2],
         ], mirror);
         handShape(base, [
-          [startX, y - 0.6], [boardEdge + 1.5, y - 0.7], [boardEdge - 0.5, y - 0.55],
-          [tipX, y - 0.45], [tipX + 0.1, y + 0.5], [boardEdge + 0.8, y + 0.6], [startX, y + 0.5],
+          [tipX + 1, y - 0.9], [tipX + 5, y - 1.1], [134, y - 1.2],
+          [137, y - 0.6], [137, y + 0.5], [134, y + 1], [tipX + 1, y + 0.8],
         ], mirror);
-        handEllipse(deep, boardEdge + 0.8, y, 2.1, 1.5, mirror);
-        handEllipse(shadow, boardEdge + 0.5, y - 0.15, 1.2, 0.8, mirror);
-        handEllipse(shadow, tipX, y, 2.2, 1.4, mirror);
-        handEllipse(base, tipX - 0.3, y - 0.2, 1.6, 1, mirror);
-        handLine([[tipX - 1.2, y - 0.8], [tipX - 0.2, y - 0.8]], highlight, mirror, 1);
+        handEllipse(shadow, tipX, y, 2.5, 1.7, mirror);
+        handEllipse(base, tipX - 0.4, y - 0.25, 1.9, 1.2, mirror);
+        handLine([[tipX - 1.1, y - 0.8], [tipX, y - 1]], highlight, mirror, 0.7);
       }
       handLine([[132, 52], [135, 54], [138, 55]], shadow, mirror, 0.9);
     };
