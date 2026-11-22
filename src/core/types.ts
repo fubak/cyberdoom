@@ -356,6 +356,8 @@ export interface ViewmodelAnim {
   ammo: number | null;
   /** Skin tone fill colours for the analyst's hands: [base, shadow, highlight]. */
   skin: [string, string, string];
+  /** Room light at the player's tile, 0..1; undefined = full bright. */
+  light?: number;
   /** Tool switch progress: 0 = fully raised, 1 = fully lowered off-screen. */
   lower?: number;
 }

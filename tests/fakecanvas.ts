@@ -260,7 +260,12 @@ export class FakeCtx {
     if (c && (x + 0.5 < c[0] || x + 0.5 > c[2] || y + 0.5 < c[1] || y + 0.5 > c[3])) return;
     const d = this.d;
     const i = (y * this.dw + x) * 4;
-    if (this.globalCompositeOperation === 'lighter') {
+    if (this.globalCompositeOperation === 'source-atop') {
+      const k = 1 - a;
+      d[i] = r * d[i + 3] + d[i] * k;
+      d[i + 1] = g * d[i + 3] + d[i + 1] * k;
+      d[i + 2] = b * d[i + 3] + d[i + 2] * k;
+    } else if (this.globalCompositeOperation === 'lighter') {
       d[i] = Math.min(1, d[i] + r);
       d[i + 1] = Math.min(1, d[i + 1] + g);
       d[i + 2] = Math.min(1, d[i + 2] + b);
