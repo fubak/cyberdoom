@@ -40,7 +40,11 @@ export class Vm3dRig<B extends Vm3dBoard = KeyboardRig> {
   ensureHands(): boolean {
     if (this._hands) return true;
     if (!handAssetsReady()) return false;
-    this._hands = { L: new LiveHand('L', this.spec), R: new LiveHand('R', this.spec) };
+    const look = this.board instanceof UsbScannerRig ? 'chunky' : 'glb';
+    this._hands = {
+      L: new LiveHand('L', this.spec, undefined, look),
+      R: new LiveHand('R', this.spec, undefined, look),
+    };
     if (this.board instanceof UsbScannerRig) {
       this._hands.L.group.visible = false;
       this._hands.R.setGripKnucklesVisible(true);

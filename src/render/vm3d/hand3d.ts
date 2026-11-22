@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { clone as skClone } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import type { Gender } from '../../core/types';
 import type { SkinTone } from '../../tools/look';
@@ -35,6 +36,46 @@ import { addOutlineHull, addSkinnedOutlineHull, toonMaterial } from './materials
 
 const D2R = Math.PI / 180;
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
+const OUTLINE_COLOR = '#1a1210';
+
+export type HandLook = 'glb' | 'chunky';
+
+function linearChannel(value: number): number {
+  const srgb = value / 255;
+  return srgb <= 0.04045 ? srgb / 12.92 : ((srgb + 0.055) / 1.055) ** 2.4;
+}
+
+function srgbChannel(value: number): number {
+  const srgb = value <= 0.0031308 ? value * 12.92 : 1.055 * value ** (1 / 2.4) - 0.055;
+  return Math.round(Math.max(0, Math.min(1, srgb)) * 255);
+}
+
+export function relativeLuminance(color: string): number {
+  const value = Number.parseInt(color.slice(1), 16);
+  return 0.2126 * linearChannel((value >> 16) & 255)
+    + 0.7152 * linearChannel((value >> 8) & 255)
+    + 0.0722 * linearChannel(value & 255);
+}
+
+function withLuminanceFloor(color: string, floor: number): string {
+  const value = Number.parseInt(color.slice(1), 16);
+  const channels = [(value >> 16) & 255, (value >> 8) & 255, value & 255].map(linearChannel);
+  const luminance = relativeLuminance(color);
+  if (luminance >= floor) return color;
+  const target = Math.min(1, floor + 0.004);
+  const mix = (target - luminance) / (1 - luminance);
+  const lifted = channels.map((channel) => srgbChannel(channel + (1 - channel) * mix));
+  return `#${lifted.map((channel) => channel.toString(16).padStart(2, '0')).join('')}`;
+}
+
+export function skinToonRamp(skin: SkinTone): [string, string, string, string] {
+  return [
+    withLuminanceFloor(shade(skin.shadow, 0.58), relativeLuminance(OUTLINE_COLOR) + 0.03),
+    withLuminanceFloor(skin.shadow, 0.075),
+    withLuminanceFloor(skin.base, 0.14),
+    withLuminanceFloor(skin.highlight, 0.28),
+  ];
+}
 
 export interface HandSpec {
   gender: Gender;
@@ -125,6 +166,7 @@ export class LiveHand {
   readonly palmL: number;
   /** determinant of the wrist-frame basis — +1 for a proper rotation. */
   readonly frameDet: number;
+  readonly look: HandLook;
   private readonly spec: HandSpec;
   private readonly chains = {} as Record<FingerName, Chain>;
   private readonly curls = {} as Record<FingerName, Required<Curl>>;
@@ -141,11 +183,12 @@ export class LiveHand {
   private thumbWrapSign = 1;
   private readonly wristBone: THREE.Bone;
 
-  constructor(side: 'L' | 'R', spec: HandSpec, size?: number) {
+  constructor(side: 'L' | 'R', spec: HandSpec, size?: number, look: HandLook = 'glb') {
     const src = sources[side];
     if (!src) throw new Error('vm3d: hand glb not loaded (call ensureHandAssets first)');
     this.side = side;
     this.spec = spec;
+    this.look = look;
     const fem = spec.gender === 'female';
     this.size = size ?? (fem ? 0.082 : 0.09);
     this.palmW = this.size * (fem ? 0.84 : 0.95);
@@ -350,12 +393,10 @@ export class LiveHand {
     if (fem) wrist.scale.x *= 0.94; // slimmer palm across the metacarpal fan
 
     // ---- materials ----
-    const skinMat = toonMaterial([
-      shade(spec.skin.shadow, 0.58),
-      spec.skin.shadow,
-      spec.skin.base,
-      spec.skin.highlight,
-    ]);
+    const skinRamp = look === 'chunky'
+      ? skinToonRamp(spec.skin)
+      : [shade(spec.skin.shadow, 0.58), spec.skin.shadow, spec.skin.base, spec.skin.highlight];
+    const skinMat = toonMaterial(skinRamp);
     const skinMeshes: THREE.Mesh[] = [];
     inner.traverse((o) => {
       const m = o as THREE.Mesh;
@@ -364,31 +405,55 @@ export class LiveHand {
     for (const mesh of skinMeshes) {
       mesh.material = skinMat;
       mesh.frustumCulled = false;
-      if ((mesh as THREE.SkinnedMesh).isSkinnedMesh) addSkinnedOutlineHull(mesh as THREE.SkinnedMesh);
-      else addOutlineHull(mesh);
+      if ((mesh as THREE.SkinnedMesh).isSkinnedMesh) {
+        const hull = addSkinnedOutlineHull(mesh as THREE.SkinnedMesh);
+        if (look === 'chunky') {
+          mesh.visible = false;
+          hull.visible = false;
+        }
+      } else {
+        addOutlineHull(mesh);
+        if (look === 'chunky') mesh.visible = false;
+      }
     }
-    for (const finger of ['index', 'middle', 'ring', 'pinky'] as const) {
-      const bump = new THREE.Mesh(new THREE.SphereGeometry(1, 8, 6), skinMat);
-      bump.name = `vm3d-grip-knuckle-${finger}`;
-      bump.position.copy(toLocal(pos(`${finger}-finger-phalanx-proximal`)))
-        .addScaledVector(palmIn.clone().negate(), 0.006 / s);
-      bump.scale.set(0.005 / s, 0.004 / s, 0.003 / s);
-      bump.visible = false;
-      scaleWrap.add(bump);
-      this.gripKnucklePads.push(bump);
-      addOutlineHull(bump, 1.12);
+    if (look === 'chunky') {
+      this.buildChunkyHand(bones, inner, frame, skinMat, s);
+      const rim = new THREE.PointLight('#8ccfff', 0.28, 0.18, 2);
+      rim.name = 'vm3d-chunky-rim-light';
+      rim.position.set(0.075, 0.105, 0.055);
+      this.group.add(rim);
+    } else {
+      for (const finger of ['index', 'middle', 'ring', 'pinky'] as const) {
+        const bump = new THREE.Mesh(new THREE.SphereGeometry(1, 8, 6), skinMat);
+        bump.name = `vm3d-grip-knuckle-${finger}`;
+        bump.position.copy(toLocal(pos(`${finger}-finger-phalanx-proximal`)))
+          .addScaledVector(palmIn.clone().negate(), 0.006 / s);
+        bump.scale.set(0.005 / s, 0.004 / s, 0.003 / s);
+        bump.visible = false;
+        scaleWrap.add(bump);
+        this.gripKnucklePads.push(bump);
+        addOutlineHull(bump, 1.12);
+      }
     }
     const nailNormal = toBoneLocal('thumb-tip', new THREE.Vector3(0, 0, 1));
     const nailFrame = new THREE.Group();
     nailFrame.name = 'vm3d-thumb-nail-frame';
-    nailFrame.position.copy(nailNormal).multiplyScalar(0.001 / s);
+    const nailOffset = (look === 'chunky' ? 0.007 : 0.001) / s;
+    nailFrame.position.copy(nailNormal).multiplyScalar(nailOffset);
     nailFrame.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), nailNormal);
+    const nailTone = withLuminanceFloor(shade(spec.skin.highlight, 1.08), 0.55);
+    const nailMaterial = look === 'chunky'
+      ? toonMaterial([skinRamp[3], nailTone, nailTone, nailTone], { side: THREE.DoubleSide })
+      : toonMaterial([shade(spec.skin.shadow, 0.58), spec.skin.shadow, spec.skin.base, spec.skin.highlight]);
     const nail = new THREE.Mesh(
-      new THREE.SphereGeometry(1, 8, 6),
-      toonMaterial([shade(spec.skin.shadow, 0.58), spec.skin.shadow, spec.skin.base, spec.skin.highlight]),
+      look === 'chunky'
+        ? new THREE.PlaneGeometry(0.009 / s, 0.01 / s)
+        : new THREE.SphereGeometry(1, 8, 6),
+      nailMaterial,
     );
     nail.name = 'vm3d-thumb-nail';
-    nail.scale.set(0.005 / s, 0.008 / s, 0.001 / s);
+    nailFrame.userData.surfaceOffset = look === 'chunky' ? nailOffset : undefined;
+    if (look === 'glb') nail.scale.set(0.005 / s, 0.008 / s, 0.001 / s);
     nailFrame.add(nail);
     this.chains.thumb.tip.add(nailFrame);
     addOutlineHull(nail, 1.16);
@@ -402,6 +467,133 @@ export class LiveHand {
 
     for (const f of HAND_FINGERS) this.curls[f] = clampCurl(f, defaultCurl(f));
     this.setCurls({});
+  }
+
+  private buildChunkyHand(
+    bones: Map<string, THREE.Bone>,
+    inner: THREE.Group,
+    frame: THREE.Group,
+    skinMat: THREE.MeshToonMaterial,
+    s: number,
+  ): void {
+    const fingerWidth: Record<FingerName, number> = {
+      index: 1, middle: 1, ring: 1, pinky: 0.85, thumb: 1.25,
+    };
+    const getBone = (name: string): THREE.Bone => {
+      const bone = bones.get(name);
+      if (!bone) throw new Error(`vm3d: glb missing bone ${name}`);
+      return bone;
+    };
+    inner.updateMatrixWorld(true);
+    const framePoint = (name: string) =>
+      frame.worldToLocal(getBone(name).getWorldPosition(new THREE.Vector3()));
+    const fingers = ['index', 'middle', 'ring', 'pinky'] as const;
+    const bases = fingers.map((finger) => framePoint(`${finger}-finger-metacarpal`));
+    const mcps = fingers.map((finger) => framePoint(`${finger}-finger-phalanx-proximal`));
+    const average = (points: THREE.Vector3[]) =>
+      points.reduce((sum, point) => sum.add(point), new THREE.Vector3()).divideScalar(points.length);
+    const baseCenter = average(bases);
+    const mcpCenter = average(mcps);
+    const minX = Math.min(...mcps.map((point) => point.x));
+    const maxX = Math.max(...mcps.map((point) => point.x));
+    const width = Math.max(maxX - minX + this.palmW / s * 0.06, this.palmW / s * 0.48);
+    const height = Math.max(mcpCenter.y - baseCenter.y + this.palmW / s * 0.06, this.palmL / s * 0.22);
+    const thickness = width * 0.35;
+    const center = new THREE.Vector3(
+      (minX + maxX) / 2,
+      (baseCenter.y + mcpCenter.y) / 2,
+      (baseCenter.z + mcpCenter.z) / 2,
+    );
+    for (const finger of HAND_FINGERS) {
+      const names = FINGER_BONES[finger];
+      const chain = [...names.flex, names.tip];
+      for (let i = 0; i + 1 < chain.length; i++) {
+        const bone = getBone(chain[i]);
+        const child = getBone(chain[i + 1]);
+        const endpoint = bone.worldToLocal(child.getWorldPosition(new THREE.Vector3()));
+        const length = endpoint.length();
+        if (length < 1e-6) continue;
+        const radius = Math.min(length * 0.26 * fingerWidth[finger], (this.palmW / s) * 0.14);
+        const distalRadius = radius * (i === chain.length - 2 ? 0.82 : 0.9);
+        const geometry = new THREE.CylinderGeometry(distalRadius, radius, length, 8, 1, false);
+        geometry.translate(0, length / 2, 0);
+        const segment = new THREE.Mesh(geometry, skinMat);
+        segment.name = `vm3d-chunky-segment-${finger}-${i}`;
+        segment.position.set(0, 0, 0);
+        segment.quaternion.setFromUnitVectors(Y_AXIS, endpoint.clone().normalize());
+        segment.userData.childBone = child;
+        segment.userData.length = length;
+        bone.add(segment);
+        addOutlineHull(segment, 1.1);
+
+        const cap = new THREE.Mesh(new THREE.SphereGeometry(distalRadius, 8, 6), skinMat);
+        cap.name = `vm3d-chunky-joint-${finger}-${i}`;
+        child.add(cap);
+        addOutlineHull(cap, 1.1);
+      }
+    }
+
+    for (const finger of HAND_FINGERS) {
+      const mcpName = finger === 'thumb'
+        ? 'thumb-phalanx-proximal'
+        : `${finger}-finger-phalanx-proximal`;
+      const mcp = getBone(mcpName);
+      const nextName = finger === 'thumb' ? 'thumb-phalanx-distal' : `${finger}-finger-phalanx-intermediate`;
+      const mcpLength = mcp.worldToLocal(getBone(nextName).getWorldPosition(new THREE.Vector3())).length();
+      const radius = Math.min(mcpLength * 0.26 * fingerWidth[finger], (this.palmW / s) * 0.14);
+      const bump = new THREE.Mesh(new THREE.SphereGeometry(radius * 1.08, 8, 6), skinMat);
+      bump.name = `vm3d-chunky-knuckle-${finger}`;
+      const mcpFrame = framePoint(mcpName);
+      const surfacePoint = frame.localToWorld(new THREE.Vector3(
+        mcpFrame.x,
+        mcpFrame.y,
+        center.z + thickness / 2 - radius * 0.35,
+      ));
+      bump.position.copy(mcp.worldToLocal(surfacePoint));
+      mcp.add(bump);
+      addOutlineHull(bump, 1.1);
+    }
+
+    const centerWorld = frame.localToWorld(center.clone());
+    const wrist = this.wristBone;
+    const palmFrame = new THREE.Group();
+    palmFrame.name = 'vm3d-chunky-palm-frame';
+    palmFrame.position.copy(wrist.worldToLocal(centerWorld));
+    palmFrame.quaternion.copy(
+      wrist.getWorldQuaternion(new THREE.Quaternion()).invert()
+        .multiply(frame.getWorldQuaternion(new THREE.Quaternion())),
+    );
+    wrist.add(palmFrame);
+
+    const bevel = Math.min(width, height, thickness) * 0.12;
+    const palmGeometry = new RoundedBoxGeometry(width, height, thickness, 2, bevel);
+    const positions = palmGeometry.getAttribute('position');
+    for (let i = 0; i < positions.count; i++) {
+      const x = positions.getX(i), y = positions.getY(i), z = positions.getZ(i);
+      if (z > 0) {
+        const arch = thickness * 0.06
+          * (1 - Math.min(1, Math.abs(x) / (width / 2)))
+          * (1 - Math.min(1, Math.abs(y) / (height / 2)));
+        positions.setZ(i, z + arch);
+      }
+    }
+    positions.needsUpdate = true;
+    palmGeometry.computeVertexNormals();
+    const palm = new THREE.Mesh(palmGeometry, skinMat);
+    palm.name = 'vm3d-chunky-palm';
+    palmFrame.add(palm);
+    addOutlineHull(palm, 1.08);
+
+    const thumbBase = framePoint('thumb-metacarpal');
+    const thenarCenter = thumbBase.lerp(center, 0.48).sub(center);
+    const thenar = new THREE.Mesh(
+      new RoundedBoxGeometry(width * 0.25, height * 0.42, thickness * 0.58, 2, bevel * 0.6),
+      skinMat,
+    );
+    thenar.name = 'vm3d-chunky-thenar';
+    thenar.position.copy(thenarCenter).add(new THREE.Vector3(0, 0, thickness * 0.12));
+    palmFrame.add(thenar);
+    addOutlineHull(thenar, 1.08);
   }
 
   /**
@@ -625,6 +817,8 @@ export class LiveHand {
       this.chains.thumb.tip.getWorldQuaternion(new THREE.Quaternion()).invert(),
     ).normalize();
     frame.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), normal);
+    const surfaceOffset = frame.userData.surfaceOffset as number | undefined;
+    if (surfaceOffset !== undefined) frame.position.copy(normal).multiplyScalar(surfaceOffset);
     this.group.updateWorldMatrix(true, true);
   }
 

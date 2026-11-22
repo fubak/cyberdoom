@@ -6,7 +6,7 @@ import { CLIPS, resolveClip, type V3 } from '../src/render/vm3d/clips';
 import { Vm3dRig } from '../src/render/vm3d/rig';
 import { keyTopWorld } from '../src/render/vm3d/keyboard3d';
 import { UsbScannerRig } from '../src/render/vm3d/usb3d';
-import { HAND_FINGERS, setHandAsset } from '../src/render/vm3d/hand3d';
+import { HAND_FINGERS, relativeLuminance, setHandAsset, skinToonRamp } from '../src/render/vm3d/hand3d';
 import { SKIN_TONES } from '../src/tools/look';
 import { VM3D_CAMERA_BACK } from '../src/render/vm3d/scene';
 import { VM_CLEAR } from '../src/tools/anim';
@@ -85,7 +85,7 @@ function projectedPixelDepth(root: THREE.Object3D, camera: THREE.Camera, include
   root.updateMatrixWorld(true);
   root.traverse((object) => {
     const mesh = object as THREE.Mesh;
-    if (!mesh.isMesh || mesh.name.startsWith('outline-') || !include(mesh)) return;
+    if (!mesh.isMesh || !mesh.visible || mesh.name.startsWith('outline-') || !include(mesh)) return;
     const position = mesh.geometry.getAttribute('position');
     const vertices: THREE.Vector3[] = [];
     for (let i = 0; i < position.count; i++) {
@@ -130,7 +130,7 @@ function projectedTop(root: THREE.Object3D, camera: THREE.Camera): number {
   root.updateMatrixWorld(true);
   root.traverse((object) => {
     const mesh = object as THREE.Mesh;
-    if (!mesh.isMesh || mesh.name.startsWith('outline-')) return;
+    if (!mesh.isMesh || !mesh.visible || mesh.name.startsWith('outline-')) return;
     const position = mesh.geometry.getAttribute('position');
     for (let i = 0; i < position.count; i++) {
       mesh.getVertexPosition(i, local);
@@ -140,7 +140,26 @@ function projectedTop(root: THREE.Object3D, camera: THREE.Camera): number {
   return top;
 }
 
+describe('chunky hand skin ramp', () => {
+  for (const skin of SKIN_TONES) {
+    it(`${skin.id} keeps highlight readable above the outline`, () => {
+      const [, shadow, , highlight] = skinToonRamp(skin);
+      expect(relativeLuminance(highlight), `${skin.id} highlight luminance`).toBeGreaterThanOrEqual(0.28);
+      expect(
+        relativeLuminance(shadow) - relativeLuminance('#1a1210'),
+        `${skin.id} shadow-to-outline luminance step`,
+      ).toBeGreaterThanOrEqual(0.04);
+    });
+  }
+});
+
 describe('vm3d clip contacts (plan §5)', () => {
+  it('keeps keyboard hands on the default GLB look', () => {
+    const rig = new Vm3dRig(spec);
+    expect(rig.hands.L.look).toBe('glb');
+    expect(rig.hands.R.look).toBe('glb');
+  });
+
   for (const name of ['kbd.idle', 'kbd.type', 'kbd.swing']) {
     const clip = CLIPS[name];
     it(`${name}: fingertip→socket < 2 mm at every declared contact keyframe`, () => {
@@ -221,6 +240,7 @@ describe('vm3d clip contacts (plan §5)', () => {
               && !(m as THREE.SkinnedMesh).isSkinnedMesh
               && !m.name.includes('vm3d-grip-knuckle-')
               && !m.name.includes('vm3d-thumb-nail')
+              && !m.name.includes('vm3d-chunky-')
             ) meshes.push(m);
           });
           expect(meshes.length, `${side} has arm-tail meshes`).toBeGreaterThan(0);
@@ -1021,7 +1041,7 @@ describe('vm3d clip contacts (plan §5)', () => {
         const handDepth = projectedPixelDepth(
           rig.hands.R.group,
           camera,
-          (mesh) => (mesh as THREE.SkinnedMesh).isSkinnedMesh || mesh.name.startsWith('vm3d-grip-knuckle-'),
+          () => true,
         );
         const fingertipDepth = projectedPixelDepth(
           rig.board.group,
@@ -1056,6 +1076,40 @@ describe('vm3d clip contacts (plan §5)', () => {
       const tip = rig.hands.R.tipWorld('thumb');
       const trigger = rig.board.socketWorld('usb.trigger');
       expect(tip.distanceTo(trigger), `tip=${tip.toArray()} trigger=${trigger.toArray()}`).toBeLessThan(0.005);
+    });
+
+    it('uses hidden GLB surfaces and bone-parented chunky segments that track IK', () => {
+      const rig = new Vm3dRig(spec, new UsbScannerRig());
+      const hand = rig.hands.R;
+      expect(hand.look).toBe('chunky');
+      const skinned: THREE.SkinnedMesh[] = [];
+      const segments: THREE.Mesh[] = [];
+      hand.group.traverse((object) => {
+        const mesh = object as THREE.Mesh;
+        if ((mesh as THREE.SkinnedMesh).isSkinnedMesh) skinned.push(mesh as THREE.SkinnedMesh);
+        if (mesh.name.startsWith('vm3d-chunky-segment-')) segments.push(mesh);
+      });
+      expect(skinned.length).toBeGreaterThan(0);
+      expect(skinned.every((mesh) => !mesh.visible)).toBe(true);
+      for (const finger of HAND_FINGERS) {
+        const fingerSegments = segments.filter((mesh) => mesh.name.startsWith(`vm3d-chunky-segment-${finger}-`));
+        if (finger === 'thumb') {
+          expect(fingerSegments.length, 'thumb segment count').toBeGreaterThanOrEqual(2);
+          expect(fingerSegments.length, 'thumb segment count').toBeLessThanOrEqual(3);
+        } else {
+          expect(fingerSegments.length, `${finger} segment count`).toBe(3);
+        }
+        expect(fingerSegments.every((mesh) => (mesh.parent as THREE.Bone).isBone)).toBe(true);
+      }
+
+      rig.solve(clip, 0.11);
+      for (const segment of segments) {
+        const child = segment.userData.childBone as THREE.Bone;
+        const length = segment.userData.length as number;
+        const endpoint = segment.localToWorld(new THREE.Vector3(0, length, 0));
+        const childPosition = child.getWorldPosition(new THREE.Vector3());
+        expect(endpoint.distanceTo(childPosition), `${segment.name} endpoint tracks child bone`).toBeLessThan(0.001);
+      }
     });
 
     it('grips from the scanner side with the palm normal perpendicular to the top face', () => {
