@@ -1,5 +1,6 @@
 import type { CallAction, EvidenceEntry } from '../core/types';
 import { CALL_PROMPT } from '../content/calls';
+import { visibleFrameworkLine } from '../content/frameworks';
 import { drawText, measureText } from '../render/font';
 import { VIEW_H, VIEW_W } from '../render/renderer';
 import { BASE_H, BASE_W, RES } from '../render/res';
@@ -241,8 +242,10 @@ export class Dossier {
     const feedback = call.feedback
       ? layoutCaseFile({ label: '', detail: call.feedback }, DOSSIER_TEXT_W, 99).pages.flat().slice(0, 3)
       : [];
+    const fwLine = visibleFrameworkLine(entry);
     const optionRows = call.resolved ? 1 : call.options.length;
-    const top = hintY - 6 - 8 - optionRows * 8 - (feedback.length ? feedback.length * 8 + 2 : 0);
+    const fwHeight = fwLine ? 9 : 0;
+    const top = hintY - 6 - 8 - optionRows * 8 - (feedback.length ? feedback.length * 8 + 2 : 0) - fwHeight;
     // the call sits as an opaque panel over the file body, never interleaved
     g.fillStyle = '#100806';
     g.fillRect(DOSSIER_X + 4, top - 2, DOSSIER_W - 8, hintY - top + 12);
@@ -265,6 +268,9 @@ export class Dossier {
     for (const line of feedback) {
       drawText(g, line, 21, y + 2, call.resolved ? '#a8d8b0' : '#ffb09a');
       y += 8;
+    }
+    if (fwLine) {
+      drawText(g, fwLine, 21, y + 3, '#7ad0ff');
     }
   }
 

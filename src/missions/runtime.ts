@@ -8,6 +8,7 @@ import type {
   ScoreEvent,
 } from '../core/types';
 import { callFeedback, callOptions, requiredCall } from '../content/calls';
+import { deriveFrameworkTags } from '../content/frameworks';
 import { objectiveById } from '../content/objectives';
 import type { WorldMap } from '../engine/map';
 import { completeMfa, refuseMfaPrompt } from '../tools/mfa';
@@ -172,6 +173,7 @@ export class MissionRuntime {
     const id = `${e.def.id}:${source}`;
     let entry = this.evidence.find((candidate) => candidate.id === id);
     if (!entry) {
+      const fw = source === 'inspect' ? deriveFrameworkTags(e.def) : { attack: [], irPhase: undefined };
       entry = {
         id,
         entityId: e.def.id,
@@ -179,6 +181,8 @@ export class MissionRuntime {
         detail,
         source,
         category: e.def.inspect?.category,
+        attack: fw.attack.length ? fw.attack : undefined,
+        irPhase: fw.irPhase,
       };
       if (source === 'inspect' && requiredCall(e.def)) {
         entry.call = { options: callOptions(), picked: -1, resolved: false };
