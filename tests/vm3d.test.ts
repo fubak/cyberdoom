@@ -1043,24 +1043,17 @@ describe('vm3d clip contacts (plan §5)', () => {
           camera,
           () => true,
         );
-        const fingertipDepth = projectedPixelDepth(
-          rig.board.group,
-          camera,
-          (mesh) => mesh.name.startsWith('usb-finger-peek-'),
-        );
-        for (let i = 0; i < handDepth.length; i++) handDepth[i] = Math.min(handDepth[i], fingertipDepth[i]);
         const scannerArea = scannerDepth.reduce((sum, value) => sum + Number(Number.isFinite(value)), 0);
         const coveredArea = scannerDepth.reduce((sum, value, i) => sum + Number(Number.isFinite(value) && handDepth[i] < value), 0);
-        expect(coveredArea / scannerArea, `${gender}/${skin.id} scanner area covered by hand`).toBeLessThanOrEqual(0.40);
+        expect(coveredArea / scannerArea, `${gender}/${skin.id} scanner area covered by hand`).toBeLessThanOrEqual(0.30);
 
-        const visibleTips = (['index', 'middle'] as const).filter((finger) => {
-          const tip = rig.board.group.getObjectByName(`usb-finger-peek-${finger}`)!;
-          const worldTip = tip.getWorldPosition(new THREE.Vector3());
-          const localTip = rig.board.group.worldToLocal(worldTip.clone());
+        expect(rig.board.group.getObjectByName('usb-finger-peek-index')).toBeUndefined();
+        const visibleTips = (['index', 'middle', 'ring', 'pinky'] as const).filter((finger) => {
+          const worldTip = rig.hands.R.tipWorld(finger);
           const screen = worldTip.project(camera);
-          return localTip.x < -0.03 && screen.x >= -1 && screen.x <= 1 && screen.y >= -1 && screen.y <= 1;
+          return screen.x >= -1 && screen.x <= 1 && screen.y >= -1 && screen.y <= 1;
         });
-        expect(visibleTips.length, `${gender}/${skin.id} fingertips peeking past the left edge`).toBeGreaterThanOrEqual(2);
+        expect(visibleTips.length, `${gender}/${skin.id} connected fingertips remain in view`).toBeGreaterThanOrEqual(2);
         expect(visibleTips.length).toBeLessThanOrEqual(4);
 
         const nail = rig.hands.R.group.getObjectByName('vm3d-thumb-nail') as THREE.Mesh;
@@ -1069,6 +1062,29 @@ describe('vm3d clip contacts (plan §5)', () => {
         expect(normal.dot(towardCamera), `${gender}/${skin.id} thumbnail faces camera`).toBeGreaterThan(0.8);
       });
     }
+
+    it('places the palm at the lower-right and the trigger halfway from the near end', () => {
+      const rig = new Vm3dRig(spec, new UsbScannerRig());
+      rig.solve(CLIPS['usb.idle'], 0);
+      const camera = vmCamera();
+      const bodyBounds = rig.board.bodyAABB();
+      const trigger = rig.board.group.worldToLocal(rig.board.socketWorld('usb.trigger'));
+      const triggerFraction = (bodyBounds.max.z - trigger.z) / (bodyBounds.max.z - bodyBounds.min.z);
+      expect(triggerFraction, 'trigger fraction from near end').toBeGreaterThanOrEqual(0.4);
+      expect(triggerFraction, 'trigger fraction from near end').toBeLessThanOrEqual(0.55);
+
+      const palmSocket = rig.board.group.worldToLocal(rig.board.socketWorld('usb.grip.palm'));
+      const palmFraction = (bodyBounds.max.z - palmSocket.z) / (bodyBounds.max.z - bodyBounds.min.z);
+      expect(palmFraction, 'palm socket fraction from near end').toBeGreaterThanOrEqual(0);
+      expect(palmFraction, 'palm socket fraction from near end').toBeLessThanOrEqual(0.3);
+      expect(palmSocket.x).toBeGreaterThan(bodyBounds.max.x);
+      expect(palmSocket.y).toBeLessThan(bodyBounds.min.y);
+
+      const palm = rig.hands.R.group.getObjectByName('vm3d-chunky-palm')!;
+      const projectedPalm = palm.getWorldPosition(new THREE.Vector3()).project(camera);
+      expect(projectedPalm.x, `palm projection ${projectedPalm.x.toFixed(3)}, ${projectedPalm.y.toFixed(3)}`).toBeGreaterThanOrEqual(0.3);
+      expect(projectedPalm.y, `palm projection ${projectedPalm.x.toFixed(3)}, ${projectedPalm.y.toFixed(3)}`).toBeLessThanOrEqual(-0.5);
+    });
 
     it('keeps the resting thumb within 5 mm of the trigger socket', () => {
       const rig = new Vm3dRig(spec, new UsbScannerRig());

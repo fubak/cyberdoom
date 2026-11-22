@@ -27,7 +27,6 @@ export class Vm3dRig<B extends Vm3dBoard = KeyboardRig> {
   constructor(spec: HandSpec, board: B = new KeyboardRig() as B) {
     this.spec = spec;
     this.board = board;
-    if (this.board instanceof UsbScannerRig) this.board.setSkinPalette(this.spec.skin);
     ensureHandAssets();
     this.root.add(this.board.group);
     this.ensureHands();
