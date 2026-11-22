@@ -1,5 +1,5 @@
-import type { Gender } from '../core/types';
-import { missionRegistry } from '../content/missions';
+import type { Gender, Mission } from '../core/types';
+import { missionRegistry, teachingRegistry } from '../content/missions';
 import { playableCoverageLine } from '../content/curriculum';
 import { objectiveById } from '../content/objectives';
 import { missionRowStates } from '../missions/progress';
@@ -84,8 +84,33 @@ export function characterSelect(onPick: (g: Gender) => void): HTMLElement {
   return s;
 }
 
+export interface MissionSelectCard {
+  id: string;
+  code: string;
+  title: string;
+  tagline: string;
+  threatLevel: number;
+  threatLabel: string;
+  objectives: string[];
+}
+
+export function missionSelectCard(m: Mission): MissionSelectCard {
+  const threatLevel = Math.max(1, Math.min(3, Math.ceil(m.difficulty / 3)));
+  const threatLabel = threatLevel === 1 ? 'LOW' : threatLevel === 2 ? 'MED' : 'HIGH';
+  const tagline = teachingRegistry.get(m.id)?.tagline ?? m.briefing.split('\n')[0];
+  return {
+    id: m.id,
+    code: `M${m.id.slice(1)}`,
+    title: m.title,
+    tagline,
+    threatLevel,
+    threatLabel,
+    objectives: m.objectives.map((id) => `${id} ${objectiveById(id)?.title ?? ''}`.trim()),
+  };
+}
+
 export function missionSelect(onPick: (id: string) => void, onBack: () => void): HTMLElement {
-  const s = el('div', 'screen mission-select');
+  const s = el('div', 'screen mission-select cd-mission-select');
   const bar = el('div', 'menu-bar');
   const back = document.createElement('button');
   back.type = 'button';
@@ -97,11 +122,39 @@ export function missionSelect(onPick: (id: string) => void, onBack: () => void):
   bar.appendChild(el('h2', '', 'SELECT MISSION'));
   bar.appendChild(el('div', 'playable-coverage', playableCoverageLine()));
   s.appendChild(bar);
+
+  const layout = el('div', 'mission-layout');
+  const listWrap = el('div', 'mission-list');
+  const detail = el('aside', 'mission-detail');
+  layout.appendChild(listWrap);
+  layout.appendChild(detail);
+  s.appendChild(layout);
+
   const missions = missionRegistry.all();
   const orderedIds = missions.map((m) => m.id);
   const states = missionRowStates(orderedIds);
+
+  const renderDetail = (m: Mission) => {
+    const card = missionSelectCard(m);
+    const state = states.get(m.id) ?? 'locked';
+    detail.innerHTML = '';
+    detail.appendChild(el('div', 'detail-kicker', `SECTOR INTEL // ${card.code} // THREAT ${card.threatLabel}`));
+    detail.appendChild(el('div', 'detail-title', card.title));
+    detail.appendChild(el('div', 'detail-tagline', card.tagline));
+    detail.appendChild(el('div', 'detail-state', `STATUS: ${state.toUpperCase()}`));
+    const head = el('div', 'detail-kicker', 'SY0-701 OBJECTIVES');
+    detail.appendChild(head);
+    const ul = el('ul', 'detail-objs');
+    for (const line of card.objectives) {
+      ul.appendChild(el('li', '', line));
+    }
+    detail.appendChild(ul);
+  };
+
   let nextRow: HTMLButtonElement | null = null;
+  let initialMission: Mission = missions[0];
   for (const m of missions) {
+    const card = missionSelectCard(m);
     const state = states.get(m.id) ?? 'locked';
     const unlocked = state !== 'locked';
     const row = document.createElement('button');
@@ -109,28 +162,32 @@ export function missionSelect(onPick: (id: string) => void, onBack: () => void):
     row.className = `mission-row ${state}`;
     row.disabled = !unlocked;
     row.dataset.missionId = m.id;
-    row.appendChild(el('span', 'diff', '☣'.repeat(Math.min(3, Math.ceil(m.difficulty / 3)))));
-    const body = el('div');
-    const badge =
-      state === 'cleared' ? ' — CLEARED'
-      : state === 'next' ? ' — NEXT'
-      : state === 'locked' ? ' — LOCKED'
-      : '';
-    body.appendChild(el('div', 'mtitle', `M${m.id.slice(1)} — ${m.title}${badge}`));
-    body.appendChild(
-      el(
-        'div',
-        'objs',
-        m.objectives
-          .map((id) => `${id} ${objectiveById(id)?.title ?? ''}`)
-          .join('<br>'),
-      ),
-    );
+    const threat = el('span', `diff threat-${card.threatLevel}`);
+    threat.textContent = '!'.repeat(card.threatLevel);
+    threat.title = `Threat: ${card.threatLabel}`;
+    row.appendChild(threat);
+    const body = el('div', 'mrow-body');
+    const head = el('div', 'mhead');
+    head.appendChild(el('span', 'mtitle', `${card.code} — ${card.title}`));
+    const badgeText =
+      state === 'cleared' ? 'CLEARED'
+      : state === 'next' ? 'NEXT'
+      : state === 'locked' ? 'LOCKED'
+      : 'OPEN';
+    head.appendChild(el('span', `mstate ${state}`, badgeText));
+    body.appendChild(head);
+    body.appendChild(el('div', 'mtagline', card.tagline));
     row.appendChild(body);
+    row.addEventListener('mouseenter', () => renderDetail(m));
+    row.addEventListener('focus', () => renderDetail(m));
     if (unlocked) row.addEventListener('click', () => onPick(m.id));
-    if (state === 'next') nextRow = row;
-    s.appendChild(row);
+    if (state === 'next') {
+      nextRow = row;
+      initialMission = m;
+    }
+    listWrap.appendChild(row);
   }
+  if (initialMission) renderDetail(initialMission);
   onKeysWhileMounted(s, (e) => {
     if (e.key === 'Escape' || e.key === 'Backspace') {
       e.preventDefault();
