@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import { missionRegistry } from '../src/content/missions';
 import { canDraw, measureText } from '../src/render/font';
 import { CHAR_HINT } from '../src/ui/characterSelect';
 import { DOSSIER_HINT, DOSSIER_W } from '../src/ui/dossier';
 import { LOOK_HINT, MAP_HINT, MENU_HINT, applyBack, type MenuOverlay, type MenuScreen } from '../src/ui/nav';
+import { missionSelectCard } from '../src/ui/screens';
 
 const SCREENS: MenuScreen[] = [
   'title',
@@ -88,6 +90,21 @@ describe('menu hint copy fits the pixel HUD', () => {
     expect(canDraw(CHAR_HINT, 'tiny')).toBe(true);
     for (const line of [DOSSIER_HINT.file, DOSSIER_HINT.log]) {
       expect(measureText(line, 'small'), line).toBeLessThanOrEqual(DOSSIER_W - 18);
+    }
+  });
+});
+
+describe('mission select cards', () => {
+  it('give every mission a one-line story tagline, threat level, and separate objective details', () => {
+    for (const m of missionRegistry.all()) {
+      const card = missionSelectCard(m);
+      expect(card.code).toBe(`M${m.id.slice(1)}`);
+      expect(card.tagline.length, m.id).toBeGreaterThan(10);
+      expect(card.tagline, m.id).not.toMatch(/\b\d\.\d\b/);
+      expect(card.threatLevel).toBeGreaterThanOrEqual(1);
+      expect(card.threatLevel).toBeLessThanOrEqual(3);
+      expect(['LOW', 'MED', 'HIGH']).toContain(card.threatLabel);
+      expect(card.objectives.length, m.id).toBe(m.objectives.length);
     }
   });
 });
