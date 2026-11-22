@@ -5,6 +5,7 @@ import { JOINT_LIMITS, type FingerName } from '../src/render/handrig';
 import { CLIPS, resolveClip, type V3 } from '../src/render/vm3d/clips';
 import { Vm3dRig } from '../src/render/vm3d/rig';
 import { keyTopWorld } from '../src/render/vm3d/keyboard3d';
+import { UsbScannerRig } from '../src/render/vm3d/usb3d';
 import { HAND_FINGERS, setHandAsset } from '../src/render/vm3d/hand3d';
 import { SKIN_TONES } from '../src/tools/look';
 
@@ -875,5 +876,65 @@ describe('vm3d clip contacts (plan §5)', () => {
         }
       }
     }
+  });
+
+  describe('USB scanner grip', () => {
+    const clip = CLIPS['usb.fire'];
+
+    it('keeps the right palm at the grip and fingertips on named sockets', () => {
+      const rig = new Vm3dRig(spec, new UsbScannerRig());
+      for (const key of clip.keys) {
+        rig.solve(clip, key.t);
+        const frame = resolveClip(clip, key.t);
+        const palm = rig.hands.R.palmCentreWorld(new THREE.Vector3());
+        expect(
+          palm.distanceTo(rig.board.socketWorld('usb.grip.palm')),
+          `usb.fire@${key.t.toFixed(3)} palm away from the grip`,
+        ).toBeLessThan(0.06);
+        for (const contact of frame.hands.R.contacts) {
+          if (contact.weight < 0.8) continue;
+          const tip = rig.hands.R.tipWorld(contact.finger);
+          const target = rig.board.socketWorld(contact.socket);
+          expect(
+            tip.distanceTo(target),
+            `usb.fire@${key.t.toFixed(3)} R.${contact.finger} → ${contact.socket}; tip=${tip.toArray()} target=${target.toArray()} curl=${JSON.stringify(rig.hands.R.getCurl(contact.finger))}`,
+          ).toBeLessThan(2 * MM);
+        }
+        expect(
+          rig.hands.R.group.getWorldPosition(new THREE.Vector3())
+            .distanceTo(rig.board.socketWorld('usb.grip.wrist')),
+        ).toBeLessThan(2 * MM);
+      }
+    });
+
+    it('keeps every joint inside limits across the fire clip', () => {
+      const rig = new Vm3dRig(spec, new UsbScannerRig());
+      for (let i = 0; i <= 60; i++) {
+        const t = (i / 60) * clip.duration;
+        rig.solve(clip, t);
+        for (const finger of HAND_FINGERS) {
+          expect(
+            withinLimits(rig.hands.R.getCurl(finger), finger),
+            `usb.fire@${t.toFixed(3)} R.${finger}`,
+          ).toBe(true);
+        }
+      }
+    });
+
+    it('keeps the right wrist visible and left hand off-screen', () => {
+      const rig = new Vm3dRig(spec, new UsbScannerRig());
+      const camera = new THREE.PerspectiveCamera(54, 1280 / 672, 0.01, 5);
+      camera.updateProjectionMatrix();
+      expect(rig.hands.L.group.visible).toBe(false);
+      for (let i = 0; i <= 47; i++) {
+        const t = (i / 47) * clip.duration;
+        rig.solve(clip, t);
+        const wrist = rig.hands.R.group.getWorldPosition(new THREE.Vector3()).project(camera);
+        expect(wrist.x, `usb.fire@${t.toFixed(3)} wrist x`).toBeGreaterThan(-1);
+        expect(wrist.x, `usb.fire@${t.toFixed(3)} wrist x`).toBeLessThan(1);
+        expect(wrist.y, `usb.fire@${t.toFixed(3)} wrist y`).toBeGreaterThan(-1);
+        expect(wrist.y, `usb.fire@${t.toFixed(3)} wrist y`).toBeLessThan(1);
+      }
+    });
   });
 });

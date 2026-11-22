@@ -3,7 +3,9 @@ import { fidgetAt } from '../vmotion';
 import { VM_CLEAR } from '../../tools/anim';
 import { TOOL_FLASH } from '../viewmodels';
 import { CLIPS, KBD_ACTION_CLIP, type KbdAction, type VmClip } from './clips';
-import { Vm3dRig } from './rig';
+import { KeyboardRig } from './keyboard3d';
+import { Vm3dRig, type Vm3dBoard } from './rig';
+import { UsbScannerRig } from './usb3d';
 import { ensureHandAssets, HAND_FINGERS, LiveHand, type HandSpec } from './hand3d';
 import type { Curl, FingerName } from '../handrig';
 
@@ -71,11 +73,12 @@ export class Vm3d {
   readonly scene = new THREE.Scene();
   readonly cam = new THREE.PerspectiveCamera(54, 1, 0.01, 5);
   readonly pass = { renderInto: (r: THREE.WebGLRenderer, w: number, h: number) => this.renderInto(r, w, h) };
-  private rig: Vm3dRig;
+  private rig: Vm3dRig<Vm3dBoard>;
   private spec: HandSpec;
   private clip: VmClip = CLIPS['kbd.idle'];
   private clipT = 0;
   private toolId: string | null = null;
+  private activeRigTool: 'keyboard' | 'usb' | null = null;
   private forced: KbdAction | null = null;
   private freezeT: number | null = null;
   private key: THREE.PointLight;
@@ -90,7 +93,7 @@ export class Vm3d {
 
   constructor(spec: HandSpec) {
     this.spec = spec;
-    this.rig = new Vm3dRig(spec);
+    this.rig = new Vm3dRig<Vm3dBoard>(spec, new KeyboardRig());
     this.scene.add(this.rig.root, this.rig.stage);
     this.key = new THREE.PointLight('#fdf6ec', 2.2, 4, 1.8);
     this.key.position.set(0.25, 0.35, 0.15);
@@ -103,12 +106,18 @@ export class Vm3d {
     ensureHandAssets(); // kick the glb fetch at startup; hands join when ready
   }
 
-  /** Tool id the vm3d layer draws this frame ('keyboard' or null → sprite path). */
+  /** Tool id the vm3d layer draws this frame (null → sprite path). */
   handles(): string | null {
     return this.toolId && this.rig.ready ? this.toolId : null;
   }
 
   onToolUsed(toolId: string, action?: string): void {
+    if (toolId === 'usb') {
+      this.clip = CLIPS['usb.fire'];
+      this.clipT = 0;
+      if (this.freezeT !== null) this.freezeT = 0;
+      return;
+    }
     if (toolId !== 'keyboard') return;
     const a = (this.forced ?? action ?? 'type') as KbdAction;
     this.clip = CLIPS[KBD_ACTION_CLIP[a] ?? KBD_ACTION_CLIP.type];
@@ -120,8 +129,13 @@ export class Vm3d {
   setSpec(spec: HandSpec): void {
     if (spec.gender === this.spec.gender && spec.skin.id === this.spec.skin.id) return;
     this.spec = spec;
+    this.replaceRig(this.activeRigTool ?? 'keyboard');
+  }
+
+  private replaceRig(toolId: 'keyboard' | 'usb'): void {
     this.scene.remove(this.rig.root, this.rig.stage);
-    this.rig = new Vm3dRig(spec);
+    const board = toolId === 'usb' ? new UsbScannerRig() : new KeyboardRig();
+    this.rig = new Vm3dRig<Vm3dBoard>(this.spec, board);
     this.scene.add(this.rig.root, this.rig.stage);
   }
 
@@ -184,13 +198,22 @@ export class Vm3d {
   }
 
   frame(f: Vm3dFrame): void {
-    this.toolId = f.toolId === 'keyboard' ? 'keyboard' : null;
+    const active = f.toolId === 'keyboard' || f.toolId === 'usb' ? f.toolId : null;
+    if (active !== this.activeRigTool) {
+      this.activeRigTool = active;
+      this.toolId = active;
+      if (active) {
+        this.replaceRig(active);
+        this.clip = CLIPS[active === 'usb' ? 'usb.idle' : 'kbd.idle'];
+        this.clipT = 0;
+      }
+    }
     this.rig.ensureHands(); // cheap once loaded; builds hands the frame they arrive
     if (!this.toolId || !this.rig.ready) return;
     if (this.freezeT === null) this.clipT += f.dt;
     const t = this.freezeT ?? this.clipT;
     if (this.clipT > this.clip.duration && !this.clip.loop) {
-      this.clip = CLIPS['kbd.idle'];
+      this.clip = CLIPS[this.toolId === 'usb' ? 'usb.idle' : 'kbd.idle'];
       this.clipT = 0;
     }
     this.rig.solve(this.clip, this.clip.loop ? t % this.clip.duration : Math.min(t, this.clip.duration));
@@ -212,14 +235,14 @@ export class Vm3d {
     );
 
     // idle finger fidgets: thumb tap + index lift + regrip on the free hand
-    if (this.clip === CLIPS['kbd.idle']) {
+    if (this.clip === CLIPS['kbd.idle'] || this.clip === CLIPS['usb.idle']) {
       const fig = fidgetAt(f.simT, f.seed);
       if (fig) {
         const u = Math.sin(Math.PI * fig.u);
         const r = this.rig.hands.R;
         if (fig.kind === 0) {
           const c = r.getCurl('thumb');
-          r.setCurl('thumb', { ...c, mcp: c.mcp + u * 14 });
+          r.setCurl('thumb', { ...c, mcp: c.mcp + u * (this.toolId === 'usb' ? 5 : 14) });
         } else if (fig.kind === 1) {
           const c = r.getCurl('index');
           r.setCurl('index', { ...c, mcp: c.mcp - u * 12 });
@@ -241,13 +264,18 @@ export class Vm3d {
     this.hemi.intensity = 0.25 + lv * 0.4;
     this.fill.position.set(-0.4, -0.2, 0.3);
     this.fill.intensity = 0.45;
+    if (this.rig.board instanceof UsbScannerRig) {
+      this.flashLight.position.copy(this.rig.board.socketWorld('usb.connector'));
+    } else {
+      this.flashLight.position.set(0, 0.04, -0.75);
+    }
     this.flashLight.intensity = 0;
     if (f.flash && f.flash.sinceUse >= f.flash.windup && f.flash.sinceUse - f.flash.windup < 0.09) {
       const u = 1 - (f.flash.sinceUse - f.flash.windup) / 0.09;
       this.flashLight.color.setRGB(f.flash.rgb[0] / 255, f.flash.rgb[1] / 255, f.flash.rgb[2] / 255);
       this.flashLight.intensity = 1.0 * u;
-      if (f.toolId === 'keyboard') this.rig.board.flashKeys(u);
-      else this.rig.board.clearFlash();
+      if (this.rig.board instanceof KeyboardRig) this.rig.board.flashKeys(u);
+      else this.rig.board.flash(u);
     } else {
       this.rig.board.clearFlash();
     }
@@ -326,7 +354,8 @@ export class Vm3d {
     // the swing's strike is the only time the board may reach above
     // VM_CLEAR: the taller band applies exactly while the board is in
     // flight — grab lift through strike and settle (0.014–0.34 s)
-    const crossing = this.clip === CLIPS['kbd.swing'] && this.clipT >= 0.10 && this.clipT <= 0.25;
+    const crossing = (this.clip === CLIPS['kbd.swing'] && this.clipT >= 0.10 && this.clipT <= 0.25)
+      || (this.clip === CLIPS['usb.fire'] && this.clipT >= 0.05 && this.clipT <= 0.14);
     const bandH = crossing ? Math.floor(h * 0.58) : Math.floor(h * (1 - VM_CLEAR));
     this.cam.aspect = w / h;
     this.cam.updateProjectionMatrix();

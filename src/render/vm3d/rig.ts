@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { FingerName } from '../handrig';
 import { resolveClip, type Resolved, type ResolvedHand, type VmClip } from './clips';
 import { KeyboardRig, keyTopWorld } from './keyboard3d';
+import { UsbScannerRig } from './usb3d';
 import { ensureHandAssets, handAssetsReady, LiveHand, type HandSpec } from './hand3d';
 
 const D2R = Math.PI / 180;
@@ -14,15 +15,18 @@ const _e = new THREE.Euler();
  * hands live in `stage` (scene/camera space) and are driven by
  * socket world transforms every frame, so grips track the board rigidly.
  */
-export class Vm3dRig {
+export type Vm3dBoard = KeyboardRig | UsbScannerRig;
+
+export class Vm3dRig<B extends Vm3dBoard = KeyboardRig> {
   readonly root = new THREE.Group();
   readonly stage = new THREE.Group();
-  readonly board = new KeyboardRig();
+  readonly board: B;
   private _hands: Record<'L' | 'R', LiveHand> | null = null;
   readonly spec: HandSpec;
 
-  constructor(spec: HandSpec) {
+  constructor(spec: HandSpec, board: B = new KeyboardRig() as B) {
     this.spec = spec;
+    this.board = board;
     ensureHandAssets();
     this.root.add(this.board.group);
     this.ensureHands();
@@ -36,6 +40,7 @@ export class Vm3dRig {
     if (this._hands) return true;
     if (!handAssetsReady()) return false;
     this._hands = { L: new LiveHand('L', this.spec), R: new LiveHand('R', this.spec) };
+    if (this.board instanceof UsbScannerRig) this._hands.L.group.visible = false;
     this._hands.L.thumbOut = 0.9; // gripping hand wraps its thumb around the board end
     this._hands.R.thumbOut = 0.6; // typing/backup hand keeps the thumb tucked
     this.stage.add(this._hands.L.group, this._hands.R.group);
@@ -57,12 +62,16 @@ export class Vm3dRig {
     const b = this.board.group;
     b.position.set(r.rootPos[0], r.rootPos[1], r.rootPos[2]);
     b.rotation.set(r.rootRot[0] * D2R, r.rootRot[1] * D2R, r.rootRot[2] * D2R, 'ZXY');
-    for (const k of this.board.keys) {
-      let v = 0;
-      for (const [name, amt] of Object.entries(r.keys)) {
-        if (k.name === name || k.name.startsWith(`${name}.`)) { v = amt; break; }
+    if (this.board instanceof KeyboardRig) {
+      for (const k of this.board.keys) {
+        let v = 0;
+        for (const [name, amt] of Object.entries(r.keys)) {
+          if (k.name === name || k.name.startsWith(`${name}.`)) { v = amt; break; }
+        }
+        k.down = v;
       }
-      k.down = v;
+    } else {
+      this.board.pressButton(r.keys.trigger ?? 0);
     }
     this.board.update(0);
     this.root.updateMatrixWorld(true);
@@ -115,7 +124,7 @@ export class Vm3dRig {
     hand.tailDir = rh.tailDir ? new THREE.Vector3(...rh.tailDir).normalize() : null;
     hand.setCurls(rh.curls);
     for (const c of rh.contacts) {
-      const target = c.socket.startsWith('key.')
+      const target = c.socket.startsWith('key.') && this.board instanceof KeyboardRig
         ? keyTopWorld(this.board, c.socket.slice(4))
         : this.board.socketWorld(c.socket);
       hand.ikTo(c.finger as FingerName, target, c.weight);

@@ -416,6 +416,35 @@ const PRESS_CURLS: Partial<Record<FingerName, Curl>> = { ...LIFT_CURLS };
 // home pose: board low-centre, tilted toward the camera, right end low
 const HOME_POS: V3 = [0.012, -0.148, -0.44];
 const HOME_ROT: V3 = [24, 5, -9];
+const USB_HOME_POS: V3 = [0.012, -0.151, -0.405];
+const USB_HOME_ROT: V3 = [-12, 2, -12];
+const USB_GRIP_CURLS: Partial<Record<FingerName, Curl>> = {
+  index: { mcp: 58, pip: 76, abd: -5 },
+  middle: { mcp: 62, pip: 82, abd: 0 },
+  ring: { mcp: 66, pip: 84, abd: 5 },
+  pinky: { mcp: 70, pip: 86, abd: 10 },
+  thumb: { mcp: 8, pip: 12, abd: 8 },
+};
+const USB_HOLD = {
+  wristSocket: 'usb.grip.wrist',
+  thumbOut: 0.9,
+  curls: USB_GRIP_CURLS,
+  tail: [0.72, -0.55, 0.38] as V3,
+  ik: [
+    ikc('index', 'usb.grip.index'),
+    ikc('middle', 'usb.grip.middle'),
+    ikc('ring', 'usb.grip.ring'),
+    ikc('pinky', 'usb.grip.pinky'),
+  ],
+};
+const USB_PRESS = {
+  ...USB_HOLD,
+  thumbOut: 0.82,
+  curls: {
+    ...USB_GRIP_CURLS,
+    thumb: { mcp: 26, pip: 32, abd: 10 },
+  },
+};
 
 /** TYPE keyframe helper: home pose unless overridden. */
 const tKey = (k: VmKey): VmKey => ({
@@ -426,6 +455,28 @@ const tKey = (k: VmKey): VmKey => ({
 });
 
 export const CLIPS: Record<string, VmClip> = {
+  'usb.idle': {
+    name: 'usb.idle',
+    duration: 2.4,
+    loop: true,
+    keys: [
+      { t: 0, root: { pos: USB_HOME_POS, rot: USB_HOME_ROT }, R: USB_HOLD },
+      { t: 1.2, root: { pos: [0.014, -0.1495, -0.405], rot: [-11.5, 2.3, -12.4] }, R: USB_HOLD },
+      { t: 2.4, root: { pos: USB_HOME_POS, rot: USB_HOME_ROT }, R: USB_HOLD },
+    ],
+  },
+  'usb.fire': {
+    name: 'usb.fire',
+    duration: 0.47,
+    keys: [
+      { t: 0, root: { pos: USB_HOME_POS, rot: USB_HOME_ROT }, R: USB_HOLD },
+      { t: 0.05, root: { pos: [0.01, -0.145, -0.405], rot: [-15, 2, -10] }, R: USB_PRESS, keys: { trigger: 1 } },
+      { t: 0.11, root: { pos: [0.018, -0.131, -0.39], rot: [-18, 4, -8] }, R: USB_PRESS, keys: { trigger: 1 } },
+      { t: 0.20, root: { pos: [0.016, -0.139, -0.397], rot: [-15, 3, -10] }, R: USB_HOLD },
+      { t: 0.32, root: { pos: USB_HOME_POS, rot: USB_HOME_ROT }, R: USB_HOLD },
+      { t: 0.47, root: { pos: USB_HOME_POS, rot: USB_HOME_ROT }, R: USB_HOLD },
+    ],
+  },
   'kbd.idle': {
     name: 'kbd.idle',
     duration: 3.2,
