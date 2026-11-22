@@ -454,7 +454,7 @@ export const m06: Mission = {
   ],
   debriefQuestions: [
     q('q1', ['1.4'], 'You must store user passwords so that a thief who dumps the database cannot reverse them or look them up in precomputed tables. What is BEST?', 2, [
-      ['Encrypt them with AES, with the key on the same server', 'Encryption is reversible. Whoever steals the database and the key gets every password.'],
+      ['Encrypt them with AES-256 and keep the key in a config file on the same database server', 'Encryption is reversible. Whoever steals the database and the key gets every password.'],
       ['Hash them with unsalted SHA-256', 'Unsalted fast hashes fall to rainbow tables and GPU brute force, and identical passwords produce identical hashes.'],
       ['Salt each password and hash it with a key-stretching algorithm (bcrypt, PBKDF2)', 'Salting defeats precomputed tables, and key stretching makes every guess expensive. Hashing is one-way, so nothing can be decrypted.'],
       ['Base64-encode them', 'Base64 is encoding, not cryptography. Anyone can decode it instantly.'],
@@ -462,12 +462,12 @@ export const m06: Mission = {
     q('q2', ['1.4'], 'The private key for www.example.com has leaked. What must happen to the certificate?', 3, [
       ['Nothing until it expires next year', 'Until then, anyone holding the key can impersonate the site with a certificate browsers still trust.'],
       ['Renew it with the same key pair', 'The leaked key would still be valid, so the compromise carries over to the new certificate.'],
-      ['Replace it with a self-signed certificate', 'Browsers do not trust self-signed certificates, and the leaked certificate would still be valid.'],
+      ['Replace it with a self-signed certificate until the CA can issue a new one next quarter', 'Browsers do not trust self-signed certificates, and the leaked certificate would still be valid.'],
       ['Revoke it so it appears on the CRL / OCSP, then reissue it with a new key pair', 'Revocation tells clients to stop trusting the compromised certificate. A new key pair ends the attacker\u2019s ability to impersonate the site.'],
     ]),
     q('q3', ['1.4'], 'A browser and a server that have never communicated must agree on a fast bulk-encryption key over the open internet. How does TLS do it?', 0, [
       ['Asymmetric key exchange (e.g. Diffie-Hellman) to agree a symmetric session key', 'Asymmetric crypto solves secure key exchange between strangers, and the symmetric session key then encrypts the bulk data quickly.'],
-      ['The server emails the symmetric key in advance', 'That moves the key-distribution problem to email, which is not secure.'],
+      ['The server emails the symmetric key to the browser in advance over a separate channel', 'That moves the key-distribution problem to email, which is not secure.'],
       ['Both sides hash the data instead of encrypting it', 'Hashing is one-way and provides integrity, not confidentiality. The other side could not read the data.'],
       ['Steganography hides the key inside an image', 'Steganography is obscurity, not encryption. Anyone who finds the hidden key can use it.'],
     ]),

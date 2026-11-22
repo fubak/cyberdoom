@@ -70,7 +70,7 @@ export const SUBTOPICS: Record<string, ObjectiveSubtopics> = {
   '1.3': {
     summary: 'Explain the importance of change management processes and the impact to security',
     terms: [
-      { term: 'approval process' },
+      { term: 'approval process', aka: ['through approval'] },
       { term: 'ownership' },
       { term: 'stakeholder' },
       { term: 'impact analysis' },
@@ -567,7 +567,7 @@ export const SUBTOPICS: Record<string, ObjectiveSubtopics> = {
       { term: 'password manager' },
       { term: 'passwordless' },
       { term: 'just-in-time' },
-      { term: 'password vaulting' },
+      { term: 'password vaulting', aka: ['vaulting / just-in-time'] },
       { term: 'ephemeral credentials' },
     ],
   },

@@ -726,9 +726,9 @@ export const m11: Mission = {
   debriefQuestions: [
     q('q1', ['4.2'], 'Decommissioned SSDs held customer PII. What must happen before they leave the building?', 3, [
       ['A quick format', 'A quick format leaves the data recoverable.'],
-      ['Delete the files and empty the recycle bin', 'Deletion removes pointers, not data. Forensic tools recover it easily.'],
+      ['Delete the files, empty the recycle bin, and run a quick format on each drive before shipping', 'Deletion removes pointers, not data. Forensic tools recover it easily.'],
       ['Donate them as-is to a school', 'Shipping recoverable PII off-site is a breach waiting to happen.'],
-      ['Sanitize (crypto-erase / secure erase) or physically destroy them, and keep a certificate of destruction', 'Sanitization or destruction makes the data unrecoverable, and the certificate proves it for auditors.'],
+      ['Sanitize (crypto-erase / secure erase) or destroy them, and keep a certificate of destruction', 'Sanitization or destruction makes the data unrecoverable, and the certificate proves it for auditors.'],
     ]),
     q('q2', ['5.4'], 'An EU customer asks you to erase all of their personal data. Which privacy concept applies, and what limits it?', 0, [
       ['Right to be forgotten, limited by legal retention obligations', 'Data subjects can request erasure, but data you are legally required to keep, such as tax records, may be retained.'],
@@ -755,7 +755,7 @@ export const m11: Mission = {
       ['The help desk', 'The help desk carries out access requests. It does not decide them.'],
     ]),
       q('q6', ['4.2'], 'A drive holding customer records must be REUSED inside the company after reassignment. Which end-of-life action is required first?', 1, [
-      ['Delete the customer folders and empty the trash', 'Deletion only unlinks files - the data is trivially recoverable.'],
+      ['Delete the customer folders and empty the trash, then hand it to the new owner', 'Deletion only unlinks files - the data is trivially recoverable.'],
       ['Sanitize it: cryptographic erase or secure wipe before reassignment', 'Correct. Reuse requires sanitization (secure erase) - destruction is only needed when media leaves control entirely.'],
       ['Rename the files so they are not recognizable', 'Renaming obscures nothing; data remains fully recoverable.'],
       ['Shred the drive', 'Destruction is correct for disposal, but this drive is being reused - sanitization is the right level.'],

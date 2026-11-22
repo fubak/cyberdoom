@@ -330,7 +330,7 @@ debriefQuestions: [
     q('q5', ['3.4'], 'Your backup program snapshots every 15 minutes (the RPO target) and a full VM restore takes 4 hours (the RTO target). Ransomware detonates at 14:00. In the worst case, what does recovery deliver?', 3, [
     ['All data as of 14:00, restored by 14:15', 'The last snapshot is 15 minutes old at worst, and the restore takes hours - neither figure matches.'],
     ['Data as of 13:45, back online by 14:15', '13:45 is the right worst-case data point, but a 4-hour restore finishes at 18:00, not 14:15.'],
-    ['Nothing until the next snapshot completes', 'Snapshots already exist - RPO bounds data LOSS, it does not delay the restore.'],
+    ['Nothing until the next 15-minute snapshot completes after the attack', 'Snapshots already exist - RPO bounds data LOSS, it does not delay the restore.'],
     ['Data as of 13:45, service restored by 18:00', 'Correct. RPO bounds how much data you can lose (15 min), RTO bounds how long restoration may take (4 h). Expect MTTR around the RTO; MTBF describes failure frequency, not recovery.'],
   ]),
 ],

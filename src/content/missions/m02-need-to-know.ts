@@ -233,8 +233,8 @@ export const m02: Mission = {
       options: [
         { id: 'a', text: 'Request it now; unused access does no harm', correct: false, explanation: 'Unused access is still attack surface. A lost or cloned badge, or a compromised account, gets everything it is entitled to.' },
         { id: 'b', text: 'Borrow an admin\u2019s badge on the day you need it', correct: false, explanation: 'Using someone else\u2019s credential is impersonation. The log then shows the admin entering, so accounting breaks.' },
-        { id: 'c', text: 'Request access only when a task requires it, through the approval process, and only for as long as it is needed', correct: true, explanation: 'Least privilege grants the minimum access for the job and no longer than needed (just-in-time). Approval keeps it reviewed.' },
-        { id: 'd', text: 'Ask facilities to prop the server-room door open during the day', correct: false, explanation: 'This removes the physical control for everyone and turns a restricted zone into an open one.' },
+        { id: 'c', text: 'Request it only when a task needs it, through approval, for as long as needed', correct: true, explanation: 'Least privilege grants the minimum access for the job and no longer than needed (just-in-time). Approval keeps it reviewed.' },
+        { id: 'd', text: 'Ask facilities to prop the server-room door open during business hours so the team never waits on badges', correct: false, explanation: 'This removes the physical control for everyone and turns a restricted zone into an open one.' },
       ],
     },
     {
@@ -253,8 +253,8 @@ export const m02: Mission = {
       prompt: 'What is the BEST way to give the four admins the access they need while fixing the shared-account problem?',
       objectives: ['4.6'],
       options: [
-        { id: 'a', text: 'Keep the shared account but rotate its password every 30 days', correct: false, explanation: 'Rotation limits how long a leaked password works, but four people still use one identity, so actions remain unattributable.' },
-        { id: 'b', text: 'Give each admin a named account, assign rights by role, and grant elevation through PAM (password vaulting / just-in-time)', correct: true, explanation: 'Individual accounts restore accounting. RBAC keeps rights matched to the job. PAM issues admin rights only when needed and logs each checkout.' },
+        { id: 'a', text: 'Keep the shared account but rotate its password every 30 days and have each admin sign a usage log by hand', correct: false, explanation: 'Rotation limits how long a leaked password works, but four people still use one identity, so actions remain unattributable.' },
+        { id: 'b', text: 'Named account per admin, rights by role, elevation through PAM (vaulting / just-in-time)', correct: true, explanation: 'Individual accounts restore accounting. RBAC keeps rights matched to the job. PAM issues admin rights only when needed and logs each checkout.' },
         { id: 'c', text: 'Give every admin domain-admin rights on their personal account', correct: false, explanation: 'Named accounts help attribution, but blanket domain-admin breaks least privilege and makes every account a high-value target.' },
         { id: 'd', text: 'Seal the shared password in an envelope in the manager\u2019s desk', correct: false, explanation: 'Break-glass envelopes are for rare emergencies. For daily admin work, the identity is still shared and unattributable.' },
       ],
@@ -266,7 +266,7 @@ export const m02: Mission = {
       options: [
         { id: 'a', text: 'Accept it but promise yourself never to use it', correct: false, explanation: 'Holding credentials not issued to you is already a policy violation, and the underlying risk goes unreported.' },
         { id: 'b', text: 'Decline politely and say nothing more', correct: false, explanation: 'You stayed clean, but the risky practice continues. Security awareness includes reporting anomalous, risky behavior.' },
-        { id: 'c', text: 'Use it once to prove to management how risky it is', correct: false, explanation: 'Unauthorized use is still unauthorized, whatever the intent. Testing needs a sanctioned assessment with rules of engagement.' },
+        { id: 'c', text: 'Use it once, carefully, to show management how risky the shared password really is', correct: false, explanation: 'Unauthorized use is still unauthorized, whatever the intent. Testing needs a sanctioned assessment with rules of engagement.' },
         { id: 'd', text: 'Decline, and report it through the official security reporting channel', correct: true, explanation: 'Refusing protects you. Reporting lets security replace the shared account (5.6: reporting and monitoring).' },
       ],
     },
@@ -311,7 +311,7 @@ export const m02: Mission = {
         { id: 'a', text: 'Add them to the shared domain-admin group for the day', correct: false, explanation: 'Group membership is standing privilege — easy to forget to remove, and every other member gets pooled attribution in the logs.' },
         { id: 'b', text: 'PAM: check out a vaulted credential just-in-time, expiring at the end of the window', correct: true, explanation: 'Privileged access management vaults the credential, issues just-in-time elevation scoped to the task, logs each use, and expires the ephemeral access automatically.' },
         { id: 'c', text: 'Create a permanent admin account they promise to stop using', correct: false, explanation: 'A standing account with a promise is exactly the over-privileged, unexpired access PAM exists to eliminate.' },
-        { id: 'd', text: 'Text them the domain-admin password, then change it afterwards', correct: false, explanation: 'Sending a privileged password in a message exposes it, gives no per-use logging, and the credential is still shared while it is valid.' },
+        { id: 'd', text: 'Text them the domain-admin password for the window, then change it as soon as the work is finished', correct: false, explanation: 'Sending a privileged password in a message exposes it, gives no per-use logging, and the credential is still shared while it is valid.' },
       ],
     },
     {
@@ -320,9 +320,9 @@ export const m02: Mission = {
       objectives: ['4.6'],
       options: [
         { id: 'a', text: 'The SaaS stores a synced copy of each password and verifies it with LDAP', correct: false, explanation: 'LDAP is a directory access protocol, and syncing passwords to the SaaS is precisely what federation avoids — credentials stay at the identity provider.' },
-        { id: 'b', text: 'The SaaS issues OAuth 2.0 access tokens so users can prove their identity', correct: false, explanation: 'OAuth 2.0 delegates authorization for APIs — it grants scoped access, not identity. OpenID Connect layers authentication on top of OAuth.' },
+        { id: 'b', text: 'The SaaS issues OAuth 2.0 access tokens, and those tokens are what prove each user’s identity at sign-in', correct: false, explanation: 'OAuth 2.0 delegates authorization for APIs — it grants scoped access, not identity. OpenID Connect layers authentication on top of OAuth.' },
         { id: 'c', text: 'The company binds to the SaaS\u2019s directory with SAML to look users up', correct: false, explanation: 'SAML is not a directory lookup. The identity provider signs a SAML assertion the service provider trusts — no password crosses to the SaaS.' },
-        { id: 'd', text: 'The identity provider sends a signed assertion (e.g. SAML) the SaaS trusts; credentials never leave the IdP', correct: true, explanation: 'In federation the service provider trusts the identity provider\u2019s assertion — SAML 2.0 for browser SSO, or OIDC\u2019s ID token — so the SaaS never sees the password.' },
+        { id: 'd', text: 'The IdP sends a signed assertion (e.g. SAML) the SaaS trusts; credentials never leave the IdP', correct: true, explanation: 'In federation the service provider trusts the identity provider\u2019s assertion — SAML 2.0 for browser SSO, or OIDC\u2019s ID token — so the SaaS never sees the password.' },
       ],
     },
   ],

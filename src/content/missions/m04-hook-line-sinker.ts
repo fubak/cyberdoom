@@ -318,7 +318,7 @@ export const m04: Mission = {
   },
   debriefQuestions: [
     q('q1', ['5.6'], 'A user receives an email "from IT": their mailbox is full and they must sign in at micros0ft-support.com within one hour or lose their mail. What should the user do?', 2, [
-      ['Click the link to check whether the page looks genuine', 'Simply visiting can deliver a drive-by download, and a convincing clone page is how credentials get harvested.'],
+      ['Click the link to check whether the page looks genuine before deciding what to do', 'Simply visiting can deliver a drive-by download, and a convincing clone page is how credentials get harvested.'],
       ['Reply to the sender and ask whether it is legitimate', 'The reply goes to the attacker. It confirms the address is live, and the attacker will just say yes.'],
       ['Report it with the phishing-report button without clicking anything', 'Reporting lets the SOC pull the same message from every inbox and block the domain. That is the trained response to a suspicious message.'],
       ['Delete it and move on', 'You are safe, but colleagues who got the same message are not. Without a report the SOC never learns of the campaign.'],
@@ -336,7 +336,7 @@ export const m04: Mission = {
       ['DMARC with a p=reject policy', 'DMARC requires SPF/DKIM results to align with the From domain and publishes a policy (reject) for receivers to apply to failures.'],
     ]),
     q('q4', ['2.4'], 'Sign-in logs show j.ortiz authenticating from Chicago at 09:00 and from Singapore at 09:20, and both sessions are still active. Which indicators are present?', 1, [
-      ['Account lockout and blocked content', 'Lockout follows repeated failed logins, and blocked content is a filter firing. Both of these sign-ins succeeded.'],
+      ['Account lockout and blocked content from repeated failed sign-ins', 'Lockout follows repeated failed logins, and blocked content is a filter firing. Both of these sign-ins succeeded.'],
       ['Impossible travel and concurrent session usage', 'No one travels 15,000 km in 20 minutes, and two simultaneous sessions from different continents point to stolen credentials.'],
       ['Out-of-cycle logging', 'Out-of-cycle logging is activity logged at times there should be none. These are business-hours sign-ins; the anomaly is location and concurrency.'],
       ['Resource inaccessibility', 'That would be users unable to reach their data. Here the attacker has too much access, not too little.'],
