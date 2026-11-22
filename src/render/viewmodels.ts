@@ -1,5 +1,5 @@
 import type { Gender, ToolDef, ViewmodelAnim } from '../core/types';
-import { fireFlash, fireLamp, usePhase, vmLine } from '../tools/anim';
+import { fireFlash, fireLamp, hash, usePhase, vmLine } from '../tools/anim';
 import { currentSkin, type SkinTone } from '../tools/look';
 import { handLook } from '../tools/shared';
 import { shade } from '../tools/pixel';
@@ -826,6 +826,145 @@ function patchArt(frame: PatchFrame, gender: Gender, skin: SkinTone): Art {
   });
 }
 
+export type TapFrame = 'rest' | 'squeeze' | 'burst' | 'release';
+
+export function tapFrameForUse(sinceUse: number, windup: number): TapFrame {
+  const phase = usePhase(sinceUse, windup);
+  if (phase.phase === 'wind') return 'squeeze';
+  if (phase.phase === 'impact') return 'burst';
+  if (phase.phase === 'recover') return phase.u < 0.5 ? 'release' : 'rest';
+  return 'rest';
+}
+
+/** Baked tap detail: waveform scroll step (0-2) and lit capture-buffer LEDs (0-6). */
+export function tapDetail(time: number, ammo: number | null, active: boolean): string {
+  const step = Math.floor(time * (active ? 12 : 4)) % 3;
+  const leds = Math.max(0, Math.min(6, Math.ceil((ammo ?? 0) / 2)));
+  return `${step}:${leds}`;
+}
+
+function tapArt(frame: TapFrame, gender: Gender, skin: SkinTone, detail: string): Art {
+  type Pt = [number, number];
+  const look = vmHandArt(gender, skin);
+  const [deep, shadow, base, highlight] = look.ramp;
+  const [step, leds] = detail.split(':').map(Number);
+  return paint(124, 92, 56, (_px, P) => {
+    const shape = (color: string, pts: Pt[]) => P.poly(pts, color);
+    const shrink = (pts: Pt[], d: number): Pt[] => {
+      const cx = pts.reduce((s, p) => s + p[0], 0) / pts.length;
+      const cy = pts.reduce((s, p) => s + p[1], 0) / pts.length;
+      return pts.map(([x, y]): Pt => {
+        const l = Math.hypot(x - cx, y - cy) || 1;
+        return [x - ((x - cx) / l) * d, y - ((y - cy) / l) * d];
+      });
+    };
+    const flesh = (pts: Pt[], lightEdge?: Pt[]) => {
+      shape(deep, pts);
+      shape(shadow, shrink(pts, 1));
+      shape(base, shrink(pts, 2.2));
+      if (lightEdge) P.line(lightEdge, highlight, 1.2);
+    };
+    const capsule = (x0: number, y0: number, x1: number, y1: number, r0: number, r1: number): Pt[] => {
+      const a = Math.atan2(y1 - y0, x1 - x0);
+      const nx = -Math.sin(a);
+      const ny = Math.cos(a);
+      const pts: Pt[] = [[x0 + nx * r0, y0 + ny * r0]];
+      for (let i = 0; i <= 6; i++) {
+        const t = a + Math.PI / 2 - (Math.PI * i) / 6;
+        pts.push([x1 + Math.cos(t) * r1, y1 + Math.sin(t) * r1]);
+      }
+      pts.push([x0 - nx * r0, y0 - ny * r0]);
+      return pts;
+    };
+    const sleeve = (mirror: boolean, ax: number, ay: number) => {
+      const sp = (x: number, y: number): Pt => {
+        const sx = (x - 73.5) * 2.1 + (y - 65) * 0.9;
+        return [ax + (mirror ? -sx : sx), ay + (y - 65) * 1.4];
+      };
+      paintVmJacketSleeve(look, {
+        shape: (color, pts) => P.poly(pts.map(([x, y]) => sp(x, y)), color),
+        seamLine: (pts) => P.line(pts.map(([x, y]) => sp(x, y)), look.seam),
+        ell: (color, x, y, rx, ry) => {
+          const [cx, cy] = sp(x, y);
+          P.ell(cx, cy, rx * 2.1, ry * 1.4, color);
+        },
+      });
+    };
+    // housing front face in slight perspective
+    const C: [Pt, Pt, Pt, Pt] = [[32, 24], [82, 24], [88, 58], [26, 58]];
+    const cp = (u: number, v: number): Pt => {
+      const top: Pt = [C[0][0] + (C[1][0] - C[0][0]) * u, C[0][1] + (C[1][1] - C[0][1]) * u];
+      const bot: Pt = [C[3][0] + (C[2][0] - C[3][0]) * u, C[3][1] + (C[2][1] - C[3][1]) * u];
+      return [top[0] + (bot[0] - top[0]) * v, top[1] + (bot[1] - top[1]) * v];
+    };
+    const quad = (color: string, u0: number, v0: number, u1: number, v1: number) =>
+      shape(color, [cp(u0, v0), cp(u1, v0), cp(u1, v1), cp(u0, v1)]);
+
+    // copper and fibre leads leaving the top ports, away from the camera
+    P.line([[40, 22], [38, 17], [35, 13]], '#163f78', 3);
+    P.line([[40, 22], [38, 17], [35.6, 13.6]], '#2a7bd8', 1.2);
+    P.line([[74, 22], [76, 17], [79, 13]], '#7a5410', 3);
+    P.line([[74, 22], [76, 17], [78.4, 13.6]], '#d8a02a', 1.2);
+
+    // left palm under the housing, sleeve to the bottom-left
+    flesh([[22, 50], [40, 52], [46, 64], [40, 78], [30, 92], [6, 92], [12, 72], [16, 58]]);
+    // right palm behind the clamp, sleeve to the bottom-right
+    flesh([[86, 44], [98, 40], [108, 48], [112, 64], [116, 92], [92, 92], [88, 74], [84, 58]]);
+
+    // housing: depth, body, top bevel, ports
+    shape('#1e2128', [[34, 20], [80, 20], [82, 24], [32, 24]]);
+    shape('#22252c', [C[0], C[1], [C[2][0] + 1, C[2][1] + 3], [C[3][0] - 1, C[3][1] + 3]]);
+    shape('#4a505e', C);
+    quad('#5e6576', 0, 0, 1, 0.08);
+    quad('#363b46', 0.96, 0.08, 1, 1);
+    for (const u of [0.1, 0.78]) {
+      quad('#14161b', u, 0, u + 0.12, 0.1);
+      quad('#c0c6d0', u + 0.03, 0.02, u + 0.09, 0.06);
+    }
+    // capture screen: one-colour copied traffic, no verdict
+    const active = frame !== 'rest';
+    const bright = frame === 'burst';
+    quad('#0b0d12', 0.07, 0.2, 0.93, 0.7);
+    quad(bright ? '#1c5a38' : '#04170d', 0.09, 0.23, 0.91, 0.67);
+    const bars = 26;
+    for (let i = 0; i < bars; i++) {
+      const v = hash(i + step * 7 + (active ? 31 : 0));
+      const hgt = Math.max(0.03, v * (bright ? 0.4 : active ? 0.32 : 0.1));
+      const u0 = 0.11 + (i / bars) * 0.78;
+      quad(bright ? '#d8ffe4' : '#3dff8a', u0, 0.45 - hgt / 2, u0 + 0.78 / bars - 0.008, 0.45 + hgt / 2);
+    }
+    if (active) quad('#d0ffe0', 0.11 + ((step + 1) / 4) * 0.78, 0.23, 0.12 + ((step + 1) / 4) * 0.78, 0.67);
+    // capture buffer LEDs
+    for (let i = 0; i < 6; i++) quad(i < leds ? '#ffb000' : '#3a2a10', 0.12 + i * 0.1, 0.8, 0.19 + i * 0.1, 0.87);
+    quad('#9aa2b0', 0.76, 0.79, 0.9, 0.88);
+
+    // spring clamp on the right flank: lever drops when squeezed
+    const drop = frame === 'squeeze' || frame === 'burst' ? 4 : frame === 'release' ? 1.5 : 0;
+    shape('#2a2e36', [[86, 34], [96, 32], [97, 40], [87, 42]]);
+    shape('#9aa2b0', [[88, 28 + drop * 0.4], [104, 24 + drop], [106, 28 + drop], [90, 33 + drop * 0.4]]);
+    shape('#d6dce6', [[89, 28.5 + drop * 0.4], [104, 24.5 + drop], [104.5, 25.6 + drop], [89.5, 29.8 + drop * 0.4]]);
+    shape('#6e7482', [[88, 40], [102, 42], [102, 45], [88, 44]]);
+
+    // left fingers curl up the housing's left flank
+    for (const [fy, len] of [[38, 6], [44, 7], [50, 6]] as Pt[]) {
+      flesh(capsule(22, fy + 2, 22 + len, fy, 2.7, 2.4), [[21, fy], [19 + len, fy - 2]]);
+      P.ell(22.5 + len, fy - 0.6, 1, 0.8, highlight);
+    }
+    // left thumb along the bottom-left corner
+    flesh(capsule(28, 64, 36, 58, 3.6, 2.9), [[29, 61], [35, 57]]);
+
+    // right thumb pressing the clamp lever, fingers wrapped under the jaw
+    flesh(capsule(106, 44 + drop * 0.5, 97, 28 + drop * 0.8, 4, 3.1), [[103, 38], [97, 26.5 + drop * 0.8]]);
+    P.ell(97, 27.6 + drop * 0.8, 1.6, 1.2, '#f2dccb');
+    for (const [fy, len] of [[47, 8], [52, 8]] as Pt[]) {
+      flesh(capsule(104, fy + 2, 104 - len, fy, 2.7, 2.4), [[104, fy - 1], [98, fy - 2]]);
+    }
+
+    sleeve(true, 22, 78);
+    sleeve(false, 104, 78);
+  });
+}
+
 function art(
   tool: ToolDef,
   gender: Gender,
@@ -836,9 +975,11 @@ function art(
   badgeFrame?: BadgeFrame,
   mfaFrame?: MfaFrame,
   patchFrame?: PatchFrame,
+  tapFrame?: TapFrame,
+  detail = '',
 ): Art | null {
   const skin = currentSkin();
-  const key = `${tool.id}:${gender}:${mode}:${usbFrame ?? ''}:${keyboardFrame ?? ''}:${mouseFrame ?? ''}:${badgeFrame ?? ''}:${mfaFrame ?? ''}:${patchFrame ?? ''}:${skin.id}`;
+  const key = `${tool.id}:${gender}:${mode}:${usbFrame ?? ''}:${keyboardFrame ?? ''}:${mouseFrame ?? ''}:${badgeFrame ?? ''}:${mfaFrame ?? ''}:${patchFrame ?? ''}:${tapFrame ?? ''}:${detail}:${skin.id}`;
   let a = cache.get(key);
   if (!a) {
     if (tool.id === 'usb') a = usbArt(usbFrame ?? (mode === 2 ? 'flash' : mode === 1 ? 'recoil' : 'rest'), gender, skin);
@@ -847,6 +988,7 @@ function art(
     else if (tool.id === 'badge') a = badgeArt(badgeFrame ?? 'rest', gender, skin);
     else if (tool.id === 'mfa') a = mfaArt(mfaFrame ?? 'rest', gender, skin);
     else if (tool.id === 'patch') a = patchArt(patchFrame ?? 'rest', gender, skin);
+    else if (tool.id === 'tap') a = tapArt(tapFrame ?? 'rest', gender, skin, detail || '0:0');
     else return null;
     if (mode === 2 && tool.id !== 'keyboard') a = tintFlash(a, TOOL_FLASH[tool.id] ?? '255,255,255');
     cache.set(key, a);
@@ -896,7 +1038,11 @@ export function drawToolViewmodel(
   const patchFrame: PatchFrame | undefined = tool.id !== 'patch' ? undefined
     : ph ? patchFrameForUse(anim!.sinceUse, tool.windup ?? 0)
       : 'rest';
-  const a = art(tool, gender, lit ? 2 : fire ? 1 : 0, usbFrame, keyboardFrame, mouseFrame, badgeFrame, mfaFrame, patchFrame);
+  const tapFrame: TapFrame | undefined = tool.id !== 'tap' ? undefined
+    : ph ? tapFrameForUse(anim!.sinceUse, tool.windup ?? 0)
+      : 'rest';
+  const detail = tool.id === 'tap' ? tapDetail(anim?.time ?? 0, anim?.ammo ?? null, !!ph && ph.phase !== 'idle') : '';
+  const a = art(tool, gender, lit ? 2 : fire ? 1 : 0, usbFrame, keyboardFrame, mouseFrame, badgeFrame, mfaFrame, patchFrame, tapFrame, detail);
   // shared bob/strike/switch offsets for the art AND the rig-hand overlay
   const bx = Math.round(Math.sin(bob) * 6);
   const byy = Math.round(Math.abs(Math.cos(bob)) * 3);
@@ -1037,7 +1183,7 @@ const HAND_SINK = 4;
 const LIT_SWELL = 1.05;
 
 /** Per-tool viewmodel size multiplier (keyboard art runs ~25% of view width at 1). */
-const SIZE: Record<string, number> = { keyboard: 1.0, mouse: 0.7, badge: 0.66, mfa: 0.62, patch: 0.64, usb: 1.0 };
+const SIZE: Record<string, number> = { keyboard: 1.0, mouse: 0.7, badge: 0.66, mfa: 0.62, patch: 0.64, tap: 0.6, usb: 1.0 };
 
 /** Muzzle-flash tint per tool (rgb for edgeFlash); also feeds the world light flood. */
 export const TOOL_FLASH: Record<string, string> = {
@@ -1062,4 +1208,5 @@ const POSE: Record<string, { wind: [number, number]; strike: [number, number] }>
   badge: { wind: [7, 3], strike: [-24, -11] }, // pull back, swipe across the reader left
   mfa: { wind: [0, 1], strike: [0, -8] }, // settle, then seat up into the reader
   patch: { wind: [0, 1], strike: [0, -12] }, // dip, then thrust the disk up into the bay
+  tap: { wind: [0, 1], strike: [0, -7] }, // squeeze, then the capture kick lifts it
 };
