@@ -167,14 +167,14 @@ function keyboardArt(frame: KeyboardFrame, gender: Gender, skin: SkinTone): Art 
     paintVmJacketSleeve(look, sleeveDraw(28, -1));
     paintVmJacketSleeve(look, sleeveDraw(132, 1));
     if (gender === 'male') {
-      const sleeveDetail = (mirror: boolean, points: [number, number][]) =>
-        P.poly(points.map(([x, y]) => point(mirror ? 160 - x : x, y)), look.accent);
       const sleeveEdge = (mirror: boolean, points: [number, number][]) =>
         P.line(points.map(([x, y]) => point(mirror ? 160 - x : x, y)), shade(look.jacket, 1.55), 1.2);
-      const band: [number, number][] = [[126, 65], [142, 64], [142, 67], [127, 68]];
+      const sleeveBandEdge = (mirror: boolean, points: [number, number][]) =>
+        P.line(points.map(([x, y]) => point(mirror ? 160 - x : x, y)), shade(look.accent, 0.55), 1);
+      const bandEdge: [number, number][] = [[126, 65], [142, 64]];
       const edge: [number, number][] = [[141, 58], [141, 78]];
-      sleeveDetail(false, band);
-      sleeveDetail(true, band);
+      sleeveBandEdge(false, bandEdge);
+      sleeveBandEdge(true, bandEdge);
       sleeveEdge(false, edge);
       sleeveEdge(true, edge);
     }
@@ -258,21 +258,30 @@ function keyboardArt(frame: KeyboardFrame, gender: Gender, skin: SkinTone): Art 
       handShape(highlight, [[134, 40], [137, 38], [141, 38], [143, 40], [140, 41], [136, 42]], mirror);
       handLine([[142, 42], [143, 46], [141, 50]], deep, mirror, 0.8);
 
-      for (let i = 0; i < 4; i++) {
-        const y = 40 + i * 4.1;
+      const fingers = [
+        { y: 39.4, outerReach: 9, tipInset: 4 },
+        { y: 44.1, outerReach: 7.8, tipInset: 4 },
+        { y: 48.2, outerReach: 6.4, tipInset: 3.6 },
+        { y: 52, outerReach: 5.6, tipInset: 2.9 },
+      ];
+      for (const finger of fingers) {
+        const { y, outerReach, tipInset } = finger;
         const boardEdge = 80 + 32 + ((y - 19) / 34) * 15;
-        const tipX = boardEdge - 2.2;
+        const tipX = boardEdge - tipInset;
+        const startX = boardEdge + outerReach;
         handShape(deep, [
-          [tipX + 1, y - 1.4], [tipX + 5, y - 1.7], [134, y - 1.8],
-          [138, y - 1.1], [139, y], [137, y + 1.2], [134, y + 1.6], [tipX + 1, y + 1.2],
+          [startX, y - 1.2], [boardEdge + 2, y - 1.4], [boardEdge - 0.4, y - 1.1],
+          [tipX, y - 0.8], [tipX + 0.3, y + 0.8], [boardEdge + 0.7, y + 1.2], [startX, y + 0.9],
         ], mirror);
         handShape(base, [
-          [tipX + 1, y - 0.9], [tipX + 5, y - 1.1], [134, y - 1.2],
-          [137, y - 0.6], [137, y + 0.5], [134, y + 1], [tipX + 1, y + 0.8],
+          [startX, y - 0.6], [boardEdge + 1.5, y - 0.7], [boardEdge - 0.5, y - 0.55],
+          [tipX, y - 0.45], [tipX + 0.1, y + 0.5], [boardEdge + 0.8, y + 0.6], [startX, y + 0.5],
         ], mirror);
-        handEllipse(shadow, tipX, y, 2.5, 1.7, mirror);
-        handEllipse(base, tipX - 0.4, y - 0.25, 1.9, 1.2, mirror);
-        handLine([[tipX - 1.1, y - 0.8], [tipX, y - 1]], highlight, mirror, 0.7);
+        handEllipse(deep, boardEdge + 0.8, y, 2.1, 1.5, mirror);
+        handEllipse(shadow, boardEdge + 0.5, y - 0.15, 1.2, 0.8, mirror);
+        handEllipse(shadow, tipX, y, 2.2, 1.4, mirror);
+        handEllipse(base, tipX - 0.3, y - 0.2, 1.6, 1, mirror);
+        handLine([[tipX - 1.2, y - 0.8], [tipX - 0.2, y - 0.8]], highlight, mirror, 1);
       }
       handLine([[132, 52], [135, 54], [138, 55]], shadow, mirror, 0.9);
     };
