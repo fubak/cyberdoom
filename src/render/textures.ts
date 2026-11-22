@@ -1121,25 +1121,38 @@ export function buildTextures(jobs = false): void {
     grime(p, 'rgba(20,10,4,0.5)', 140);
   });
 
-  // Episode 1: Corporate carpet tiles (subtle slate/navy weave).
+  // Episode 1: Corporate carpet tiles (alternating slate-blue/charcoal woven squares).
   flatV('floor-carpet', (p) => {
     const { g } = p;
-    noiseFill(p, [54, 62, 74], 8);
-    for (let y = 0; y < 64; y += 2) {
-      g.fillStyle = y % 4 === 0 ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.08)';
-      g.fillRect(0, y, 64, 1);
+    noiseFill(p, [56, 68, 86], 7);
+    // Checkerboard pile direction across the 4 32x32 carpet tiles
+    for (let ty = 0; ty < 2; ty++) {
+      for (let tx = 0; tx < 2; tx++) {
+        const ox = tx * 32;
+        const oy = ty * 32;
+        const horiz = (tx + ty) % 2 === 0;
+        g.fillStyle = horiz ? 'rgba(130,162,196,0.08)' : 'rgba(16,24,36,0.10)';
+        g.fillRect(ox + 1, oy + 1, 30, 30);
+        if (horiz) {
+          for (let y = 2; y < 31; y += 2) {
+            g.fillStyle = y % 4 === 0 ? 'rgba(195,216,238,0.08)' : 'rgba(14,20,30,0.12)';
+            g.fillRect(ox + 1, oy + y, 30, 1);
+          }
+        } else {
+          for (let x = 2; x < 31; x += 2) {
+            g.fillStyle = x % 4 === 0 ? 'rgba(195,216,238,0.08)' : 'rgba(14,20,30,0.12)';
+            g.fillRect(ox + x, oy + 1, 1, 30);
+          }
+        }
+      }
     }
-    for (let x = 0; x < 64; x += 4) {
-      g.fillStyle = 'rgba(20,26,34,0.12)';
-      g.fillRect(x, 0, 1, 64);
-    }
-    // Carpet tile seams
-    g.fillStyle = '#242b36';
+    // Clean carpet tile seams
+    g.fillStyle = '#253040';
     g.fillRect(0, 0, 64, 1);
     g.fillRect(0, 0, 1, 64);
     g.fillRect(32, 0, 1, 64);
     g.fillRect(0, 32, 64, 1);
-    grime(p, 'rgba(12,16,22,0.25)', 80);
+    grime(p, 'rgba(14,20,28,0.16)', 45);
   });
 
   // Episode 2: Cold-aisle datacenter steel grating with recessed cyan fiber conduit.

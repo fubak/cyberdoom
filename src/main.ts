@@ -18,7 +18,7 @@ import { lightProbe, lookProbe, placeThreat } from './render/probe';
 import { Renderer } from './render/renderer';
 import { prewarmLazySpriteFrames, prioritizeLazySprites, spriteSets } from './render/sprites';
 import { textureRegistry } from './render/textures';
-import { TOOL_FLASH } from './render/viewmodels';
+import { SHOW_HANDS, TOOL_FLASH } from './render/viewmodels';
 import { bakeRig } from './render/handrig';
 import { POSES, TOOL_HANDS } from './render/handposes';
 import { currentSkin } from './tools/look';
@@ -578,14 +578,15 @@ class Game {
       },
       this.settings.skill,
     ));
-    // warm the WebGL hand-bake path during briefing: the first bake carries
-    // a one-time renderer/shader init that must not land inside deploy→play
-    this.scheduleIdle(() => {
-      try {
-        const th = TOOL_HANDS.keyboard;
-        bakeRig(th.rest, POSES[th.rest], { gender: this.gender, skin: currentSkin() });
-      } catch { /* lazy bake covers it */ }
-    });
+    // warm the WebGL hand-bake path during briefing only when the legacy 3D rig is enabled
+    if (SHOW_HANDS) {
+      this.scheduleIdle(() => {
+        try {
+          const th = TOOL_HANDS.keyboard;
+          bakeRig(th.rest, POSES[th.rest], { gender: this.gender, skin: currentSkin() });
+        } catch { /* lazy bake covers it */ }
+      });
+    }
   }
 
   private applySettings(next: Settings): void {
@@ -761,8 +762,11 @@ class Game {
         this.warmHud(mission);
         p.stage++;
         break;
-      case 7: { // hand bakes: one tool's rest pose per idle slice so equipping
-        // a tool never stalls a frame on the WebGL mesh bake
+      case 7: { // hand bakes: only needed when legacy 3D rig hands are enabled
+        if (!SHOW_HANDS) {
+          p.ready = true;
+          break;
+        }
         const tools = Object.keys(TOOL_HANDS);
         if (p.handWarm >= tools.length) {
           p.ready = true;
@@ -971,17 +975,18 @@ class Game {
     this.hud.clearMessages();
     this.hud.pushMessage(`${mission.title} — good luck, analyst`, 'info');
     this.automaticCheckpoint = this.captureCheckpoint('MISSION START');
-    // finish warming the tool hand bakes in idle slices during play so a
-    // first equip never stalls a frame on the WebGL mesh bake
-    let hw = 0;
-    const warmTools = Object.keys(TOOL_HANDS);
-    const warmStep = () => {
-      if (hw >= warmTools.length || this.screen !== 'play') return;
-      const rest = TOOL_HANDS[warmTools[hw++] as keyof typeof TOOL_HANDS].rest;
-      try { bakeRig(rest, POSES[rest], { gender: this.gender, skin: currentSkin() }); } catch { /* lazy bake covers it */ }
-      if (hw < warmTools.length) this.scheduleIdle(warmStep);
-    };
-    this.scheduleIdle(warmStep);
+    // finish warming the legacy 3D tool hand bakes only when enabled
+    if (SHOW_HANDS) {
+      let hw = 0;
+      const warmTools = Object.keys(TOOL_HANDS);
+      const warmStep = () => {
+        if (hw >= warmTools.length || this.screen !== 'play') return;
+        const rest = TOOL_HANDS[warmTools[hw++] as keyof typeof TOOL_HANDS].rest;
+        try { bakeRig(rest, POSES[rest], { gender: this.gender, skin: currentSkin() }); } catch { /* lazy bake covers it */ }
+        if (hw < warmTools.length) this.scheduleIdle(warmStep);
+      };
+      this.scheduleIdle(warmStep);
+    }
   }
 
   private captureCheckpoint(label: string): Checkpoint {

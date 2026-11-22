@@ -52,8 +52,12 @@ describe('D3 environmental props and episode wall/floor themes', () => {
       usedWalls.add(theme!.wall);
       usedFloors.add(theme!.floor);
 
-      for (const ent of mission.entities) {
-        if (ent.kind !== 'prop' || ent.sprite === 'duck') continue;
+      const props = mission.entities.filter((ent) => ent.kind === 'prop');
+      expect(props.length, `${mission.id} should have rich prop density`).toBeGreaterThanOrEqual(15);
+      for (const ent of props) {
+        const ch = mission.map.grid[Math.floor(ent.y)]?.[Math.floor(ent.x)] ?? '';
+        expect(mission.map.legend[ch]?.kind, `${mission.id} prop ${ent.id} must be on floor`).toBe('floor');
+        if (ent.sprite === 'duck') continue;
         expect(theme!.props).toContain(ent.sprite);
         usedProps.add(ent.sprite);
       }
@@ -62,5 +66,28 @@ describe('D3 environmental props and episode wall/floor themes', () => {
     expect(usedWalls.size).toBe(4);
     expect(usedFloors.size).toBe(3);
     expect(usedProps.size).toBe(6);
+  });
+
+  it('M01 spawn office lobby uses office walls and carpet floor rather than server racks', () => {
+    const m01 = missionRegistry.get('m01');
+    expect(m01).toBeDefined();
+    const { grid, legend, spawn } = m01!.map;
+    const sx = Math.floor(spawn.x);
+    const sy = Math.floor(spawn.y);
+    expect(legend[grid[sy]![sx]!]?.tex).toBe('floor-carpet');
+    // Check walls surrounding the south-west office lobby (rows 20..29, cols 3..16)
+    let officeWalls = 0;
+    let serverWalls = 0;
+    for (let y = 20; y <= 29; y++) {
+      for (let x = 3; x <= 16; x++) {
+        const cell = legend[grid[y]![x]!];
+        if (cell?.kind === 'wall') {
+          if (cell.tex === 'wall-office') officeWalls += 1;
+          if (cell.tex === 'wall-server') serverWalls += 1;
+        }
+      }
+    }
+    expect(officeWalls).toBeGreaterThan(20);
+    expect(serverWalls).toBe(0);
   });
 });
