@@ -6,6 +6,7 @@ export interface Settings {
   sfxVol: number;
   musicVol: number;
   viewBob: boolean;
+  colorBlind: boolean;
   skill: SkillId;
   bindings: Partial<Record<Action, string[]>>;
 }
@@ -15,6 +16,7 @@ export const DEFAULT_SETTINGS: Settings = {
   sfxVol: 1,
   musicVol: 0.7,
   viewBob: true,
+  colorBlind: false,
   skill: 'analyst',
   bindings: {},
 };
@@ -99,6 +101,7 @@ export function loadSettings(
     sfxVol: readNumber(values.sfxVol, defaults.sfxVol, 0, 1),
     musicVol: readNumber(values.musicVol, defaults.musicVol, 0, 1),
     viewBob: typeof values.viewBob === 'boolean' ? values.viewBob : defaults.viewBob,
+    colorBlind: typeof values.colorBlind === 'boolean' ? values.colorBlind : defaults.colorBlind,
     skill: isSkillId(values.skill) ? values.skill : defaults.skill,
     bindings: readBindings(values.bindings),
   };

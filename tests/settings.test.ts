@@ -30,6 +30,7 @@ describe('settings persistence', () => {
       sfxVol: 0,
       musicVol: 1,
       viewBob: false,
+      colorBlind: false,
       skill: 'analyst',
       bindings: {},
     });
@@ -69,6 +70,7 @@ describe('settings persistence', () => {
       sfxVol: 0.4,
       musicVol: 0.15,
       viewBob: false,
+      colorBlind: true,
       skill: 'commander' as const,
       bindings: { forward: ['KeyI'], use: [] },
     };

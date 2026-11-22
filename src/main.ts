@@ -224,6 +224,7 @@ class Game {
     this.input = new Input(this.renderer.canvas, () => this.audio.unlock(), () => this.lockWanted());
     this.input.setBindings(resolveBindings(this.settings.bindings));
     this.hud = new Hud(viewport);
+    this.hud.setColorBlind(this.settings.colorBlind);
     this.automap = new Automap(this.hud.canvas);
     // EGGS: Doom-style typed cheats during play; the Konami code on title.
     // Capture phase: this listener is registered before the dossier's capture
@@ -565,6 +566,7 @@ class Game {
     this.input.setBindings(resolveBindings(next.bindings));
     this.audio.setMusicVolume(next.musicVol);
     this.audio.setSfxVolume(next.sfxVol);
+    this.hud.setColorBlind(next.colorBlind);
     if (this.player) this.player.bobScale = next.viewBob ? 1 : 0;
   }
 

@@ -34,6 +34,28 @@ const MSG_RAMP: Record<string, string[]> = {
   warn: ['#fff0a0', '#ffc030', '#d08a10'],
   info: ['#ffffff', '#d8e0f0', '#9aa8c0'],
 };
+
+/** Okabe-Ito-inspired color-blind-safe ramps (sky blue = good, yellow = warn, vermilion = bad). */
+const MSG_RAMP_CB: Record<string, string[]> = {
+  bad: ['#ffd0b0', '#ff7a20', '#d55e00'],
+  good: ['#d0f0ff', '#56b4e9', '#1c86c8'],
+  warn: ['#ffffc8', '#f0e442', '#c8b810'],
+  info: ['#ffffff', '#d8e0f0', '#9aa8c0'],
+};
+
+/** Non-color semantic prefix so good/warn/bad messages never rely on color alone. */
+export function tickerPrefix(kind: string): string {
+  if (kind === 'bad') return '[!] ';
+  if (kind === 'warn') return '[~] ';
+  if (kind === 'good') return '[+] ';
+  return '';
+}
+
+export function tickerColor(kind: string, colorBlind = false): string {
+  const table = colorBlind ? MSG_RAMP_CB : MSG_RAMP;
+  const ramp = table[kind] ?? table.info;
+  return ramp[ramp.length - 2];
+}
 /** Objective strip never exceeds 12% of the 168px 3D view. */
 const OBJ_STRIP_MAX = 20;
 
@@ -100,8 +122,9 @@ export function tickerRows(
   let rows = 0;
   for (let i = messages.length - 1; i >= 0 && rows < maxRows; i--) {
     const m = messages[i];
-    const text = m.n > 1 ? `${m.text.toUpperCase()} X${m.n}` : m.text.toUpperCase();
-    const lines = wrapText(text, 52, 3);
+    const prefix = tickerPrefix(m.kind);
+    const body = m.n > 1 ? `${m.text.toUpperCase()} X${m.n}` : m.text.toUpperCase();
+    const lines = wrapText(`${prefix}${body}`, 52, 3);
     const take = Math.min(lines.length, maxRows - rows);
     const shown = lines.slice(0, take);
     if (lines.length > take) shown[shown.length - 1] = ellipsizeWords(shown[shown.length - 1], 52);
@@ -129,6 +152,11 @@ export class Hud {
   private objShowT = 0;
   private lastObjKey = '';
   private objIdx = 0;
+  private colorBlind = false;
+
+  setColorBlind(enabled: boolean): void {
+    this.colorBlind = enabled;
+  }
   private pickup: { text: string; t: number } | null = null;
 
   constructor(container: HTMLElement) {
@@ -532,11 +560,10 @@ export class Hud {
         y += 7;
         continue;
       }
-      const ramp = MSG_RAMP[row.kind] ?? MSG_RAMP.info;
       const w = measureText(row.line, 'tiny');
       this.g.fillStyle = 'rgba(4,6,10,0.55)';
       this.g.fillRect(1, y, w + 3, 6);
-      drawText(this.g, row.line, 2, y + 1, ramp[ramp.length - 2], 'tiny', null);
+      drawText(this.g, row.line, 2, y + 1, tickerColor(row.kind, this.colorBlind), 'tiny', null);
       y += 7;
     }
   }

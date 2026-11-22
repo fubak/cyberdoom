@@ -77,6 +77,10 @@ export function pauseMenu(actions: {
     ...current,
     viewBob: !current.viewBob,
   }));
+  addSetting('color-blind', () => `COLOR-BLIND ${settings.colorBlind ? 'ON' : 'OFF'}`, (current) => ({
+    ...current,
+    colorBlind: !current.colorBlind,
+  }));
 
   const help = h('ul', 'cd-pause-help');
   const bindings = resolveBindings(settings.bindings);
