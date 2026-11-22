@@ -727,6 +727,105 @@ function mfaArt(frame: MfaFrame, gender: Gender, skin: SkinTone): Art {
   });
 }
 
+export type PatchFrame = 'rest' | 'pull' | 'push' | 'redraw';
+
+export function patchFrameForUse(sinceUse: number, windup: number): PatchFrame {
+  const phase = usePhase(sinceUse, windup);
+  if (phase.phase === 'wind') return 'pull';
+  if (phase.phase === 'impact') return 'push';
+  if (phase.phase === 'recover') return phase.u < 0.5 ? 'redraw' : 'rest';
+  return 'rest';
+}
+
+function patchArt(frame: PatchFrame, gender: Gender, skin: SkinTone): Art {
+  type Pt = [number, number];
+  const look = vmHandArt(gender, skin);
+  const [deep, shadow, base, highlight] = look.ramp;
+  const pose: Record<PatchFrame, [number, number]> = { rest: [1, 0], pull: [1.04, 2], push: [0.86, -2], redraw: [0.94, 0] };
+  const [scale, dy] = pose[frame];
+  const T = (x: number, y: number): Pt => [44 + (x - 44) * scale, 76 + dy + (y - 76) * scale];
+  return paint(104, 92, 44, (_px, P) => {
+    const shape = (color: string, pts: Pt[]) => P.poly(pts.map(([x, y]) => T(x, y)), color);
+    const line = (pts: Pt[], color: string, width = 1) => P.line(pts.map(([x, y]) => T(x, y)), color, width);
+    const shrink = (pts: Pt[], d: number): Pt[] => {
+      const cx = pts.reduce((s, p) => s + p[0], 0) / pts.length;
+      const cy = pts.reduce((s, p) => s + p[1], 0) / pts.length;
+      return pts.map(([x, y]): Pt => {
+        const l = Math.hypot(x - cx, y - cy) || 1;
+        return [x - ((x - cx) / l) * d, y - ((y - cy) / l) * d];
+      });
+    };
+    const flesh = (pts: Pt[], lightEdge?: Pt[]) => {
+      shape(deep, pts);
+      shape(shadow, shrink(pts, 1));
+      shape(base, shrink(pts, 2.2));
+      if (lightEdge) line(lightEdge, highlight, 1.2);
+    };
+    const capsule = (x0: number, y0: number, x1: number, y1: number, r0: number, r1: number): Pt[] => {
+      const a = Math.atan2(y1 - y0, x1 - x0);
+      const nx = -Math.sin(a);
+      const ny = Math.cos(a);
+      const pts: Pt[] = [[x0 + nx * r0, y0 + ny * r0]];
+      for (let i = 0; i <= 6; i++) {
+        const t = a + Math.PI / 2 - (Math.PI * i) / 6;
+        pts.push([x1 + Math.cos(t) * r1, y1 + Math.sin(t) * r1]);
+      }
+      pts.push([x0 - nx * r0, y0 - ny * r0]);
+      return pts;
+    };
+    // disk top face in perspective: shutter edge away from the camera
+    const C: [Pt, Pt, Pt, Pt] = [[24, 12], [64, 12], [72, 60], [16, 60]];
+    const cp = (u: number, v: number): Pt => {
+      const top: Pt = [C[0][0] + (C[1][0] - C[0][0]) * u, C[0][1] + (C[1][1] - C[0][1]) * u];
+      const bot: Pt = [C[3][0] + (C[2][0] - C[3][0]) * u, C[3][1] + (C[2][1] - C[3][1]) * u];
+      return [top[0] + (bot[0] - top[0]) * v, top[1] + (bot[1] - top[1]) * v];
+    };
+    const quad = (color: string, u0: number, v0: number, u1: number, v1: number) =>
+      shape(color, [cp(u0, v0), cp(u1, v0), cp(u1, v1), cp(u0, v1)]);
+
+    // palm under the near edge, index finger curled beneath the disk
+    flesh([[52, 54], [66, 52], [78, 60], [86, 74], [92, 92], [66, 92], [58, 78], [50, 66]]);
+    flesh(capsule(64, 70, 48, 62, 4, 3.4), [[60, 64], [50, 60]]);
+
+    // disk: thickness, body, shutter, label, write-protect tab
+    shape('#0c1838', [C[0], C[1], [C[2][0], C[2][1] + 3], [C[3][0], C[3][1] + 3]]);
+    shape('#1e3a8a', C);
+    quad('#2c52b4', 0, 0, 0.06, 1);
+    quad('#3c64cc', 0.02, 0.0, 0.98, 0.03);
+    quad('#9aa0ae', 0.3, 0, 0.76, 0.36);
+    quad('#d8dce6', 0.3, 0, 0.76, 0.05);
+    quad('#6e7482', 0.72, 0.05, 0.76, 0.36);
+    quad('#22262e', 0.58, 0.07, 0.68, 0.3);
+    quad('#f0ede4', 0.12, 0.48, 0.88, 0.96);
+    quad('#ff8a1a', 0.12, 0.48, 0.88, 0.58);
+    quad('#ffc070', 0.12, 0.48, 0.88, 0.5);
+    quad('#1e3a8a', 0.2, 0.66, 0.6, 0.71);
+    quad('#7a8296', 0.2, 0.78, 0.72, 0.82);
+    quad('#7a8296', 0.2, 0.87, 0.5, 0.91);
+    quad('#06080e', 0.03, 0.86, 0.09, 0.95);
+    if (frame === 'push') {
+      quad('#ffe8b0', 0.3, 0, 0.76, 0.04);
+      quad('#fff4d8', 0.12, 0.48, 0.88, 0.52);
+    }
+
+    // thumb pinching the near-right corner on top of the disk
+    flesh(capsule(80, 72, 63, 52, 6, 4.2), [[74, 62], [64, 50]]);
+    const [tx, ty] = T(62.5, 51.2);
+    P.ell(tx, ty, 2.2 * scale, 1.7 * scale, '#f2dccb');
+
+    // jacket sleeve over the wrist, out of the bottom-right corner
+    const sp = (x: number, y: number): Pt => T(80 + (x - 73.5) * 2.1 + (y - 65) * 0.9, 77 + (y - 65) * 1.4);
+    paintVmJacketSleeve(look, {
+      shape: (color, pts) => P.poly(pts.map(([x, y]) => sp(x, y)), color),
+      seamLine: (pts) => P.line(pts.map(([x, y]) => sp(x, y)), look.seam),
+      ell: (color, x, y, rx, ry) => {
+        const [cx, cy] = sp(x, y);
+        P.ell(cx, cy, rx * 2.1 * scale, ry * 1.4 * scale, color);
+      },
+    });
+  });
+}
+
 function art(
   tool: ToolDef,
   gender: Gender,
@@ -736,9 +835,10 @@ function art(
   mouseFrame?: MouseFrame,
   badgeFrame?: BadgeFrame,
   mfaFrame?: MfaFrame,
+  patchFrame?: PatchFrame,
 ): Art | null {
   const skin = currentSkin();
-  const key = `${tool.id}:${gender}:${mode}:${usbFrame ?? ''}:${keyboardFrame ?? ''}:${mouseFrame ?? ''}:${badgeFrame ?? ''}:${mfaFrame ?? ''}:${skin.id}`;
+  const key = `${tool.id}:${gender}:${mode}:${usbFrame ?? ''}:${keyboardFrame ?? ''}:${mouseFrame ?? ''}:${badgeFrame ?? ''}:${mfaFrame ?? ''}:${patchFrame ?? ''}:${skin.id}`;
   let a = cache.get(key);
   if (!a) {
     if (tool.id === 'usb') a = usbArt(usbFrame ?? (mode === 2 ? 'flash' : mode === 1 ? 'recoil' : 'rest'), gender, skin);
@@ -746,6 +846,7 @@ function art(
     else if (tool.id === 'mouse') a = mouseArt(mouseFrame ?? 'rest', gender, skin);
     else if (tool.id === 'badge') a = badgeArt(badgeFrame ?? 'rest', gender, skin);
     else if (tool.id === 'mfa') a = mfaArt(mfaFrame ?? 'rest', gender, skin);
+    else if (tool.id === 'patch') a = patchArt(patchFrame ?? 'rest', gender, skin);
     else return null;
     if (mode === 2 && tool.id !== 'keyboard') a = tintFlash(a, TOOL_FLASH[tool.id] ?? '255,255,255');
     cache.set(key, a);
@@ -792,7 +893,10 @@ export function drawToolViewmodel(
   const mfaFrame: MfaFrame | undefined = tool.id !== 'mfa' ? undefined
     : ph ? mfaFrameForUse(anim!.sinceUse, tool.windup ?? 0)
       : 'rest';
-  const a = art(tool, gender, lit ? 2 : fire ? 1 : 0, usbFrame, keyboardFrame, mouseFrame, badgeFrame, mfaFrame);
+  const patchFrame: PatchFrame | undefined = tool.id !== 'patch' ? undefined
+    : ph ? patchFrameForUse(anim!.sinceUse, tool.windup ?? 0)
+      : 'rest';
+  const a = art(tool, gender, lit ? 2 : fire ? 1 : 0, usbFrame, keyboardFrame, mouseFrame, badgeFrame, mfaFrame, patchFrame);
   // shared bob/strike/switch offsets for the art AND the rig-hand overlay
   const bx = Math.round(Math.sin(bob) * 6);
   const byy = Math.round(Math.abs(Math.cos(bob)) * 3);
@@ -933,7 +1037,7 @@ const HAND_SINK = 4;
 const LIT_SWELL = 1.05;
 
 /** Per-tool viewmodel size multiplier (keyboard art runs ~25% of view width at 1). */
-const SIZE: Record<string, number> = { keyboard: 1.0, mouse: 0.7, badge: 0.66, mfa: 0.62, usb: 1.0 };
+const SIZE: Record<string, number> = { keyboard: 1.0, mouse: 0.7, badge: 0.66, mfa: 0.62, patch: 0.64, usb: 1.0 };
 
 /** Muzzle-flash tint per tool (rgb for edgeFlash); also feeds the world light flood. */
 export const TOOL_FLASH: Record<string, string> = {
@@ -957,4 +1061,5 @@ const POSE: Record<string, { wind: [number, number]; strike: [number, number] }>
   usb: { wind: [-2, -2], strike: [4, -12] }, // anticipation lift, recoil kick up-back
   badge: { wind: [7, 3], strike: [-24, -11] }, // pull back, swipe across the reader left
   mfa: { wind: [0, 1], strike: [0, -8] }, // settle, then seat up into the reader
+  patch: { wind: [0, 1], strike: [0, -12] }, // dip, then thrust the disk up into the bay
 };
