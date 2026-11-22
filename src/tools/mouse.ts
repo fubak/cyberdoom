@@ -107,8 +107,8 @@ export const mouseTool: ToolDef = {
       e.state.inspected = true;
       ctx.bus.emit('tool-hit', { toolId: 'mouse', entityId: e.def.id, good: true });
       ctx.bus.emit('inspect', { entityId: e.def.id });
-      if (!e.def.tags?.includes('triage') && (e.def.kind !== 'item' || isMalicious(e))) {
-        ctx.bus.emit('message', { text: 'Click again on the same target to flag it as MALICIOUS.', kind: 'info' });
+      if (!e.def.tags?.includes('triage') && e.def.inspect?.category !== 'person') {
+        ctx.bus.emit('message', { text: 'Weigh the evidence. Click again to FLAG it, or leave it if it checks out.', kind: 'info' });
       }
       return;
     }
@@ -143,6 +143,6 @@ export const mouseTool: ToolDef = {
     if (e.state.flagged) return { text: 'ALREADY FLAGGED', ready: false };
     if (e.def.tags?.includes('triage')) return { text: 'CHOOSE A RESPONSE TOOL', ready: false };
     if (e.def.inspect?.category === 'person') return { text: 'REPORT VIA SECURITY CONSOLE', ready: false };
-    return { text: `FLAG ${targetNoun(e)} AS MALICIOUS`, ready: true };
+    return { text: `FLAG ${targetNoun(e)} OR MOVE ON`, ready: true };
   },
 };

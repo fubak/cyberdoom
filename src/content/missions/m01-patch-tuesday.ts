@@ -420,6 +420,8 @@ m01.map.legend[';'] = { kind: 'floor', tex: 'floor-rust' };
 retex(m01, [30, 1, 38, 15], 'floor', ',');
 retex(m01, [0, 19, 14, 28], 'floor', ';');
 m01.map.lights = { ...m01.map.lights, ...lightRects([[31, 1, 38, 14, 0.85], [0, 20, 14, 28, 0.55]]) };
+// keep the spawn lane readable inside the dim bullpen
+m01.map.lights = { ...m01.map.lights, ...lightRects([[5, 20, 9, 27, 0.8]]) };
 m01.entities.push(
   { id: 'noc-wall-a', kind: 'prop', x: 33.5, y: 1.8, sprite: 'console' },
   { id: 'noc-wall-b', kind: 'prop', x: 35.5, y: 1.8, sprite: 'console' },

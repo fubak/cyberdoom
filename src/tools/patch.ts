@@ -29,7 +29,7 @@ export const patchTool: ToolDef = {
     types: ['preventive', 'corrective'],
     objectives: ['2.5', '4.3'],
     use: 'At arm\'s length, install the security update on a clean workstation to close its known vulnerability. It cannot remove malware that is already running: clean the host first, then patch it.',
-    lesson: 'Patching removes the vulnerability; it does not evict an attacker already inside. Clean, then patch, then verify: that is remediation followed by hardening.',
+    lesson: 'Patching removes the hole; it does not evict an attacker already inside. Clean, then patch, then verify.',
   },
   drawViewmodel(g, w, h, _bob, _gender, _cd, anim) {
     const ph = usePhase(anim?.sinceUse ?? 9, WINDUP);

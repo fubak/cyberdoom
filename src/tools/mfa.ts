@@ -29,7 +29,7 @@ export const mfaTool: ToolDef = {
     types: ['preventive'],
     objectives: ['4.6', '2.2'],
     use: 'MFA doors: swipe the BADGE (something you have), then touch the token (your fingerprint: something you are). It refuses phishing prompts and shared accounts, because the key is bound to your identity and to the real site.',
-    lesson: 'MFA combines different factor types (know / have / are / somewhere you are). Two of the same type is not MFA. FIDO2 keys are phishing-resistant because they check the origin; a shared account defeats MFA because nobody is uniquely identified.',
+    lesson: 'Real MFA mixes factor types: know, have, are. Two of one type is not MFA. FIDO2 keys check the origin, so they resist phishing.',
   },
   drawViewmodel(g, w, h, _bob, _gender, _cd, anim) {
     const ph = usePhase(anim?.sinceUse ?? 9, WINDUP);
@@ -111,7 +111,7 @@ export const mfaTool: ToolDef = {
       e.state.mfaRefused = true;
       ctx.bus.emit('tool-hit', { toolId: 'mfa', entityId: e.def.id, good: false });
       ctx.bus.emit('message', {
-        text: `KEY REFUSED: ${e.def.inspect?.label ?? 'this prompt'} is not the origin the key was enrolled to. FIDO2 will not sign for a look-alike site, so the phish gets nothing. MOUSE (2) it and flag it.`,
+        text: `KEY REFUSED: ${e.def.inspect?.label ?? 'this prompt'} is not the enrolled origin. FIDO2 won't sign for a look-alike. MOUSE (2) it and flag it.`,
         kind: 'warn',
       });
       return;
