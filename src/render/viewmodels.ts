@@ -166,6 +166,18 @@ function keyboardArt(frame: KeyboardFrame, gender: Gender, skin: SkinTone): Art 
     };
     paintVmJacketSleeve(look, sleeveDraw(28, -1));
     paintVmJacketSleeve(look, sleeveDraw(132, 1));
+    if (gender === 'male') {
+      const sleeveDetail = (mirror: boolean, points: [number, number][]) =>
+        P.poly(points.map(([x, y]) => point(mirror ? 160 - x : x, y)), look.accent);
+      const sleeveEdge = (mirror: boolean, points: [number, number][]) =>
+        P.line(points.map(([x, y]) => point(mirror ? 160 - x : x, y)), shade(look.jacket, 1.55), 1.2);
+      const band: [number, number][] = [[126, 65], [142, 64], [142, 67], [127, 68]];
+      const edge: [number, number][] = [[141, 58], [141, 78]];
+      sleeveDetail(false, band);
+      sleeveDetail(true, band);
+      sleeveEdge(false, edge);
+      sleeveEdge(true, edge);
+    }
 
     const boardPoint = (u: number, v: number): [number, number] => {
       const y = 19 + v * 34;
@@ -226,40 +238,43 @@ function keyboardArt(frame: KeyboardFrame, gender: Gender, skin: SkinTone): Art 
       shape('#fff0c0', [[92, 15.2], [96.8, 14.3], [97.4, 15], [92.2, 16]]);
     }
 
-    const handPoint = (x: number, y: number, mirror: boolean): [number, number] => {
-      const narrowedX = 116.5 + (x - 116.5) * 0.9;
-      return point(mirror ? 160 - narrowedX : narrowedX, y);
-    };
+    const handPoint = (x: number, y: number, mirror: boolean): [number, number] =>
+      point(mirror ? 160 - x : x, y);
     const handShape = (color: string, points: [number, number][], mirror: boolean) =>
       P.poly(points.map(([x, y]) => handPoint(x, y, mirror)), color);
     const handLine = (points: [number, number][], color: string, mirror: boolean, width = 1) =>
       P.line(points.map(([x, y]) => handPoint(x, y, mirror)), color, width);
     const handEllipse = (color: string, x: number, y: number, rx: number, ry: number, mirror: boolean) => {
       const [cx, cy] = handPoint(x, y, mirror);
-      P.ell(cx, cy, rx * 0.9 * sx, ry * sy, color);
+      P.ell(cx, cy, rx * sx, ry * sy, color);
     };
     const hand = (mirror: boolean) => {
-      handShape(deep, [[103, 52], [108, 52], [114, 57], [116, 62], [112, 65], [107, 63], [104, 59]], mirror);
-      handShape(base, [[104, 53], [108, 54], [113, 59], [113, 62], [110, 63], [106, 60]], mirror);
-      handLine([[107, 56], [110, 58], [112, 61]], highlight, mirror, 0.8);
+      handShape(deep, [[124, 55], [129, 55], [132, 58], [131, 61], [127, 60]], mirror);
+      handEllipse(base, 127, 57.5, 1.8, 1.1, mirror);
 
-      handShape(deep, [[102, 38], [107, 34], [119, 34], [127, 38], [131, 45], [129, 53], [124, 58], [115, 58], [107, 54], [102, 48]], mirror);
-      handShape(shadow, [[104, 38], [109, 35], [119, 35], [126, 39], [129, 46], [127, 52], [122, 56], [115, 56], [108, 52], [104, 47]], mirror);
-      handShape(base, [[106, 39], [110, 36], [118, 36], [124, 40], [127, 46], [125, 51], [121, 54], [115, 54], [110, 50], [106, 46]], mirror);
-      handShape(highlight, [[107, 39], [111, 37], [118, 37], [123, 40], [125, 43], [119, 41], [113, 40], [109, 42]], mirror);
+      handShape(deep, [[131, 39], [134, 35], [141, 34], [146, 37], [149, 42], [148, 50], [145, 56], [140, 59], [134, 57], [131, 53], [129, 47]], mirror);
+      handShape(shadow, [[132, 40], [135, 37], [141, 36], [145, 39], [147, 43], [146, 50], [143, 54], [139, 57], [135, 55], [132, 51], [131, 47]], mirror);
+      handShape(base, [[133, 41], [136, 38], [141, 38], [144, 40], [146, 44], [145, 49], [142, 53], [139, 55], [136, 53], [133, 50], [132, 46]], mirror);
+      handShape(highlight, [[134, 40], [137, 38], [141, 38], [143, 40], [140, 41], [136, 42]], mirror);
+      handLine([[142, 42], [143, 46], [141, 50]], deep, mirror, 0.8);
 
       for (let i = 0; i < 4; i++) {
-        const x = 105 + i * 5.8;
-        handShape(deep, [[x - 2.3, 43], [x + 1.7, 42], [x + 2.6, 48], [x + 2.3, 53], [x - 1.8, 54], [x - 2.5, 50]], mirror);
-        handShape(base, [[x - 1.7, 43], [x + 1.3, 43], [x + 2, 48], [x + 1.8, 52], [x - 1.4, 53], [x - 2, 49]], mirror);
-        handEllipse(shadow, x, 51.2, 3, 2.4, mirror);
-        handEllipse(base, x - 0.2, 50.4, 2.45, 1.85, mirror);
-        handLine([[x - 1.2, 49], [x, 48.5], [x + 1.2, 49]], highlight, mirror, 0.7);
+        const y = 40 + i * 4.1;
+        const boardEdge = 80 + 32 + ((y - 19) / 34) * 15;
+        const tipX = boardEdge - 2.2;
+        handShape(deep, [
+          [tipX + 1, y - 1.4], [tipX + 5, y - 1.7], [134, y - 1.8],
+          [138, y - 1.1], [139, y], [137, y + 1.2], [134, y + 1.6], [tipX + 1, y + 1.2],
+        ], mirror);
+        handShape(base, [
+          [tipX + 1, y - 0.9], [tipX + 5, y - 1.1], [134, y - 1.2],
+          [137, y - 0.6], [137, y + 0.5], [134, y + 1], [tipX + 1, y + 0.8],
+        ], mirror);
+        handEllipse(shadow, tipX, y, 2.5, 1.7, mirror);
+        handEllipse(base, tipX - 0.4, y - 0.25, 1.9, 1.2, mirror);
+        handLine([[tipX - 1.1, y - 0.8], [tipX, y - 1]], highlight, mirror, 0.7);
       }
-      handShape(deep, [[106, 48], [110, 50], [113, 52]], mirror);
-      handLine([[108, 47], [112, 49], [116, 50]], shadow, mirror, 1);
-      handLine([[113, 46], [117, 48], [121, 49]], shadow, mirror, 1);
-      handEllipse(highlight, 109, 57, 2.2, 1.25, mirror);
+      handLine([[132, 52], [135, 54], [138, 55]], shadow, mirror, 0.9);
     };
     hand(true);
     hand(false);
