@@ -516,30 +516,113 @@ function usbArt(frame: UsbFrame, gender: Gender, skin: SkinTone): Art {
   });
 }
 
-function badgeArt(fire: boolean): Art {
-  return paint(84, 80, 42, (px, _P) => {
-    // lanyard clip (the strap runs down behind the card)
-    px('#c81e14', 38, 0, 6, 4);
-    px('#ff7a5a', 38, 0, 2, 4);
-    px('#9aa0b0', 37, 3, 8, 5);
-    // card
-    px('#eef0f6', 18, 7, 46, 46);
-    px('#c8ccd8', 60, 9, 4, 44);
-    px('#2458d8', 18, 10, 46, 8);
-    px('#8ab4ff', 18, 10, 46, 2);
-    px('#8a90a0', 24, 21, 14, 16); // photo
-    px('#f0b888', 27, 23, 8, 8);
-    px('#3a2a1a', 26, 21, 10, 3);
-    px('#2458d8', 25, 31, 12, 6);
-    px('#ffd040', 44, 22, 12, 9); // chip
-    px('#c89818', 44, 26, 12, 1);
-    px('#c89818', 50, 22, 1, 9);
-    px('#3a404c', 24, 40, 34, 2);
-    px('#3a404c', 46, 35, 12, 2);
-    if (fire) {
-      px('#5aff6a', 40, 44, 22, 3);
-      px('#c8ffb0', 40, 44, 22, 1);
+export type BadgeFrame = 'rest' | 'pull' | 'swipe' | 'hold';
+
+export function badgeFrameForUse(sinceUse: number, windup: number): BadgeFrame {
+  const phase = usePhase(sinceUse, windup);
+  if (phase.phase === 'wind') return 'pull';
+  if (phase.phase === 'impact') return 'swipe';
+  if (phase.phase === 'recover') return phase.u < 0.5 ? 'hold' : 'rest';
+  return 'rest';
+}
+
+function badgeArt(frame: BadgeFrame, gender: Gender, skin: SkinTone): Art {
+  type Pt = [number, number];
+  const look = vmHandArt(gender, skin);
+  const [deep, shadow, base, highlight] = look.ramp;
+  const pose: Record<BadgeFrame, [number, number, number]> = {
+    rest: [0, 1, 0],
+    pull: [5, 1.04, 2],
+    swipe: [-9, 0.9, -1],
+    hold: [-3, 0.97, 0],
+  };
+  const [deg, scale, dy] = pose[frame];
+  const rot = (deg * Math.PI) / 180;
+  const T = (x: number, y: number): Pt => {
+    const dx = (x - 56) * scale;
+    const ddy = (y - 70) * scale;
+    return [56 + dx * Math.cos(rot) - ddy * Math.sin(rot), 70 + dy + dx * Math.sin(rot) + ddy * Math.cos(rot)];
+  };
+  return paint(112, 92, 46, (_px, P) => {
+    const shape = (color: string, pts: Pt[]) => P.poly(pts.map(([x, y]) => T(x, y)), color);
+    const line = (pts: Pt[], color: string, width = 1) => P.line(pts.map(([x, y]) => T(x, y)), color, width);
+    const ellipse = (color: string, x: number, y: number, rx: number, ry: number) => {
+      const [cx, cy] = T(x, y);
+      P.ell(cx, cy, rx * scale, ry * scale, color);
+    };
+    const shrink = (pts: Pt[], d: number): Pt[] => {
+      const cx = pts.reduce((s, p) => s + p[0], 0) / pts.length;
+      const cy = pts.reduce((s, p) => s + p[1], 0) / pts.length;
+      return pts.map(([x, y]): Pt => {
+        const l = Math.hypot(x - cx, y - cy) || 1;
+        return [x - ((x - cx) / l) * d, y - ((y - cy) / l) * d];
+      });
+    };
+    const flesh = (pts: Pt[], lightEdge?: Pt[]) => {
+      shape(deep, pts);
+      shape(shadow, shrink(pts, 1));
+      shape(base, shrink(pts, 2.2));
+      if (lightEdge) line(lightEdge, highlight, 1.2);
+    };
+    // card corners in perspective (near/bottom edge slightly wider)
+    const C: [Pt, Pt, Pt, Pt] = [[22, 12], [66, 10], [71, 56], [19, 58]];
+    const cp = (u: number, v: number): Pt => {
+      const top: Pt = [C[0][0] + (C[1][0] - C[0][0]) * u, C[0][1] + (C[1][1] - C[0][1]) * u];
+      const bot: Pt = [C[3][0] + (C[2][0] - C[3][0]) * u, C[3][1] + (C[2][1] - C[3][1]) * u];
+      return [top[0] + (bot[0] - top[0]) * v, top[1] + (bot[1] - top[1]) * v];
+    };
+    const quad = (color: string, u0: number, v0: number, u1: number, v1: number) =>
+      shape(color, [cp(u0, v0), cp(u1, v0), cp(u1, v1), cp(u0, v1)]);
+
+    // lanyard strap loops from the clip back down to the wrist
+    line([[44, 9], [54, 2], [74, 4], [86, 16], [92, 40], [94, 66]], '#7a120c', 3.2);
+    line([[44, 9], [54, 3], [73, 5], [85, 17]], '#e0402c', 1.2);
+
+    // back of the hand + fingers wrapping behind the card's right edge
+    flesh([[66, 26], [74, 24], [80, 30], [84, 44], [90, 60], [98, 76], [102, 92], [74, 92], [70, 74], [64, 62], [62, 46]]);
+    for (const [fx, fy] of [[71, 28], [73, 37], [74, 46]] as Pt[]) {
+      flesh([[fx - 3, fy - 3], [fx + 3, fy - 4], [fx + 6, fy], [fx + 4, fy + 4], [fx - 2, fy + 4]], [[fx - 2, fy - 3], [fx + 3, fy - 3]]);
     }
+
+    // card: thickness, face, header, photo, chip, text, status stripe
+    shape('#5a6272', [C[0], C[1], [C[2][0] + 2, C[2][1] + 1], [C[3][0] + 1, C[3][1] + 2]]);
+    shape('#eef1f6', C);
+    quad('#c9cfdb', 0.9, 0, 1, 1);
+    quad('#2458d8', 0, 0.06, 1, 0.22);
+    quad('#8ab4ff', 0, 0.06, 1, 0.09);
+    quad('#9fb4d6', 0.1, 0.3, 0.42, 0.7);
+    quad(skin.base, 0.17, 0.36, 0.35, 0.56);
+    quad(look.ramp[1], 0.17, 0.5, 0.35, 0.56);
+    quad(gender === 'female' ? '#4a2a1c' : '#2c2018', 0.15, 0.31, 0.37, 0.39);
+    if (gender === 'female') quad('#4a2a1c', 0.15, 0.36, 0.2, 0.62);
+    quad(look.jacket, 0.12, 0.6, 0.4, 0.7);
+    quad('#e2b84c', 0.52, 0.32, 0.74, 0.5);
+    quad('#a07a20', 0.52, 0.4, 0.74, 0.42);
+    quad('#a07a20', 0.62, 0.32, 0.635, 0.5);
+    quad('#333a48', 0.52, 0.56, 0.86, 0.6);
+    quad('#7a8296', 0.52, 0.64, 0.78, 0.68);
+    quad('#ffb000', 0.04, 0.8, 0.96, 0.9);
+    quad('#ffe08a', 0.04, 0.8, 0.96, 0.82);
+    line([cp(0.02, 0.02), cp(0.98, 0.01)], '#ffffff', 1);
+    // clip
+    shape('#8a909c', [[40, 6], [48, 5], [49, 13], [41, 14]]);
+    shape('#c3c8d2', [[41, 7], [47, 6], [47, 8], [41, 9]]);
+
+    // thumb pinching the front lower-right corner
+    flesh([[80, 66], [72, 60], [64, 54], [59, 50], [59, 46], [63, 45], [69, 48], [76, 53], [84, 58]], [[60, 46], [64, 45], [70, 48]]);
+    shape('#f2dccb', [[60, 46.5], [63, 45.8], [64.5, 48.5], [61, 49.5]]);
+    ellipse(shadow, 69, 54, 2, 1.2);
+
+    // jacket sleeve over the wrist, out of the bottom-right corner
+    const sp = (x: number, y: number): Pt => T(84 + (x - 73.5) * 2.1 + (y - 65) * 0.9, 74 + (y - 65) * 1.4);
+    paintVmJacketSleeve(look, {
+      shape: (color, pts) => P.poly(pts.map(([x, y]) => sp(x, y)), color),
+      seamLine: (pts) => P.line(pts.map(([x, y]) => sp(x, y)), look.seam),
+      ell: (color, x, y, rx, ry) => {
+        const [cx, cy] = sp(x, y);
+        P.ell(cx, cy, rx * 2.1 * scale, ry * 1.4 * scale, color);
+      },
+    });
   });
 }
 
@@ -551,15 +634,16 @@ function art(
   usbFrame?: UsbFrame,
   keyboardFrame?: KeyboardFrame,
   mouseFrame?: MouseFrame,
+  badgeFrame?: BadgeFrame,
 ): Art | null {
   const skin = currentSkin();
-  const key = `${tool.id}:${gender}:${mode}:${usbFrame ?? ''}:${keyboardFrame ?? ''}:${mouseFrame ?? ''}:${skin.id}`;
+  const key = `${tool.id}:${gender}:${mode}:${usbFrame ?? ''}:${keyboardFrame ?? ''}:${mouseFrame ?? ''}:${badgeFrame ?? ''}:${skin.id}`;
   let a = cache.get(key);
   if (!a) {
     if (tool.id === 'usb') a = usbArt(usbFrame ?? (mode === 2 ? 'flash' : mode === 1 ? 'recoil' : 'rest'), gender, skin);
     else if (tool.id === 'keyboard') a = keyboardArt(keyboardFrame ?? (mode > 0 ? 'swing' : 'rest'), gender, skin);
     else if (tool.id === 'mouse') a = mouseArt(mouseFrame ?? 'rest', gender, skin);
-    else if (tool.id === 'badge') a = badgeArt(mode > 0);
+    else if (tool.id === 'badge') a = badgeArt(badgeFrame ?? 'rest', gender, skin);
     else return null;
     if (mode === 2 && tool.id !== 'keyboard') a = tintFlash(a, TOOL_FLASH[tool.id] ?? '255,255,255');
     cache.set(key, a);
@@ -600,7 +684,10 @@ export function drawToolViewmodel(
   const mouseFrame: MouseFrame | undefined = tool.id !== 'mouse' ? undefined
     : ph ? mouseFrameForUse(anim!.sinceUse, tool.windup ?? 0)
       : 'rest';
-  const a = art(tool, gender, lit ? 2 : fire ? 1 : 0, usbFrame, keyboardFrame, mouseFrame);
+  const badgeFrame: BadgeFrame | undefined = tool.id !== 'badge' ? undefined
+    : ph ? badgeFrameForUse(anim!.sinceUse, tool.windup ?? 0)
+      : 'rest';
+  const a = art(tool, gender, lit ? 2 : fire ? 1 : 0, usbFrame, keyboardFrame, mouseFrame, badgeFrame);
   // shared bob/strike/switch offsets for the art AND the rig-hand overlay
   const bx = Math.round(Math.sin(bob) * 6);
   const byy = Math.round(Math.abs(Math.cos(bob)) * 3);
