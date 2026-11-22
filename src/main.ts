@@ -539,7 +539,7 @@ class Game {
 
   private showTitle(): void {
     this.audio.startMusic('title');
-    this.setScreen('title', screens.titleScreen(() => this.showCharSelect()));
+    this.setScreen('title', screens.titleScreen(() => this.showCharSelect(), () => this.showMissionSelect()));
   }
 
   private showCharSelect(): void {

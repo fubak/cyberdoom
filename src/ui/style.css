@@ -266,6 +266,8 @@ button.mission-row:disabled {
 .mission-detail {
   position: sticky;
   top: 72px;
+  max-height: calc(100vh - 96px);
+  overflow-y: auto;
   background: #1a1414;
   border: 2px solid #685650;
   box-shadow: inset 1px 1px 0 #847068, inset -1px -1px 0 #0a0606;

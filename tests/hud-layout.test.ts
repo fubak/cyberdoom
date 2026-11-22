@@ -116,7 +116,7 @@ describe('statusBarText layout', () => {
     for (const slot of ['1', '2', '3', '5', '6', '8']) expect(labels).toContain(slot);
   });
 
-  it('replaces the READY cell with wrapped current objective text when holding an unlimited tool', () => {
+  it('shows concise tool mode (no truncated objective text) in the AMMO cell when holding an unlimited tool', () => {
     const input: BarLayoutInput = {
       ...worstCase(),
       ammo: null,
@@ -130,16 +130,13 @@ describe('statusBarText layout', () => {
       const b = barTextBox(t);
       return b.x >= 58 && b.x + b.w <= 100;
     });
-    expect(ammoRuns.length).toBeGreaterThanOrEqual(1);
-    expect(ammoRuns.length).toBeLessThanOrEqual(3);
-    expect(ammoRuns.map((r) => r.text)).not.toContain('READY');
-    for (const r of ammoRuns) {
-      const b = barTextBox(r);
-      expect(b.x).toBeGreaterThanOrEqual(58);
-      expect(b.x + b.w).toBeLessThanOrEqual(100);
-      expect(b.y).toBeGreaterThanOrEqual(BAR_TOP);
-      expect(b.y + b.h).toBeLessThanOrEqual(BAR_BOTTOM);
-    }
+    expect(ammoRuns).toHaveLength(1);
+    expect(ammoRuns[0]!.text).toMatch(/^(CMD MODE|INSPECT|NET TAP|READY)$/);
+    const b = barTextBox(ammoRuns[0]!);
+    expect(b.x).toBeGreaterThanOrEqual(58);
+    expect(b.x + b.w).toBeLessThanOrEqual(100);
+    expect(b.y).toBeGreaterThanOrEqual(BAR_TOP);
+    expect(b.y + b.h).toBeLessThanOrEqual(BAR_BOTTOM);
     const boxes = runs.map((t) => ({ ...barTextBox(t), t: t.text }));
     for (let i = 0; i < boxes.length; i++) {
       for (let j = i + 1; j < boxes.length; j++) {

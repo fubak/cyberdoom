@@ -1114,48 +1114,116 @@ function edrArt(frame: EdrFrame, gender: Gender, skin: SkinTone, detail: string)
 }
 
 function firewallArt(mode: 0 | 1 | 2, gender: Gender, skin: SkinTone): Art {
-  const { jacket, accent, seam, ramp } = vmHandArt(gender, skin);
+  const look = vmHandArt(gender, skin);
+  const [deep, shadow, base, highlight] = look.ramp;
   const flash = mode === 2;
-  const kick = mode === 1 ? 4 : mode === 2 ? 2 : 0;
-  return paint(116, 94, 58, (_px, P) => {
-    const shape = (color: string, pts: [number, number][]) => P.poly(pts, color);
-    // dual-rail amber/slate packet-filter blaster chassis in perspective
-    shape('#12151c', [[36, 18 + kick], [80, 18 + kick], [90, 62 + kick], [26, 62 + kick]]);
-    shape('#2a303c', [[38, 20 + kick], [78, 20 + kick], [86, 58 + kick], [30, 58 + kick]]);
-    // twin vent rails
-    shape('#424a5a', [[40, 22 + kick], [54, 22 + kick], [52, 46 + kick], [36, 46 + kick]]);
-    shape('#424a5a', [[62, 22 + kick], [76, 22 + kick], [80, 46 + kick], [64, 46 + kick]]);
-    // glowing amber filter core + heat vents
-    const core = flash ? '#fff4c0' : mode === 1 ? '#ffb840' : '#ff8820';
-    shape(core, [[54, 22 + kick], [62, 22 + kick], [63, 46 + kick], [53, 46 + kick]]);
-    for (let i = 0; i < 4; i++) {
-      const y = 26 + i * 5 + kick;
-      P.rect(41, y, 10, 2, flash ? '#ffe080' : '#ff7018');
-      P.rect(65, y, 10, 2, flash ? '#ffe080' : '#ff7018');
-    }
-    // muzzle burst on impact frame
+  const kick = mode === 1 ? 5 : mode === 2 ? 2 : 0;
+  return paint(124, 96, 62, (_px, P) => {
+    type Pt = [number, number];
+    const shape = (color: string, pts: Pt[]) => P.poly(pts, color);
+    const shrink = (pts: Pt[], d: number): Pt[] => {
+      const cx = pts.reduce((s, p) => s + p[0], 0) / pts.length;
+      const cy = pts.reduce((s, p) => s + p[1], 0) / pts.length;
+      return pts.map(([x, y]): Pt => {
+        const l = Math.hypot(x - cx, y - cy) || 1;
+        return [x - ((x - cx) / l) * d, y - ((y - cy) / l) * d];
+      });
+    };
+    const flesh = (pts: Pt[], lightEdge?: Pt[]) => {
+      shape(deep, pts);
+      shape(shadow, shrink(pts, 1));
+      shape(base, shrink(pts, 2.2));
+      if (lightEdge) P.line(lightEdge, highlight, 1.2);
+    };
+    const capsule = (x0: number, y0: number, x1: number, y1: number, r0: number, r1: number): Pt[] => {
+      const a = Math.atan2(y1 - y0, x1 - x0);
+      const nx = -Math.sin(a);
+      const ny = Math.cos(a);
+      const pts: Pt[] = [[x0 + nx * r0, y0 + ny * r0]];
+      for (let i = 0; i <= 6; i++) {
+        const t = a + Math.PI / 2 - (Math.PI * i) / 6;
+        pts.push([x1 + Math.cos(t) * r1, y1 + Math.sin(t) * r1]);
+      }
+      pts.push([x0 - nx * r0, y0 - ny * r0]);
+      return pts;
+    };
+    const sleeve = (mirror: boolean, ax: number, ay: number) => {
+      const sp = (x: number, y: number): Pt => {
+        const sx = (x - 73.5) * 2.1 + (y - 65) * 0.9;
+        return [ax + (mirror ? -sx : sx), ay + (y - 65) * 1.4];
+      };
+      paintVmJacketSleeve(look, {
+        shape: (color, pts) => P.poly(pts.map(([x, y]) => sp(x, y)), color),
+        seamLine: (pts) => P.line(pts.map(([x, y]) => sp(x, y)), look.seam),
+        ell: (color, x, y, rx, ry) => {
+          const [cx, cy] = sp(x, y);
+          P.ell(cx, cy, rx * 2.1, ry * 1.4, color);
+        },
+      });
+    };
+
+    // muzzle blast behind chassis on fire frame
     if (flash) {
-      shape('#fff8d0', [[44, 8], [58, 2], [72, 8], [64, 20], [52, 20]]);
-      shape('#ff9030', [[32, 12], [44, 8], [50, 20], [38, 22]]);
-      shape('#ff9030', [[72, 8], [84, 12], [78, 22], [66, 20]]);
+      shape('#ff7018', [[28, 12], [44, 4], [62, 0], [80, 4], [96, 12], [86, 26], [38, 26]]);
+      shape('#ffc848', [[38, 13], [52, 6], [62, 2], [72, 6], [86, 13], [78, 24], [46, 24]]);
+      shape('#fff8d8', [[48, 15], [62, 6], [76, 15], [70, 23], [54, 23]]);
     }
-    // analyst hands gripping both sides + sleeves to bottom
-    const [hi, mid, sh, dp] = ramp;
-    shape(dp, [[16, 54 + kick], [32, 48 + kick], [36, 74], [12, 74]]);
-    shape(mid, [[18, 55 + kick], [31, 50 + kick], [34, 70], [15, 70]]);
-    shape(hi, [[20, 56 + kick], [30, 52 + kick], [31, 60 + kick], [19, 62 + kick]]);
-    shape(dp, [[84, 48 + kick], [100, 54 + kick], [104, 74], [80, 74]]);
-    shape(mid, [[85, 50 + kick], [98, 55 + kick], [101, 70], [82, 70]]);
-    shape(hi, [[86, 52 + kick], [96, 56 + kick], [97, 62 + kick], [85, 60 + kick]]);
-    shape(sh, [[28, 56 + kick], [34, 56 + kick], [34, 68], [28, 68]]);
-    shape(sh, [[82, 56 + kick], [88, 56 + kick], [88, 68], [82, 68]]);
-    // sleeves
-    shape(jacket, [[4, 70], [34, 68], [38, 94], [0, 94]]);
-    shape(accent, [[8, 72], [32, 70], [33, 74], [6, 76]]);
-    shape(seam, [[16, 74], [20, 74], [22, 94], [18, 94]]);
-    shape(jacket, [[82, 68], [112, 70], [116, 94], [78, 94]]);
-    shape(accent, [[84, 70], [108, 72], [110, 76], [83, 74]]);
-    shape(seam, [[96, 74], [100, 74], [98, 94], [94, 94]]);
+
+    // palms behind grip rails
+    flesh([[18, 48 + kick], [34, 44 + kick], [36, 68 + kick], [32, 92], [6, 92], [10, 68 + kick]]);
+    flesh([[90, 44 + kick], [106, 48 + kick], [114, 68 + kick], [118, 92], [92, 92], [88, 68 + kick]]);
+
+    // dual-rail packet-filter blaster chassis in perspective
+    const k = kick;
+    shape('#0e1118', [[40, 16 + k], [84, 16 + k], [96, 68 + k], [28, 68 + k]]);
+    shape('#232936', [[42, 18 + k], [82, 18 + k], [92, 64 + k], [32, 64 + k]]);
+    // beveled top edge highlight
+    shape('#4a5468', [[42, 18 + k], [82, 18 + k], [83, 21 + k], [41, 21 + k]]);
+    // left & right armored emitter rails
+    shape('#343c4c', [[42, 21 + k], [56, 21 + k], [54, 54 + k], [35, 54 + k]]);
+    shape('#343c4c', [[68, 21 + k], [82, 21 + k], [89, 54 + k], [70, 54 + k]]);
+    shape('#525d72', [[43, 21 + k], [55, 21 + k], [55, 23 + k], [42, 23 + k]]);
+    shape('#525d72', [[69, 21 + k], [81, 21 + k], [82, 23 + k], [69, 23 + k]]);
+    // recessed central packet-filter channel & glowing amber core
+    shape('#0a0d12', [[56, 20 + k], [68, 20 + k], [70, 58 + k], [54, 58 + k]]);
+    const coreOuter = flash ? '#ffe080' : mode === 1 ? '#ff9828' : '#d86214';
+    const coreInner = flash ? '#ffffff' : mode === 1 ? '#ffd870' : '#ff9c34';
+    shape(coreOuter, [[58, 22 + k], [66, 22 + k], [68, 54 + k], [56, 54 + k]]);
+    shape(coreInner, [[60, 23 + k], [64, 23 + k], [65, 52 + k], [59, 52 + k]]);
+    // twin cooling vents along each rail
+    for (let i = 0; i < 4; i++) {
+      const y = 26 + i * 6 + k;
+      const dx = i * 1.4;
+      P.rect(42 - dx, y, 11, 2.5, '#12161f');
+      P.rect(43 - dx, y + 0.5, 9, 1.4, flash ? '#fff0a0' : '#ff7820');
+      P.rect(71 + dx, y, 11, 2.5, '#12161f');
+      P.rect(72 + dx, y + 0.5, 9, 1.4, flash ? '#fff0a0' : '#ff7820');
+    }
+    // rear sight bridge & rule-engine LEDs
+    shape('#191e28', [[34, 54 + k], [90, 54 + k], [92, 63 + k], [32, 63 + k]]);
+    shape('#444e62', [[35, 54 + k], [89, 54 + k], [89, 56 + k], [35, 56 + k]]);
+    for (let i = 0; i < 5; i++) {
+      P.rect(46 + i * 7, 57 + k, 4, 3, flash ? '#ffffff' : i === 2 ? '#5df2ff' : '#ff9828');
+    }
+
+    // left hand gripping left rail: curled fingers + thumb over bevel
+    for (const [fy, len] of [[42, 6], [48, 7], [54, 6]] as Pt[]) {
+      flesh(capsule(24, fy + 2 + k, 28 + len, fy + k, 3.0, 2.5), [[25, fy + k], [27 + len, fy - 1.5 + k]]);
+    }
+    flesh(capsule(24, 64 + k, 38, 47 + k, 4.4, 3.2), [[26, 58 + k], [37, 46 + k]]);
+    P.ell(38, 47 + k, 1.6, 1.2, '#f2dccb');
+
+    // right hand gripping right rail: curled fingers + thumb over trigger switch
+    for (const [fy, len] of [[42, 6], [48, 7], [54, 6]] as Pt[]) {
+      flesh(capsule(100, fy + 2 + k, 96 - len, fy + k, 3.0, 2.5), [[99, fy + k], [97 - len, fy - 1.5 + k]]);
+    }
+    const thumbY = mode === 1 ? 49 : 47;
+    flesh(capsule(100, 64 + k, 86, thumbY + k, 4.4, 3.2), [[98, 58 + k], [87, thumbY - 1 + k]]);
+    P.ell(86, thumbY + k, 1.6, 1.2, '#f2dccb');
+
+    // analyst sleeves matching chosen character
+    sleeve(true, 22, 82);
+    sleeve(false, 102, 82);
   });
 }
 
