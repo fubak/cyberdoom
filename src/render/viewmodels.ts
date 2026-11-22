@@ -43,6 +43,48 @@ function paint(w: number, h: number, ox: number, fn: (px: Px, P: Painter) => voi
   return { c: P.c, ox, top: top / RES, bot: opaqueBottom(P.g, P.c.width, P.c.height) / RES };
 }
 
+type VmHandArt = {
+  gender: Gender;
+  jacket: string;
+  accent: string;
+  ramp: [string, string, string, string];
+  seam: string;
+};
+
+type VmSleeveDraw = {
+  shape: (color: string, points: [number, number][]) => void;
+  seamLine: (points: [number, number][]) => void;
+  ell: (color: string, x: number, y: number, rx: number, ry: number) => void;
+};
+
+function vmHandArt(gender: Gender, skin: SkinTone): VmHandArt {
+  const look = handLook(gender);
+  return {
+    gender,
+    jacket: look.jacket,
+    accent: look.accent,
+    ramp: [shade(skin.shadow, 0.65), skin.shadow, skin.base, skin.highlight],
+    seam: '#30201b',
+  };
+}
+
+function paintVmJacketSleeve(look: VmHandArt, draw: VmSleeveDraw): void {
+  const { shape, seamLine, ell } = draw;
+  const jacketShade = shade(look.jacket, 0.64);
+  const jacketLight = shade(look.jacket, 1.22);
+  shape(jacketShade, [[67, 67], [84, 65], [84, 88], [67, 88], [63, 82], [63, 75]]);
+  shape(look.jacket, [[70, 69], [84, 68], [84, 88], [71, 88], [67, 82], [66, 76]]);
+  shape(jacketLight, [[70, 70], [73, 70], [75, 84], [72, 84]]);
+  seamLine([[69, 72], [75, 79], [80, 88]]);
+  shape(jacketShade, [[67, 71], [84, 70], [84, 76], [68, 77], [65, 74]]);
+  shape(look.accent, [[67, 73], [84, 72], [84, 74], [68, 75], [66, 74]]);
+  if (look.gender === 'female') {
+    shape('#20242c', [[66, 69], [72, 69], [73, 73], [67, 74]]);
+    shape('#0b2a2a', [[67, 70], [71, 70], [72, 72], [68, 73]]);
+    ell(look.accent, 69, 71, 1.2, 0.8);
+  }
+}
+
 /** One past the lowest opaque row (native px). */
 function opaqueBottom(g: CanvasRenderingContext2D, w: number, h: number): number {
   const d = g.getImageData(0, 0, w, h).data;
@@ -75,42 +117,167 @@ function tintFlash(a: Art, rgb: string): Art {
   return { c, ox: a.ox, top: a.top, bot: a.bot };
 }
 
-function keyboardArt(fire: boolean): Art {
-  // compact board (~25% of view width with hands), like Doom's pistol-sized footprint
-  return paint(80, 50, 40, (px, _P) => {
-    for (let r = 0; r < 22; r++) {
-      const inset = Math.floor((22 - r) * 0.3);
-      px(r < 2 ? '#8a92a8' : '#3a404c', 10 + inset, 2 + r, 60 - inset * 2, 1);
+export type KeyboardFrame = 'rest' | 'raise' | 'swing' | 'contact' | 'recover';
+
+export function keyboardFrameForUse(sinceUse: number, windup: number): KeyboardFrame {
+  const phase = usePhase(sinceUse, windup);
+  if (phase.phase === 'wind') return 'raise';
+  if (phase.phase === 'impact') return phase.u < 0.4 ? 'swing' : 'contact';
+  if (phase.phase === 'recover') return 'recover';
+  return 'rest';
+}
+
+function keyboardArt(frame: KeyboardFrame, gender: Gender, skin: SkinTone): Art {
+  const look = vmHandArt(gender, skin);
+  const [deep, shadow, base, highlight] = look.ramp;
+  const poses: Record<KeyboardFrame, [number, number, number, number]> = {
+    rest: [1, 1, 0, 0],
+    raise: [1.05, 1.06, 0.025, 1.2],
+    swing: [0.88, 0.9, -0.012, -1.3],
+    contact: [0.88, 0.9, -0.012, -1.3],
+    recover: [0.95, 0.96, -0.005, -0.3],
+  };
+  const [sx, sy, shear, offsetY] = poses[frame];
+  const point = (x: number, y: number): [number, number] => [
+    80 + (x - 80) * sx + (y - 38) * shear,
+    38 + (y - 38) * sy + offsetY,
+  ];
+
+  return paint(160, 80, 80, (_px, P) => {
+    const shape = (color: string, points: [number, number][]) => P.poly(points.map(([x, y]) => point(x, y)), color);
+    const line = (points: [number, number][], color: string, width = 1) =>
+      P.line(points.map(([x, y]) => point(x, y)), color, width);
+    const ellipse = (color: string, x: number, y: number, rx: number, ry: number) => {
+      const [cx, cy] = point(x, y);
+      P.ell(cx, cy, rx * sx, ry * sy, color);
+    };
+
+    const sleeveDraw = (centerX: number, direction: -1 | 1): VmSleeveDraw => {
+      const sleevePoint = (x: number, y: number): [number, number] =>
+        point(centerX + (x - 73.5) * 0.95 * direction, 56 + (y - 65) * 0.9);
+      return {
+        shape: (color, points) => P.poly(points.map(([x, y]) => sleevePoint(x, y)), color),
+        seamLine: (points) => P.line(points.map(([x, y]) => sleevePoint(x, y)), look.seam),
+        ell: (color, x, y, rx, ry) => {
+          const [cx, cy] = sleevePoint(x, y);
+          P.ell(cx, cy, rx * 0.95 * sx, ry * 0.9 * sy, color);
+        },
+      };
+    };
+    paintVmJacketSleeve(look, sleeveDraw(28, -1));
+    paintVmJacketSleeve(look, sleeveDraw(132, 1));
+    if (gender === 'male') {
+      const sleeveEdge = (mirror: boolean, points: [number, number][]) =>
+        P.line(points.map(([x, y]) => point(mirror ? 160 - x : x, y)), shade(look.jacket, 1.55), 1.2);
+      const sleeveBandEdge = (mirror: boolean, points: [number, number][]) =>
+        P.line(points.map(([x, y]) => point(mirror ? 160 - x : x, y)), shade(look.accent, 0.55), 1);
+      const bandEdge: [number, number][] = [[126, 65], [142, 64]];
+      const edge: [number, number][] = [[141, 58], [141, 78]];
+      sleeveBandEdge(false, bandEdge);
+      sleeveBandEdge(true, bandEdge);
+      sleeveEdge(false, edge);
+      sleeveEdge(true, edge);
     }
-    px('#1a1c22', 10, 24, 60, 3);
-    const rows = 4;
-    for (let row = 0; row < rows; row++) {
-      const y = 5 + row * 5;
-      const x0 = 10 + (rows - row) * 2 + 2;
-      const x1 = 70 - (rows - row) * 2 - 2;
-      const n = 10;
-      const kw = (x1 - x0) / n;
-      for (let k = 0; k < n; k++) {
-        let cap = '#c8ccd8';
-        let top = '#eef0f6';
-        const kx = Math.round(x0 + k * kw);
-        if (row === 3 && k > 2 && k < 7) {
-          if (k !== 3) continue;
-          px('#9aa0b0', kx, y, Math.round(kw * 4) - 1, 3);
-          px('#dde0e8', kx, y, Math.round(kw * 4) - 1, 1);
-          continue;
-        }
-        if (row === 1 && k === 9) { cap = '#2ad83a'; top = '#8aff9a'; }
-        if (row === 0 && k === 0) { cap = '#e01e10'; top = '#ff7a5a'; }
-        const pressed = fire && ((row === 1 && k === 9) || (row === 1 && (k === 3 || k === 6)));
-        const ky = y + (pressed ? 1 : 0);
-        px('#5a6070', kx, ky + 3, Math.round(kw) - 1, 1);
-        px(cap, kx, ky, Math.round(kw) - 1, 3);
-        px(top, kx, ky, Math.round(kw) - 1, 1);
+
+    const boardPoint = (u: number, v: number): [number, number] => {
+      const y = 19 + v * 34;
+      const halfWidth = 32 + v * 15;
+      return point(80 + (u * 2 - 1) * halfWidth, y);
+    };
+    const boardShape = (color: string, points: [number, number][]) =>
+      P.poly(points.map(([u, v]) => boardPoint(u, v)), color);
+
+    // The case tapers toward the far edge and deepens toward the hands.
+    shape('#111722', [[47, 18], [113, 18], [129, 59], [31, 59]]);
+    shape('#303846', [[50, 19], [110, 19], [125, 55], [35, 55]]);
+    shape('#1a202b', [[35, 54], [125, 54], [129, 59], [31, 59]]);
+    shape('#485466', [[50, 20], [109, 20], [120, 52], [40, 52]]);
+    shape('#566274', [[50, 20], [109, 20], [112, 23], [48, 23]]);
+    shape('#252d3a', [[47, 23], [50, 20], [40, 52], [35, 55]]);
+    shape('#343e4d', [[109, 20], [113, 18], [129, 59], [120, 52]]);
+    shape('#697587', [[47, 23], [113, 21], [116, 24], [44, 26]]);
+    line([[38, 55], [122, 55]], '#111722', 1.4);
+
+    for (let row = 0; row < 4; row++) {
+      const v0 = 0.1 + row * 0.16;
+      const v1 = v0 + 0.105;
+      const cols = row === 0 ? 11 : 12;
+      const left = 0.055 + (row === 0 ? 0.012 : 0);
+      const cell = (0.89 - (row === 0 ? 0.024 : 0)) / cols;
+      for (let col = 0; col < cols; col++) {
+        const u0 = left + col * cell + 0.006;
+        const u1 = left + (col + 1) * cell - 0.006;
+        let cap = (row + col) % 3 === 0 ? '#c4cbd6' : '#aab3c2';
+        let top = (row + col) % 3 === 0 ? '#eef1f5' : '#d7dce5';
+        if (row === 0 && col === 0) { cap = '#b6372c'; top = '#ff8060'; }
+        if (row === 2 && col === cols - 1) { cap = '#b77a18'; top = '#ffd36a'; }
+        if (row === 1 && (col === 4 || col === 5)) { cap = '#7d8798'; top = '#bbc4d2'; }
+        boardShape('#242a35', [[u0, v0 + 0.015], [u1, v0 + 0.015], [u1, v1], [u0, v1]]);
+        boardShape(cap, [[u0, v0], [u1, v0], [u1, v1 - 0.012], [u0, v1 - 0.012]]);
+        boardShape(top, [[u0, v0], [u1, v0], [u1, v0 + 0.025], [u0, v0 + 0.025]]);
+        boardShape('#515b6b', [[u0, v1 - 0.018], [u1, v1 - 0.018], [u1, v1 - 0.008], [u0, v1 - 0.008]]);
       }
     }
-    px(fire ? '#8aff9a' : '#2ad83a', 60, 3, 2, 1);
-    px('#ffd040', 56, 3, 2, 1);
+    for (const [u0, u1] of [[0.08, 0.19], [0.21, 0.32], [0.34, 0.67], [0.69, 0.8], [0.82, 0.93]]) {
+      boardShape('#28303d', [[u0, 0.77], [u1, 0.77], [u1, 0.88], [u0, 0.88]]);
+      boardShape(u1 - u0 > 0.25 ? '#9aa4b3' : '#697587', [[u0, 0.77], [u1, 0.77], [u1, 0.86], [u0, 0.86]]);
+      boardShape('#d4dbe5', [[u0, 0.77], [u1, 0.77], [u1, 0.795], [u0, 0.795]]);
+    }
+    ellipse('#2ad083', 103, 23, 1.4, 0.8);
+    ellipse('#ffca55', 98, 23, 1.2, 0.8);
+
+    if (frame === 'contact') {
+      const flash = `rgb(${TOOL_FLASH.keyboard})`;
+      line([[68, 19], [66, 14]], '#fff0c0', 0.8);
+      line([[91, 20], [94, 15]], '#fff0c0', 0.8);
+      shape('#242a35', [[62, 15], [68, 14], [70, 17], [64, 18]]);
+      shape(flash, [[62.5, 13], [68, 12], [69.5, 14], [63.5, 15]]);
+      shape('#fff0c0', [[63, 13.3], [67.6, 12.4], [68.2, 13], [63.2, 14]]);
+      shape('#242a35', [[91, 17], [97, 16], [99, 19], [93, 20]]);
+      shape(flash, [[91.5, 15], [97.3, 14], [98.8, 16], [92.5, 17]]);
+      shape('#fff0c0', [[92, 15.2], [96.8, 14.3], [97.4, 15], [92.2, 16]]);
+    }
+
+    const handPoint = (x: number, y: number, mirror: boolean): [number, number] =>
+      point(mirror ? 160 - x : x, y);
+    const handShape = (color: string, points: [number, number][], mirror: boolean) =>
+      P.poly(points.map(([x, y]) => handPoint(x, y, mirror)), color);
+    const handLine = (points: [number, number][], color: string, mirror: boolean, width = 1) =>
+      P.line(points.map(([x, y]) => handPoint(x, y, mirror)), color, width);
+    const handEllipse = (color: string, x: number, y: number, rx: number, ry: number, mirror: boolean) => {
+      const [cx, cy] = handPoint(x, y, mirror);
+      P.ell(cx, cy, rx * sx, ry * sy, color);
+    };
+    const hand = (mirror: boolean) => {
+      handShape(deep, [[124, 55], [129, 55], [132, 58], [131, 61], [127, 60]], mirror);
+      handEllipse(base, 127, 57.5, 1.8, 1.1, mirror);
+
+      handShape(deep, [[131, 39], [134, 35], [141, 34], [146, 37], [149, 42], [148, 50], [145, 56], [140, 59], [134, 57], [131, 53], [129, 47]], mirror);
+      handShape(shadow, [[132, 40], [135, 37], [141, 36], [145, 39], [147, 43], [146, 50], [143, 54], [139, 57], [135, 55], [132, 51], [131, 47]], mirror);
+      handShape(base, [[133, 41], [136, 38], [141, 38], [144, 40], [146, 44], [145, 49], [142, 53], [139, 55], [136, 53], [133, 50], [132, 46]], mirror);
+      handShape(highlight, [[134, 40], [137, 38], [141, 38], [143, 40], [140, 41], [136, 42]], mirror);
+      handLine([[142, 42], [143, 46], [141, 50]], deep, mirror, 0.8);
+
+      for (let i = 0; i < 4; i++) {
+        const y = 40 + i * 4.1;
+        const boardEdge = 80 + 32 + ((y - 19) / 34) * 15;
+        const tipX = boardEdge - 2.2;
+        handShape(deep, [
+          [tipX + 1, y - 1.4], [tipX + 5, y - 1.7], [134, y - 1.8],
+          [138, y - 1.1], [139, y], [137, y + 1.2], [134, y + 1.6], [tipX + 1, y + 1.2],
+        ], mirror);
+        handShape(base, [
+          [tipX + 1, y - 0.9], [tipX + 5, y - 1.1], [134, y - 1.2],
+          [137, y - 0.6], [137, y + 0.5], [134, y + 1], [tipX + 1, y + 0.8],
+        ], mirror);
+        handEllipse(shadow, tipX, y, 2.5, 1.7, mirror);
+        handEllipse(base, tipX - 0.4, y - 0.25, 1.9, 1.2, mirror);
+        handLine([[tipX - 1.1, y - 0.8], [tipX, y - 1]], highlight, mirror, 0.7);
+      }
+      handLine([[132, 52], [135, 54], [138, 55]], shadow, mirror, 0.9);
+    };
+    hand(true);
+    hand(false);
   });
 }
 
@@ -144,11 +311,8 @@ function mouseArt(fire: boolean): Art {
 type UsbFrame = 'rest' | 'press' | 'flash' | 'recoil' | 'settle';
 
 function usbArt(frame: UsbFrame, gender: Gender, skin: SkinTone): Art {
-  const look = handLook(gender);
-  const [base, shadow, highlight] = [skin.base, skin.shadow, skin.highlight];
-  const deep = shade(shadow, 0.65);
-  const ramp = [deep, shadow, base, highlight];
-  const seam = '#30201b';
+  const look = vmHandArt(gender, skin);
+  const { ramp, seam } = look;
   const recoil = frame === 'recoil';
   return paint(84, 56, 42, (_px, P) => {
     const yScale = 48 / 88;
@@ -184,19 +348,7 @@ function usbArt(frame: UsbFrame, gender: Gender, skin: SkinTone): Art {
       P.ell(cx, cy, rx, ry * yScale, color);
     };
 
-    const jacketShade = shade(look.jacket, 0.64);
-    const jacketLight = shade(look.jacket, 1.22);
-    shape(jacketShade, [[67, 67], [84, 65], [84, 88], [67, 88], [63, 82], [63, 75]]);
-    shape(look.jacket, [[70, 69], [84, 68], [84, 88], [71, 88], [67, 82], [66, 76]]);
-    shape(jacketLight, [[70, 70], [73, 70], [75, 84], [72, 84]]);
-    seamLine([[69, 72], [75, 79], [80, 88]]);
-    shape(jacketShade, [[67, 71], [84, 70], [84, 76], [68, 77], [65, 74]]);
-    shape(look.accent, [[67, 73], [84, 72], [84, 74], [68, 75], [66, 74]]);
-    if (gender === 'female') {
-      shape('#20242c', [[66, 69], [72, 69], [73, 73], [67, 74]]);
-      shape('#0b2a2a', [[67, 70], [71, 70], [72, 72], [68, 73]]);
-      ell(look.accent, 69, 71, 1.2, 0.8);
-    }
+    paintVmJacketSleeve(look, { shape, seamLine, ell });
 
     for (const [x, y] of [[21, 57], [20, 61], [20, 65]] as [number, number][]) {
       ell(ramp[1], x + 0.5, y + 0.5, 3.8, 2.7);
@@ -306,15 +458,23 @@ function badgeArt(fire: boolean): Art {
 }
 
 /** Art variant: 0 rest, 1 fire pose, 2 fire pose lit in the tool's flash colour. */
-function art(tool: ToolDef, gender: Gender, mode: 0 | 1 | 2, usbFrame?: UsbFrame): Art | null {
-  const key = `${tool.id}:${gender}:${mode}:${usbFrame ?? ''}:${currentSkin().id}`;
+function art(
+  tool: ToolDef,
+  gender: Gender,
+  mode: 0 | 1 | 2,
+  usbFrame?: UsbFrame,
+  keyboardFrame?: KeyboardFrame,
+): Art | null {
+  const skin = currentSkin();
+  const key = `${tool.id}:${gender}:${mode}:${usbFrame ?? ''}:${keyboardFrame ?? ''}:${skin.id}`;
   let a = cache.get(key);
   if (!a) {
-    const maker = { keyboard: keyboardArt, mouse: mouseArt, badge: badgeArt }[tool.id];
-    if (tool.id === 'usb') a = usbArt(usbFrame ?? (mode === 2 ? 'flash' : mode === 1 ? 'recoil' : 'rest'), gender, currentSkin());
-    else if (!maker) return null;
-    else a = maker(mode > 0);
-    if (mode === 2) a = tintFlash(a, TOOL_FLASH[tool.id] ?? '255,255,255');
+    if (tool.id === 'usb') a = usbArt(usbFrame ?? (mode === 2 ? 'flash' : mode === 1 ? 'recoil' : 'rest'), gender, skin);
+    else if (tool.id === 'keyboard') a = keyboardArt(keyboardFrame ?? (mode > 0 ? 'swing' : 'rest'), gender, skin);
+    else if (tool.id === 'mouse') a = mouseArt(mode > 0);
+    else if (tool.id === 'badge') a = badgeArt(mode > 0);
+    else return null;
+    if (mode === 2 && tool.id !== 'keyboard') a = tintFlash(a, TOOL_FLASH[tool.id] ?? '255,255,255');
     cache.set(key, a);
   }
   return a;
@@ -347,7 +507,10 @@ export function drawToolViewmodel(
       : ph.phase === 'impact' ? 'flash'
         : ph.phase === 'recover' ? (ph.u < 0.5 ? 'recoil' : 'settle')
           : 'rest';
-  const a = art(tool, gender, lit ? 2 : fire ? 1 : 0, usbFrame);
+  const keyboardFrame: KeyboardFrame | undefined = tool.id !== 'keyboard' ? undefined
+    : ph ? keyboardFrameForUse(anim!.sinceUse, tool.windup ?? 0)
+      : 'rest';
+  const a = art(tool, gender, lit ? 2 : fire ? 1 : 0, usbFrame, keyboardFrame);
   // shared bob/strike/switch offsets for the art AND the rig-hand overlay
   const bx = Math.round(Math.sin(bob) * 6);
   const byy = Math.round(Math.abs(Math.cos(bob)) * 3);

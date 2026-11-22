@@ -1,15 +1,32 @@
-// Capture exact USB viewmodel frames with a paused Playwright clock.
-// Usage: node tools/usb-proto-capture.mjs <output-dir> [base-url]
+// Capture exact viewmodel frames with a paused Playwright clock.
+// Usage: node tools/usb-proto-capture.mjs <output-dir> [base-url] [--slot N --tool ID]
 import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { chromium } from '@playwright/test';
 
-const output = process.argv[2];
-if (!output) throw new Error('Usage: node tools/usb-proto-capture.mjs <output-dir> [base-url]');
+const args = process.argv.slice(2);
+let output;
+let baseUrlArg;
+let slot = 3;
+let tool = 'usb';
+for (let i = 0; i < args.length; i++) {
+  if (args[i] === '--slot') {
+    slot = Number(args[++i]);
+    if (!Number.isInteger(slot) || slot < 1) throw new Error('--slot must be a positive integer');
+  } else if (args[i] === '--tool') {
+    tool = args[++i] ?? '';
+    if (!tool) throw new Error('--tool requires a tool ID');
+  } else if (args[i].startsWith('--')) {
+    throw new Error(`Unknown option ${args[i]}`);
+  } else if (!output) output = args[i];
+  else if (!baseUrlArg) baseUrlArg = args[i];
+  else throw new Error(`Unexpected argument ${args[i]}`);
+}
+if (!output) throw new Error('Usage: node tools/usb-proto-capture.mjs <output-dir> [base-url] [--slot N --tool ID]');
 
 const outDir = resolve(output);
-const base = new URL(process.argv[3] ?? 'http://localhost:5173');
+const base = new URL(baseUrlArg ?? 'http://localhost:5173');
 base.searchParams.set('debug', '1');
 const baseUrl = base.href;
 const dimensions = { width: 1920, height: 1080 };
@@ -40,18 +57,18 @@ try {
       // Let the page load naturally, then stop its real-time clock before the
       // mission starts. All capture-time advancement below uses runFor().
       await page.clock.pauseAt(new Date(await page.evaluate(() => Date.now() + 1000)));
-      await page.evaluate((analyst) => {
+      await page.evaluate(({ analyst, slot }) => {
         window.__cd.startMission('m12', analyst);
-        window.__cd.setTool(3);
-      }, gender);
+        window.__cd.setTool(slot);
+      }, { analyst: gender, slot });
       await page.clock.runFor(1200);
       const prefix = `${gender}-${skin}`;
       const setup = await page.evaluate(() => {
         const state = window.__cd.state();
         return { clockMs: performance.now(), gameTime: state.stats.time, screen: state.screen, tool: state.tool };
       });
-      if (setup.screen !== 'play' || setup.tool !== 'usb') {
-        throw new Error(`${prefix}: expected M12 play with tool 3, got ${setup.screen}/${setup.tool}`);
+      if (setup.screen !== 'play' || setup.tool !== tool) {
+        throw new Error(`${prefix}: expected M12 play with tool ${slot} (${tool}), got ${setup.screen}/${setup.tool}`);
       }
       await page.screenshot({ path: resolve(outDir, `${prefix}-rest.png`) });
 
