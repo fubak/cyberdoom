@@ -968,6 +968,7 @@ class Game {
         ammo: ars.ammoFor(),
         ammoName: ars.current.ammo?.resource ?? '',
         tool: ars.current,
+        viewTool: ars.viewTool,
         bob: this.settings.viewBob ? this.player.bob : 0,
         cooldownFrac: ars.cooldownFrac,
         gender: this.gender,
@@ -1068,6 +1069,8 @@ class Game {
       use: this.input.usePressed,
       openDoor: (doorId) => this.openDoor(doorId),
       hasBadge: this.arsenal.owns('badge'),
+      hasToken: this.arsenal.owns('mfa'),
+      flashTool: (toolId) => this.arsenal.flash(toolId),
     });
     if (this.dossier.isOpen) {
       this.consumeDossierInput();
@@ -1454,6 +1457,7 @@ class Game {
       wallDistance: tool.wallDistance,
       roles: rt.roles,
       hasBadge: this.arsenal.owns('badge'),
+      hasToken: this.arsenal.owns('mfa'),
       mfaPending: mfaPending(rt.entities),
     };
   }

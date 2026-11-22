@@ -17,7 +17,11 @@ import {
  * half-open [x, x+w) x [y, y+h); touching edges do not count as overlap.
  */
 
-const TOOLS = Array.from({ length: 8 }, (_, i) => ({ id: `tool-${i + 1}`, slot: i + 1 }));
+const TOOLS = Array.from({ length: 8 }, (_, i) => ({
+  id: `tool-${i + 1}`,
+  slot: i + 1,
+  passive: i === 3 || i === 6,
+}));
 
 function worstCase(): BarLayoutInput {
   return {
@@ -103,5 +107,12 @@ describe('statusBarText layout', () => {
       expect(v!.x).toBeGreaterThan(row.x);
       expect(i === 0 || row.y > rows[i - 1].y).toBe(true);
     }
+  });
+
+  it('passive badge and token slots show no weapon numbers', () => {
+    const labels = statusBarText(worstCase(), false).map((text) => text.text);
+    expect(labels).not.toContain('4');
+    expect(labels).not.toContain('7');
+    for (const slot of ['1', '2', '3', '5', '6', '8']) expect(labels).toContain(slot);
   });
 });

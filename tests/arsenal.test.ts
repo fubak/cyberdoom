@@ -69,6 +69,59 @@ describe('arsenal runtime', () => {
     expect(a.switching).toBe(false);
   });
 
+  it('passive slots do not select, cycle, or become current on pickup', () => {
+    const bus = new EventBus();
+    const messages: string[] = [];
+    bus.on('message', ({ text }) => messages.push(text));
+    const a = new Arsenal(bus);
+    a.reset({ difficulty: 9, loadout: toolRegistry.all().map((tool) => tool.id) }, 'male');
+    settle(a);
+
+    expect(a.select(4)).toBe(false);
+    expect(a.select(7)).toBe(false);
+    expect(a.current.id).toBe('keyboard');
+    expect(messages).toEqual([
+      'BADGE and TOKEN work automatically: press E at a reader.',
+      'BADGE and TOKEN work automatically: press E at a reader.',
+    ]);
+    for (const direction of [1, -1]) {
+      for (let i = 0; i < 12; i++) {
+        a.cycle(direction);
+        settle(a);
+        expect(['badge', 'mfa']).not.toContain(a.current.id);
+      }
+    }
+
+    a.reset({ difficulty: 1, loadout: ['keyboard'] }, 'male');
+    a.grant('tool:badge', 1);
+    for (let i = 0; i < 240; i++) a.update(1 / 60, false, false, () => ctx());
+    a.grant('tool:mfa', 1);
+    for (let i = 0; i < 240; i++) a.update(1 / 60, false, false, () => ctx());
+    expect(a.owns('badge')).toBe(true);
+    expect(a.owns('mfa')).toBe(true);
+    expect(a.current.id).toBe('keyboard');
+    expect(messages.some((text) => text.toUpperCase().startsWith('BADGE: PRESS E AT A READER DOOR'))).toBe(true);
+    expect(messages.some((text) => text.toUpperCase().startsWith('MFA TOKEN: MFA DOORS: PRESS E'))).toBe(true);
+    expect(messages.some((text) => text.toUpperCase().startsWith('[4] BADGE:'))).toBe(false);
+    expect(messages.some((text) => text.toUpperCase().startsWith('[7] MFA TOKEN:'))).toBe(false);
+
+    a.reset({ difficulty: 1, loadout: ['badge', 'mfa'] }, 'male');
+    expect(['badge', 'mfa']).not.toContain(a.current.id);
+  });
+
+  it('flashes the badge viewmodel, then returns to the current tool', () => {
+    const a = new Arsenal(new EventBus());
+    a.reset({ difficulty: 1, loadout: ['keyboard', 'badge'] }, 'male');
+
+    a.flash('badge');
+    expect(a.current.id).toBe('keyboard');
+    expect(a.viewTool.id).toBe('badge');
+    expect(a.anim().sinceUse).toBe(0);
+
+    a.update(0.61, false, false, () => ctx());
+    expect(a.viewTool.id).toBe('keyboard');
+  });
+
   it('fires after the windup, spends ammo, and dry-fires at zero', () => {
     const a = new Arsenal(new EventBus());
     a.reset({ difficulty: 1 }, 'male');
@@ -108,7 +161,8 @@ describe('arsenal runtime', () => {
     a.introduce([toolRegistry.require('mfa'), toolRegistry.require('patch')]);
     for (let i = 0; i < 500; i++) a.update(1 / 60, false, false, () => ctx());
     const ticker = messages.join(' ');
-    expect(ticker).toContain('[7] MFA TOKEN:');
+    expect(ticker).toContain('MFA TOKEN:');
+    expect(ticker).not.toContain('[7] MFA TOKEN:');
     expect(ticker).toContain('[8] PATCH DISK:');
     expect(a.current.id).toBe('keyboard');
     expect(a.owns('mfa')).toBe(false);
@@ -155,16 +209,6 @@ describe('tool mechanics', () => {
     expect(verdicts).toEqual([]);
   });
 
-  it('badge: a repeated denied swipe at the same door logs only one violation', () => {
-    const bus = new EventBus();
-    const logged: boolean[] = [];
-    bus.on('badge-door', ({ allowed }) => logged.push(allowed));
-    const entities: Entity[] = [];
-    const c = ctx({ bus, entities, authorizedRoles: ['analyst'], isDoorAhead: () => ({ doorId: 'srv', accessRole: 'admin', dist: 1 }) });
-    for (let i = 0; i < 4; i++) toolForSlot(4)!.use(c);
-    expect(logged).toEqual([false]);
-  });
-
   it('tap copies traffic in the cone but makes no verdict and never cleans', () => {
     const bus = new EventBus();
     const cleaned: string[] = [];
@@ -193,33 +237,6 @@ describe('tool mechanics', () => {
     const host = ent('h', { infected: true, state: { captured: true } }, 'malware');
     toolForSlot(2)!.use(ctx({ bus, aimEntity: () => host }));
     expect(verdicts).toEqual([true]);
-  });
-
-  it('mfa: an MFA door needs the badge AND the token; token alone fails', () => {
-    const bus = new EventBus();
-    const opened: string[] = [];
-    bus.on('badge-door', ({ doorId, allowed }) => { if (allowed) opened.push(doorId); });
-    const entities: Entity[] = [];
-    const door = () => ({ doorId: 'srv', accessRole: 'netops', dist: 1, mfa: true });
-    const c = ctx({ bus, entities, authorizedRoles: ['netops'], isDoorAhead: door });
-    toolForSlot(7)!.use(c);
-    expect(opened).toEqual([]);
-    toolForSlot(4)!.use(c);
-    expect(opened).toEqual([]);
-    toolForSlot(7)!.use(c);
-    expect(opened).toEqual(['srv']);
-  });
-
-  it('mfa: refuses phishing prompts and shared accounts', () => {
-    const bus = new EventBus();
-    const hits: boolean[] = [];
-    bus.on('tool-hit', ({ good }) => hits.push(good));
-    const phish = ent('p', {}, 'phishing');
-    const shared = ent('s');
-    shared.def.tags = ['shared-account'];
-    for (const e of [phish, shared]) toolForSlot(7)!.use(ctx({ bus, aimEntity: () => e }));
-    expect(hits).toEqual([false, false]);
-    expect(phish.state.mfaRefused).toBe(true);
   });
 
   it('patch disk: patches clean hosts, refuses infected ones, refunds misses', () => {

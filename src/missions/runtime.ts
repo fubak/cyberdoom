@@ -10,7 +10,8 @@ import type {
 import { callFeedback, callOptions, requiredCall } from '../content/calls';
 import { objectiveById } from '../content/objectives';
 import type { WorldMap } from '../engine/map';
-import { mfaPending, swipeBadge } from '../tools/badge';
+import { completeMfa, refuseMfaPrompt } from '../tools/mfa';
+import { swipeBadge } from '../tools/badge';
 import { mouseTool } from '../tools/mouse';
 import { difficultyScale, skillById, type Skill, type SkillId } from './difficulty';
 
@@ -48,6 +49,9 @@ type UpdateWorld = {
   openDoor: (doorId: string) => void;
   /** Whether the badge tool is in the kit (E at a reader swipes it). */
   hasBadge?: boolean;
+  /** Whether the MFA token is in the kit (E at an MFA reader completes it). */
+  hasToken?: boolean;
+  flashTool?: (toolId: 'badge' | 'mfa') => void;
 };
 
 export class MissionRuntime {
@@ -85,7 +89,9 @@ export class MissionRuntime {
   private revealedSecrets = new Set<string>();
   private revealedSecretDoors = new Set<string>();
   private doorAccessScored = new Set<string>();
+  private warnedOutOfRoleDoorAt = new Map<string, number>();
   private grantApplied = new Set<string>();
+  private hasToken = false;
   private outbreakElapsed = 0;
   private lastExitMessage = -Infinity;
   private currentPlayer: UpdateWorld['player'] | null = null;
@@ -488,6 +494,7 @@ export class MissionRuntime {
     this.bus.on('interact', ({ entityId }) => {
       const e = this.byId(entityId);
       if (!e || !e.alive) return;
+      if (this.hasToken) refuseMfaPrompt({ bus: this.bus }, e);
       if (e.def.egg) this.revealEgg(e.def.egg);
 
       // ENEMIES-owned (ransomware seal): an encrypted console is unusable until
@@ -857,6 +864,7 @@ export class MissionRuntime {
 
   update(dt: number, w: UpdateWorld): void {
     this.currentPlayer = w.player;
+    this.hasToken = !!w.hasToken;
     if (!this.finished) this.elapsed += dt;
     this.updateVisited(dt, w);
 
@@ -868,22 +876,41 @@ export class MissionRuntime {
         if (door.locked) {
           this.message(door.lockText ?? 'Locked.', 'warn');
         } else if (door.accessRole !== undefined) {
-          if (door.mfa && mfaPending(this.entities).has(doorId)) {
-            this.message('Badge accepted. Second factor: select TOKEN [7] and touch the reader.', 'warn');
-          } else if (!this.roles.includes(door.accessRole)) {
-            // A rejected badge swipe is a least-privilege violation — E only warns.
-            const roles = this.roles.map((r) => r.toUpperCase()).join(', ') || 'none';
-            this.message(
-              `Badge reader: ${door.accessRole.toUpperCase()} only. Your roles: ${roles}. Swiping BADGE [4] here would be logged as a violation.`,
-              'info',
-            );
-          } else if (w.hasBadge) {
+          if (!this.roles.includes(door.accessRole)) {
+            const warnedAt = this.warnedOutOfRoleDoorAt.get(doorId);
+            if (warnedAt !== undefined && this.elapsed - warnedAt <= 3) {
+              this.warnedOutOfRoleDoorAt.delete(doorId);
+              w.flashTool?.('badge');
+              swipeBadge(
+                { bus: this.bus, entities: this.entities, authorizedRoles: this.roles },
+                { doorId, accessRole: door.accessRole, mfa: door.mfa },
+              );
+            } else {
+              this.warnedOutOfRoleDoorAt.set(doorId, this.elapsed);
+              const roles = this.roles.map((r) => r.toUpperCase()).join(', ') || 'none';
+              this.message(
+                `Badge reader: ${door.accessRole.toUpperCase()} only. Your roles: ${roles}. Press E again to swipe anyway (logged as a violation).`,
+                'info',
+              );
+            }
+          } else if (!w.hasBadge) {
+            this.message(`Badge reader: ${door.accessRole.toUpperCase()} only. You have no badge.`, 'warn');
+          } else {
+            w.flashTool?.('badge');
             swipeBadge(
               { bus: this.bus, entities: this.entities, authorizedRoles: this.roles },
               { doorId, accessRole: door.accessRole, mfa: door.mfa },
             );
-          } else {
-            this.message(`Badge reader: ${door.accessRole.toUpperCase()} only — select BADGE [4]`, 'warn');
+            if (door.mfa) {
+              if (w.hasToken) {
+                if (completeMfa(
+                  { bus: this.bus, entities: this.entities },
+                  { doorId, accessRole: door.accessRole, mfa: door.mfa },
+                )) w.flashTool?.('mfa');
+              } else {
+                this.message('This door enforces MFA and you have no enrolled token.', 'warn');
+              }
+            }
           }
         } else {
           w.openDoor(doorId);
