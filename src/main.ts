@@ -5,7 +5,7 @@ import { resolveBindings } from './engine/bindings';
 import { WorldMap } from './engine/map';
 import { Input } from './engine/input';
 import { EYE_HEIGHT, Player } from './engine/player';
-import { alertNear, damageEntity, hurtEntity, traceShot, updateEntities, updateProjectiles, wormPropagateCap } from './engine/ai';
+import { alertNear, damageEntity, ENEMY_PROFILES, hurtEntity, traceShot, updateEntities, updateProjectiles, wormPropagateCap } from './engine/ai';
 import type { SealTarget } from './engine/ai';
 import { enemyInTheWay, exitEdge } from './engine/interact';
 import { doorUseHint, resolveUse, type UseTargetContext } from './engine/useTarget';
@@ -81,6 +81,10 @@ const THREAT_BLOOD: Record<string, [number, number, number]> = {
   logicbomb: [1, 0.3, 0.1],
   rat: [0.22, 0.9, 0.38],
   rootkit: [0.48, 0.32, 1],
+  botnet: [0.25, 0.88, 1],
+  wiper: [1, 0.25, 0.12],
+  'boss-locker': [1, 0.65, 0.12],
+  'boss-ghostledger': [0.85, 0.22, 1],
 };
 const bloodOf = (e: Entity): [number, number, number] =>
   THREAT_BLOOD[e.def.threat ?? e.def.sprite] ?? [1, 0.28, 0.08];
@@ -1110,11 +1114,27 @@ class Game {
       this.vmLight += (targetLight - this.vmLight) * Math.min(1, dt * 6);
       const ars = this.arsenal;
       const integrity = this.player.integrity;
+      const activeBoss = this.runtime.entities.find(
+        (e) => e.alive && e.state.awake && ENEMY_PROFILES[e.def.threat ?? e.def.sprite]?.boss,
+      );
       this.hud.draw({
         integrity,
         armor: this.player.armor,
         overclockT: this.player.overclockT,
         airgapT: this.player.airgapT,
+        boss: activeBoss
+          ? {
+              name:
+                activeBoss.def.inspect?.label ??
+                (activeBoss.def.sprite === 'boss-ghostledger'
+                  ? 'GHOSTLEDGER CORE'
+                  : activeBoss.def.sprite === 'boss-locker'
+                    ? 'LOCKER OVERLORD'
+                    : activeBoss.def.sprite.toUpperCase()),
+              hp: activeBoss.hp,
+              maxHp: Math.max(activeBoss.hp, (activeBoss.state.maxHp as number | undefined) ?? activeBoss.def.hp ?? 100),
+            }
+          : null,
         ammo: ars.ammoFor(),
         ammoName: ars.current.ammo?.resource ?? '',
         tool: ars.current,

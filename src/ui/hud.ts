@@ -242,6 +242,8 @@ export class Hud {
     armor?: number;
     overclockT?: number;
     airgapT?: number;
+    /** Active boss encounter health bar (shown when a boss is awake and alive). */
+    boss?: { name: string; hp: number; maxHp: number } | null;
     ammo: number | null;
     ammoName: string;
     tool: ToolDef;
@@ -332,6 +334,9 @@ export class Hud {
     // like Doom's tracer + wall impact drawn over the gun sprite
     if (opts.anim) this.drawUseFx(viewTool, opts.anim);
     this.drawPowerupBadges(opts.armor ?? 0, opts.overclockT ?? 0, opts.airgapT ?? 0);
+    if (opts.boss && opts.boss.hp > 0 && opts.boss.maxHp > 0) {
+      this.drawBossBar(opts.boss.name, opts.boss.hp, opts.boss.maxHp);
+    }
     this.drawBar(opts);
   }
 
@@ -353,6 +358,26 @@ export class Hud {
       drawText(g, b.label, x + 4, y + 2, b.fg, 'tiny', null);
       y += 12;
     }
+  }
+
+  private drawBossBar(name: string, hp: number, maxHp: number): void {
+    const g = this.g;
+    const barW = 148;
+    const barH = 6;
+    const x = Math.round((BASE_W - barW) / 2);
+    const y = 26;
+    const frac = Math.max(0, Math.min(1, hp / maxHp));
+    g.fillStyle = 'rgba(10, 12, 18, 0.85)';
+    g.fillRect(x - 3, y - 9, barW + 6, barH + 12);
+    g.fillStyle = '#a82430';
+    g.fillRect(x - 3, y - 9, barW + 6, 1);
+    const label = `${name.toUpperCase()}  ${Math.ceil(hp)}/${Math.ceil(maxHp)}`;
+    const lw = measureText(label, 'tiny');
+    drawText(g, label, Math.round(BASE_W / 2 - lw / 2), y - 7, '#ff6858', 'tiny', null);
+    g.fillStyle = '#241418';
+    g.fillRect(x, y, barW, barH);
+    g.fillStyle = frac > 0.35 ? '#e03028' : '#ff9820';
+    g.fillRect(x, y, Math.round(barW * frac), barH);
   }
 
   /**

@@ -74,7 +74,7 @@ const perThreat = (build: (kind: string, threat: string) => Layer[]): void => {
   }
 };
 
-const THREATS = ['worm', 'trojan', 'ransomware', 'logicbomb', 'rat', 'rootkit'];
+const THREATS = ['worm', 'trojan', 'ransomware', 'logicbomb', 'rat', 'rootkit', 'botnet', 'wiper', 'boss-locker', 'boss-ghostledger'];
 
 export const SFX_DEFS: Record<string, SfxSpec> = {
   // ---------- engine events ----------
@@ -264,6 +264,24 @@ export const SFX_DEFS: Record<string, SfxSpec> = {
   'sight-rootkit': one(() => [
     osc('sine', 55, 90, 0.5, 0.6, 0, { dist: 4 }),
     nz(400, 900, 'bandpass', 0.4, 0.2, 0.1),
+  ]),
+  'sight-botnet': one(() => [
+    ...[0, 0.06, 0.12].map((t, i) => osc('square', 680 + i * 240, 880 + i * 180, 0.055, 0.26, t)),
+    nz(1800, 3200, 'bandpass', 0.18, 0.24, 0.04, 2),
+  ]),
+  'sight-wiper': one(() => [
+    osc('sawtooth', 120, 48, 0.48, 0.68, 0, { dist: 5 }),
+    nz(900, 260, 'lowpass', 0.42, 0.38, 0.05),
+  ]),
+  'sight-boss-locker': one(() => [
+    osc('sawtooth', 92, 34, 0.72, 0.85, 0, { dist: 6 }),
+    ks(140, 0.5, 0.28, 0.12, 0.99),
+    nz(700, 180, 'lowpass', 0.6, 0.4, 0.08),
+  ]),
+  'sight-boss-ghostledger': one(() => [
+    osc('sawtooth', 78, 28, 0.88, 0.9, 0, { dist: 7 }),
+    osc('square', 220, 110, 0.55, 0.45, 0.12),
+    nz(1400, 220, 'bandpass', 0.75, 0.44, 0.04, 1.5),
   ]),
 
   // ---------- tool sounds (from src/tools/sfx.ts, now on the shared bus) ----------
@@ -496,6 +514,58 @@ perThreat((kind, threat) => {
           osc('square', 1500, 800, 0.08, 0.22, 0.02),
         ];
       }
+    case 'botnet':
+      switch (kind) {
+        case 'growl': return [
+          osc('square', 420, 620, 0.14, 0.26, 0),
+          nz(1800, 2600, 'bandpass', 0.16, 0.2, 0.02, 2.2),
+        ];
+        case 'pain': return [
+          osc('square', V ? 920 : 760, 280, 0.16, 0.34, 0),
+          nz(2400, 900, 'bandpass', 0.14, 0.26, 0, 2),
+        ];
+        case 'death': return [
+          ...impact(0.45),
+          osc('square', 840, 90, 0.45, 0.42, 0),
+          nz(2200, 300, 'bandpass', 0.42, 0.32, 0.04),
+        ];
+        case 'attack': return [
+          osc('square', 960, 420, 0.08, 0.34, 0),
+          osc('square', 1120, 480, 0.08, 0.32, 0.07),
+        ];
+        default: return [
+          osc('square', 720, 960, 0.1, 0.28, 0),
+          nz(2000, 3000, 'bandpass', 0.12, 0.22, 0.02, 2),
+        ];
+      }
+    case 'wiper':
+    case 'boss-locker':
+    case 'boss-ghostledger': {
+      const pitch = threat === 'boss-ghostledger' ? 0.68 : threat === 'boss-locker' ? 0.8 : 1;
+      switch (kind) {
+        case 'growl': return [
+          osc('sawtooth', 95 * pitch, 52 * pitch, 0.55, 0.55, 0, { dist: 5 }),
+          nz(700, 220, 'lowpass', 0.5, 0.3),
+        ];
+        case 'pain': return [
+          osc('sawtooth', (V ? 180 : 145) * pitch, 55 * pitch, 0.26, 0.68, 0, { dist: 5 }),
+          nz(1100, 380, 'bandpass', 0.22, 0.32, 0, 2),
+        ];
+        case 'death': return [
+          ...impact(0.85),
+          osc('sawtooth', 120 * pitch, 24 * pitch, 1.05, 0.9, 0, { dist: 6 }),
+          nz(1600, 120, 'lowpass', 0.95, 0.55, 0.05),
+        ];
+        case 'attack': return [
+          osc('sawtooth', 260 * pitch, 80 * pitch, 0.24, 0.65, 0, { dist: 5 }),
+          nz(1800, 420, 'bandpass', 0.22, 0.42, 0.02, 1.8),
+        ];
+        default: return [
+          osc('sawtooth', 140 * pitch, 65 * pitch, 0.32, 0.5, 0, { dist: 4 }),
+          nz(1000, 260, 'lowpass', 0.3, 0.35),
+        ];
+      }
+    }
     default: // rootkit
       switch (kind) {
         case 'growl': return [

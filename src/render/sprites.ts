@@ -602,6 +602,141 @@ const ratModel: Model = (pose) => {
   return out;
 };
 
+/** Botnet Drone — hovering cyan multi-node swarm cluster with twin packet emitters. */
+const botnetModel: Model = (pose) => {
+  const out: Prim[] = [];
+  if (pose.kind === 'dead') {
+    out.push(ell([0, 4, 0], [16, 4.5, 14], '#1a3852'));
+    out.push(ell([-9, 3, 5], [6, 3, 6], '#265c84'));
+    out.push(ell([10, 3, -4], [5.5, 3, 5.5], '#1e4a6d'));
+    out.push(ell([0, 7, 2], [4, 2.5, 4], '#38b6ff', { glow: true }));
+    return out;
+  }
+  const ph = pose.kind === 'walk' ? (pose.k / 4) * Math.PI * 2 : 0;
+  const hover = Math.sin(ph) * 3.5;
+  const atk = pose.kind === 'attack' ? (pose.k === 0 ? -1 : 1) : 0;
+  const pain = pose.kind === 'pain';
+  const cy = 34 + hover + (pain ? 4 : 0);
+  // central server-core sphere + orbital zombie nodes
+  out.push(ell([0, cy, 0], [12.5, 12.5, 11.5], '#1b496b'));
+  out.push(box([0, cy, 2], [14.5, 3.2, 12], '#2d78a8'));
+  // glowing central eye array
+  out.push(ell([0, cy + 1, 10.5], [5.2, 3.6, 2.4], atk === 1 ? '#fff060' : '#40f0ff', { glow: true }));
+  // orbiting bot nodes (3 around perimeter)
+  for (let i = 0; i < 3; i++) {
+    const a = ph + (i * Math.PI * 2) / 3;
+    const nx = Math.cos(a) * 16;
+    const nz = Math.sin(a) * 10;
+    const ny = cy + Math.sin(ph * 2 + i) * 4;
+    limb(out, [0, cy, 0], [nx, ny, nz], 1.1, '#265c84');
+    out.push(ell([nx, ny, nz], [4.2, 4.2, 4.2], '#2e7fb2'));
+    out.push(ell([nx, ny, nz + 3.2], [1.6, 1.6, 1.6], atk === 1 ? '#ffe040' : '#58f8ff', { glow: true }));
+  }
+  // twin forward emitter prongs
+  for (const sx of [-1, 1]) {
+    const tipZ = 14 + (atk === 1 ? 5 : atk === -1 ? -3 : 0);
+    limb(out, [sx * 8, cy - 6, 4], [sx * 10, cy - 7, tipZ], 1.5, '#18364d');
+    out.push(ell([sx * 10, cy - 7, tipZ + 1.5], [2.4, 2.4, 2.4], atk === 1 ? '#ffff80' : '#32d8ff', { glow: true }));
+  }
+  // top antenna mast
+  limb(out, [0, cy + 11, 0], [0, cy + 22, -2], 1.1, '#326e99');
+  out.push(ell([0, cy + 23, -2], [2.2, 2.2, 2.2], '#40f0ff', { glow: true }));
+  return out;
+};
+
+/** Wiper Bruiser — heavy crimson/obsidian horned shock-trooper with glowing magma core. */
+const wiperModel: Model = (pose) => {
+  const out: Prim[] = [];
+  if (pose.kind === 'dead') {
+    out.push(box([0, 4.5, 0], [18, 4.5, 16], '#26141a'));
+    out.push(ell([0, 6, 3], [9, 3, 7], '#d83820', { glow: true }));
+    out.push(box([-14, 3, 4], [5, 3, 10], '#3a1a22'));
+    out.push(box([14, 3, -3], [5, 3, 10], '#3a1a22'));
+    return out;
+  }
+  const ph = pose.kind === 'walk' ? (pose.k / 4) * Math.PI * 2 : 0;
+  const bob = Math.abs(Math.sin(ph)) * 2.5;
+  const atk = pose.kind === 'attack' ? (pose.k === 0 ? -1 : 1) : 0;
+  const pain = pose.kind === 'pain';
+  // heavy legs
+  for (const sx of [-1, 1]) {
+    const stride = Math.sin(ph + (sx > 0 ? Math.PI : 0)) * 5;
+    limb(out, [sx * 8, 22 + bob, 0], [sx * 9.5, 11, stride * 0.5], 3.8, '#2b161c');
+    limb(out, [sx * 9.5, 11, stride * 0.5], [sx * 10, 2.5, stride], 3.4, '#3d1d26');
+    out.push(box([sx * 10, 2, stride + 2], [4.5, 2.2, 6], '#1a0e12'));
+  }
+  // armored torso + magma core
+  out.push(box([0, 34 + bob, 0], [16, 13, 11], '#2e161d'));
+  out.push(ell([0, 35 + bob, 9.5], [7.5, 6.5, 3.2], atk === 1 ? '#fff280' : '#ff4820', { glow: true }));
+  // horned head
+  out.push(ell([0, 50 + bob + (pain ? 2 : 0), 1], [8.5, 7.5, 8], '#461e28'));
+  for (const sx of [-1, 1]) {
+    limb(out, [sx * 6, 54 + bob, 1], [sx * 14, 62 + bob, 4], 2.2, '#d8c8b0');
+    out.push(ell([sx * 3.5, 51 + bob, 7.5], [1.9, 1.3, 1.5], '#ffea40', { glow: true }));
+    // massive shoulder pauldrons & cannon arms
+    out.push(ell([sx * 17, 42 + bob, 0], [6.5, 6, 6.5], '#52222e'));
+    const armZ = atk === 1 ? 14 : atk === -1 ? -4 : 6;
+    limb(out, [sx * 17, 38 + bob, 1], [sx * 18, 30 + bob, armZ], 3.2, '#3a1a22');
+    out.push(ell([sx * 18, 30 + bob, armZ + 3], [3.6, 3.6, 3.6], atk === 1 ? '#ffee60' : '#ff5028', { glow: true }));
+  }
+  return out;
+};
+
+/** Boss: GHOSTLEDGER LOCKER — towering gold/crimson armored vault padlock juggernaut (M09). */
+const bossLockerModel: Model = (pose) => {
+  const out = ransomModel(pose);
+  if (pose.kind === 'dead') {
+    out.push(box([0, 9, 0], [18, 3, 12], '#d49a2a'));
+    return out;
+  }
+  const atk = pose.kind === 'attack' ? (pose.k === 0 ? -1 : 1) : 0;
+  // heavy gilded shoulder spikes + twin encryption cannon pods + crown crest
+  for (const sx of [-1, 1]) {
+    out.push(box([sx * 20, 44, 0], [6.5, 8, 7], '#b8821e'));
+    out.push(ell([sx * 21, 36, atk === 1 ? 14 : 9], [4.2, 4.2, 4.2], atk === 1 ? '#ffff80' : '#ff3820', { glow: true }));
+  }
+  out.push(box([0, 62, 0], [12, 4.5, 5], '#e0a82e'));
+  out.push(ell([0, 64, 3.5], [3.2, 3.2, 2.5], '#ff3020', { glow: true }));
+  return out;
+};
+
+/** Boss: GHOSTLEDGER C2 CORE — colossal Cyberdemon-scale monolith with crown & twin plasma emitters (M12). */
+const bossGhostledgerModel: Model = (pose) => {
+  const out: Prim[] = [];
+  if (pose.kind === 'dead') {
+    out.push(box([0, 5, 0], [22, 5, 18], '#181024'));
+    out.push(ell([0, 8, 2], [11, 3.5, 9], '#d020ff', { glow: true }));
+    return out;
+  }
+  const ph = pose.kind === 'walk' ? (pose.k / 4) * Math.PI * 2 : 0;
+  const bob = Math.abs(Math.sin(ph)) * 2.2;
+  const atk = pose.kind === 'attack' ? (pose.k === 0 ? -1 : 1) : 0;
+  // cybernetic legs
+  for (const sx of [-1, 1]) {
+    const stride = Math.sin(ph + (sx > 0 ? Math.PI : 0)) * 5.5;
+    limb(out, [sx * 10, 24 + bob, 0], [sx * 11, 12, stride * 0.5], 4.4, '#1b142a');
+    limb(out, [sx * 11, 12, stride * 0.5], [sx * 12, 2.5, stride], 4.0, '#2c2044');
+    out.push(box([sx * 12, 2, stride + 2.5], [5.5, 2.5, 7], '#120d1c'));
+  }
+  // obsidian server-monolith torso + violet/crimson reactor core
+  out.push(box([0, 38 + bob, 0], [19, 15, 13], '#1c1230'));
+  out.push(box([0, 38 + bob, 9], [12, 10, 4], '#381e5c'));
+  out.push(ell([0, 38 + bob, 11.5], [7.2, 6.2, 3.2], atk === 1 ? '#ffffff' : '#ff2860', { glow: true }));
+  // horned C2 crown head
+  out.push(ell([0, 55 + bob, 1], [9.5, 8.5, 9], '#2a1a45'));
+  for (const sx of [-1, 1]) {
+    limb(out, [sx * 7, 59 + bob, 1], [sx * 17, 68 + bob, 5], 2.5, '#d0b8ff');
+    out.push(ell([sx * 3.8, 56 + bob, 8.5], [2.3, 1.5, 1.8], '#ff3060', { glow: true }));
+    // twin shoulder plasma racks + arm cannons
+    out.push(box([sx * 21, 47 + bob, -1], [6.5, 7.5, 7.5], '#3d2466'));
+    out.push(ell([sx * 21, 52 + bob, 4], [3.0, 3.0, 3.0], '#c840ff', { glow: true }));
+    const armZ = atk === 1 ? 16 : atk === -1 ? -3 : 8;
+    limb(out, [sx * 20, 40 + bob, 1], [sx * 21, 31 + bob, armZ], 3.8, '#281844');
+    out.push(ell([sx * 21, 31 + bob, armZ + 3.5], [4.5, 4.5, 4.5], atk === 1 ? '#fff080' : '#ff2860', { glow: true }));
+  }
+  return out;
+};
+
 interface LazyFrame {
   /** Sprite set this frame belongs to (for prewarm prioritization). */
   setId: string;
@@ -615,7 +750,18 @@ let lazyOwner = '';
 const lazyFirstDone = new Set<string>();
 
 /** TESTING: exported so tests/model-raster.test.ts can pin rasterizer output on real models. */
-export const spriteModels = { worm: wormModel, trojan: trojanModel, ransom: ransomModel, rootkit: rootkitModel, logicbomb: logicbombModel, rat: ratModel };
+export const spriteModels = {
+  worm: wormModel,
+  trojan: trojanModel,
+  ransom: ransomModel,
+  rootkit: rootkitModel,
+  logicbomb: logicbombModel,
+  rat: ratModel,
+  botnet: botnetModel,
+  wiper: wiperModel,
+  'boss-locker': bossLockerModel,
+  'boss-ghostledger': bossGhostledgerModel,
+};
 
 export function scaleModel(prims: Prim[]): Prim[] {
   return prims.map((prim) => ({
@@ -1123,6 +1269,10 @@ export function buildSprites(jobs = false): void {
   makeMonster('rootkit', 1.45, rootkitModel, { floor: 1.5, gain: 2.7, walkN: 8, gib: [0.5, 0.35, 0.95] });
   makeMonster('logicbomb', 1.35, logicbombModel, { floor: 1.3, gain: 2.6, grow: 1.8, gib: [1.0, 0.85, 0.2] });
   makeMonster('rat', 1.45, ratModel, { floor: 1.55, gain: 2.7, gib: [0.7, 0.9, 0.3] });
+  makeMonster('botnet', 1.38, botnetModel, { floor: 1.45, gain: 2.7, gib: [0.25, 0.85, 1.0] });
+  makeMonster('wiper', 1.62, wiperModel, { floor: 1.4, gain: 2.7, gib: [1.0, 0.32, 0.15] });
+  makeMonster('boss-locker', 1.88, bossLockerModel, { floor: 1.4, gain: 2.75, gib: [1.0, 0.65, 0.12] });
+  makeMonster('boss-ghostledger', 2.05, bossGhostledgerModel, { floor: 1.45, gain: 2.8, gib: [0.85, 0.2, 1.0] });
 
   makeSet('workstation', 64, 64, 0.82, 'static', [{ key: 'idle', draw: workstation('clean', 0) }]);
   makeSet('workstation-infected', 64, 64, 0.82, 'flicker', [

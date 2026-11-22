@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { cd, waitScreen, watchProblems } from './helpers';
+import { cd, settleMenus, waitScreen, watchProblems } from './helpers';
 
 test('F5 quicksave and F9 quickload report their messages and restore the saved state', async ({ page }) => {
   const problems = watchProblems(page);
@@ -46,6 +46,7 @@ test('R restores the latest quicksave from the loss debrief', async ({ page }) =
 
   const canvas = page.locator('canvas.cd-pixel-canvas');
   await expect(canvas).toHaveAttribute('aria-label', /RETRY CHECKPOINT: QUICKSAVE/);
+  await settleMenus(page);
   await page.keyboard.press('r');
   await expect.poll(async () => cd(page)).toMatchObject({ x: saved.x, y: saved.y, screen: 'play' });
   await expect.poll(async () => (await cd(page)).hudMessages).toContain('RESTORED: QUICKSAVE');

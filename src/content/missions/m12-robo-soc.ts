@@ -106,24 +106,24 @@ export const m12: Mission = {
   },
   entities: [
     {
-      id: 'prime', kind: 'enemy', x: 14, y: 15, sprite: 'ransomware', threat: 'ransomware',
+      id: 'prime', kind: 'enemy', x: 14, y: 15, sprite: 'boss-ghostledger', threat: 'boss-ghostledger',
       ai: 'chase', hp: 30, infected: true, dormant: true,
       inspect: {
-        label: 'RANSOMWARE PRIME',
-        detail: 'Enterprise-grade encryptor process - oversized, overprivileged and holding the war room.',
+        label: 'Boss-Ghostledger Core',
+        detail: 'GHOSTLEDGER final command-and-control monolith — 5-bolt fan volley, door-sealing authority, and full war-room persistence.',
         category: 'malware',
         objectives: ['4.5'],
       },
     },
     {
-      id: 'prime-escort-a', kind: 'enemy', x: 25, y: 15, sprite: 'rat', threat: 'rat',
-      ai: 'chase', hp: 2, infected: true, dormant: true,
-      inspect: { label: 'RAT escort session', detail: 'Attacker remote session guarding the prime encryptor.', category: 'malware', objectives: ['4.5'] },
+      id: 'prime-escort-a', kind: 'enemy', x: 25, y: 15, sprite: 'botnet', threat: 'botnet',
+      ai: 'chase', hp: 3, infected: true, dormant: true,
+      inspect: { label: 'Botnet escort drone', detail: 'C2 botnet drone screening the GHOSTLEDGER core.', category: 'malware', objectives: ['4.5'] },
     },
     {
-      id: 'prime-escort-b', kind: 'enemy', x: 13, y: 17, sprite: 'rat', threat: 'rat',
-      ai: 'chase', hp: 2, infected: true, dormant: true,
-      inspect: { label: 'RAT escort session', detail: 'Attacker remote session guarding the prime encryptor.', category: 'malware', objectives: ['4.5'] },
+      id: 'prime-escort-b', kind: 'enemy', x: 13, y: 17, sprite: 'botnet', threat: 'botnet',
+      ai: 'chase', hp: 3, infected: true, dormant: true,
+      inspect: { label: 'Botnet escort drone', detail: 'C2 botnet drone screening the GHOSTLEDGER core.', category: 'malware', objectives: ['4.5'] },
     },
 
     // --- Security Center: war board, spawn lobby ---
@@ -462,7 +462,7 @@ export const m12: Mission = {
       { id: 'pay-ambush', area: [1, 1, 9, 6], spawn: ['pay-bomb'], kind: 'bad', message: 'A logic bomb ticks over the payment segment.' },
       { id: 'vault-ambush', area: [29, 1, 38, 6], spawn: ['vault-rootkit'], kind: 'bad', message: 'A rootkit wakes inside the crypto vault.' },
       { id: 'prime-rise', area: [11, 12, 27, 18], spawn: ['prime', 'prime-escort-a', 'prime-escort-b'], kind: 'bad',
-        message: 'RANSOMWARE PRIME: an enterprise encryptor is holding the war room. Clear the arena.' },
+        message: 'BOSS-GHOSTLEDGER CORE online in the war room with botnet escorts. Clear the arena.' },
     ],
     secrets: [
       { id: 'egress-cache', area: [2, 22, 2, 22], label: 'Egress supply cache', grant: { resource: 'patch-disk', amount: 3 } },
@@ -784,9 +784,9 @@ m12.script!.secrets!.push(
   { id: 'rf4-war-n', area: [44, 4, 45, 7], label: 'War-room north cache', grant: { resource: 'usb-charge', amount: 8 } },
   { id: 'rf4-war-s', area: [42, 21, 44, 23], label: 'War-room south cache', grant: { resource: 'integrity', amount: 20 } },
 );
-mixedThreatEncounter(m12, 'arena-mix', [['ransomware', 2], ['rat', 4]],
+mixedThreatEncounter(m12, 'arena-mix', [['wiper', 2], ['botnet', 4]],
   { id: 'arena-ambush', area: [41, 9, 46, 19], kind: 'bad',
-    message: 'The SOC arena is a live firefight — ransomware anchors a rat swarm.' },
+    message: 'The SOC arena is a live firefight — wipers anchor a botnet swarm.' },
   [41, 9, 46, 19]);
 addThreatEncounter(m12, 'sweep-worms', 'worm', 5,
   { id: 'sweep-ambush', area: [8, 30, 38, 31], kind: 'bad',
