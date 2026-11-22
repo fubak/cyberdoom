@@ -491,6 +491,11 @@ addThreatEncounter(m04, 'signin-alarm', 'worm', 3,
   { id: 'signin-alarm', after: ['signin'], kind: 'warn',
     message: 'The fake sign-in tripped a silent alarm — worms flood the spine.' },
   [41, 8, 41, 27]);
+// Episode 1 climax boss: Vishing Broker breaches the mail gateway once hardened.
+addThreatEncounter(m04, 'ep1-boss', 'boss-phish', 1,
+  { id: 'ep1-climax', after: ['gateway'], kind: 'bad',
+    message: 'EPISODE 1 CLIMAX: Vishing Broker breached the mail floor — purge it!' },
+  [8, 4, 34, 8]);
 m04.map.lights = { ...m04.map.lights, ...lightRects([[41, 8, 41, 27, 0.6], [40, 17, 44, 19, 0.65], [16, 31, 26, 32, 0.55], [43, 10, 44, 12, 0.85], [43, 24, 44, 26, 0.85], [41, 11, 41, 11, 0.35], [41, 25, 41, 25, 0.35]]) };
 
 // EGGS F5: a wall-tell door on the west end of the south cage corridor hides a

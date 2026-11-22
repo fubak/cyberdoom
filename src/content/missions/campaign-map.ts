@@ -53,8 +53,10 @@ export function threatWave(
     rootkit: 3,
     botnet: 3,
     wiper: 6,
-    'boss-locker': 16,
-    'boss-ghostledger': 30,
+    'boss-locker': 24,
+    'boss-ghostledger': 36,
+    'boss-phish': 14,
+    'boss-zeroday': 18,
   };
   const positions: { x: number; y: number }[] = [];
   const world = spawnSafe?.los ? new WorldMap(map) : null;
@@ -90,6 +92,8 @@ export function threatWave(
         wiper: 'Wiper unit',
         'boss-locker': 'Boss-Locker Overlord',
         'boss-ghostledger': 'Boss-Ghostledger Core',
+        'boss-phish': 'Boss-Phish Vishing Broker',
+        'boss-zeroday': 'Boss-ZeroDay Kernel Exploit',
       } as Record<string, string>)[sprite] ?? 'Malware process',
       detail: ({
         worm: 'Self-propagating process scanning reachable hosts.',
@@ -100,8 +104,10 @@ export function threatWave(
         ransomware: 'File-encryption process and ransom note recorded.',
         botnet: 'C2 botnet drone firing rapid twin-bolt packet volleys.',
         wiper: 'Destructive disk-wiper unit firing 3-bolt fan spreads.',
-        'boss-locker': 'GHOSTLEDGER primary encryptor node — 3-bolt encryption volley and door-sealing daemon.',
-        'boss-ghostledger': 'GHOSTLEDGER final C2 monolith — 5-bolt fan volley and full war-room persistence.',
+        'boss-locker': 'GHOSTLEDGER primary encryptor node — 3-phase encryption daemon with lockdown seals and wiper summons.',
+        'boss-ghostledger': 'GHOSTLEDGER final C2 monolith — 3-phase command core with beam sweeps, botnet swarms, and overload rings.',
+        'boss-phish': 'Episode 1 climax: GHOSTLEDGER vishing & credential broker — summons RATs and fires credential-stuffing rings.',
+        'boss-zeroday': 'Episode 2 climax: weaponized unpatched kernel exploit — fires heap-spray sweeps and spawns worm waves.',
       } as Record<string, string>)[sprite] ?? 'Malicious process recorded by endpoint telemetry.',
       category: 'malware',
     },

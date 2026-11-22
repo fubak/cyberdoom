@@ -702,6 +702,11 @@ addThreatEncounter(m08, 'rescan-wave', 'worm', 4,
   { id: 'rescan-wave', after: ['rescan'], kind: 'warn',
     message: 'Rescan triggered a dormant variant — fresh signatures dropping into the hall.' },
   [2, 13, 36, 20]);
+// Episode 2 climax boss: weaponized kernel exploit materializes in the central hall.
+addThreatEncounter(m08, 'ep2-boss', 'boss-zeroday', 1,
+  { id: 'ep2-climax', after: ['rescan'], kind: 'bad',
+    message: 'EPISODE 2 CLIMAX: CVE-0DAY EXPLOIT materialized in the central hall — purge it!' },
+  [10, 14, 30, 19]);
 m08.script!.triggers!.push({ id: 'stair-loop-open', after: ['remediate'], kind: 'good',
   message: 'Remediation applied — the lab shortcut back to the hall is open.',
   openDoors: ['rf4-stair-loop'] });

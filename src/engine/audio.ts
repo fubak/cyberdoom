@@ -71,6 +71,8 @@ export const VOICE_CAPS: Record<string, number> = {
   'sight-wiper': 1,
   'sight-boss-locker': 1,
   'sight-boss-ghostledger': 1,
+  'sight-boss-phish': 1,
+  'sight-boss-zeroday': 1,
   death: 1,
   kill: 2,
   win: 1,

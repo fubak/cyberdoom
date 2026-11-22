@@ -66,6 +66,59 @@ interface EnemyProfile {
   spreadAngle?: number;
   /** Boss flag for HUD boss bar and encounter tracking. */
   boss?: boolean;
+  /** Multi-phase boss progression ordered from Phase 1 (threshold 1) down to final phase. */
+  bossPhases?: BossPhaseDef[];
+}
+
+export type BossSpecialKind = 'ring-burst' | 'beam-sweep' | 'lockdown-seal' | 'summon';
+
+export interface BossPhaseDef {
+  /** Enter this phase when HP / maxHp <= threshold (Phase 1 uses 1.0). */
+  threshold: number;
+  /** Short HUD phase label (e.g. "KEY GENERATION", "EXTORTION OVERDRIVE"). */
+  label: string;
+  /** Alert fired via hooks.onNotice when the boss shifts into this phase. */
+  notice: string;
+  /** Ranged volley spread count in this phase. */
+  spreadCount: number;
+  /** Ranged volley angular spread in radians. */
+  spreadAngle: number;
+  /** Movement speed multiplier for this phase. */
+  speedMul: number;
+  /** Windup duration multiplier for normal shots in this phase. */
+  windupMul: number;
+  /** Telegraphed special attack used periodically in this phase. */
+  special: BossSpecialKind;
+  /** Warning banner shown during the special-attack telegraph windup. */
+  telegraphLabel: string;
+  /** Telegraph windup duration (seconds) before the special fires. */
+  telegraphDur: number;
+  /** Cooldown (seconds) between special attacks in this phase. */
+  specialCooldown: number;
+  /** Projectile count for ring-burst / beam-sweep specials. */
+  specialCount?: number;
+  /** Threat type to summon when special === 'summon'. */
+  summonThreat?: string;
+  /** Number of minions to summon per cast (boss total is capped at BOSS_SUMMON_MAX). */
+  summonCount?: number;
+}
+
+export const BOSS_SUMMON_MAX = 4;
+
+/** Resolve the active BossPhaseDef and 1-based phase number for a boss entity. */
+export function bossPhaseFor(
+  e: Entity,
+  profile: EnemyProfile,
+): { index: number; count: number; phase: BossPhaseDef } | null {
+  const phases = profile.bossPhases;
+  if (!phases || phases.length === 0) return null;
+  const maxHp = Math.max(1, (e.state.maxHp as number | undefined) ?? e.def.hp ?? Math.max(1, e.hp));
+  const frac = Math.max(0, e.hp / maxHp);
+  let idx = 0;
+  for (let i = 0; i < phases.length; i++) {
+    if (frac <= phases[i].threshold) idx = i;
+  }
+  return { index: idx + 1, count: phases.length, phase: phases[idx] };
 }
 
 export const ENEMY_PROFILES: Record<string, EnemyProfile> = {
@@ -77,8 +130,171 @@ export const ENEMY_PROFILES: Record<string, EnemyProfile> = {
   rootkit: { speed: 1.6, ranged: false, damage: 12, painChance: 0.4, range: 0.95, windup: 0.5, regenerate: true, hidesWhenIdle: true, stealthy: true },
   botnet: { speed: 2.3, ranged: true, damage: 7, painChance: 0.65, projectileSpeed: 6.2, windup: 0.48, strafes: true, spreadCount: 2, spreadAngle: 0.14 },
   wiper: { speed: 1.5, ranged: true, damage: 14, painChance: 0.35, projectileSpeed: 5.0, windup: 0.65, strafes: true, spreadCount: 3, spreadAngle: 0.22 },
-  'boss-locker': { speed: 1.25, ranged: true, damage: 16, painChance: 0.18, projectileSpeed: 4.8, windup: 0.65, seals: true, strafes: true, spreadCount: 3, spreadAngle: 0.24, boss: true },
-  'boss-ghostledger': { speed: 1.4, ranged: true, damage: 18, painChance: 0.12, projectileSpeed: 5.5, windup: 0.6, strafes: true, spreadCount: 5, spreadAngle: 0.36, boss: true },
+  'boss-phish': {
+    speed: 1.45, ranged: true, damage: 11, painChance: 0.22, projectileSpeed: 5.4, windup: 0.62, strafes: true, spreadCount: 3, spreadAngle: 0.24, boss: true,
+    bossPhases: [
+      {
+        threshold: 1.0,
+        label: 'SPOOFED CALLS',
+        notice: 'VISHING BROKER online — watch for spoofed RAT sessions!',
+        spreadCount: 3,
+        spreadAngle: 0.24,
+        speedMul: 1.0,
+        windupMul: 1.0,
+        special: 'summon',
+        telegraphLabel: 'SPOOFING RAT SESSION',
+        telegraphDur: 0.95,
+        specialCooldown: 7.0,
+        summonThreat: 'rat',
+        summonCount: 1,
+      },
+      {
+        threshold: 0.5,
+        label: 'CREDENTIAL FLOOD',
+        notice: 'PHASE 2: VISHING BROKER flooding credentials — take cover on wave!',
+        spreadCount: 5,
+        spreadAngle: 0.38,
+        speedMul: 1.25,
+        windupMul: 0.85,
+        special: 'ring-burst',
+        telegraphLabel: 'CREDENTIAL STUFFING WAVE',
+        telegraphDur: 1.05,
+        specialCooldown: 5.5,
+        specialCount: 8,
+      },
+    ],
+  },
+  'boss-zeroday': {
+    speed: 1.55, ranged: true, damage: 13, painChance: 0.18, projectileSpeed: 5.8, windup: 0.58, strafes: true, spreadCount: 3, spreadAngle: 0.26, boss: true,
+    bossPhases: [
+      {
+        threshold: 1.0,
+        label: 'RCE PROBE',
+        notice: 'CVE-0DAY EXPLOIT active — dodging heap-spray sweeps!',
+        spreadCount: 3,
+        spreadAngle: 0.26,
+        speedMul: 1.0,
+        windupMul: 1.0,
+        special: 'beam-sweep',
+        telegraphLabel: 'HEAP SPRAY BURST',
+        telegraphDur: 0.95,
+        specialCooldown: 6.0,
+        specialCount: 7,
+      },
+      {
+        threshold: 0.5,
+        label: 'KERNEL ESCALATION',
+        notice: 'PHASE 2: Kernel escalation! Worm replicas + exploit shockwave incoming!',
+        spreadCount: 5,
+        spreadAngle: 0.4,
+        speedMul: 1.28,
+        windupMul: 0.82,
+        special: 'ring-burst',
+        telegraphLabel: 'ZERO-DAY SHOCKWAVE',
+        telegraphDur: 1.05,
+        specialCooldown: 5.2,
+        specialCount: 10,
+        summonThreat: 'worm',
+        summonCount: 2,
+      },
+    ],
+  },
+  'boss-locker': {
+    speed: 1.25, ranged: true, damage: 15, painChance: 0.16, projectileSpeed: 4.9, windup: 0.65, seals: true, strafes: true, spreadCount: 3, spreadAngle: 0.24, boss: true,
+    bossPhases: [
+      {
+        threshold: 1.0,
+        label: 'KEY GENERATION',
+        notice: 'LOCKER OVERLORD engaged — it is sealing arena nodes with AES-256!',
+        spreadCount: 3,
+        spreadAngle: 0.24,
+        speedMul: 1.0,
+        windupMul: 1.0,
+        special: 'lockdown-seal',
+        telegraphLabel: 'ENCRYPTING ARENA NODE',
+        telegraphDur: 0.95,
+        specialCooldown: 6.5,
+        specialCount: 5,
+      },
+      {
+        threshold: 0.66,
+        label: 'LATERAL ENCRYPTION',
+        notice: 'PHASE 2: LOCKER OVERLORD deploying Wiper payloads across the vault!',
+        spreadCount: 5,
+        spreadAngle: 0.34,
+        speedMul: 1.2,
+        windupMul: 0.88,
+        special: 'summon',
+        telegraphLabel: 'DEPLOYING WIPER PAYLOAD',
+        telegraphDur: 1.0,
+        specialCooldown: 6.5,
+        summonThreat: 'wiper',
+        summonCount: 1,
+      },
+      {
+        threshold: 0.33,
+        label: 'EXTORTION OVERDRIVE',
+        notice: 'PHASE 3: EXTORTION OVERDRIVE — dodge the 360° ransom shockwave!',
+        spreadCount: 5,
+        spreadAngle: 0.42,
+        speedMul: 1.35,
+        windupMul: 0.78,
+        special: 'ring-burst',
+        telegraphLabel: 'RANSOM PAYLOAD WAVE',
+        telegraphDur: 1.1,
+        specialCooldown: 4.8,
+        specialCount: 10,
+      },
+    ],
+  },
+  'boss-ghostledger': {
+    speed: 1.4, ranged: true, damage: 16, painChance: 0.12, projectileSpeed: 5.5, windup: 0.6, strafes: true, spreadCount: 5, spreadAngle: 0.36, boss: true,
+    bossPhases: [
+      {
+        threshold: 1.0,
+        label: 'C2 BEACON',
+        notice: 'GHOSTLEDGER C2 CORE online — sever its command-and-control relays!',
+        spreadCount: 5,
+        spreadAngle: 0.36,
+        speedMul: 1.0,
+        windupMul: 1.0,
+        special: 'beam-sweep',
+        telegraphLabel: 'C2 COMMAND SWEEP',
+        telegraphDur: 0.95,
+        specialCooldown: 5.8,
+        specialCount: 7,
+      },
+      {
+        threshold: 0.66,
+        label: 'BOTNET SWARM',
+        notice: 'PHASE 2: C2 Core summoning botnet drones & hijacking SIEM nodes!',
+        spreadCount: 5,
+        spreadAngle: 0.42,
+        speedMul: 1.2,
+        windupMul: 0.88,
+        special: 'summon',
+        telegraphLabel: 'BOTNET SWARM UPLINK',
+        telegraphDur: 1.0,
+        specialCooldown: 6.2,
+        summonThreat: 'botnet',
+        summonCount: 2,
+      },
+      {
+        threshold: 0.33,
+        label: 'FULL PERSISTENCE',
+        notice: 'PHASE 3: FULL PERSISTENCE OVERLOAD — evade the C2 pulse ring!',
+        spreadCount: 7,
+        spreadAngle: 0.54,
+        speedMul: 1.38,
+        windupMul: 0.76,
+        special: 'ring-burst',
+        telegraphLabel: 'GHOSTLEDGER OVERLOAD',
+        telegraphDur: 1.1,
+        specialCooldown: 4.5,
+        specialCount: 12,
+      },
+    ],
+  },
 };
 
 export const ENEMY_RADIUS = 0.3;
@@ -414,9 +630,12 @@ function setRenderState(e: Entity, now: number): void {
       : currentMode === 'pain'
         ? 0.94
         : 1 + 0.25 * pop;
+  const telegraphing = typeof e.state.bossTelegraph === 'string' && e.state.bossTelegraph.length > 0;
   e.state.tint = currentMode === 'pain' || (e.state.flashT as number) > 0
     ? 0xff3030
-    : 0xffffff;
+    : telegraphing
+      ? (Math.floor(now * 10) % 2 === 0 ? 0xffe060 : 0xff6030)
+      : 0xffffff;
   if (typeof e.state.phase !== 'number') {
     let hash = 0;
     for (const ch of e.def.id) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
@@ -441,15 +660,26 @@ export function updateEntities(
   }
   for (const e of entities) {
     if (!e.alive) {
-      // A dead ransomware releases whatever it sealed.
+      e.state.bossTelegraph = '';
+      e.state.bossPendingSpecial = undefined;
+      // A dead ransomware or boss releases everything it sealed.
+      const sealsToFree: SealTarget[] = [];
       const seal = e.state.seal as SealTarget | undefined;
       if (seal) {
         delete e.state.seal;
-        if (seal.kind === 'entity') {
-          const t = entities.find((t) => t.def.id === seal.id);
+        sealsToFree.push(seal);
+      }
+      const extraSeals = e.state.extraSeals as SealTarget[] | undefined;
+      if (extraSeals && extraSeals.length > 0) {
+        delete e.state.extraSeals;
+        sealsToFree.push(...extraSeals);
+      }
+      for (const s of sealsToFree) {
+        if (s.kind === 'entity') {
+          const t = entities.find((o) => o.def.id === s.id);
           if (t) delete t.state.sealedBy;
         }
-        hooks.onUnseal?.(e, seal);
+        hooks.onUnseal?.(e, s);
       }
       continue;
     }
@@ -466,7 +696,73 @@ export function updateEntities(
     const ai = e.def.kind === 'enemy' && e.state.aggroed === true ? 'chase' : (e.def.ai ?? 'stand');
     if (ai === 'chase') {
       const profile = ENEMY_PROFILES[e.def.threat ?? e.def.sprite] ?? ENEMY_PROFILES.worm;
-      const speed = profile.speed * ((e.state.speedMul as number | undefined) ?? 1);
+      const bossPhaseInfo = profile.boss ? bossPhaseFor(e, profile) : null;
+      const activePhase = bossPhaseInfo?.phase ?? null;
+      if (bossPhaseInfo && activePhase) {
+        const prevPhase = (e.state.bossPhase as number | undefined) ?? 0;
+        e.state.bossPhase = bossPhaseInfo.index;
+        e.state.bossPhaseCount = bossPhaseInfo.count;
+        e.state.bossPhaseLabel = activePhase.label;
+        if (prevPhase !== bossPhaseInfo.index && e.state.sighted === true) {
+          e.state.flashT = 0.45;
+          hooks.onNotice?.(e, activePhase.notice);
+          if (prevPhase > 0) {
+            hooks.onSight(e);
+            // Trigger the new phase's signature special promptly after shifting.
+            e.state.bossSpecialT = Math.min((e.state.bossSpecialT as number | undefined) ?? 1.2, 1.2);
+            // Phase-entry reinforcement if configured alongside a non-summon special.
+            if (activePhase.summonThreat && activePhase.special !== 'summon') {
+              const spawned = (e.state.bossSummons as number | undefined) ?? 0;
+              const budget = Math.min(activePhase.summonCount ?? 1, Math.max(0, BOSS_SUMMON_MAX - spawned));
+              for (let s = 0; s < budget; s++) {
+                const spot = findSpawnSpot(e, map, player);
+                if (!spot) break;
+                const threat = activePhase.summonThreat;
+                const copy: Entity = {
+                  def: {
+                    id: `${e.def.id}-minion-${spawned + s + 1}`,
+                    kind: 'enemy',
+                    x: spot.x,
+                    y: spot.y,
+                    sprite: threat,
+                    threat,
+                    ai: 'chase',
+                    hp: threat === 'wiper' ? 5 : threat === 'botnet' ? 3 : 2,
+                    infected: true,
+                    tags: ['malware'],
+                  },
+                  x: spot.x,
+                  y: spot.y,
+                  alive: true,
+                  infected: true,
+                  hp: threat === 'wiper' ? 5 : threat === 'botnet' ? 3 : 2,
+                  state: {
+                    speedMul: e.state.speedMul,
+                    dmgMul: e.state.dmgMul,
+                    skillDmg: e.state.skillDmg,
+                    aggro: e.state.aggro,
+                    maxHp: threat === 'wiper' ? 5 : threat === 'botnet' ? 3 : 2,
+                    aggroed: true,
+                    mode: 'chase',
+                    spawnGrace: 0.75,
+                    sighted: true,
+                    propT: 1e9,
+                    propN: WORM_PROPAGATE_MAX,
+                  },
+                };
+                entities.push(copy);
+                e.state.bossSummons = ((e.state.bossSummons as number | undefined) ?? 0) + 1;
+                hooks.onSpawn?.(copy);
+              }
+            }
+          }
+        }
+        if (e.state.sighted === true) {
+          const prevSp = (e.state.bossSpecialT as number | undefined) ?? activePhase.specialCooldown * 0.6;
+          e.state.bossSpecialT = Math.max(0, prevSp - dt);
+        }
+      }
+      const speed = profile.speed * ((e.state.speedMul as number | undefined) ?? 1) * (activePhase?.speedMul ?? 1);
       // A still-disguised trojan is a planted pickup: it neither spots the
       // player nor moves until the reveal path flips revealedTrojan.
       const disguisedActive = profile.disguised === true && e.state.revealedTrojan !== true;
@@ -587,10 +883,16 @@ export function updateEntities(
             ? dist < 12 && Math.random() < Math.max(0.08, 0.35 - dist * 0.02)
             : dist < (profile.range ?? 0.95) + 0.1;
           if (((e.state.reaction as number) <= 0) && inAttackRange) {
+            const useSpecial = activePhase !== null && ((e.state.bossSpecialT as number | undefined) ?? 1) <= 0;
+            const wuDur = useSpecial
+              ? activePhase.telegraphDur
+              : profile.windup * (activePhase?.windupMul ?? 1);
             e.state.mode = 'windup';
-            e.state.windupDur = profile.windup;
+            e.state.windupDur = wuDur;
             e.state.windupT = 0;
-            hooks.onWindup(e, profile.windup);
+            e.state.bossPendingSpecial = useSpecial ? activePhase.special : undefined;
+            e.state.bossTelegraph = useSpecial ? activePhase.telegraphLabel : '';
+            hooks.onWindup(e, wuDur);
             currentMode = 'windup';
           }
         }
@@ -657,23 +959,117 @@ export function updateEntities(
             const aimDx = (grudge ? grudge.x : player.x) - e.x;
             const aimDy = (grudge ? grudge.y : player.y) - e.y;
             const baseAngle = Math.atan2(aimDy, aimDx);
-            const count = Math.max(1, profile.spreadCount ?? 1);
-            const spread = profile.spreadAngle ?? 0;
+            const pendingSpecial = e.state.bossPendingSpecial as BossSpecialKind | undefined;
+            e.state.bossPendingSpecial = undefined;
+            e.state.bossTelegraph = '';
             const projDmg = Math.round(profile.damage * ((e.state.dmgMul as number | undefined) ?? 1));
-            for (let b = 0; b < count; b++) {
-              const offset = count === 1 ? 0 : -spread / 2 + (spread * b) / (count - 1);
-              const ang = baseAngle + offset;
-              hooks.onFire(e, {
-                x: e.x,
-                y: e.y,
-                dx: Math.cos(ang),
-                dy: Math.sin(ang),
-                speed: profile.projectileSpeed ?? 5,
-                range: 16,
-                source: `enemy:${e.def.id}`,
-                hostile: true,
-                damage: projDmg,
-              });
+            const fireVolley = (count: number, spread: number, speedBonus = 0, dmgScale = 1) => {
+              const dmg = Math.max(1, Math.round(projDmg * dmgScale));
+              for (let b = 0; b < count; b++) {
+                const offset = count === 1 ? 0 : -spread / 2 + (spread * b) / (count - 1);
+                const ang = baseAngle + offset;
+                hooks.onFire(e, {
+                  x: e.x,
+                  y: e.y,
+                  dx: Math.cos(ang),
+                  dy: Math.sin(ang),
+                  speed: (profile.projectileSpeed ?? 5) + speedBonus,
+                  range: 16,
+                  source: `enemy:${e.def.id}`,
+                  hostile: true,
+                  damage: dmg,
+                });
+              }
+            };
+            if (pendingSpecial && activePhase) {
+              e.state.bossSpecialT = activePhase.specialCooldown;
+              if (pendingSpecial === 'ring-burst') {
+                const count = Math.max(6, activePhase.specialCount ?? 8);
+                const dmg = Math.max(1, Math.round(projDmg * 0.85));
+                for (let b = 0; b < count; b++) {
+                  const ang = baseAngle + (b * Math.PI * 2) / count;
+                  hooks.onFire(e, {
+                    x: e.x,
+                    y: e.y,
+                    dx: Math.cos(ang),
+                    dy: Math.sin(ang),
+                    speed: (profile.projectileSpeed ?? 5) * 0.95,
+                    range: 16,
+                    source: `enemy:${e.def.id}`,
+                    hostile: true,
+                    damage: dmg,
+                  });
+                }
+              } else if (pendingSpecial === 'beam-sweep') {
+                const count = Math.max(5, activePhase.specialCount ?? 7);
+                fireVolley(count, 0.72, 0.8, 0.85);
+              } else if (pendingSpecial === 'lockdown-seal') {
+                const seal = pickSealTarget(e, entities, map, player);
+                if (seal) {
+                  const extra = (e.state.extraSeals as SealTarget[] | undefined) ?? [];
+                  if (!e.state.seal) e.state.seal = seal;
+                  else extra.push(seal);
+                  e.state.extraSeals = extra;
+                  if (seal.kind === 'entity') {
+                    const t = entities.find((o) => o.def.id === seal.id);
+                    if (t) t.state.sealedBy = e.def.id;
+                  }
+                  hooks.onSeal?.(e, seal);
+                  hooks.onNotice?.(e, `${e.def.inspect?.label ?? 'BOSS'} encrypted ${seal.kind === 'door' ? 'an arena door' : 'a console'}!`);
+                }
+                fireVolley(activePhase.specialCount ?? 5, 0.44, 0, 0.9);
+              } else if (pendingSpecial === 'summon' && activePhase.summonThreat) {
+                const spawned = (e.state.bossSummons as number | undefined) ?? 0;
+                const budget = Math.min(activePhase.summonCount ?? 1, Math.max(0, BOSS_SUMMON_MAX - spawned));
+                for (let s = 0; s < budget; s++) {
+                  const spot = findSpawnSpot(e, map, player);
+                  if (!spot) break;
+                  const threat = activePhase.summonThreat;
+                  const mHp = threat === 'wiper' ? 5 : threat === 'botnet' ? 3 : 2;
+                  const copy: Entity = {
+                    def: {
+                      id: `${e.def.id}-minion-${spawned + s + 1}`,
+                      kind: 'enemy',
+                      x: spot.x,
+                      y: spot.y,
+                      sprite: threat,
+                      threat,
+                      ai: 'chase',
+                      hp: mHp,
+                      infected: true,
+                      tags: ['malware'],
+                    },
+                    x: spot.x,
+                    y: spot.y,
+                    alive: true,
+                    infected: true,
+                    hp: mHp,
+                    state: {
+                      speedMul: e.state.speedMul,
+                      dmgMul: e.state.dmgMul,
+                      skillDmg: e.state.skillDmg,
+                      aggro: e.state.aggro,
+                      maxHp: mHp,
+                      aggroed: true,
+                      mode: 'chase',
+                      spawnGrace: 0.75,
+                      sighted: true,
+                      propT: 1e9,
+                      propN: WORM_PROPAGATE_MAX,
+                    },
+                  };
+                  entities.push(copy);
+                  e.state.bossSummons = ((e.state.bossSummons as number | undefined) ?? 0) + 1;
+                  hooks.onSpawn?.(copy);
+                }
+                fireVolley(activePhase.spreadCount, activePhase.spreadAngle);
+              } else {
+                fireVolley(activePhase.spreadCount, activePhase.spreadAngle);
+              }
+            } else {
+              const count = Math.max(1, activePhase?.spreadCount ?? profile.spreadCount ?? 1);
+              const spread = activePhase?.spreadAngle ?? profile.spreadAngle ?? 0;
+              fireVolley(count, spread);
             }
           } else if (dist < (profile.range ?? 0.95) + 0.25) {
             if (grudge) hooks.onEnemyMelee?.(e, grudge, meleeDmg);
@@ -696,6 +1092,8 @@ export function updateEntities(
         e.state.recoverT = recoverT;
         if (recoverT <= 0) e.state.mode = 'chase';
       } else if (currentMode === 'pain') {
+        e.state.bossTelegraph = '';
+        e.state.bossPendingSpecial = undefined;
         const painT = ((e.state.painT as number | undefined) ?? 0) - dt;
         e.state.painT = painT;
         if (painT <= 0) e.state.mode = 'chase';

@@ -85,6 +85,8 @@ const THREAT_BLOOD: Record<string, [number, number, number]> = {
   wiper: [1, 0.25, 0.12],
   'boss-locker': [1, 0.65, 0.12],
   'boss-ghostledger': [0.85, 0.22, 1],
+  'boss-phish': [0.22, 0.95, 0.55],
+  'boss-zeroday': [1, 0.35, 0.12],
 };
 const bloodOf = (e: Entity): [number, number, number] =>
   THREAT_BLOOD[e.def.threat ?? e.def.sprite] ?? [1, 0.28, 0.08];
@@ -565,7 +567,7 @@ class Game {
     this.audio.startMusic('briefing');
     // warm the mission's tier on the worker so Deploy hits a cached buffer
     this.audio.prefetchMusic(musicTierForMission(m.id, m.difficulty));
-    if (m.entities.some((e) => e.threat === 'boss-locker' || e.threat === 'boss-ghostledger')) {
+    if (m.entities.some((e) => ENEMY_PROFILES[e.threat ?? e.sprite]?.boss)) {
       this.audio.prefetchMusic('boss');
     }
     this.setScreen('briefing', screens.briefing(
@@ -1132,12 +1134,20 @@ class Game {
               name:
                 activeBoss.def.inspect?.label ??
                 (activeBoss.def.sprite === 'boss-ghostledger'
-                  ? 'GHOSTLEDGER CORE'
+                  ? 'GHOSTLEDGER C2 CORE'
                   : activeBoss.def.sprite === 'boss-locker'
                     ? 'LOCKER OVERLORD'
-                    : activeBoss.def.sprite.toUpperCase()),
+                    : activeBoss.def.sprite === 'boss-phish'
+                      ? 'VISHING BROKER'
+                      : activeBoss.def.sprite === 'boss-zeroday'
+                        ? 'CVE-0DAY EXPLOIT'
+                        : activeBoss.def.sprite.toUpperCase()),
               hp: activeBoss.hp,
               maxHp: Math.max(activeBoss.hp, (activeBoss.state.maxHp as number | undefined) ?? activeBoss.def.hp ?? 100),
+              phase: (activeBoss.state.bossPhase as number | undefined) ?? 1,
+              phaseCount: (activeBoss.state.bossPhaseCount as number | undefined) ?? 1,
+              phaseLabel: (activeBoss.state.bossPhaseLabel as string | undefined) ?? '',
+              telegraph: (activeBoss.state.bossTelegraph as string | undefined) || null,
             }
           : null,
         ammo: ars.ammoFor(),
@@ -1364,9 +1374,11 @@ class Game {
       },
       onNotice: (e, text) => {
         const key = e.def.threat ?? e.def.sprite;
-        if (this.noticedThreats.has(key)) return;
-        this.noticedThreats.add(key);
-        this.hud.pushMessage(text, 'warn');
+        const isBoss = ENEMY_PROFILES[key]?.boss === true;
+        const dedupKey = isBoss ? `${key}:${text}` : key;
+        if (this.noticedThreats.has(dedupKey)) return;
+        this.noticedThreats.add(dedupKey);
+        this.hud.pushMessage(text, isBoss ? 'bad' : 'warn');
       },
       wormCopyBudget: this.wormBudget,
     });
@@ -1469,14 +1481,14 @@ class Game {
     const bossEngaged = runtime.entities.some((e) =>
       e.alive &&
       e.def.kind === 'enemy' &&
-      (e.def.threat === 'boss-locker' || e.def.threat === 'boss-ghostledger') &&
+      ENEMY_PROFILES[e.def.threat ?? e.def.sprite]?.boss === true &&
       ['chase', 'windup', 'recover', 'pain'].includes(String(e.state.mode)),
     );
     const activeTier = this.audio.activeMusicTier();
     if (bossEngaged && activeTier !== 'boss' && activeTier !== 'rick') {
       this.audio.startMusic('boss');
     } else if (!bossEngaged && activeTier === 'boss' && !runtime.entities.some((e) =>
-      e.alive && (e.def.threat === 'boss-locker' || e.def.threat === 'boss-ghostledger'),
+      e.alive && ENEMY_PROFILES[e.def.threat ?? e.def.sprite]?.boss === true,
     )) {
       this.audio.startMusic(musicTierForMission(runtime.mission.id, runtime.mission.difficulty));
     }

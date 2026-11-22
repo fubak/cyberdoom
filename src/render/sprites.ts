@@ -682,57 +682,178 @@ const wiperModel: Model = (pose) => {
   return out;
 };
 
-/** Boss: GHOSTLEDGER LOCKER — towering gold/crimson armored vault padlock juggernaut (M09). */
+/** Boss: LOCKER OVERLORD — bespoke armored vault-padlock titan with shackle arch & rotary encryption cannons (M09). */
 const bossLockerModel: Model = (pose) => {
-  const out = ransomModel(pose);
+  const out: Prim[] = [];
   if (pose.kind === 'dead') {
-    out.push(box([0, 9, 0], [18, 3, 12], '#d49a2a'));
+    out.push(box([0, 5, 0], [21, 4.5, 16], '#2e2216'));
+    out.push(box([0, 8.5, 2], [14, 3, 10], '#b8821e'));
+    out.push(ell([0, 10, 4], [7, 2.5, 5], '#ff5820', { glow: true }));
     return out;
   }
+  const ph = pose.kind === 'walk' ? (pose.k / 4) * Math.PI * 2 : 0;
+  const bob = Math.abs(Math.sin(ph)) * 1.8;
   const atk = pose.kind === 'attack' ? (pose.k === 0 ? -1 : 1) : 0;
-  // heavy gilded shoulder spikes + twin encryption cannon pods + crown crest
+  const pain = pose.kind === 'pain';
+  // hydraulic vault legs with gilded knee plates
   for (const sx of [-1, 1]) {
-    out.push(box([sx * 20, 44, 0], [6.5, 8, 7], '#b8821e'));
-    out.push(ell([sx * 21, 36, atk === 1 ? 14 : 9], [4.2, 4.2, 4.2], atk === 1 ? '#ffff80' : '#ff3820', { glow: true }));
+    const stride = Math.sin(ph + (sx > 0 ? Math.PI : 0)) * 4.8;
+    limb(out, [sx * 9.5, 23 + bob, 0], [sx * 10.5, 11.5, stride * 0.5], 4.0, '#2a221c');
+    out.push(box([sx * 10.5, 12.5, stride * 0.5 + 3], [3.8, 3.2, 2.2], '#d49a2a'));
+    limb(out, [sx * 10.5, 11.5, stride * 0.5], [sx * 11, 2.5, stride], 3.8, '#3b2e22');
+    out.push(box([sx * 11, 2, stride + 2.2], [5.2, 2.4, 6.5], '#1c1612'));
   }
-  out.push(box([0, 62, 0], [12, 4.5, 5], '#e0a82e'));
-  out.push(ell([0, 64, 3.5], [3.2, 3.2, 2.5], '#ff3020', { glow: true }));
+  // ribbed vault-chassis torso + recessed glowing keyhole cipher core
+  out.push(box([0, 36 + bob, 0], [18, 14, 12], '#2c231b'));
+  out.push(box([0, 36 + bob, 8.5], [14.5, 11, 4], '#a8761c'));
+  for (let r = -1; r <= 1; r++) {
+    out.push(box([0, 36 + r * 4 + bob, 10.5], [12.5, 1.2, 1.5], '#3d2d18'));
+  }
+  // keyhole core (circular top + vertical slot)
+  out.push(ell([0, 39 + bob, 11.8], [4.2, 4.2, 2.2], atk === 1 ? '#fff8a0' : '#ff4020', { glow: true }));
+  out.push(box([0, 33.5 + bob, 11.8], [2.2, 4.2, 2.0], atk === 1 ? '#fff080' : '#ff6820', { glow: true }));
+  // padlock shackle arch curving over the head
+  for (const sx of [-1, 1]) {
+    limb(out, [sx * 13, 49 + bob, 0], [sx * 12, 62 + bob, 0], 2.8, '#c8c0b4');
+    limb(out, [sx * 12, 62 + bob, 0], [sx * 5, 67 + bob, 0], 2.6, '#d8d0c4');
+  }
+  limb(out, [-5, 67 + bob, 0], [5, 67 + bob, 0], 2.6, '#e2dacd');
+  // armored visor helm inside the shackle
+  out.push(box([0, 54 + bob + (pain ? 1.5 : 0), 1], [7.5, 6.2, 7.2], '#3a2c1e'));
+  out.push(box([0, 54.5 + bob, 7.6], [5.8, 1.8, 1.6], atk === 1 ? '#ffffff' : '#ff2e18', { glow: true }));
+  // heavy shoulder bunkers & rotary encryption cannon arms
+  for (const sx of [-1, 1]) {
+    out.push(box([sx * 20, 45 + bob, 0], [6.2, 7.2, 7.2], '#b8821e'));
+    out.push(box([sx * 20, 50 + bob, 3.5], [4.0, 2.0, 2.2], '#ff5a20', { glow: true }));
+    const armZ = atk === 1 ? 15 : atk === -1 ? -3 : 7;
+    limb(out, [sx * 19, 39 + bob, 1], [sx * 20.5, 30 + bob, armZ], 3.5, '#35281c');
+    out.push(box([sx * 20.5, 30 + bob, armZ + 2], [4.2, 4.2, 4.8], '#8c6218'));
+    out.push(ell([sx * 20.5, 30 + bob, armZ + 6], [3.6, 3.6, 3.2], atk === 1 ? '#ffff90' : '#ff4818', { glow: true }));
+  }
   return out;
 };
 
-/** Boss: GHOSTLEDGER C2 CORE — colossal Cyberdemon-scale monolith with crown & twin plasma emitters (M12). */
+/** Boss: GHOSTLEDGER C2 CORE — colossal Cyberdemon-scale monolith with fiber conduits, triple crown & twin plasma emitters (M12). */
 const bossGhostledgerModel: Model = (pose) => {
   const out: Prim[] = [];
   if (pose.kind === 'dead') {
     out.push(box([0, 5, 0], [22, 5, 18], '#181024'));
-    out.push(ell([0, 8, 2], [11, 3.5, 9], '#d020ff', { glow: true }));
+    out.push(box([0, 8, 1], [15, 3, 12], '#2c1848'));
+    out.push(ell([0, 9.5, 3], [10, 3.2, 8], '#d020ff', { glow: true }));
     return out;
   }
   const ph = pose.kind === 'walk' ? (pose.k / 4) * Math.PI * 2 : 0;
   const bob = Math.abs(Math.sin(ph)) * 2.2;
   const atk = pose.kind === 'attack' ? (pose.k === 0 ? -1 : 1) : 0;
-  // cybernetic legs
+  const pain = pose.kind === 'pain';
+  // cybernetic articulated legs with knee exhaust vents
   for (const sx of [-1, 1]) {
     const stride = Math.sin(ph + (sx > 0 ? Math.PI : 0)) * 5.5;
     limb(out, [sx * 10, 24 + bob, 0], [sx * 11, 12, stride * 0.5], 4.4, '#1b142a');
+    out.push(ell([sx * 11, 12.5, stride * 0.5 + 3.5], [2.4, 2.0, 1.8], '#a830ff', { glow: true }));
     limb(out, [sx * 11, 12, stride * 0.5], [sx * 12, 2.5, stride], 4.0, '#2c2044');
     out.push(box([sx * 12, 2, stride + 2.5], [5.5, 2.5, 7], '#120d1c'));
   }
-  // obsidian server-monolith torso + violet/crimson reactor core
+  // obsidian server-monolith torso + ribbed armor + violet/crimson reactor core
   out.push(box([0, 38 + bob, 0], [19, 15, 13], '#1c1230'));
-  out.push(box([0, 38 + bob, 9], [12, 10, 4], '#381e5c'));
-  out.push(ell([0, 38 + bob, 11.5], [7.2, 6.2, 3.2], atk === 1 ? '#ffffff' : '#ff2860', { glow: true }));
-  // horned C2 crown head
-  out.push(ell([0, 55 + bob, 1], [9.5, 8.5, 9], '#2a1a45'));
+  out.push(box([0, 38 + bob, 9], [13.5, 11.5, 4], '#381e5c'));
+  for (let r = -1; r <= 1; r++) {
+    out.push(box([0, 38 + r * 4.5 + bob, 10.8], [12, 1.1, 1.4], '#140c22'));
+  }
+  out.push(ell([0, 38 + bob, 11.8], [6.8, 5.8, 3.2], atk === 1 ? '#ffffff' : '#ff2860', { glow: true }));
+  out.push(ell([0, 38 + bob, 13.4], [3.2, 2.8, 1.6], atk === 1 ? '#ffe080' : '#ff90b0', { glow: true }));
+  // triple-horned C2 crown head + glowing optic array
+  out.push(ell([0, 55 + bob + (pain ? 2 : 0), 1], [9.2, 8.2, 8.8], '#2a1a45'));
+  limb(out, [0, 61 + bob, 1], [0, 70 + bob, 3], 2.2, '#e2c8ff');
+  out.push(ell([0, 57 + bob, 9.2], [2.2, 1.8, 1.6], '#c840ff', { glow: true }));
   for (const sx of [-1, 1]) {
     limb(out, [sx * 7, 59 + bob, 1], [sx * 17, 68 + bob, 5], 2.5, '#d0b8ff');
-    out.push(ell([sx * 3.8, 56 + bob, 8.5], [2.3, 1.5, 1.8], '#ff3060', { glow: true }));
-    // twin shoulder plasma racks + arm cannons
+    out.push(ell([sx * 4.2, 55 + bob, 8.5], [2.2, 1.4, 1.6], '#ff3060', { glow: true }));
+    // fiber-optic conduit cables from torso to shoulder racks
+    limb(out, [sx * 13, 44 + bob, 5], [sx * 19, 49 + bob, 2], 1.5, '#c840ff', { glow: true });
+    // twin shoulder plasma racks + dual-barrel arm cannons
     out.push(box([sx * 21, 47 + bob, -1], [6.5, 7.5, 7.5], '#3d2466'));
-    out.push(ell([sx * 21, 52 + bob, 4], [3.0, 3.0, 3.0], '#c840ff', { glow: true }));
+    out.push(ell([sx * 21, 52 + bob, 4], [3.2, 3.2, 3.0], '#c840ff', { glow: true }));
     const armZ = atk === 1 ? 16 : atk === -1 ? -3 : 8;
     limb(out, [sx * 20, 40 + bob, 1], [sx * 21, 31 + bob, armZ], 3.8, '#281844');
-    out.push(ell([sx * 21, 31 + bob, armZ + 3.5], [4.5, 4.5, 4.5], atk === 1 ? '#fff080' : '#ff2860', { glow: true }));
+    out.push(box([sx * 21, 31 + bob, armZ + 1.5], [4.2, 4.8, 4.5], '#462872'));
+    out.push(ell([sx * 21, 31 + bob, armZ + 5], [4.4, 4.4, 4.2], atk === 1 ? '#fff080' : '#ff2860', { glow: true }));
+  }
+  return out;
+};
+
+/** Boss: VISHING BROKER — Episode 1 climax cybernetic signal-phantom with parabolic comms horns & credential siphon arms (M04). */
+const bossPhishModel: Model = (pose) => {
+  const out: Prim[] = [];
+  if (pose.kind === 'dead') {
+    out.push(box([0, 4.5, 0], [18, 4, 14], '#102420'));
+    out.push(ell([0, 7.5, 2], [9, 2.5, 7], '#28e080', { glow: true }));
+    return out;
+  }
+  const ph = pose.kind === 'walk' ? (pose.k / 4) * Math.PI * 2 : 0;
+  const bob = Math.sin(ph) * 2.4;
+  const atk = pose.kind === 'attack' ? (pose.k === 0 ? -1 : 1) : 0;
+  const pain = pose.kind === 'pain';
+  // hovering signal-cloak lower chassis + data-stream skirt fins
+  out.push(ell([0, 16 + bob, 0], [12, 13, 10], '#122a24'));
+  for (const sx of [-1, 1]) {
+    limb(out, [sx * 7, 22 + bob, 0], [sx * 10, 6 + bob * 0.5, sx * 2], 3.0, '#183d33');
+    out.push(ell([sx * 9, 10 + bob, 5], [2.0, 4.0, 2.0], '#20d878', { glow: true }));
+  }
+  // tall armored signal-tower torso + glowing credential matrix chest
+  out.push(box([0, 36 + bob, 0], [14, 13, 10], '#16342c'));
+  out.push(box([0, 36 + bob, 7.5], [10, 9.5, 3.2], '#225244'));
+  out.push(ell([0, 37 + bob, 9.8], [5.4, 4.8, 2.4], atk === 1 ? '#fff690' : '#28f088', { glow: true }));
+  // hooded headset head + twin parabolic comms antennas
+  out.push(ell([0, 53 + bob + (pain ? 2 : 0), 1], [7.8, 7.5, 7.8], '#1c4036'));
+  out.push(box([0, 53.5 + bob, 7.8], [6.2, 2.2, 1.8], atk === 1 ? '#ffffff' : '#ffb830', { glow: true }));
+  for (const sx of [-1, 1]) {
+    limb(out, [sx * 8, 55 + bob, 0], [sx * 16, 67 + bob, 2], 2.0, '#88d8b8');
+    out.push(ell([sx * 16, 68 + bob, 2.5], [3.0, 3.0, 2.5], '#28f088', { glow: true }));
+    // shoulder signal relays & credential-siphon arms
+    out.push(ell([sx * 16, 44 + bob, 0], [5.5, 5.2, 5.5], '#1e4a3d'));
+    const armZ = atk === 1 ? 15 : atk === -1 ? -3 : 7;
+    limb(out, [sx * 16, 40 + bob, 1], [sx * 18, 30 + bob, armZ], 3.0, '#16382e');
+    out.push(ell([sx * 18, 30 + bob, armZ + 3.5], [3.8, 3.8, 3.8], atk === 1 ? '#fff080' : '#30ff90', { glow: true }));
+  }
+  return out;
+};
+
+/** Boss: CVE-0DAY EXPLOIT — Episode 2 climax quadrupedal kernel-spike spider-mech with fractured molten core (M08). */
+const bossZerodayModel: Model = (pose) => {
+  const out: Prim[] = [];
+  if (pose.kind === 'dead') {
+    out.push(box([0, 5, 0], [22, 4.5, 18], '#241214'));
+    out.push(ell([0, 8.5, 2], [10, 3, 8], '#ff4020', { glow: true }));
+    return out;
+  }
+  const ph = pose.kind === 'walk' ? (pose.k / 4) * Math.PI * 2 : 0;
+  const bob = Math.abs(Math.sin(ph)) * 1.8;
+  const atk = pose.kind === 'attack' ? (pose.k === 0 ? -1 : 1) : 0;
+  const pain = pose.kind === 'pain';
+  // four splayed spider-mech legs
+  for (const sx of [-1, 1]) {
+    for (const sz of [-1, 1]) {
+      const stride = Math.sin(ph + (sx * sz > 0 ? Math.PI : 0)) * 4.5;
+      limb(out, [sx * 11, 24 + bob, sz * 6], [sx * 19, 15 + bob, sz * 9 + stride * 0.4], 3.0, '#2a161a');
+      limb(out, [sx * 19, 15 + bob, sz * 9 + stride * 0.4], [sx * 21, 2.5, sz * 11 + stride], 2.6, '#441f24');
+      out.push(ell([sx * 19, 15 + bob, sz * 9 + stride * 0.4], [2.2, 2.2, 2.2], '#ff5828', { glow: true }));
+    }
+  }
+  // jagged armored kernel carapace + fractured glowing heap-spray core
+  out.push(ell([0, 33 + bob, 0], [17, 12, 14], '#2c1518'));
+  out.push(box([0, 33 + bob, 9.5], [12, 8.5, 4], '#4a1d22'));
+  out.push(ell([0, 33 + bob, 12.2], [6.6, 5.2, 2.8], atk === 1 ? '#ffffff' : '#ff3818', { glow: true }));
+  // dorsal hex-blade crest + optic cluster
+  out.push(ell([0, 48 + bob + (pain ? 2 : 0), 2], [9.0, 6.8, 8.5], '#3b181e'));
+  limb(out, [0, 53 + bob, 0], [0, 66 + bob, -2], 2.8, '#ff5028', { glow: true });
+  for (const sx of [-1, 1]) {
+    limb(out, [sx * 7, 50 + bob, 0], [sx * 16, 61 + bob, 3], 2.4, '#d8c0b8');
+    out.push(ell([sx * 3.8, 48 + bob, 8.8], [2.2, 1.6, 1.5], '#ffe040', { glow: true }));
+    // twin dorsal spike-cannons
+    const armZ = atk === 1 ? 16 : atk === -1 ? -2 : 9;
+    limb(out, [sx * 15, 38 + bob, 2], [sx * 17, 34 + bob, armZ], 3.4, '#4e2026');
+    out.push(ell([sx * 17, 34 + bob, armZ + 4], [4.0, 4.0, 4.0], atk === 1 ? '#fff280' : '#ff4820', { glow: true }));
   }
   return out;
 };
@@ -761,6 +882,8 @@ export const spriteModels = {
   wiper: wiperModel,
   'boss-locker': bossLockerModel,
   'boss-ghostledger': bossGhostledgerModel,
+  'boss-phish': bossPhishModel,
+  'boss-zeroday': bossZerodayModel,
 };
 
 export function scaleModel(prims: Prim[]): Prim[] {
@@ -1271,8 +1394,10 @@ export function buildSprites(jobs = false): void {
   makeMonster('rat', 1.45, ratModel, { floor: 1.55, gain: 2.7, gib: [0.7, 0.9, 0.3] });
   makeMonster('botnet', 1.38, botnetModel, { floor: 1.45, gain: 2.7, gib: [0.25, 0.85, 1.0] });
   makeMonster('wiper', 1.62, wiperModel, { floor: 1.4, gain: 2.7, gib: [1.0, 0.32, 0.15] });
-  makeMonster('boss-locker', 1.88, bossLockerModel, { floor: 1.4, gain: 2.75, gib: [1.0, 0.65, 0.12] });
-  makeMonster('boss-ghostledger', 2.05, bossGhostledgerModel, { floor: 1.45, gain: 2.8, gib: [0.85, 0.2, 1.0] });
+  makeMonster('boss-locker', 1.92, bossLockerModel, { floor: 1.45, gain: 2.8, gib: [1.0, 0.65, 0.12] });
+  makeMonster('boss-ghostledger', 2.08, bossGhostledgerModel, { floor: 1.48, gain: 2.85, gib: [0.85, 0.2, 1.0] });
+  makeMonster('boss-phish', 1.78, bossPhishModel, { floor: 1.45, gain: 2.75, gib: [0.2, 0.95, 0.55] });
+  makeMonster('boss-zeroday', 1.86, bossZerodayModel, { floor: 1.45, gain: 2.8, gib: [1.0, 0.35, 0.15] });
 
   makeSet('workstation', 64, 64, 0.82, 'static', [{ key: 'idle', draw: workstation('clean', 0) }]);
   makeSet('workstation-infected', 64, 64, 0.82, 'flicker', [
