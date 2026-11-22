@@ -30,6 +30,7 @@ describe('settings persistence', () => {
       sfxVol: 0,
       musicVol: 1,
       viewBob: false,
+      skill: 'analyst',
     });
   });
 
@@ -62,9 +63,21 @@ describe('settings persistence', () => {
       getItem: (key: string) => values.get(key) ?? null,
       setItem: (key: string, value: string) => { values.set(key, value); },
     };
-    const settings = { sensitivity: 1.5, sfxVol: 0.4, musicVol: 0.15, viewBob: false };
+    const settings = {
+      sensitivity: 1.5,
+      sfxVol: 0.4,
+      musicVol: 0.15,
+      viewBob: false,
+      skill: 'commander' as const,
+    };
     saveSettings(settings, storage);
     expect(loadSettings(storage)).toEqual(settings);
+  });
+
+  it('falls back to analyst for an invalid skill id', () => {
+    expect(loadSettings(reader({
+      'cyberdoom-settings': JSON.stringify({ ...DEFAULT_SETTINGS, skill: 'expert' }),
+    })).skill).toBe('analyst');
   });
 
   it('swallows storage errors when saving', () => {

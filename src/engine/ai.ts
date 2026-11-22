@@ -256,6 +256,11 @@ function runMalwareMechanics(
             alive: true,
             infected: e.infected,
             state: {
+              speedMul: e.state.speedMul,
+              dmgMul: e.state.dmgMul,
+              skillDmg: e.state.skillDmg,
+              aggro: e.state.aggro,
+              maxHp: e.state.maxHp,
               aggroed: true,
               mode: 'chase',
               spawnGrace: 0.75,
@@ -626,11 +631,14 @@ export function updateEntities(
         const windupT = ((e.state.windupT as number | undefined) ?? 0) + dt;
         e.state.windupT = windupT;
         if (windupT >= (e.state.windupDur as number)) {
-          // melee lethality scales with the mission's difficulty dial (speedMul),
-          // so late-mission melee drains faster while ranged damage stays flat
+          // Melee damage uses the mission's speed dial and the selected skill.
           const meleeDmg = Math.max(
             1,
-            Math.round(profile.damage * ((e.state.speedMul as number | undefined) ?? 1)),
+            Math.round(
+              profile.damage *
+              ((e.state.speedMul as number | undefined) ?? 1) *
+              ((e.state.skillDmg as number | undefined) ?? 1),
+            ),
           );
           if (profile.logicBomb) {
             if (dist <= (profile.range ?? 2.2)) hooks.onMelee(e, meleeDmg);

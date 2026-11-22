@@ -1,3 +1,26 @@
+export type SkillId = 'trainee' | 'junior' | 'analyst' | 'senior' | 'commander';
+
+export interface Skill {
+  id: SkillId;
+  label: string;
+  dmg: number;
+  speed: number;
+  hpBonus: number;
+  pickup: number;
+}
+
+export const SKILLS: Skill[] = [
+  { id: 'trainee', label: 'TRAINEE', dmg: 0.5, speed: 0.85, hpBonus: 0, pickup: 2 },
+  { id: 'junior', label: 'JUNIOR ANALYST', dmg: 0.75, speed: 0.93, hpBonus: 0, pickup: 1.5 },
+  { id: 'analyst', label: 'ANALYST', dmg: 1, speed: 1, hpBonus: 0, pickup: 1 },
+  { id: 'senior', label: 'SENIOR ANALYST', dmg: 1.25, speed: 1.07, hpBonus: 0, pickup: 0.75 },
+  { id: 'commander', label: 'INCIDENT COMMANDER', dmg: 1.5, speed: 1.15, hpBonus: 1, pickup: 0.5 },
+];
+
+export function skillById(id: string): Skill {
+  return SKILLS.find((skill) => skill.id === id) ?? SKILLS.find((skill) => skill.id === 'analyst')!;
+}
+
 /** LEVELS: expected threat count for the campaign arc (grows with mission difficulty). */
 export function encounterBudget(d: number): number {
   return Math.ceil(6 * Math.pow(1.14, d - 1));
@@ -9,8 +32,8 @@ export function encounterBudget(d: number): number {
  * d1 stays at base stats; d12 gives +5 hp, x1.55 speed and x1.66 ranged damage.
  * `aggro` is the sight radius in tiles and is capped at ~10 so un-sighted
  * enemies never detect the player across half the map (spawn-safety rule).
- * `dmgMul` scales ranged (projectile) damage only — melee cadence/damage is
- * owned by the feel tuning so the two-worm kill-time floor stays intact.
+ * `dmgMul` scales ranged (projectile) damage only; melee damage uses speedMul
+ * and the selected skill modifier.
  */
 export function difficultyScale(d: number): {
   hpBonus: number;
