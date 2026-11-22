@@ -1,4 +1,4 @@
-import { measureBig, measureText } from '../render/font';
+import { ellipsizeWords, measureBig, measureText, wrapText } from '../render/font';
 import { BASE_H, BASE_STATUS, BASE_W } from '../render/res';
 
 /**
@@ -81,8 +81,22 @@ export interface BarLayoutInput {
   got?: { k: number; slot: number; blink: boolean } | null;
   /** Doom RES table rows (max 4 shown). */
   resources: { label: string; cur: number; max: number; owned: boolean; active: boolean }[];
-  objectives: { done: boolean; failed: boolean }[];
+  objectives: { text?: string; done: boolean; failed: boolean; progress?: number; target?: number }[];
   progress?: { done: number; total: number; failed: boolean };
+}
+
+/** Fit an objective string into up to 3 tiny lines inside `P_AMMO`. */
+export function fitPanelObjective(text: string, maxW = P_AMMO[1] - 6): string[] {
+  const maxCols = Math.max(4, Math.floor((maxW + 1) / 4));
+  const raw = text.toUpperCase().trim();
+  const lines = wrapText(raw, maxCols, 3);
+  return lines.map((line, i) => {
+    let s = line;
+    const truncated = i === lines.length - 1 && lines.join(' ').length < raw.length;
+    if (truncated) s = ellipsizeWords(s, maxCols);
+    while (s.length > 1 && measureText(s, 'tiny') > maxW) s = s.slice(0, -1);
+    return s;
+  });
 }
 
 export function statusBarText(o: BarLayoutInput, pulse: boolean): BarText[] {
@@ -105,12 +119,27 @@ export function statusBarText(o: BarLayoutInput, pulse: boolean): BarText[] {
   centered(`${hp}%`, P_INT, by + 5, 'bigfat', crit && pulse ? RED_HOT : RED);
   label(crit && !pulse ? 'CRITICAL' : 'INTEGRITY', P_INT, by + 20, crit ? '#ff5a3a' : undefined!);
 
-  // AMMO / bandwidth.
+  // AMMO / bandwidth — unlimited tools replace the old READY cell with the active objective.
   const rr = o.resources.find((r) => r.active);
   const low =
     o.ammo !== null && (o.ammo === 0 || (!!rr && rr.max > 0 && o.ammo <= Math.max(1, Math.floor(rr.max * 0.25))));
   if (o.ammo === null) {
-    label(o.ready ? 'READY' : 'BUSY', P_AMMO, by + 20, o.ready ? '#5aff6a' : '#ffc030');
+    const failedObj = o.progress?.failed ?? o.objectives.some((x) => x.failed);
+    const activeObj = o.objectives.find((x) => !x.done && !x.failed && x.text);
+    const hasNamed = o.objectives.some((x) => !!x.text);
+    if (failedObj && hasNamed) {
+      label('FAILED', P_AMMO, by + 12, '#ff5a3a');
+    } else if (activeObj?.text) {
+      const lines = fitPanelObjective(activeObj.text);
+      const startY = by + (lines.length === 1 ? 13 : lines.length === 2 ? 9 : 6);
+      lines.forEach((line, i) => {
+        push(line, 'tiny', P_AMMO[0] + 3, startY + i * 7, '#a8f0ff');
+      });
+    } else if (hasNamed) {
+      label('ALL DONE', P_AMMO, by + 12, '#5aff6a');
+    } else {
+      label(o.ready ? 'READY' : 'BUSY', P_AMMO, by + 20, o.ready ? '#5aff6a' : '#ffc030');
+    }
   } else {
     centered(`${o.ammo}`, P_AMMO, by + 5, 'bigfat', low ? (pulse ? RED_HOT : RED) : AMBER);
     label((rr ? rr.label : o.ammoName).toUpperCase().slice(0, 6), P_AMMO, by + 20, low ? '#ff5a3a' : undefined!);
