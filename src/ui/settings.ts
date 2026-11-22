@@ -1,8 +1,11 @@
+import { SKILLS, type SkillId } from '../missions/difficulty';
+
 export interface Settings {
   sensitivity: number;
   sfxVol: number;
   musicVol: number;
   viewBob: boolean;
+  skill: SkillId;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -10,6 +13,7 @@ export const DEFAULT_SETTINGS: Settings = {
   sfxVol: 1,
   musicVol: 0.7,
   viewBob: true,
+  skill: 'analyst',
 };
 
 export const SENS_STEPS = [0.5, 0.75, 1, 1.25, 1.5, 2, 3] as const;
@@ -31,6 +35,10 @@ function clamp(value: number, min: number, max: number): number {
 
 function readNumber(value: unknown, fallback: number, min: number, max: number): number {
   return typeof value === 'number' && Number.isFinite(value) ? clamp(value, min, max) : fallback;
+}
+
+function isSkillId(value: unknown): value is SkillId {
+  return typeof value === 'string' && SKILLS.some((skill) => skill.id === value);
 }
 
 export function loadSettings(
@@ -73,6 +81,7 @@ export function loadSettings(
     sfxVol: readNumber(values.sfxVol, defaults.sfxVol, 0, 1),
     musicVol: readNumber(values.musicVol, defaults.musicVol, 0, 1),
     viewBob: typeof values.viewBob === 'boolean' ? values.viewBob : defaults.viewBob,
+    skill: isSkillId(values.skill) ? values.skill : defaults.skill,
   };
 }
 

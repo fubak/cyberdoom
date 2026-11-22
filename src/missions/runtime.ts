@@ -12,7 +12,7 @@ import { objectiveById } from '../content/objectives';
 import type { WorldMap } from '../engine/map';
 import { mfaPending, swipeBadge } from '../tools/badge';
 import { mouseTool } from '../tools/mouse';
-import { difficultyScale } from './difficulty';
+import { difficultyScale, skillById, type Skill, type SkillId } from './difficulty';
 
 /**
  * LEVELS: mission runtime.
@@ -32,6 +32,15 @@ export interface ObjectiveStatus {
   violations: number;
 }
 
+export function scaledPickupGrant(
+  resource: string,
+  amount: number,
+  ammoResources: Pick<ReadonlyMap<string, number>, 'has'>,
+  scale: (amount: number) => number,
+): number {
+  return resource === 'integrity' || ammoResources.has(resource) ? scale(amount) : amount;
+}
+
 type UpdateWorld = {
   player: { x: number; y: number; angle: number; integrity: number };
   map: WorldMap;
@@ -43,6 +52,7 @@ type UpdateWorld = {
 
 export class MissionRuntime {
   readonly mission: Mission;
+  readonly skill: Skill;
   entities: Entity[];
   objectives: ObjectiveStatus[];
   evidence: EvidenceEntry[] = [];
@@ -88,12 +98,13 @@ export class MissionRuntime {
   /** EGGS: secret exit taken — debrief routes to this hidden mission's briefing. */
   nextMission?: string;
 
-  constructor(mission: Mission, private bus: EventBus) {
+  constructor(mission: Mission, private bus: EventBus, skill: SkillId = 'analyst') {
     this.mission = mission;
+    this.skill = skillById(skill);
     this.roles = [...mission.authorizedRoles];
     const scaling = difficultyScale(mission.difficulty);
     this.entities = mission.entities.map((def) => {
-      const hp = (def.hp ?? 1) + (def.kind === 'enemy' ? scaling.hpBonus : 0);
+      const hp = (def.hp ?? 1) + (def.kind === 'enemy' ? scaling.hpBonus + this.skill.hpBonus : 0);
       this.initialHp.set(def.id, hp);
       this.initialInfected.set(def.id, def.infected ?? false);
       return {
@@ -105,8 +116,9 @@ export class MissionRuntime {
         infected: def.infected ?? false,
         state: def.kind === 'enemy'
           ? {
-              speedMul: scaling.speedMul,
-              dmgMul: scaling.dmgMul,
+              speedMul: scaling.speedMul * this.skill.speed,
+              dmgMul: scaling.dmgMul * this.skill.dmg,
+              skillDmg: this.skill.dmg,
               aggro: scaling.aggro,
               maxHp: hp,
               // Opening grace: mission-start enemies cannot aggro for ~3 s
@@ -219,6 +231,10 @@ export class MissionRuntime {
     if (this.roles.includes(role)) return;
     this.roles.push(role);
     this.message(`Access granted: ${role.toUpperCase()}`, 'good');
+  }
+
+  pickupAmount(n: number): number {
+    return Math.max(1, Math.round(n * this.skill.pickup));
   }
 
   revokeRole(role: string): void {

@@ -1,5 +1,6 @@
 import { h, bigButton } from './briefing';
 import { nextStep, SENS_STEPS, type Settings } from './settings';
+import { skillById } from '../missions/difficulty';
 
 const VOLUME_STEPS = [1, 0.7, 0.4, 0.15, 0];
 
@@ -80,6 +81,7 @@ export function pauseMenu(actions: {
     'CLICK TO LOOK  ·  LMB USE TOOL  ·  E / SPACE INTERACT',
     '1-8 / WHEEL / Q SWITCH TOOL',
     'TAB OBJECTIVES  ·  M MAP  ·  L EVIDENCE LOG',
+    `SKILL: ${skillById(settings.skill).label}`,
     'ESC PAUSES, OR STEPS BACK THROUGH MENUS',
   ]) {
     help.appendChild(h('li', '', line));

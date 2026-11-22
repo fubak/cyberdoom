@@ -27,7 +27,7 @@ import { setupPresentation } from './ui/present';
 import { RES } from './render/res';
 import { Dossier } from './ui/dossier';
 import * as screens from './ui/screens';
-import { MissionRuntime } from './missions/runtime';
+import { MissionRuntime, scaledPickupGrant } from './missions/runtime';
 import { mfaPending } from './tools/badge';
 import { Arsenal, ammoUnit } from './tools/arsenal';
 import { bindAudio } from './tools/sfx';
@@ -403,12 +403,16 @@ class Game {
     // Secret payoffs: runtime emits the grant; apply it like a floor pickup and
     // say what was found so every secret visibly pays off.
     this.bus.on('grant-item', ({ resource, amount }) => {
+      const runtime = this.runtime;
+      const scaledAmount = runtime
+        ? scaledPickupGrant(resource, amount, this.arsenal.ammo, (n) => runtime.pickupAmount(n))
+        : amount;
       let text: string;
       if (resource === 'integrity') {
-        if (this.player) this.player.integrity = Math.min(100, this.player.integrity + amount);
-        text = `PICKED UP ${amount} INTEGRITY.`;
+        if (this.player) this.player.integrity = Math.min(100, this.player.integrity + scaledAmount);
+        text = `PICKED UP ${scaledAmount} INTEGRITY.`;
       } else {
-        text = this.arsenal.grant(resource, amount);
+        text = this.arsenal.grant(resource, scaledAmount);
       }
       this.audio.sfx('pickup', this.player ? { x: this.player.x, y: this.player.y } : {});
       this.hud.pushPickup(text);
@@ -507,7 +511,16 @@ class Game {
     this.audio.startMusic('briefing');
     // warm the mission's tier on the worker so Deploy hits a cached buffer
     this.audio.prefetchMusic(musicTierFor(m.difficulty));
-    this.setScreen('briefing', screens.briefing(m, () => this.deploy(id), () => this.showMissionSelect()));
+    this.setScreen('briefing', screens.briefing(
+      m,
+      () => this.deploy(id),
+      () => this.showMissionSelect(),
+      (skill) => {
+        this.settings = { ...this.settings, skill };
+        saveSettings(this.settings);
+      },
+      this.settings.skill,
+    ));
     // warm the WebGL hand-bake path during briefing: the first bake carries
     // a one-time renderer/shader init that must not land inside deploy→play
     this.scheduleIdle(() => {
@@ -803,7 +816,7 @@ class Game {
     const prep = this.prepared && this.prepared.id === id ? this.prepared : null;
     this.prepared = null; // prep is consumed; a retry re-runs the synchronous path
     this.map = prep?.map ?? new WorldMap(mission.map);
-    this.runtime = new MissionRuntime(mission, this.bus);
+    this.runtime = new MissionRuntime(mission, this.bus, this.settings.skill);
     this.dossier.reset();
     const sp = mission.map.spawn;
     this.player = new Player(sp.x, sp.y, sp.angle);
@@ -1229,14 +1242,20 @@ class Game {
       if (Math.hypot(e.x - p.x, e.y - p.y) < 0.6) {
         e.alive = false;
         const { resource, amount } = e.def.grants;
+        const scaledAmount = scaledPickupGrant(
+          resource,
+          amount,
+          this.arsenal.ammo,
+          (n) => runtime.pickupAmount(n),
+        );
         let text: string;
         if (resource === 'integrity') {
-          p.integrity = Math.min(100, p.integrity + amount);
-          text = `PICKED UP ${amount} INTEGRITY.`;
+          p.integrity = Math.min(100, p.integrity + scaledAmount);
+          text = `PICKED UP ${scaledAmount} INTEGRITY.`;
         } else if (resource.startsWith('role:')) {
           text = `Access granted: ${resource.slice(5).toUpperCase()}`;
         } else {
-          text = this.arsenal.grant(resource, amount);
+          text = this.arsenal.grant(resource, scaledAmount);
         }
         this.bus.emit('pickup', { entityId: e.def.id });
         this.hud.pushPickup(text);

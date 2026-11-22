@@ -153,6 +153,22 @@ describe('new threat profiles', () => {
     expect(onWindup).toHaveBeenCalledWith(rootkit, 0.5);
     expect(onMelee).toHaveBeenCalledWith(rootkit, 12);
   });
+
+  it('scales melee damage by skillDmg', () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    const map = new WorldMap(mapDef);
+    const rootkit = enemy('rootkit-skilled', 'rootkit', 2.5, 2.5, 3);
+    rootkit.state.skillDmg = 1.5;
+    rootkit.state.speedMul = 1;
+    const player = new Player(3.2, 2.5, 0);
+    const onMelee = vi.fn();
+
+    for (let i = 0; i < 100 && onMelee.mock.calls.length === 0; i++) {
+      updateEntities([rootkit], map, player, 0.025, hooks({ onMelee }));
+    }
+    expect(onMelee).toHaveBeenCalledWith(rootkit, 18);
+    vi.restoreAllMocks();
+  });
 });
 
 describe('combat telegraph and drain floors', () => {
@@ -207,6 +223,11 @@ describe('malware-type mechanics (SY0-701 2.4)', () => {
     vi.spyOn(Math, 'random').mockReturnValue(0.5);
     const map = new WorldMap(mapDef);
     const worm = enemy('w1', 'worm', 6.5, 2.5, 2);
+    worm.state.speedMul = 1.15;
+    worm.state.dmgMul = 1.5;
+    worm.state.skillDmg = 1.5;
+    worm.state.aggro = 8;
+    worm.state.maxHp = 3;
     const player = new Player(2.5, 2.5, 0);
     const onSpawn = vi.fn();
     const onNotice = vi.fn();
@@ -224,6 +245,14 @@ describe('malware-type mechanics (SY0-701 2.4)', () => {
     expect(copy.def.id).toBe('w1-c1');
     expect(copy.alive).toBe(true);
     expect(copy.def.tags).toEqual([]);
+    expect(copy.hp).toBe(3);
+    expect(copy.state).toMatchObject({
+      speedMul: 1.15,
+      dmgMul: 1.5,
+      skillDmg: 1.5,
+      aggro: 8,
+      maxHp: 3,
+    });
 
     for (let i = 0; i < 400 && entities.length < 3; i++) updateEntities(entities, map, player, 0.025, h);
     expect(entities).toHaveLength(3);

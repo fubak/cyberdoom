@@ -4,7 +4,8 @@ import type { Mission } from '../src/core/types';
 import { m03 } from '../src/content/missions/m03-quiet-one';
 import { m08 } from '../src/content/missions/m08-zero-day';
 import { WorldMap } from '../src/engine/map';
-import { MissionRuntime } from '../src/missions/runtime';
+import { difficultyScale } from '../src/missions/difficulty';
+import { MissionRuntime, scaledPickupGrant } from '../src/missions/runtime';
 
 const mapDef = {
   grid: [
@@ -66,6 +67,39 @@ function tick(
 }
 
 describe('MissionRuntime', () => {
+  it('applies the selected skill to enemy health, movement, and ranged damage', () => {
+    const m = mission({
+      difficulty: 8,
+      entities: [{ id: 'worm', kind: 'enemy', x: 2, y: 2, sprite: 'worm', hp: 3 }],
+      missionObjectives: [{ id: 'exit', text: 'Exit', kind: 'reach-exit' }],
+    });
+    const analyst = new MissionRuntime(m, new EventBus(), 'analyst').byId('worm')!;
+    const commander = new MissionRuntime(m, new EventBus(), 'commander').byId('worm')!;
+    const scaling = difficultyScale(m.difficulty);
+
+    expect(commander.hp).toBe(analyst.hp + 1);
+    expect(commander.state.speedMul).toBeCloseTo(scaling.speedMul * 1.15);
+    expect(commander.state.dmgMul).toBeCloseTo(scaling.dmgMul * 1.5);
+    expect(commander.state.skillDmg).toBe(1.5);
+  });
+
+  it('scales consumable pickup grants only', () => {
+    const m = mission({ missionObjectives: [] });
+    const trainee = new MissionRuntime(m, new EventBus(), 'trainee');
+    const commander = new MissionRuntime(m, new EventBus(), 'commander');
+    const ammoResources = new Map([['usb-charge', 0]]);
+    const apply = (resource: string, amount: number, runtime: MissionRuntime) =>
+      scaledPickupGrant(resource, amount, ammoResources, (n) => runtime.pickupAmount(n));
+
+    expect(apply('usb-charge', 8, trainee)).toBe(16);
+    expect(apply('integrity', 8, trainee)).toBe(16);
+    expect(apply('usb-charge', 8, commander)).toBe(4);
+    expect(apply('usb-charge', 1, commander)).toBe(1);
+    for (const resource of ['tool:edr', 'role:ITOPS', 'key:vault']) {
+      expect(apply(resource, 2, trainee), resource).toBe(2);
+    }
+  });
+
   it('spawns dormant entities and opens trigger doors', () => {
     const m = mission({
       entities: [{

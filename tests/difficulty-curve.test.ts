@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { missionRegistry } from '../src/content/missions';
-import { difficultyScale, encounterBudget } from '../src/missions/difficulty';
+import { difficultyScale, encounterBudget, SKILLS, skillById } from '../src/missions/difficulty';
 
 // Campaign order is the mission id sequence (m01..m12), which matches the
 // intended difficulty arc.
@@ -43,6 +43,24 @@ describe('difficulty curve', () => {
     // Encounter budgets never shrink down the arc.
     const budgets = ordered.map((m) => encounterBudget(m.difficulty));
     expect(budgets).toEqual([...budgets].sort((a, b) => a - b));
+  });
+
+  it('orders skill levels monotonically with analyst as the identity baseline', () => {
+    expect(SKILLS.map((skill) => skill.id)).toEqual([
+      'trainee', 'junior', 'analyst', 'senior', 'commander',
+    ]);
+    for (let i = 1; i < SKILLS.length; i++) {
+      expect(SKILLS[i]!.dmg).toBeGreaterThanOrEqual(SKILLS[i - 1]!.dmg);
+      expect(SKILLS[i]!.speed).toBeGreaterThanOrEqual(SKILLS[i - 1]!.speed);
+      expect(SKILLS[i]!.pickup).toBeLessThanOrEqual(SKILLS[i - 1]!.pickup);
+    }
+    expect(skillById('analyst')).toMatchObject({
+      dmg: 1,
+      speed: 1,
+      hpBonus: 0,
+      pickup: 1,
+    });
+    expect(skillById('unknown')).toEqual(skillById('analyst'));
   });
 
   it('gives every mission an opening skirmish and at least one telegraphed ambush', () => {

@@ -24,6 +24,7 @@ import {
   pixelSafe,
   type PLine,
 } from './debrief-layout';
+import { SKILLS, skillById, type SkillId } from '../missions/difficulty';
 import './curriculum.css';
 
 /**
@@ -70,11 +71,19 @@ const makeCanvas = () => {
   return { canvas, g };
 };
 
-export function briefing(mission: Mission, onGo: () => void, onBack: () => void): HTMLElement {
+export function briefing(
+  mission: Mission,
+  onGo: () => void,
+  onBack: () => void,
+  onSkill?: (next: SkillId) => void,
+  skill: SkillId = 'analyst',
+): HTMLElement {
   const teach = teachingRegistry.get(mission.id);
   const idx = arcIndex(mission.id);
   const orders = teach?.orders ?? mission.missionObjectives.map((o) => ({ text: o.text, objective: '' }));
   const s = h('div', 'screen cd-inter cd-pixel cd-briefing');
+  let selectedSkill = skillById(skill).id;
+  let skillButton: HTMLButtonElement | null = null;
   const kicker = `MISSION ${idx + 1}/${ARC.length} - THREAT LEVEL ${'!'.repeat(Math.max(1, Math.ceil(mission.difficulty / 3)))}`;
   let mode: 'overview' | 'details' = 'overview';
   let page = 0;
@@ -178,8 +187,17 @@ export function briefing(mission: Mission, onGo: () => void, onBack: () => void)
     return canvas;
   };
 
+  const skillLabel = () => `SKILL: ${skillById(selectedSkill).label}  [K]`;
+  const cycleSkill = () => {
+    const index = SKILLS.findIndex((entry) => entry.id === selectedSkill);
+    selectedSkill = SKILLS[(index + 1) % SKILLS.length]!.id;
+    if (skillButton) skillButton.textContent = skillLabel();
+    onSkill?.(selectedSkill);
+  };
+
   const render = () => {
     s.replaceChildren();
+    skillButton = null;
     const pg = h('div', mode === 'details' ? 'cd-briefing-page cd-briefing-details-page' : 'cd-briefing-page');
     pg.appendChild(mode === 'details' ? details() : overview());
     const buttons = h('div', 'cd-brief-actions');
@@ -189,6 +207,10 @@ export function briefing(mission: Mission, onGo: () => void, onBack: () => void)
     if (mode === 'overview') {
       buttons.appendChild(bigButton('DETAILS  [D]', () => { mode = 'details'; page = 0; render(); }, 'cd-btn alt'));
     }
+    skillButton = bigButton(skillLabel(), cycleSkill, 'cd-btn alt');
+    skillButton.type = 'button';
+    skillButton.dataset.menuItem = 'skill';
+    buttons.appendChild(skillButton);
     buttons.appendChild(bigButton('DEPLOY  [ENTER]', onGo));
     pg.appendChild(buttons);
     s.appendChild(pg);
@@ -205,6 +227,9 @@ export function briefing(mission: Mission, onGo: () => void, onBack: () => void)
     } else if (e.key.toLowerCase() === 'd' && mode === 'overview') {
       e.preventDefault();
       mode = 'details'; page = 0; render();
+    } else if (e.key.toLowerCase() === 'k') {
+      e.preventDefault();
+      cycleSkill();
     } else if (mode === 'details' && (e.key === 'ArrowRight' || e.key.toLowerCase() === 'a')) {
       e.preventDefault();
       page = Math.min(page + 1, paginate(detailBlocks()).length - 1);
