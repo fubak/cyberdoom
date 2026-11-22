@@ -1284,6 +1284,172 @@ export function buildSprites(jobs = false): void {
     { key: 'f1', draw: consoleKiosk(1) },
   ]);
 
+  // D3 environmental props — datacenter racks, office life, briefing boards, industrial hazards.
+  makeSet('server-rack', 48, 64, 1.08, 'flicker', [0, 1].map((f) => ({
+    key: `f${f}`,
+    draw: (p: PaintCtx) => {
+      const { g } = p;
+      // Steel 42U cabinet body
+      g.fillStyle = '#181c24';
+      g.fillRect(8, 4, 32, 56);
+      g.fillStyle = '#2d3442';
+      g.fillRect(8, 4, 32, 3);
+      g.fillRect(8, 4, 2, 56);
+      g.fillStyle = '#0d1016';
+      g.fillRect(38, 4, 2, 56);
+      g.fillRect(6, 58, 36, 4);
+      // Blade slots & blinking telemetry LEDs
+      for (let row = 0; row < 8; row++) {
+        const y = 10 + row * 6;
+        g.fillStyle = '#232936';
+        g.fillRect(11, y, 26, 4);
+        g.fillStyle = '#10141c';
+        g.fillRect(13, y + 1, 14, 2);
+        const ledCol = (row + f) % 3 === 0 ? '#32ff8a' : (row + f) % 3 === 1 ? '#28e0ff' : '#ffb830';
+        lit(p, ledCol, 30, y + 1, 2, 2);
+        lit(p, (row + f) % 2 === 0 ? '#28e0ff' : '#32ff8a', 34, y + 1, 2, 2);
+      }
+    },
+  })));
+
+  makeSet('office-plant', 48, 64, 0.92, 'static', [{
+    key: 'idle',
+    draw: (p: PaintCtx) => {
+      const { g } = p;
+      // Brushed metal planter pot
+      g.fillStyle = '#6c7482';
+      g.fillRect(15, 42, 18, 18);
+      g.fillStyle = '#8c96a6';
+      g.fillRect(14, 40, 20, 4);
+      g.fillStyle = '#484e58';
+      g.fillRect(29, 42, 4, 18);
+      // Soil + trunk
+      g.fillStyle = '#3b2818';
+      g.fillRect(16, 40, 16, 2);
+      g.fillStyle = '#5a3a20';
+      g.fillRect(23, 24, 3, 17);
+      // Layered foliage fronds
+      const leaves: [number, number, number, number, string][] = [
+        [10, 18, 14, 8, '#1e6e36'], [24, 16, 15, 8, '#1e6e36'],
+        [14, 10, 20, 10, '#2a8c44'], [8, 24, 13, 7, '#247c3c'],
+        [26, 23, 14, 7, '#247c3c'], [17, 6, 14, 8, '#3aa854'],
+        [12, 14, 10, 6, '#3aa854'], [26, 12, 10, 6, '#48bc62'],
+      ];
+      for (const [x, y, w, h, c] of leaves) {
+        g.fillStyle = c;
+        g.fillRect(x, y, w, h);
+      }
+    },
+  }]);
+
+  makeSet('water-cooler', 32, 64, 0.9, 'static', [{
+    key: 'idle',
+    draw: (p: PaintCtx) => {
+      const { g } = p;
+      // White dispenser pedestal
+      g.fillStyle = '#d4d8df';
+      g.fillRect(8, 28, 16, 32);
+      g.fillStyle = '#eff2f7';
+      g.fillRect(8, 28, 4, 32);
+      g.fillStyle = '#9aa2b0';
+      g.fillRect(21, 28, 3, 32);
+      // Spigot recess & hot/cold taps
+      g.fillStyle = '#2a303a';
+      g.fillRect(11, 34, 10, 9);
+      g.fillStyle = '#2890ff';
+      g.fillRect(12, 35, 3, 3);
+      g.fillStyle = '#e03830';
+      g.fillRect(17, 35, 3, 3);
+      // Translucent blue 5-gallon water jug
+      g.fillStyle = '#5ab8f0';
+      g.fillRect(9, 10, 14, 18);
+      g.fillStyle = '#96dcff';
+      g.fillRect(11, 12, 4, 13);
+      g.fillStyle = '#2d82c4';
+      g.fillRect(19, 11, 4, 16);
+      g.fillStyle = '#2068a8';
+      g.fillRect(13, 7, 6, 4);
+    },
+  }]);
+
+  makeSet('whiteboard', 64, 64, 1.0, 'static', [{
+    key: 'idle',
+    draw: (p: PaintCtx) => {
+      const { g } = p;
+      // Wheeled aluminum stand legs
+      g.fillStyle = '#505866';
+      g.fillRect(10, 44, 3, 16);
+      g.fillRect(51, 44, 3, 16);
+      g.fillRect(6, 58, 12, 3);
+      g.fillRect(46, 58, 12, 3);
+      // Frame + dry-erase board
+      g.fillStyle = '#8b94a2';
+      g.fillRect(6, 8, 52, 36);
+      g.fillStyle = '#e6eaf0';
+      g.fillRect(8, 10, 48, 32);
+      // Network topology diagram + sticky notes
+      g.fillStyle = '#2860b8';
+      g.fillRect(12, 14, 10, 7);
+      g.fillRect(38, 14, 12, 7);
+      g.fillStyle = '#c83028';
+      g.fillRect(22, 17, 16, 2);
+      g.fillRect(24, 26, 16, 8);
+      g.fillStyle = '#f2d040';
+      g.fillRect(11, 28, 7, 7);
+      g.fillStyle = '#ff7060';
+      g.fillRect(46, 28, 7, 7);
+      // Marker tray
+      g.fillStyle = '#606876';
+      g.fillRect(16, 43, 32, 2);
+    },
+  }]);
+
+  makeSet('hazard-barrel', 32, 48, 0.78, 'static', [{
+    key: 'idle',
+    draw: (p: PaintCtx) => {
+      const { g } = p;
+      // Cylindrical steel industrial drum
+      g.fillStyle = '#383e48';
+      g.fillRect(6, 10, 20, 34);
+      g.fillStyle = '#545c6a';
+      g.fillRect(6, 10, 6, 34);
+      g.fillStyle = '#20242c';
+      g.fillRect(22, 10, 4, 34);
+      // Ribs + lid
+      g.fillStyle = '#687282';
+      g.fillRect(5, 9, 22, 3);
+      g.fillRect(5, 21, 22, 2);
+      g.fillRect(5, 34, 22, 2);
+      g.fillRect(5, 42, 22, 3);
+      // Yellow/black hazard stripe band
+      g.fillStyle = '#e8b820';
+      g.fillRect(7, 23, 18, 10);
+      g.fillStyle = '#181a1e';
+      for (let x = 8; x < 24; x += 6) {
+        g.fillRect(x, 23, 3, 5);
+        g.fillRect(x + 2, 28, 3, 5);
+      }
+    },
+  }]);
+
+  makeSet('warning-beacon', 32, 48, 0.72, 'flicker', [0, 1].map((f) => ({
+    key: `f${f}`,
+    draw: (p: PaintCtx) => {
+      const { g } = p;
+      // Steel tripod base + pole
+      g.fillStyle = '#48505c';
+      g.fillRect(14, 20, 4, 20);
+      g.fillRect(7, 38, 18, 5);
+      g.fillStyle = '#282d36';
+      g.fillRect(5, 42, 22, 3);
+      // Rotating strobe dome
+      g.fillStyle = '#2a2024';
+      g.fillRect(10, 18, 12, 4);
+      lit(p, f ? '#ff3828' : '#ffb020', 11, 8, 10, 10);
+      lit(p, '#fff2b0', f ? 12 : 16, 10, 4, 5);
+    },
+  })));
+
   personSet('npc-m', {
     shirt: '#3a6ad0', shirtDark: '#24448a', pants: '#2a2c34', skin: '#e0a878', hair: '#4a3020',
     longHair: false, lanyard: '#2458d8',
