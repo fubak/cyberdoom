@@ -229,7 +229,7 @@ export const m03: Mission = {
   script: {
     par: 240,
     triggers: [
-      { id: 'logic-bomb', after: ['evidence'], spawn: ['bomb-a', 'bomb-b', 'bomb-rw'], kind: 'bad',
+      { id: 'logic-bomb', after: ['evidence'], unless: ['report'], spawn: ['bomb-a', 'bomb-b', 'bomb-rw'], kind: 'bad',
         message: 'A scheduled task fired in the records wing: the insider left a logic bomb!' },
       { id: 'lockdown-lift', after: ['report'], openDoors: ['exit-door'], kind: 'good',
         message: 'Case filed: lockdown lifted, exit open.' },

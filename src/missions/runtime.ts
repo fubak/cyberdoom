@@ -9,6 +9,7 @@ import type {
 } from '../core/types';
 import { callFeedback, callOptions, requiredCall } from '../content/calls';
 import { deriveFrameworkTags } from '../content/frameworks';
+import { RADIO_LINES, formatRadioLine } from '../content/radio';
 import { objectiveById } from '../content/objectives';
 import type { WorldMap } from '../engine/map';
 import { completeMfa, refuseMfaPrompt } from '../tools/mfa';
@@ -92,6 +93,7 @@ export class MissionRuntime {
   private doorAccessScored = new Set<string>();
   private warnedOutOfRoleDoorAt = new Map<string, number>();
   private grantApplied = new Set<string>();
+  private radioSent = new Set<'start' | 'midpoint' | 'ready'>();
   private hasToken = false;
   private outbreakElapsed = 0;
   private lastExitMessage = -Infinity;
@@ -960,6 +962,7 @@ export class MissionRuntime {
     this.updateTriggers(w);
     this.updateSecrets(w);
     this.updateOutbreak(dt);
+    this.updateRadio();
   }
 
   private updateVisited(dt: number, w: UpdateWorld): void {
@@ -1032,6 +1035,10 @@ export class MissionRuntime {
       const area = trigger.area;
       const inside = !area || (tx >= area[0] && tx <= area[2] && ty >= area[1] && ty <= area[3]);
       if (!inside || trigger.after?.some((id) => !this.obj(id)?.done)) continue;
+      if (trigger.unless?.some((id) => this.obj(id)?.done)) {
+        this.firedTriggers.add(trigger.id);
+        continue;
+      }
       this.firedTriggers.add(trigger.id);
       if (trigger.message) this.message(trigger.message, trigger.kind ?? 'info');
       for (const id of trigger.spawn ?? []) {
@@ -1111,6 +1118,28 @@ export class MissionRuntime {
       this.counted.get(objective.def.id)?.delete(e.def.id);
     }
     this.message(outbreak.message, 'bad');
+  }
+
+  private updateRadio(): void {
+    const lines = RADIO_LINES[this.mission.id];
+    if (!lines) return;
+    if (!this.radioSent.has('start') && this.elapsed >= 4) {
+      this.radioSent.add('start');
+      this.message(formatRadioLine(lines.start), 'info');
+      return;
+    }
+    const core = this.objectives.filter(
+      (o) => o.def.kind !== 'avoid' && o.def.kind !== 'reach-exit',
+    );
+    if (!core.length) return;
+    const doneCount = core.filter((o) => o.done).length;
+    if (!this.radioSent.has('midpoint') && doneCount >= 1 && doneCount < core.length) {
+      this.radioSent.add('midpoint');
+      this.message(formatRadioLine(lines.midpoint), 'info');
+    } else if (!this.radioSent.has('ready') && doneCount === core.length) {
+      this.radioSent.add('ready');
+      this.message(formatRadioLine(lines.ready), 'good');
+    }
   }
 
   private appendWinTally(): void {

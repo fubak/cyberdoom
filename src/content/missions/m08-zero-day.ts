@@ -468,6 +468,7 @@ export const m08: Mission = {
       {
         id: 'dmz-exploit-traffic',
         area: [2, 2, 17, 11],
+        unless: ['remediate'],
         spawn: ['trojan-a', 'trojan-b'],
         kind: 'warn',
         message: 'Exploit traffic: bots are hammering the unpatched storefront!',
@@ -475,6 +476,7 @@ export const m08: Mission = {
       {
         id: 'server-room-worms',
         area: [22, 2, 37, 11],
+        unless: ['harden'],
         spawn: ['server-worm-a', 'server-worm-b'],
         kind: 'warn',
         message: 'Dormant worms wake in the server room!',

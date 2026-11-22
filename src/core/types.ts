@@ -272,6 +272,8 @@ export interface MissionTrigger {
   area?: TileRect;
   /** Fires once all these objective ids are done (and `area` entered, if set). */
   after?: string[];
+  /** Suppresses the trigger if any of these security-control objectives are already done. */
+  unless?: string[];
   message?: string;
   kind?: 'info' | 'warn' | 'good' | 'bad';
   /** Dormant entity ids to activate. */
