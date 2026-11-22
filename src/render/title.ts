@@ -249,7 +249,12 @@ function paintTitlePic(): HTMLCanvasElement {
   return c;
 }
 
-export function mountTitle(host: HTMLElement, onStart: () => void, about: string[]): void {
+export function mountTitle(
+  host: HTMLElement,
+  onStart: () => void,
+  about: string[],
+  onMissions?: () => void,
+): void {
   const c = document.createElement('canvas');
   c.width = VIEW_W;
   c.height = VIEW_H;
@@ -294,12 +299,13 @@ export function mountTitle(host: HTMLElement, onStart: () => void, about: string
   let showAbout = false;
   const items = [
     { id: 'new-game', label: 'New Game', action: onStart },
+    ...(onMissions ? [{ id: 'mission-select', label: 'Missions', action: onMissions }] : []),
     { id: 'read-this', label: 'Read This!', action: () => (showAbout = true) },
   ];
   let t = 0;
   let last = performance.now();
   const menuX = 30;
-  const menuY = 156;
+  const menuY = onMissions ? 142 : 156;
   const rowH = 14;
 
   const choose = () => {
@@ -414,9 +420,10 @@ export function mountTitle(host: HTMLElement, onStart: () => void, about: string
     const px = 5;
     const lw = logo.length * 6 * px - px;
     paintLogo(g, logo, Math.round((W - lw) / 2), 12, px);
-    const sub = 'SECURITY+ FIELD TRAINING';
+    const sub = 'MERIDIAN FREIGHT INCIDENT RESPONSE';
     drawChunky(g, sub, Math.round((W - measureChunky(sub)) / 2), 52, ['#fff0a0', '#ffd040', '#d08a10']);
-    drawText(g, 'COMPTIA SY0-701', W - 6 - measureText('COMPTIA SY0-701', 'tiny'), H - 8, '#c8a878', 'tiny', '#000');
+    const tag = 'GHOSTLEDGER CAMPAIGN // SY0-701';
+    drawText(g, tag, W - 6 - measureText(tag, 'tiny'), H - 8, '#c8a878', 'tiny', '#000');
 
     if (showAbout) {
       const bw = 300;

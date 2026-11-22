@@ -119,27 +119,21 @@ export function statusBarText(o: BarLayoutInput, pulse: boolean): BarText[] {
   centered(`${hp}%`, P_INT, by + 5, 'bigfat', crit && pulse ? RED_HOT : RED);
   label(crit && !pulse ? 'CRITICAL' : 'INTEGRITY', P_INT, by + 20, crit ? '#ff5a3a' : undefined!);
 
-  // AMMO / bandwidth — unlimited tools replace the old READY cell with the active objective.
+  // AMMO / bandwidth — unlimited tools show a crisp tool-mode/status readout instead of truncated objective text.
   const rr = o.resources.find((r) => r.active);
   const low =
     o.ammo !== null && (o.ammo === 0 || (!!rr && rr.max > 0 && o.ammo <= Math.max(1, Math.floor(rr.max * 0.25))));
   if (o.ammo === null) {
-    const failedObj = o.progress?.failed ?? o.objectives.some((x) => x.failed);
-    const activeObj = o.objectives.find((x) => !x.done && !x.failed && x.text);
-    const hasNamed = o.objectives.some((x) => !!x.text);
-    if (failedObj && hasNamed) {
-      label('FAILED', P_AMMO, by + 12, '#ff5a3a');
-    } else if (activeObj?.text) {
-      const lines = fitPanelObjective(activeObj.text);
-      const startY = by + (lines.length === 1 ? 13 : lines.length === 2 ? 9 : 6);
-      lines.forEach((line, i) => {
-        push(line, 'tiny', P_AMMO[0] + 3, startY + i * 7, '#a8f0ff');
-      });
-    } else if (hasNamed) {
-      label('ALL DONE', P_AMMO, by + 12, '#5aff6a');
-    } else {
-      label(o.ready ? 'READY' : 'BUSY', P_AMMO, by + 20, o.ready ? '#5aff6a' : '#ffc030');
-    }
+    const activeToolId = o.tools.find((tt) => tt.slot === o.tool.slot)?.id;
+    const modeLabel =
+      activeToolId === 'keyboard'
+        ? 'CMD MODE'
+        : activeToolId === 'mouse'
+          ? 'INSPECT'
+          : activeToolId === 'nettap'
+            ? 'NET TAP'
+            : 'READY';
+    label(o.ready ? modeLabel : 'BUSY', P_AMMO, by + 20, o.ready ? '#5aff6a' : '#ffc030');
   } else {
     centered(`${o.ammo}`, P_AMMO, by + 5, 'bigfat', low ? (pulse ? RED_HOT : RED) : AMBER);
     label((rr ? rr.label : o.ammoName).toUpperCase().slice(0, 6), P_AMMO, by + 20, low ? '#ff5a3a' : undefined!);

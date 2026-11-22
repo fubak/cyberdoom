@@ -123,7 +123,6 @@ export function briefing(
       }
       if (y < 160) y += 4;
     }
-    drawText(g, 'D DETAILS   ENTER DEPLOY   ESC BACK', 22, DB_H - 34, C.orange);
     return canvas;
   };
 
@@ -182,8 +181,9 @@ export function briefing(
     const pages = paginate(detailBlocks());
     const lines = pages[Math.min(page, pages.length - 1)] ?? [];
     lines.forEach((l, i) => drawLine(g, l, DB_BODY_TOP + i * DB_LINE));
-    const foot = pages.length > 1 ? `A/D PAGE ${Math.min(page, pages.length - 1) + 1}/${pages.length}   ESC BACK   ENTER DEPLOY` : 'ESC BACK   ENTER DEPLOY';
-    drawText(g, foot, 22, DB_H - 34, C.orange);
+    if (pages.length > 1) {
+      drawText(g, `A/D PAGE ${Math.min(page, pages.length - 1) + 1}/${pages.length}`, 22, DB_H - 28, C.orange);
+    }
     return canvas;
   };
 

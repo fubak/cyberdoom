@@ -156,6 +156,13 @@ export const keyboardTool: ToolDef = {
     if (e.def.kind === 'workstation' && e.infected && e.state.revealed) {
       return { text: "KILL PROCESS (WON'T CLEAN HOST)", ready: false };
     }
+    if (e.def.kind === 'item' && e.def.grants) {
+      const res = e.def.grants.resource;
+      if ((res === 'armor' || res === 'overclock' || res === 'airgap' || res === 'siem-map') && e.def.inspect?.label) {
+        return { text: `PICK UP: ${e.def.inspect.label.toUpperCase()}`, ready: false };
+      }
+      return { text: 'WALK OVER TO PICK UP', ready: false };
+    }
     return { text: `RUN COMMAND: ${targetNoun(e)}`, ready: true };
   },
 };

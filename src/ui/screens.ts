@@ -1,7 +1,6 @@
 import type { Gender, Mission } from '../core/types';
 import { missionRegistry, teachingRegistry } from '../content/missions';
 import { episodeForMission, realCaseForMission } from '../content/story';
-import { playableCoverageLine } from '../content/curriculum';
 import { objectiveById } from '../content/objectives';
 import { missionRowStates } from '../missions/progress';
 import { mountTitle } from '../render/title';
@@ -20,19 +19,19 @@ function el(tag: string, cls = '', html = ''): HTMLElement {
   return e;
 }
 
-export function titleScreen(onStart: () => void): HTMLElement {
+export function titleScreen(onStart: () => void, onMissions?: () => void): HTMLElement {
   const s = el('div', 'screen title');
   mountTitle(s, onStart, [
-    'A DOOM-STYLE TRAINING GROUND FOR COMPTIA SECURITY+ SY0-701.',
-    'YOUR WEAPONS ARE IT TOOLS: KEYBOARD, MOUSE, USB SCANNER, BADGE,',
-    'NETWORK TAP, EDR, MFA TOKEN, PATCH DISK. FIND MORE IN THE FIELD.',
-    'CLEAN MALWARE. ENFORCE LEAST PRIVILEGE. CATCH THE INSIDER.',
+    'MERIDIAN FREIGHT IS UNDER ATTACK BY GHOSTLEDGER.',
+    'YOUR WEAPONS ARE IR TOOLS: KEYBOARD, MOUSE, USB SCANNER, TAP,',
+    'EDR, PATCH DISK, FIREWALL BLASTER. BADGE & MFA SWIPE AT DOORS.',
+    'CONTAIN MALWARE. ENFORCE LEAST PRIVILEGE. STOP THE BREACH.',
     '',
     'WASD MOVE - MOUSE LOOK - ARROWS TURN - SHIFT RUN',
-    'LMB USE TOOL - E/SPACE INTERACT - 1-8 / WHEEL / Q SELECT TOOL',
+    'LMB USE TOOL - E/SPACE INTERACT - 1-9 / WHEEL / Q SELECT TOOL',
     '',
     'PRESS ANY KEY OR CLICK TO GO BACK',
-  ]);
+  ], onMissions);
   return s;
 }
 
@@ -120,8 +119,12 @@ export function missionSelect(onPick: (id: string) => void, onBack: () => void):
   back.textContent = 'BACK [ESC]';
   back.addEventListener('click', onBack);
   bar.appendChild(back);
+  const missions = missionRegistry.all();
+  const orderedIds = missions.map((m) => m.id);
+  const states = missionRowStates(orderedIds);
+  const clearedCount = orderedIds.filter((id) => states.get(id) === 'cleared').length;
   bar.appendChild(el('h2', '', 'SELECT MISSION'));
-  bar.appendChild(el('div', 'playable-coverage', playableCoverageLine()));
+  bar.appendChild(el('div', 'playable-coverage', `MERIDIAN FREIGHT CAMPAIGN · ${clearedCount}/${orderedIds.length} SECTORS CLEARED`));
   s.appendChild(bar);
 
   const layout = el('div', 'mission-layout');
@@ -130,10 +133,6 @@ export function missionSelect(onPick: (id: string) => void, onBack: () => void):
   layout.appendChild(listWrap);
   layout.appendChild(detail);
   s.appendChild(layout);
-
-  const missions = missionRegistry.all();
-  const orderedIds = missions.map((m) => m.id);
-  const states = missionRowStates(orderedIds);
 
   const renderDetail = (m: Mission) => {
     const card = missionSelectCard(m);

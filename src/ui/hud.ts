@@ -797,27 +797,19 @@ export class Hud {
     const crit = hp > 0 && hp <= 25;
     if (crit) alarmWell(g, P_INT, by, pulse);
 
-    // AMMO / bandwidth art: active-objective CRT well for unlimited tools, alarm well when low
+    // AMMO / bandwidth art: status lamp for unlimited tools, alarm well when low
     const rr = o.resources?.find((x) => x.active);
     const low =
       o.ammo !== null && (o.ammo === 0 || (!!rr && rr.max > 0 && o.ammo <= Math.max(1, Math.floor(rr.max * 0.25))));
     const ready = this.cooldown <= 0.01;
     if (o.ammo === null) {
-      const hasNamed = o.objectives.some((x) => !!x.text);
-      if (hasNamed) {
-        g.fillStyle = '#070c10';
-        g.fillRect(P_AMMO[0] + 2, by + 4, P_AMMO[1] - 4, 24);
-        g.fillStyle = '#1b3544';
-        g.fillRect(P_AMMO[0] + 2, by + 4, P_AMMO[1] - 4, 1);
-      } else {
-        const lx = P_AMMO[0] + 15;
-        g.fillStyle = '#000';
-        g.fillRect(lx, by + 7, 16, 12);
-        g.fillStyle = ready ? '#14a024' : '#5a4008';
-        g.fillRect(lx + 1, by + 8, 14, 10);
-        g.fillStyle = ready ? '#8aff9a' : '#ffa818';
-        g.fillRect(lx + 2, by + 9, 12, 3);
-      }
+      const lx = P_AMMO[0] + 15;
+      g.fillStyle = '#000';
+      g.fillRect(lx, by + 7, 16, 12);
+      g.fillStyle = ready ? '#14a024' : '#5a4008';
+      g.fillRect(lx + 1, by + 8, 14, 10);
+      g.fillStyle = ready ? '#8aff9a' : '#ffa818';
+      g.fillRect(lx + 2, by + 9, 12, 3);
     } else if (low) {
       alarmWell(g, P_AMMO, by, pulse);
     }
