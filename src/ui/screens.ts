@@ -1,5 +1,6 @@
 import type { Gender, Mission } from '../core/types';
 import { missionRegistry, teachingRegistry } from '../content/missions';
+import { episodeForMission, realCaseForMission } from '../content/story';
 import { playableCoverageLine } from '../content/curriculum';
 import { objectiveById } from '../content/objectives';
 import { missionRowStates } from '../missions/progress';
@@ -137,11 +138,18 @@ export function missionSelect(onPick: (id: string) => void, onBack: () => void):
   const renderDetail = (m: Mission) => {
     const card = missionSelectCard(m);
     const state = states.get(m.id) ?? 'locked';
+    const ep = episodeForMission(m.id);
+    const realCase = realCaseForMission(m.id);
     detail.innerHTML = '';
+    if (ep) detail.appendChild(el('div', 'detail-kicker', ep.title));
     detail.appendChild(el('div', 'detail-kicker', `SECTOR INTEL // ${card.code} // THREAT ${card.threatLabel}`));
     detail.appendChild(el('div', 'detail-title', card.title));
     detail.appendChild(el('div', 'detail-tagline', card.tagline));
     detail.appendChild(el('div', 'detail-state', `STATUS: ${state.toUpperCase()}`));
+    if (realCase) {
+      detail.appendChild(el('div', 'detail-kicker', `BASED ON (${realCase.year})`));
+      detail.appendChild(el('div', 'detail-tagline', realCase.name));
+    }
     const head = el('div', 'detail-kicker', 'SY0-701 OBJECTIVES');
     detail.appendChild(head);
     const ul = el('ul', 'detail-objs');

@@ -8,6 +8,7 @@ import {
   recordField,
 } from '../content/curriculum';
 import { missionRegistry, teachingRegistry } from '../content/missions';
+import { episodeIntermissionAfter, realCaseForMission } from '../content/story';
 import type { LossCause } from '../missions/runtime';
 import { failureExplanation } from './failure';
 import { objectiveById } from '../content/objectives';
@@ -795,6 +796,22 @@ export function debrief(opts: {
     };
     const notes: PLine[][] = [];
     if (teach) notes.push([...block('EXAM TIP', C.gold), ...block(teach.examTip, C.white)]);
+    const realCase = realCaseForMission(mission.id);
+    if (realCase) {
+      notes.push([
+        ...block(`WHAT REALLY HAPPENED (${realCase.year})`, C.gold),
+        ...block(realCase.name, C.white),
+        ...block(realCase.summary, C.text),
+        ...block(`SOURCE: ${realCase.source}`, C.dim),
+      ]);
+    }
+    const intermission = opts.won ? episodeIntermissionAfter(mission.id) : undefined;
+    if (intermission) {
+      notes.push([
+        ...block(`${intermission.title} COMPLETE`, C.green),
+        ...block(intermission.intermission, C.white),
+      ]);
+    }
     if (retried) {
       const fixed = retried.filter((it) => !review.includes(`${it.missionId}:${it.q.id}`)).length;
       notes.push(block(`RETRY: ${fixed}/${retried.length} NOW CORRECT. THE GRADE KEEPS FIRST-TRY ANSWERS.`, C.text));
