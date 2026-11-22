@@ -67,6 +67,10 @@ export const VOICE_CAPS: Record<string, number> = {
   'sight-rat': 1,
   'sight-rootkit': 1,
   'sight-logicbomb': 1,
+  'sight-botnet': 1,
+  'sight-wiper': 1,
+  'sight-boss-locker': 1,
+  'sight-boss-ghostledger': 1,
   death: 1,
   kill: 2,
   win: 1,
@@ -91,7 +95,17 @@ export function voiceCapFor(name: string): number {
 }
 
 /** Background-score identity: mission tiers plus the screen beds and the RICKROLL egg. */
-export type MusicTier = 'early' | 'mid' | 'late' | 'rick' | 'title' | 'briefing' | 'debrief';
+export type MusicTier = 'early' | 'stealth' | 'mid' | 'late' | 'boss' | 'rick' | 'title' | 'briefing' | 'debrief';
+
+const STEALTH_MISSIONS = new Set(['m03', 'm04', 'm10', 'm11']);
+
+/** Mission music tier: stealth/audit missions get the covert score, others scale with difficulty. */
+export function musicTierForMission(missionId: string, difficulty: number): MusicTier {
+  if (STEALTH_MISSIONS.has(missionId)) return 'stealth';
+  if (difficulty >= 9) return 'late';
+  if (difficulty >= 5) return 'mid';
+  return 'early';
+}
 
 /** Music-bus send: the score sits ~-18..-20 dB RMS under the sfx bus. */
 const MUSIC_SEND = 1.2;
@@ -141,6 +155,10 @@ export class Audio {
   private sfxInflight = new Set<string>();
   private songInflight = new Set<MusicTier>();
   private stingInflight = new Set<string>();
+
+  activeMusicTier(): MusicTier | null {
+    return this.musicRequested;
+  }
 
   private ensure(): AudioContext | null {
     if (!this.unlocked || this.muted) return null;

@@ -550,8 +550,131 @@ const stingBoss: SongDef = {
   ],
 };
 
+// ---------- STEALTH (m03, m04, m10, m11): covert infiltration & audit tension ----------
+const stealth: SongDef = {
+  bpm: 108,
+  root: 92.5, // F#2
+  bars: 8,
+  tracks: [
+    {
+      inst: 'sub', layer: 'bed', gain: 0.24,
+      bars: [
+        [H(0, 0.55, 32)], [H(0, 0.55, 32)], [H(-2, 0.5, 32)], [H(1, 0.5, 32)],
+      ],
+    },
+    {
+      inst: 'bass', layer: 'bed', gain: 0.34,
+      bars: [
+        [0, null, null, 0, null, 3, null, null, 0, null, null, 0, null, 1, null, null],
+        [0, null, null, 0, null, 3, null, null, -2, null, null, -2, null, 0, null, null],
+        [0, null, null, 0, null, 5, null, null, 3, null, null, 1, null, 0, null, null],
+        [1, null, null, 1, null, 3, null, null, 0, null, -2, null, -1, null, null, null],
+      ],
+    },
+    {
+      inst: 'arp', layer: 'bed', gain: 0.1,
+      bars: [
+        [12, null, 15, null, null, 19, null, 15, 12, null, 13, null, null, 15, null, null],
+        [12, null, 15, null, null, 18, null, 15, 10, null, 12, null, null, 13, null, null],
+      ],
+    },
+    {
+      inst: 'hat', layer: 'bed', gain: 0.1,
+      bars: [[0, null, null, 0, 0, null, null, 0, 0, null, null, 0, 0, null, 0, null]],
+    },
+    // threat: muted industrial guitar pulse + tight snare
+    {
+      inst: 'gtr', layer: 'threat', gain: 0.24,
+      bars: [
+        [0, null, 0, 0, null, 1, null, 0, 0, null, 3, null, 1, 0, null, -1],
+        [0, null, 0, 0, null, 6, null, 5, 3, null, 1, null, 0, null, -2, null],
+      ],
+    },
+    {
+      inst: 'snare', layer: 'threat', gain: 0.35,
+      bars: [[null, null, null, null, 0, null, null, null, null, null, null, null, 0, null, null, 0]],
+    },
+    // combat: alarm-like lead + driving double kick
+    {
+      inst: 'lead', layer: 'combat', gain: 0.15,
+      bars: [
+        [12, null, 13, 15, null, 13, 12, null, 18, null, 15, null, 13, 12, 10, null],
+        [13, null, 12, null, 15, null, 18, 17, 15, null, 13, null, 12, null, 10, null],
+      ],
+    },
+    {
+      inst: 'kick', layer: 'combat', gain: 0.65,
+      bars: [[0, null, null, 0, 0, null, 0, null, 0, null, null, 0, 0, null, 0, 0]],
+    },
+    {
+      inst: 'ohat', layer: 'combat',
+      bars: [[null, null, 0, null, null, null, 0, null, null, null, 0, null, null, null, 0, null]],
+    },
+  ],
+};
+
+// ---------- BOSS (M09 Locker / M12 Ghostledger): relentless cyber-metal ----------
+const boss: SongDef = {
+  bpm: 158,
+  root: 69.3, // C#2
+  bars: 8,
+  tracks: [
+    {
+      inst: 'bass', layer: 'bed', gain: 0.42,
+      bars: [
+        [0, 0, 0, 1, 0, 0, 6, 5, 0, 0, 0, 3, 1, 0, -1, 0],
+        [0, 0, 0, 1, 0, 0, 6, 5, 8, 7, 6, 5, 3, 1, 0, -1],
+        [0, 0, 0, 1, 0, 0, 6, 5, 0, 0, 0, 3, 1, 0, -1, 0],
+        [1, 1, 0, 1, 3, 1, 6, 5, 8, 6, 5, 3, 1, 0, -1, -2],
+      ],
+    },
+    {
+      inst: 'sub', layer: 'bed', gain: 0.22,
+      bars: [[H(0, 0.55, 32)], [H(0, 0.55, 32)], [H(0, 0.55, 32)], [H(1, 0.5, 32)]],
+    },
+    {
+      inst: 'kick', layer: 'bed', gain: 0.78,
+      bars: [[0, null, 0, null, 0, null, 0, 0, 0, null, 0, null, 0, null, 0, 0]],
+    },
+    {
+      inst: 'snare', layer: 'bed', gain: 0.48,
+      bars: [[null, null, null, null, 0, null, null, null, null, null, null, null, 0, null, 0, null]],
+    },
+    // threat: heavy power-chord chug wall
+    {
+      inst: 'gtr', layer: 'threat', gain: 0.28,
+      bars: [
+        [H(0, 1, 2, [7]), 0, 0, H(1, 0.9, 2, [8]), 0, 0, H(6, 0.95, 2, [13]), 5, 0, 0, 0, H(3, 0.9, 2, [10]), 1, 0, -1, 0],
+        [H(0, 1, 2, [7]), 0, 0, H(1, 0.9, 2, [8]), 0, 0, H(6, 0.95, 2, [13]), 5, H(8, 0.9, 2, [15]), 7, 6, 5, 3, 1, 0, -1],
+      ],
+    },
+    {
+      inst: 'hat', layer: 'threat', gain: 0.14,
+      bars: [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]],
+    },
+    // combat: screaming tritone lead + dissonant stabs
+    {
+      inst: 'lead', layer: 'combat', gain: 0.16,
+      bars: [
+        [12, 13, 12, 15, null, 18, 17, 15, 13, 12, 15, 13, 12, 10, 8, 7],
+        [18, null, 17, 15, 18, null, 19, 18, 15, 13, 12, 13, 15, 13, 12, null],
+      ],
+    },
+    {
+      inst: 'stab', layer: 'combat', gain: 0.14,
+      bars: [
+        [H(0, 0.85, 3, [6]), null, null, H(1, 0.8, 3, [7]), null, null, H(6, 0.85, 3, [12]), null, H(0, 0.8, 2, [6])],
+      ],
+    },
+    {
+      inst: 'ohat', layer: 'combat',
+      bars: [[null, null, 0, null, null, null, 0, null, null, null, 0, null, null, null, 0, null]],
+    },
+  ],
+};
+
 export const SONGS: Record<string, SongDef> = {
-  title, briefing, early, mid, late, debrief, rick,
+  title, briefing, early, stealth, mid, late, boss, debrief, rick,
 };
 
 export const STINGS: Record<string, SongDef> = {
