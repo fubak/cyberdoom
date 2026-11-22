@@ -21,13 +21,7 @@ export const m02: Mission = {
   title: 'NEED TO KNOW',
   difficulty: 2,
   objectives: ['4.6', '1.2', '5.6'],
-  briefing:
-    'New floor, first day. Your badge carries the ANALYST role. The doors here use ' +
-    'role-based access control, and every badge attempt, allowed or denied, is logged to your name. ' +
-    'Word is that someone on the floor is handing out "the shared admin password". ' +
-    'Your kit: BADGE (4) presents your credential to a door. MOUSE (2) inspects. ' +
-    'Press E on a person to mark them as a suspect; the security console files the report. ' +
-    'Get across the floor to the exit.',
+  briefing: 'New floor, first day. Your badge carries the ANALYST role. The doors here use role-based access control, and every badge attempt, allowed or denied, is logged to your name. Word is that someone is handing out "the shared admin password". Get across the floor to the exit.',
   authorizedRoles: ['analyst'],
   loadout: ['keyboard', 'mouse', 'usb', 'badge', 'mfa'],
   map: {

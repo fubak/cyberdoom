@@ -46,6 +46,16 @@ export function missionById(id: string): Mission | undefined {
   return missionRegistry.get(id) ?? bonusMissions[id];
 }
 
+export function newToolsFor(missionId: string): string[] {
+  const mission = missionById(missionId);
+  if (!mission) return [];
+  const arc = missionRegistry.all();
+  const index = arc.findIndex((entry) => entry.id === missionId);
+  const earlier = index < 0 ? arc : arc.slice(0, index);
+  const seen = new Set(earlier.flatMap((entry) => entry.loadout ?? []));
+  return (mission.loadout ?? []).filter((id) => !seen.has(id));
+}
+
 export function requireMission(id: string): Mission {
   const m = missionById(id);
   if (!m) throw new Error(`unknown mission ${id}`);

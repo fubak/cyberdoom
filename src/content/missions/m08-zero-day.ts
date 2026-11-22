@@ -10,10 +10,7 @@ export const m08: Mission = {
   title: 'ZERO DAY',
   difficulty: 8,
   objectives: ['2.3', '4.3', '4.1'],
-  briefing:
-    'Exploit chatter on a threat feed names your stack. You have until the next shift to close the holes. ' +
-    'Your kit: MOUSE (2) inspects, KEYBOARD (1) operates consoles and patches, USB SCANNER (3) cleans malware, ' +
-    'BADGE (4) opens doors your role covers, EDR (6) fires a containment pulse that quarantines malware in an area.',
+  briefing: 'Exploit chatter on a threat feed names your stack. You have until the next shift to close the holes.',
   authorizedRoles: ['analyst'],
   loadout: ['keyboard', 'mouse', 'usb', 'badge', 'edr'],
   map: {

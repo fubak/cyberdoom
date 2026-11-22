@@ -19,13 +19,7 @@ export const m01: Mission = {
   title: 'PATCH TUESDAY',
   difficulty: 1,
   objectives: ['2.4', '2.2', '2.5', '3.4', '5.6'],
-  briefing:
-    'Patch Tuesday went wrong. Three workstations on this floor are behaving abnormally, ' +
-    'and a USB stick nobody claims is lying in the corridor. ' +
-    'Your kit: MOUSE (2) inspects whatever is under the crosshair. USB SCANNER (3) fires ' +
-    'endpoint-protection charges that remove malware from a host. KEYBOARD (1) operates whatever ' +
-    'is in front of you; on a device, that means connecting it. Charges are limited. ' +
-    'Work out what is wrong, deal with it, and reach the exit.',
+  briefing: 'Patch Tuesday went wrong. Three workstations on this floor are behaving abnormally, and a USB stick nobody claims is lying in the corridor. Charges are limited. Work out what is wrong, deal with it, and reach the exit.',
   authorizedRoles: ['staff'],
   loadout: ['keyboard', 'mouse', 'usb', 'badge'],
   map: {

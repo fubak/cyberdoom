@@ -23,10 +23,7 @@ export const m09: Mission = {
   title: 'LOCKED OUT',
   difficulty: 9,
   objectives: ['4.8', '3.4', '4.9'],
-briefing:
-    'Ransomware is encrypting the finance VLAN right now. The CFO wants payroll back by morning. ' +
-    'Your kit: MOUSE (2) inspects, KEYBOARD (1) operates consoles, USB SCANNER (3) cleans hosts, ' +
-    'BADGE (4) opens doors your IR role covers.',
+briefing: 'Ransomware is encrypting the finance VLAN right now. The CFO wants payroll back by morning.',
   authorizedRoles: ['analyst', 'ir'],
   loadout: ['keyboard', 'mouse', 'usb', 'badge', 'mfa', 'tap', 'patch'],
   map: {

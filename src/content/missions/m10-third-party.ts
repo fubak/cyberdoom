@@ -31,11 +31,7 @@ export const m10: Mission = {
   title: 'THIRD PARTY',
   difficulty: 10,
   objectives: ['5.3', '5.2', '2.2', '3.1'],
-  briefing:
-    'A new SaaS vendor wants remote access to production next week — and their rep is already ' +
-    'in the meeting room pushing to skip the assessment. Meanwhile a compromised MSP is pushing ' +
-    'an unscheduled update through the trusted RMM channel. MOUSE (2) inspects people and records, ' +
-    'KEYBOARD (1) issues demands and decisions, BADGE (4) opens doors your roles cover.',
+  briefing: 'A new SaaS vendor wants remote access to production next week, and their rep is already in the meeting room pushing to skip the assessment. Meanwhile a compromised MSP is pushing an unscheduled update through the trusted RMM channel.',
   authorizedRoles: ['analyst'],
   loadout: ['keyboard', 'mouse', 'usb', 'badge', 'mfa'],
   map: {
