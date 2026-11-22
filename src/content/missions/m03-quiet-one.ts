@@ -263,7 +263,7 @@ export const m03: Mission = {
       prompt: 'Which observation set is the STRONGEST evidence of an insider exfiltrating data?',
       objectives: ['2.4'],
       options: [
-        { id: 'a', text: 'A developer committing code at 23:40 during release week, all of it to his own repository, three nights running', correct: false, explanation: 'One unusual-hours signal that matches his role and a known deadline. It is innocent until other sources corroborate it.' },
+        { id: 'a', text: 'A developer committing code at 23:40 during release week, all of it to his own team’s repository on the build server', correct: false, explanation: 'One unusual-hours signal that matches his role and a known deadline. It is innocent until other sources corroborate it.' },
         { id: 'b', text: 'An HR specialist opening hundreds of personnel records a day', correct: false, explanation: 'High volume, but within the role baseline, and the data never leaves the HR system. Volume only matters compared with what is normal for the job.' },
         { id: 'c', text: 'An intern who seems nervous and avoids security staff', correct: false, explanation: 'Demeanor is an impression, not a technical indicator. Acting on it leads to false accusations.' },
         { id: 'd', text: 'A 03:12 Sunday badge-in, bulk access to files outside the user\u2019s project, then a USB mass-storage write', correct: true, explanation: 'Three independent signals (physical access, file access outside role, an exfiltration channel) all point the same way. Corroboration is what makes it actionable.' },

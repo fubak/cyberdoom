@@ -253,7 +253,7 @@ export const m02: Mission = {
       prompt: 'What is the BEST way to give the four admins the access they need while fixing the shared-account problem?',
       objectives: ['4.6'],
       options: [
-        { id: 'a', text: 'Keep the shared account but rotate its password every 30 days and have each admin sign a usage log by hand', correct: false, explanation: 'Rotation limits how long a leaked password works, but four people still use one identity, so actions remain unattributable.' },
+        { id: 'a', text: 'Keep the shared account but rotate its password every 30 days and email the new one to all four admins', correct: false, explanation: 'Rotation limits how long a leaked password works, but four people still use one identity, so actions remain unattributable.' },
         { id: 'b', text: 'Named account per admin, rights by role, elevation through PAM (vaulting / just-in-time)', correct: true, explanation: 'Individual accounts restore accounting. RBAC keeps rights matched to the job. PAM issues admin rights only when needed and logs each checkout.' },
         { id: 'c', text: 'Give every admin domain-admin rights on their personal account', correct: false, explanation: 'Named accounts help attribution, but blanket domain-admin breaks least privilege and makes every account a high-value target.' },
         { id: 'd', text: 'Seal the shared password in an envelope in the manager\u2019s desk', correct: false, explanation: 'Break-glass envelopes are for rare emergencies. For daily admin work, the identity is still shared and unattributable.' },
