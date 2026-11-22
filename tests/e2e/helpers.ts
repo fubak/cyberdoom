@@ -14,6 +14,7 @@ export interface CdEntity {
 export interface CdState {
   screen: 'title' | 'character-select' | 'mission-select' | 'briefing' | 'loading' | 'play' | 'debrief';
   paused: boolean;
+  hudMessages: string[];
   mission: string | null;
   x: number | null;
   y: number | null;

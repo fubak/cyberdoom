@@ -82,6 +82,7 @@ export function pauseMenu(actions: {
     '1-8 / WHEEL / Q SWITCH TOOL',
     'TAB OBJECTIVES  ·  M MAP  ·  L EVIDENCE LOG',
     `SKILL: ${skillById(settings.skill).label}`,
+    'F5 QUICKSAVE / F9 QUICKLOAD',
     'ESC PAUSES, OR STEPS BACK THROUGH MENUS',
   ]) {
     help.appendChild(h('li', '', line));

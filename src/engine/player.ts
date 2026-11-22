@@ -17,6 +17,19 @@ export const MOVE = {
   slowTurnTime: 0.17,
 } as const;
 
+export interface PlayerSnapshot {
+  x: number;
+  y: number;
+  angle: number;
+  vx: number;
+  vy: number;
+  integrity: number;
+  hurtT: number;
+  lastHurtFrom: number | undefined;
+  turnDir: number;
+  turnHeld: number;
+}
+
 /**
  * Doom-like player movement: acceleration, friction, momentum, wall sliding.
  * Pure logic — unit-testable without a browser.
@@ -50,6 +63,42 @@ export class Player {
     this.angle = angle;
     this.prevX = x;
     this.prevY = y;
+  }
+
+  snapshot(): PlayerSnapshot {
+    return {
+      x: this.x,
+      y: this.y,
+      angle: this.angle,
+      vx: this.vx,
+      vy: this.vy,
+      integrity: this.integrity,
+      hurtT: this.hurtT,
+      lastHurtFrom: this.lastHurtFrom,
+      turnDir: this.turnDir,
+      turnHeld: this.turnHeld,
+    };
+  }
+
+  restore(snapshot: PlayerSnapshot): void {
+    this.x = snapshot.x;
+    this.y = snapshot.y;
+    this.prevX = snapshot.x;
+    this.prevY = snapshot.y;
+    this.angle = snapshot.angle;
+    this.vx = snapshot.vx;
+    this.vy = snapshot.vy;
+    this.integrity = snapshot.integrity;
+    this.hurtT = snapshot.hurtT;
+    this.lastHurtFrom = snapshot.lastHurtFrom;
+    this.turnDir = snapshot.turnDir;
+    this.turnHeld = snapshot.turnHeld;
+    this.bob = 0;
+    this.t = 0;
+    this.stepReady = false;
+    this.bobAmt = 0;
+    this.bobStopAmt = 0;
+    this.bobStopT = 99;
   }
 
   /**

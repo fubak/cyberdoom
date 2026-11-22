@@ -56,6 +56,12 @@ const PICKUP_NAME: Record<string, [string, string]> = {
 const TICKER_COLS = 52;
 const RES_LABEL: Record<string, string> = { 'usb-charge': 'SCAN', pcap: 'PCAP', 'edr-cell': 'CELL', 'patch-disk': 'DISK' };
 
+export interface ArsenalSnapshot {
+  owned: string[];
+  ammo: [string, number][];
+  currentId: string;
+}
+
 /** Tool-native unit name for an ammo resource ('-1 SCAN', '-1 PCAP', ...). */
 export function ammoUnit(resource: string): string {
   return RES_LABEL[resource] ?? resource.slice(0, 4).toUpperCase();
@@ -117,6 +123,34 @@ export class Arsenal {
     this.windT = -1;
     this.sinceUse = 9;
     this.sinceConfirm = 9;
+    this.face.reset();
+  }
+
+  snapshot(): ArsenalSnapshot {
+    return { owned: [...this.owned], ammo: [...this.ammo], currentId: this.current.id };
+  }
+
+  restore(snapshot: ArsenalSnapshot): void {
+    this.owned.clear();
+    for (const id of snapshot.owned) this.owned.add(id);
+    this.ammo.clear();
+    for (const [resource, amount] of snapshot.ammo) this.ammo.set(resource, amount);
+    this.current = toolRegistry.get(snapshot.currentId) ?? sorted()[0];
+    this.next = null;
+    this.swapT = 0;
+    this.swapPhase = 'none';
+    this.cooldown = 0;
+    this.windT = -1;
+    this.queued = false;
+    this.sinceUse = 9;
+    this.sinceConfirm = 9;
+    this.confirmGood = true;
+    this.time = 0;
+    this.dryMsgT = 0;
+    this.gotT = 9;
+    this.gotSlot = 0;
+    this.pages = [];
+    this.pageT = 0;
     this.face.reset();
   }
 

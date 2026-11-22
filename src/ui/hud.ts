@@ -138,6 +138,10 @@ export class Hud {
     if (this.messages.length > 3) this.messages.shift();
   }
 
+  debugMessages(): string[] {
+    return this.messages.map((message) => message.text);
+  }
+
   /**
    * Pickup lines get their own pinned lane above the ticker: they stay up
    * for ~1.9 s no matter how much chatter lands behind them, so a tool's
