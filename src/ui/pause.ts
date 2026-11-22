@@ -120,7 +120,7 @@ export function pauseMenu(actions: {
       `LMB/${key('fire')} TOOL · ${key('use')} INTERACT`,
       `1-9 / WHEEL / ${key('cycle')} SWITCH TOOL`,
       `TAB OBJECTIVES · ${key('map')} MAP · ${key('log')} LOG`,
-      `F5 SAVE · F9 LOAD · SKILL: ${skillById(settings.skill).label}`,
+      `F5 QUICKSAVE / F9 QUICKLOAD · ${skillById(settings.skill).label}`,
     ]) {
       help.appendChild(h('li', '', line));
     }
