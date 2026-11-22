@@ -387,6 +387,12 @@ export const SFX_DEFS: Record<string, SfxSpec> = {
     nz(1800, 900, 'bandpass', 0.05, 0.55, 0.05, 2),
     osc('triangle', 210, 90, 0.14, 0.5, 0.16),
   ]),
+  'firewall-blast': one(() => [
+    nz(3200, 600, 'lowpass', 0.16, 0.95),
+    osc('sawtooth', 160, 42, 0.18, 0.7),
+    osc('square', 420, 110, 0.09, 0.45, 0.02),
+    nz(2400, 1200, 'bandpass', 0.07, 0.4, 0.14, 2),
+  ]),
   confirm: one(() => [
     osc('square', 1046, 1046, 0.06, 0.25),
     osc('square', 1568, 1568, 0.12, 0.22, 0.06),

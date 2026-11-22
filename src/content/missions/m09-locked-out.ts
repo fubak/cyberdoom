@@ -25,7 +25,7 @@ export const m09: Mission = {
   objectives: ['4.8', '3.4', '4.9'],
 briefing: 'Ransomware is encrypting the finance VLAN right now. The CFO wants payroll back by morning.',
   authorizedRoles: ['analyst', 'ir'],
-  loadout: ['keyboard', 'mouse', 'usb', 'badge', 'mfa', 'tap', 'patch'],
+  loadout: ['keyboard', 'mouse', 'usb', 'badge', 'mfa', 'tap', 'patch', 'firewall'],
   map: {
     grid: [
     'SSSSSSSSSS#####SSSSSSSSSS#####SSSSSSSSSS########',

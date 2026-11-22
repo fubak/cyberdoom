@@ -1113,6 +1113,52 @@ function edrArt(frame: EdrFrame, gender: Gender, skin: SkinTone, detail: string)
   });
 }
 
+function firewallArt(mode: 0 | 1 | 2, gender: Gender, skin: SkinTone): Art {
+  const { jacket, accent, seam, ramp } = vmHandArt(gender, skin);
+  const flash = mode === 2;
+  const kick = mode === 1 ? 4 : mode === 2 ? 2 : 0;
+  return paint(116, 94, 58, (_px, P) => {
+    const shape = (color: string, pts: [number, number][]) => P.poly(pts, color);
+    // dual-rail amber/slate packet-filter blaster chassis in perspective
+    shape('#12151c', [[36, 18 + kick], [80, 18 + kick], [90, 62 + kick], [26, 62 + kick]]);
+    shape('#2a303c', [[38, 20 + kick], [78, 20 + kick], [86, 58 + kick], [30, 58 + kick]]);
+    // twin vent rails
+    shape('#424a5a', [[40, 22 + kick], [54, 22 + kick], [52, 46 + kick], [36, 46 + kick]]);
+    shape('#424a5a', [[62, 22 + kick], [76, 22 + kick], [80, 46 + kick], [64, 46 + kick]]);
+    // glowing amber filter core + heat vents
+    const core = flash ? '#fff4c0' : mode === 1 ? '#ffb840' : '#ff8820';
+    shape(core, [[54, 22 + kick], [62, 22 + kick], [63, 46 + kick], [53, 46 + kick]]);
+    for (let i = 0; i < 4; i++) {
+      const y = 26 + i * 5 + kick;
+      P.rect(41, y, 10, 2, flash ? '#ffe080' : '#ff7018');
+      P.rect(65, y, 10, 2, flash ? '#ffe080' : '#ff7018');
+    }
+    // muzzle burst on impact frame
+    if (flash) {
+      shape('#fff8d0', [[44, 8], [58, 2], [72, 8], [64, 20], [52, 20]]);
+      shape('#ff9030', [[32, 12], [44, 8], [50, 20], [38, 22]]);
+      shape('#ff9030', [[72, 8], [84, 12], [78, 22], [66, 20]]);
+    }
+    // analyst hands gripping both sides + sleeves to bottom
+    const [hi, mid, sh, dp] = ramp;
+    shape(dp, [[16, 54 + kick], [32, 48 + kick], [36, 74], [12, 74]]);
+    shape(mid, [[18, 55 + kick], [31, 50 + kick], [34, 70], [15, 70]]);
+    shape(hi, [[20, 56 + kick], [30, 52 + kick], [31, 60 + kick], [19, 62 + kick]]);
+    shape(dp, [[84, 48 + kick], [100, 54 + kick], [104, 74], [80, 74]]);
+    shape(mid, [[85, 50 + kick], [98, 55 + kick], [101, 70], [82, 70]]);
+    shape(hi, [[86, 52 + kick], [96, 56 + kick], [97, 62 + kick], [85, 60 + kick]]);
+    shape(sh, [[28, 56 + kick], [34, 56 + kick], [34, 68], [28, 68]]);
+    shape(sh, [[82, 56 + kick], [88, 56 + kick], [88, 68], [82, 68]]);
+    // sleeves
+    shape(jacket, [[4, 70], [34, 68], [38, 94], [0, 94]]);
+    shape(accent, [[8, 72], [32, 70], [33, 74], [6, 76]]);
+    shape(seam, [[16, 74], [20, 74], [22, 94], [18, 94]]);
+    shape(jacket, [[82, 68], [112, 70], [116, 94], [78, 94]]);
+    shape(accent, [[84, 70], [108, 72], [110, 76], [83, 74]]);
+    shape(seam, [[96, 74], [100, 74], [98, 94], [94, 94]]);
+  });
+}
+
 function art(
   tool: ToolDef,
   gender: Gender,
@@ -1139,6 +1185,7 @@ function art(
     else if (tool.id === 'patch') a = patchArt(patchFrame ?? 'rest', gender, skin);
     else if (tool.id === 'tap') a = tapArt(tapFrame ?? 'rest', gender, skin, detail || '0:0');
     else if (tool.id === 'edr') a = edrArt(edrFrame ?? 'rest', gender, skin, detail || '0');
+    else if (tool.id === 'firewall') a = firewallArt(mode, gender, skin);
     else return null;
     if (mode === 2 && tool.id !== 'keyboard') a = tintFlash(a, TOOL_FLASH[tool.id] ?? '255,255,255');
     cache.set(key, a);
@@ -1340,7 +1387,7 @@ const HAND_SINK = 4;
 const LIT_SWELL = 1.05;
 
 /** Per-tool viewmodel size multiplier (keyboard art runs ~25% of view width at 1). */
-const SIZE: Record<string, number> = { keyboard: 1.0, mouse: 0.7, badge: 0.66, mfa: 0.62, patch: 0.64, tap: 0.6, edr: 0.6, usb: 1.0 };
+const SIZE: Record<string, number> = { keyboard: 1.0, mouse: 0.7, badge: 0.66, mfa: 0.62, patch: 0.64, tap: 0.6, edr: 0.6, usb: 1.0, firewall: 0.62 };
 
 /** Muzzle-flash tint per tool (rgb for edgeFlash); also feeds the world light flood. */
 export const TOOL_FLASH: Record<string, string> = {
@@ -1352,6 +1399,7 @@ export const TOOL_FLASH: Record<string, string> = {
   edr: '120,220,255',
   mfa: '255,220,140',
   patch: '120,255,140',
+  firewall: '255,160,60',
 };
 
 /** Per-tool [dx, dy] at full windup and at the impact frame. */
@@ -1367,4 +1415,5 @@ const POSE: Record<string, { wind: [number, number]; strike: [number, number] }>
   patch: { wind: [0, 1], strike: [0, -12] }, // dip, then thrust the disk up into the bay
   tap: { wind: [0, 1], strike: [0, -7] }, // squeeze, then the capture kick lifts it
   edr: { wind: [0, 0], strike: [0, -9] }, // hold the charge, then the containment recoil rides up
+  firewall: { wind: [0, 2], strike: [0, -6] }, // brace, then heavy shotgun kick
 };

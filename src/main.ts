@@ -1627,6 +1627,28 @@ class Game {
     }
   }
 
+  private resolveFirewallHit(hit: Entity | null, x: number, y: number, dx: number, dy: number, dmg: number): void {
+    if (!hit) {
+      this.particles.burst(x, y, 0.25, 'hit', [255, 144, 48], dx, dy);
+      return;
+    }
+    if (hit.def.kind === 'workstation') {
+      this.hud.pushMessage('Firewall blocks network threats — plug in the USB Scanner (3) to clean endpoints.', 'info');
+      return;
+    }
+    if (hit.infected) {
+      const result = damageEntity(hit, dmg, dx, dy);
+      this.bus.emit('tool-hit', { toolId: 'firewall', entityId: hit.def.id, good: true });
+      if (result === 'killed') {
+        this.bus.emit('cleaned', { entityId: hit.def.id });
+      } else {
+        this.particles.burst(x, y, 0.35, 'hit', bloodOf(hit), dx, dy);
+        this.impactBloom(x, y, bloodOf(hit));
+        if (hit.def.kind === 'enemy') this.audio.sfx(`pain-${hit.def.threat ?? hit.def.sprite}`, { x: hit.x, y: hit.y });
+      }
+    }
+  }
+
   /** E/Space target context: shared by the E action and the HUD prompt. */
   private useCtx(): UseTargetContext {
     const tool = this.toolCtx();
@@ -1728,6 +1750,19 @@ class Game {
           this.projectiles.push({
             ...proj,
             speed: 30,
+            range: shot.dist,
+            alive: true,
+            traveled: 0,
+            cosmetic: true,
+          });
+          return;
+        }
+        if (proj.source === 'firewall-pellet') {
+          const shot = traceShot(p.x, p.y, proj.dx, proj.dy, proj.range, rt.entities, map);
+          this.resolveFirewallHit(shot.hit, shot.x, shot.y, proj.dx, proj.dy, proj.damage ?? 1);
+          this.projectiles.push({
+            ...proj,
+            speed: 36,
             range: shot.dist,
             alive: true,
             traveled: 0,

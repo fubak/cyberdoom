@@ -12,7 +12,7 @@ export const m08: Mission = {
   objectives: ['2.3', '4.3', '4.1'],
   briefing: 'Exploit chatter on a threat feed names your stack. You have until the next shift to close the holes.',
   authorizedRoles: ['analyst'],
-  loadout: ['keyboard', 'mouse', 'usb', 'badge', 'edr'],
+  loadout: ['keyboard', 'mouse', 'usb', 'badge', 'edr', 'firewall'],
   map: {
     grid: [
     '##############################################',

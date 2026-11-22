@@ -146,16 +146,16 @@ export function statusBarText(o: BarLayoutInput, pulse: boolean): BarText[] {
   }
 
   // TOOLS grid digits (Doom ARMS): lit when owned, boxed when held.
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < 9; i++) {
     const slot = i + 1;
     const t = o.tools.find((tt) => tt.slot === slot);
     if (t?.passive) continue;
     const owned = !!t && o.owned.includes(t.id);
-    const x = P_TOOLS[0] + 3 + (i % 4) * 11;
-    const y = by + 6 + Math.floor(i / 4) * 10;
+    const x = P_TOOLS[0] + 2 + (i % 5) * 9;
+    const y = by + 6 + Math.floor(i / 5) * 10;
     const active = !!t && t.slot === o.tool.slot;
     const fresh = !!o.got && o.got.slot === slot && o.got.blink;
-    push(`${slot}`, 'small', x + 3, y + 1, fresh ? '#000' : active ? '#fff0a0' : owned ? '#ffa818' : '#3a3e48', fresh ? null : '#000');
+    push(`${slot}`, 'small', x + 2, y + 1, fresh ? '#000' : active ? '#fff0a0' : owned ? '#ffa818' : '#3a3e48', fresh ? null : '#000');
   }
 
   // CRED: current role under the keycard art.

@@ -16,7 +16,7 @@ describe('mission tool introductions', () => {
       m04: [],
       m05: ['patch'],
       m06: [],
-      m07: [],
+      m07: ['firewall'],
       m08: ['edr'],
       m09: [],
       m10: [],

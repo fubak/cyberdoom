@@ -35,7 +35,7 @@ export const m11: Mission = {
   objectives: ['4.2', '5.4', '5.5', '5.1'],
   briefing: 'External auditors walk in at 08:00 and the asset register has not been touched since 2021. Sweep the floor, reconcile the inventory, dispose of the retired drives the right way, clear the data-subject queue and set the pen-test scope, then sign the attestation.',
   authorizedRoles: ['analyst'],
-  loadout: ['keyboard', 'mouse', 'usb', 'badge', 'mfa'],
+  loadout: ['keyboard', 'mouse', 'usb', 'badge', 'mfa', 'firewall'],
   map: {
     grid: [
     '##############################################',
