@@ -1,6 +1,8 @@
 import type { Gender, ToolDef, ViewmodelAnim } from '../core/types';
 import { fireFlash, fireLamp, usePhase, vmLine } from '../tools/anim';
-import { currentSkin } from '../tools/look';
+import { currentSkin, type SkinTone } from '../tools/look';
+import { handLook } from '../tools/shared';
+import { shade } from '../tools/pixel';
 import { outlineNative, painter, type Painter } from './hires';
 import { RES } from './res';
 import { bakeRig } from './handrig';
@@ -139,40 +141,140 @@ function mouseArt(fire: boolean): Art {
   });
 }
 
-function usbArt(fire: boolean): Art {
-  // the scanner is the shotgun-equivalent: a big chunky stick ~17% of view
-  // width, connector up, hard-edged flash blooming off the tip on the fire frame
-  return paint(92, 58, 46, (px, _P) => {
-    const cx = 46;
-    if (fire) {
-      px('#5affff', cx - 6, 2, 12, 9);
-      px('#5affff', cx - 10, 5, 20, 4);
-      px('#ffffff', cx - 3, 3, 6, 8);
-      px('#ffffff', cx - 8, 6, 16, 2);
-      px('#bff8ff', cx - 12, 4, 3, 3);
-      px('#bff8ff', cx + 10, 4, 3, 3);
+type UsbFrame = 'rest' | 'press' | 'flash' | 'recoil' | 'settle';
+
+function usbArt(frame: UsbFrame, gender: Gender, skin: SkinTone): Art {
+  const look = handLook(gender);
+  const [base, shadow, highlight] = [skin.base, skin.shadow, skin.highlight];
+  const deep = shade(shadow, 0.65);
+  const ramp = [deep, shadow, base, highlight];
+  const seam = '#30201b';
+  const recoil = frame === 'recoil';
+  return paint(84, 56, 42, (_px, P) => {
+    const yScale = 48 / 88;
+    const point = (x: number, y: number): [number, number] => {
+      const py = 8 + y * yScale;
+      if (!recoil) return [x, py];
+      const angle = (4 * Math.PI) / 180;
+      const dx = x - 42;
+      const dy = py - 32;
+      return [
+        42 + Math.cos(angle) * dx - Math.sin(angle) * dy,
+        32 + Math.sin(angle) * dx + Math.cos(angle) * dy - 3,
+      ];
+    };
+    const box = (color: string, x: number, y: number, w: number, h: number) =>
+      P.poly([point(x, y), point(x + w, y), point(x + w, y + h), point(x, y + h)], color);
+    const shape = (color: string, pts: [number, number][]) => P.poly(pts.map(([x, y]) => point(x, y)), color);
+    const seamLine = (pts: [number, number][]) => P.line(pts.map(([x, y]) => point(x, y)), seam);
+    const ell = (color: string, x: number, y: number, rx: number, ry: number) => {
+      const [cx, cy] = point(x, y);
+      P.ell(cx, cy, rx, ry * yScale, color);
+    };
+    const handPoint = (x: number, y: number): [number, number] => {
+      const press = frame === 'press' && x < 61 && y < 54 ? 1 : 0;
+      return point(x + press, y + press);
+    };
+    const handShape = (color: string, pts: [number, number][]) =>
+      P.poly(pts.map(([x, y]) => handPoint(x, y)), color);
+    const handLine = (pts: [number, number][], color: string, width = 4) =>
+      P.line(pts.map(([x, y]) => handPoint(x, y)), color, width);
+    const handEll = (color: string, x: number, y: number, rx: number, ry: number) => {
+      const [cx, cy] = handPoint(x, y);
+      P.ell(cx, cy, rx, ry * yScale, color);
+    };
+
+    const jacketShade = shade(look.jacket, 0.64);
+    const jacketLight = shade(look.jacket, 1.22);
+    shape(jacketShade, [[67, 67], [84, 65], [84, 88], [67, 88], [63, 82], [63, 75]]);
+    shape(look.jacket, [[70, 69], [84, 68], [84, 88], [71, 88], [67, 82], [66, 76]]);
+    shape(jacketLight, [[70, 70], [73, 70], [75, 84], [72, 84]]);
+    seamLine([[69, 72], [75, 79], [80, 88]]);
+    shape(jacketShade, [[67, 71], [84, 70], [84, 76], [68, 77], [65, 74]]);
+    shape(look.accent, [[67, 73], [84, 72], [84, 74], [68, 75], [66, 74]]);
+    if (gender === 'female') {
+      shape('#20242c', [[66, 69], [72, 69], [73, 73], [67, 74]]);
+      shape('#0b2a2a', [[67, 70], [71, 70], [72, 72], [68, 73]]);
+      ell(look.accent, 69, 71, 1.2, 0.8);
     }
-    // metal connector
-    px('#c8ccd8', cx - 9, 11, 18, 11);
-    px('#eef0f6', cx - 9, 11, 18, 2);
-    px('#6a7288', cx + 5, 13, 4, 9);
-    px('#2a2e38', cx - 6, 14, 4, 4);
-    px('#2a2e38', cx + 1, 14, 4, 4);
-    // scanner body (dark polymer, chunky)
-    px('#2a2e38', cx - 22, 22, 44, 30);
-    px('#4a5060', cx - 22, 22, 44, 3);
-    px('#4a5060', cx - 22, 22, 3, 30);
-    px('#14161c', cx + 15, 24, 7, 28);
-    for (let y = 45; y < 52; y += 3) px('#1a1c22', cx - 19, y, 34, 1);
-    // little screen + LED
-    px('#0a1a14', cx - 17, 26, 30, 12);
-    px(fire ? '#8affff' : '#2ad83a', cx - 14, 28, 24, 2);
-    px(fire ? '#5affff' : '#14a024', cx - 14, 31, 15, 1);
-    px(fire ? '#5affff' : '#14a024', cx - 14, 33, 20, 1);
-    px(fire ? '#ffffff' : '#ff4a2a', cx - 5, 40, 9, 3);
-    // blue brand stripe
-    px('#2458d8', cx - 22, 46, 44, 3);
-    px('#8ab4ff', cx - 22, 46, 44, 1);
+
+    for (const [x, y] of [[21, 57], [20, 61], [20, 65]] as [number, number][]) {
+      ell(ramp[1], x + 0.5, y + 0.5, 3.8, 2.7);
+      ell(ramp[2], x, y, 3.4, 2.3);
+      ell(ramp[3], x - 0.8, y - 0.8, 1.6, 0.8);
+      P.line([point(x + 0.5, y + 0.5), point(x + 2.2, y + 0.9)], seam, 3);
+    }
+    shape('#11151d', [[31, 4], [51, 4], [61, 49], [65, 68], [19, 68], [23, 49]]);
+    shape('#657084', [[33, 5], [49, 5], [58, 47], [61, 66], [22, 66], [26, 47]]);
+    if (frame === 'flash') {
+      shape('#157f92', [[34, -2], [39, -2], [39, 0], [44, 0], [44, 2], [50, 2], [50, 4], [44, 4], [44, 2], [39, 2], [39, 1], [34, 1]]);
+      shape('#5affff', [[31, 0], [34, 0], [34, 3], [38, 3], [38, 1], [42, 1], [42, 4], [39, 4], [39, 6], [35, 6], [35, 4], [31, 4]]);
+      shape('#bff8ff', [[46, 0], [49, 0], [49, 3], [54, 3], [54, 6], [50, 6], [50, 4], [46, 4]]);
+    }
+    shape('#aab4c5', [[34, 6], [48, 6], [54, 34], [29, 34]]);
+    shape('#454f61', [[29, 34], [54, 34], [60, 66], [24, 66]]);
+    shape('#778396', [[30, 35], [53, 35], [56, 40], [28, 40]]);
+    shape('#242b38', [[24, 41], [59, 41], [62, 66], [22, 66]]);
+    shape('#384353', [[25, 42], [57, 42], [58, 62], [24, 62]]);
+    shape('#171d27', [[22, 63], [62, 63], [65, 68], [19, 68]]);
+    shape('#4a5667', [[22, 63], [62, 63], [62, 65], [22, 65]]);
+
+    // Connector, screen, LED, and the thumb-side red trigger on the top face.
+    box('#b6c1d0', 36, 1, 11, 6);
+    box('#edf2f5', 36, 1, 11, 1.5);
+    box('#7b8798', 44, 2, 3, 5);
+    box('#141922', 38, 3, 2, 2);
+    box('#141922', 42, 3, 2, 2);
+    shape('#0a171b', [[32, 14], [51, 14], [54, 29], [29, 29]]);
+    box(frame === 'flash' ? '#8affff' : '#2ad83a', 32, 17, 17, 1.5);
+    box(frame === 'flash' ? '#5affff' : '#149d34', 32, 20, 11, 1);
+    box(frame === 'flash' ? '#5affff' : '#149d34', 32, 22, 14, 1);
+    box(frame === 'press' ? '#a52f22' : '#ff4a2a', 47, 41, 8, 2.5);
+    box(frame === 'press' ? '#d25338' : '#ff9873', 47, 41, 8, 0.75);
+    box('#285fe0', 24, 47, 37, 2.5);
+    box('#8ab4ff', 24, 47, 37, 0.75);
+    box(frame === 'settle' ? '#53ff72' : '#22bb48', 52, 35, 4, 1.5);
+
+    handShape(ramp[1], [
+      [48.5, 40.5], [50.2, 39.3], [52.5, 40.3], [54.4, 42.5], [55.7, 45.2],
+      [57.7, 48.2], [60.1, 51.1], [63.5, 52.2], [67.2, 53.8], [69.4, 56.3],
+      [71.4, 60.1], [72.4, 64.4], [75.2, 68.1], [78.6, 69], [80.3, 71],
+      [80.8, 73.4], [80.2, 76.4], [78.8, 79.5], [77.5, 82.4], [74.5, 84],
+      [70.5, 82.8], [68.1, 79], [64.9, 76.1], [61.8, 77.2], [57.8, 74.8],
+      [54.8, 72], [52.2, 68.8], [50.8, 65.2], [49.8, 61.3], [50.3, 58],
+      [52.1, 55.2], [54.8, 53.4], [57.8, 53.8], [60.2, 55.5], [62.1, 57.5],
+      [61.7, 54.8], [59.4, 52.4], [57, 49.8], [54.7, 47], [52.4, 44.6],
+    ]);
+    handShape(ramp[2], [
+      [50, 41], [51.8, 40.3], [53.4, 42.2], [54.8, 45.1], [56.5, 48],
+      [59.2, 51.2], [62.8, 53], [66.5, 54.4], [68.3, 56.7], [70.2, 60.1],
+      [71.3, 64], [74.4, 67.7], [78.4, 69.8], [79.2, 71.6], [79.4, 74.5],
+      [78.4, 77.5], [76.9, 80.5], [74.3, 82.5], [71.2, 81.4], [68.5, 78.2],
+      [65.5, 75.5], [61.5, 75.5], [57.7, 73.4],
+      [54.6, 70.6], [52.6, 67.5], [51.8, 64], [51, 60.7], [51.7, 57.8],
+      [54.2, 55.3], [57.1, 55.4], [59.6, 57.1], [61.2, 58.6], [60.4, 55.2],
+      [58.1, 52.8], [55.7, 50], [53.7, 47], [51.8, 44.5],
+    ]);
+
+    // Thumb pad, nail, joint crease, and the knuckle ridge catch upper-left light.
+    handShape(ramp[2], [[50, 41], [52, 40.3], [54, 42.7], [55, 45.3], [57, 48], [59.4, 50.6], [57.5, 51.2], [55.1, 48.7], [53, 45.6]]);
+    handLine([[50, 41.3], [52, 43], [54, 46], [56, 48.1]], ramp[3], 5);
+    handLine([[55.1, 47], [56.7, 49], [59.2, 51.2]], ramp[0], 4);
+    handLine([[55.5, 46.6], [57.2, 48.7], [59.5, 50.8]], ramp[3], 2);
+    handEll(ramp[1], 50.8, 40.5, 2.5, 1.7);
+    handEll(ramp[3], 50.6, 40.2, 1.8, 1.1);
+
+    // The back of the hand stays broad, with rounded knuckles and a tucked shadow.
+    handShape(ramp[2], [[57, 54], [61, 53], [66, 54], [69, 57], [71, 61], [72, 66], [75, 69], [72, 72], [67, 71], [63, 69], [59, 68], [55, 65], [53, 61], [54, 57]]);
+    handEll(ramp[2], 65, 56, 4, 3.4);
+    handEll(ramp[2], 68.5, 59, 3.7, 3.2);
+    handEll(ramp[2], 70.5, 63, 3.2, 3.5);
+    handLine([[63, 54], [66, 55], [68.7, 57.2], [70.2, 59.5]], ramp[3], 5);
+    handLine([[66.2, 56], [68.2, 57.4]], ramp[1], 3);
+    handLine([[69, 58.7], [70.6, 60.2]], ramp[1], 3);
+    handShape(ramp[0], [[52, 65], [57, 68], [62, 69.5], [67, 72], [66, 75], [61, 73], [57, 71], [54, 69]]);
+    handShape(ramp[0], [[66, 74], [70, 76], [73, 79], [75, 82], [73, 83], [70, 81], [68, 78], [65, 78]]);
+    handLine([[62, 73], [65, 75], [67, 78]], ramp[1], 4);
   });
 }
 
@@ -204,13 +306,14 @@ function badgeArt(fire: boolean): Art {
 }
 
 /** Art variant: 0 rest, 1 fire pose, 2 fire pose lit in the tool's flash colour. */
-function art(tool: ToolDef, gender: Gender, mode: 0 | 1 | 2): Art | null {
-  const key = `${tool.id}:${gender}:${mode}:${currentSkin().id}`;
+function art(tool: ToolDef, gender: Gender, mode: 0 | 1 | 2, usbFrame?: UsbFrame): Art | null {
+  const key = `${tool.id}:${gender}:${mode}:${usbFrame ?? ''}:${currentSkin().id}`;
   let a = cache.get(key);
   if (!a) {
-    const maker = { keyboard: keyboardArt, mouse: mouseArt, usb: usbArt, badge: badgeArt }[tool.id];
-    if (!maker) return null;
-    a = maker(mode > 0);
+    const maker = { keyboard: keyboardArt, mouse: mouseArt, badge: badgeArt }[tool.id];
+    if (tool.id === 'usb') a = usbArt(usbFrame ?? (mode === 2 ? 'flash' : mode === 1 ? 'recoil' : 'rest'), gender, currentSkin());
+    else if (!maker) return null;
+    else a = maker(mode > 0);
     if (mode === 2) a = tintFlash(a, TOOL_FLASH[tool.id] ?? '255,255,255');
     cache.set(key, a);
   }
@@ -239,7 +342,12 @@ export function drawToolViewmodel(
   // ~77 ms of the 90 ms impact window, so >=4 rendered frames at 60 Hz
   const lit = !!ph && ph.phase === 'impact' && ph.u < 0.85;
   const fire = lit || (!!ph && (ph.phase === 'impact' || (ph.phase === 'recover' && ph.u < 0.25))) || (!ph && cooldownFrac > 0.55);
-  const a = art(tool, gender, lit ? 2 : fire ? 1 : 0);
+  const usbFrame: UsbFrame | undefined = tool.id !== 'usb' || !ph ? undefined
+    : ph.phase === 'wind' ? 'press'
+      : ph.phase === 'impact' ? 'flash'
+        : ph.phase === 'recover' ? (ph.u < 0.5 ? 'recoil' : 'settle')
+          : 'rest';
+  const a = art(tool, gender, lit ? 2 : fire ? 1 : 0, usbFrame);
   // shared bob/strike/switch offsets for the art AND the rig-hand overlay
   const bx = Math.round(Math.sin(bob) * 6);
   const byy = Math.round(Math.abs(Math.cos(bob)) * 3);
