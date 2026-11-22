@@ -127,6 +127,16 @@ export function keyboardFrameForUse(sinceUse: number, windup: number): KeyboardF
   return 'rest';
 }
 
+export type MouseFrame = 'rest' | 'press' | 'click' | 'release';
+
+export function mouseFrameForUse(sinceUse: number, windup: number): MouseFrame {
+  const phase = usePhase(sinceUse, windup);
+  if (phase.phase === 'wind') return 'press';
+  if (phase.phase === 'impact') return 'click';
+  if (phase.phase === 'recover') return phase.u < 0.5 ? 'release' : 'rest';
+  return 'rest';
+}
+
 function keyboardArt(frame: KeyboardFrame, gender: Gender, skin: SkinTone): Art {
   const look = vmHandArt(gender, skin);
   const [deep, shadow, base, highlight] = look.ramp;
@@ -281,30 +291,106 @@ function keyboardArt(frame: KeyboardFrame, gender: Gender, skin: SkinTone): Art 
   });
 }
 
-function mouseArt(fire: boolean): Art {
-  return paint(72, 84, 36, (px, _P) => {
-    // cable going up/forward
-    px('#3a404c', 34, 0, 2, 14);
-    px('#5a6070', 34, 0, 1, 14);
-    // mouse shell
-    const shell = ['#f0f2f8', '#c8ccd8', '#9aa0b0', '#5a6070'];
-    for (let r = 0; r < 40; r++) {
-      const half = Math.round(Math.sqrt(Math.max(0, 1 - ((r - 22) / 24) ** 2)) * 16);
-      px(shell[1], 35 - half, 12 + r, half * 2, 1);
-      px(shell[0], 35 - half + 2, 12 + r, Math.max(0, half - 4), 1);
-      px(shell[2], 35 + half - 3, 12 + r, 3, 1);
+function mouseArt(frame: MouseFrame, gender: Gender, skin: SkinTone): Art {
+  const look = vmHandArt(gender, skin);
+  const [deep, shadow, base, highlight] = look.ramp;
+  const buttonDown = frame === 'press' ? 1 : frame === 'click' ? 2 : 0;
+  const indexTravel = frame === 'press' ? 1 : frame === 'click' ? 2 : frame === 'release' ? -2 : 0;
+  return paint(120, 96, 52, (_px, P) => {
+    type Pt = [number, number];
+    const shape = (color: string, points: Pt[]) => P.poly(points, color);
+    const line = (points: Pt[], color: string, width = 1) => P.line(points, color, width);
+    const ellipse = (color: string, x: number, y: number, rx: number, ry: number) => P.ell(x, y, rx, ry, color);
+    // mouse seen from behind and above: rounded front (top), wide palm hump (bottom)
+    const egg = (cx: number, cy: number, rx: number, ry: number, taper = 0.22): Pt[] => {
+      const pts: Pt[] = [];
+      for (let i = 0; i < 28; i++) {
+        const a = (i / 28) * Math.PI * 2;
+        const c = Math.cos(a);
+        pts.push([cx + rx * Math.sin(a) * (1 - taper * (1 + c) * 0.5), cy - ry * c]);
+      }
+      return pts;
+    };
+    const shrink = (pts: Pt[], d: number): Pt[] => {
+      const cx = pts.reduce((s, p) => s + p[0], 0) / pts.length;
+      const cy = pts.reduce((s, p) => s + p[1], 0) / pts.length;
+      return pts.map(([x, y]): Pt => {
+        const l = Math.hypot(x - cx, y - cy) || 1;
+        return [x - ((x - cx) / l) * d, y - ((y - cy) / l) * d];
+      });
+    };
+    // skin part: deep rim, shadow body, base face, inset highlight edge
+    const flesh = (pts: Pt[], lightEdge?: Pt[]) => {
+      shape(deep, pts);
+      shape(shadow, shrink(pts, 1));
+      shape(base, shrink(pts, 2.2));
+      if (lightEdge) line(lightEdge, highlight, 1.2);
+    };
+    const idx = (pts: Pt[]): Pt[] => pts.map(([x, y]): Pt => [x, y + (y < 38 ? indexTravel : 0)]);
+
+    // pad shadow + cable
+    line([[52, 16], [52, 13], [54, 11]], '#262b35', 2.4);
+    line([[52, 16], [52, 13]], '#6d7684', 0.8);
+
+    // shell
+    shape('#3c4554', egg(52, 40, 21, 24));
+    shape('#7d8899', egg(51, 39, 19, 22.5));
+    shape('#2c3340', [[66, 30], [70, 40], [71, 50], [68, 58], [62, 62], [66, 52], [67, 42]]);
+    shape('#b4bdc9', egg(49, 37, 14, 19));
+    line([[35, 30], [34, 40], [36, 50]], '#dfe4ea', 1.2);
+
+    // buttons (front half), split, wheel, LED
+    const lb: Pt[] = [[51, 18], [51, 37], [36, 38], [36, 30], [40, 22], [45, 18]];
+    shape(frame === 'click' ? '#8e99a8' : '#c6ced8', lb.map(([x, y]): Pt => [x, y + buttonDown]));
+    shape('#d8dee6', [[46, 19 + buttonDown], [51, 18 + buttonDown], [51, 20 + buttonDown], [45, 21 + buttonDown]]);
+    shape('#bcc5d0', [[53, 18], [58, 18], [63, 22], [66, 30], [66, 37], [53, 37]]);
+    line([[52, 17], [52, 38]], '#2a303b', 1.2);
+    line([[36, 38.5], [66, 38.5]], '#59626f', 0.8);
+    ellipse('#1c2129', 52, 25, 2.2, 3.6);
+    ellipse('#6e7989', 52, 24.5, 1, 2.4);
+    ellipse('#0f4a5c', 60, 21, 1.4, 1.1);
+    ellipse('#5beaff', 60, 21, 0.8, 0.6);
+    if (frame === 'click') {
+      ellipse('#1c7a3c', 41, 24 + buttonDown, 2.6, 1.8);
+      ellipse('#9affaa', 41, 24 + buttonDown, 1.3, 0.9);
     }
-    // buttons split + wheel
-    px(shell[3], 34, 12, 1, 18);
-    px(fire ? '#2ad83a' : '#8a90a0', 22, 16, 11, fire ? 12 : 1);
-    px('#1a1c22', 33, 16, 4, 8);
-    px('#2458d8', 34, 17, 2, 6);
-    px('#8ab4ff', 34, 17, 2, 1);
-    // contact shadow + thin dark mousepad in perspective (wider toward camera)
-    px('#14100e', 22, 50, 34, 3);
-    px('#242228', 4, 54, 64, 4);
-    px('#1a181e', 0, 58, 72, 6);
-    px('#2a2830', 0, 58, 72, 1);
+
+    // thumb along the left wall, pointing forward
+    flesh([[37, 58], [32, 54], [30, 47], [31, 41], [34, 39], [37, 43], [39, 51]], [[31, 46], [32, 41], [34, 40]]);
+    // ring + pinky curled down the right wall
+    flesh([[63, 44], [68, 41], [72, 44], [73, 50], [70, 53], [65, 51]], [[68, 42], [71, 44]]);
+    flesh([[66, 52], [71, 50], [75, 53], [75, 59], [71, 61], [67, 58]], [[71, 51], [74, 53]]);
+    // back of the hand over the palm hump; wrist runs off toward the bottom-right
+    flesh(
+      [[37, 45], [41, 40], [48, 38], [57, 38], [64, 40], [69, 45], [74, 54], [82, 64], [92, 76], [96, 96], [66, 96], [58, 80], [48, 70], [40, 60], [36, 52]],
+      [[39, 44], [44, 40], [52, 39], [60, 39], [66, 42]],
+    );
+    // tendons + knuckle ridge
+    line([[45, 44], [50, 56], [58, 70]], shadow, 1);
+    line([[53, 43], [58, 55], [66, 70]], shadow, 1);
+    line([[61, 44], [66, 55], [73, 68]], shadow, 1);
+    for (const [kx, ky] of [[44, 41], [51, 40], [58, 40], [65, 43]] as Pt[]) {
+      ellipse(shadow, kx, ky + 1, 2.4, 1.6);
+      ellipse(highlight, kx, ky, 1.4, 0.8);
+    }
+    // index on the left button, middle on the right: two foreshortened segments + nail
+    flesh(idx([[39, 41], [39, 33], [40, 27], [42, 23], [46, 22], [48, 25], [48, 32], [48, 41]]), idx([[40, 33], [41, 27], [43, 24]]));
+    line(idx([[40, 32], [47, 32]]), shadow, 1);
+    shape('#f2dccb', idx([[42, 24.5], [45, 23.5], [46.5, 26], [43, 27]]));
+    flesh([[54, 41], [54, 32], [55, 26], [57, 22], [61, 21], [63, 24], [63, 31], [63, 41]], [[55, 32], [56, 26], [58, 23]]);
+    line([[55, 31], [62, 31]], shadow, 1);
+    shape('#f2dccb', [[57, 23.5], [60, 22.5], [61.5, 25], [58, 26]]);
+
+    // forearm sleeve over the wrist, out of the bottom-right corner
+    const sleevePoint = (x: number, y: number): Pt => [80 + (x - 73.5) * 2.1 + (y - 65) * 1.1, 70 + (y - 65) * 1.4];
+    paintVmJacketSleeve(look, {
+      shape: (color, points) => P.poly(points.map(([x, y]) => sleevePoint(x, y)), color),
+      seamLine: (points) => P.line(points.map(([x, y]) => sleevePoint(x, y)), look.seam),
+      ell: (color, x, y, rx, ry) => {
+        const [cx, cy] = sleevePoint(x, y);
+        P.ell(cx, cy, rx * 2.1, ry * 1.4, color);
+      },
+    });
   });
 }
 
@@ -464,14 +550,15 @@ function art(
   mode: 0 | 1 | 2,
   usbFrame?: UsbFrame,
   keyboardFrame?: KeyboardFrame,
+  mouseFrame?: MouseFrame,
 ): Art | null {
   const skin = currentSkin();
-  const key = `${tool.id}:${gender}:${mode}:${usbFrame ?? ''}:${keyboardFrame ?? ''}:${skin.id}`;
+  const key = `${tool.id}:${gender}:${mode}:${usbFrame ?? ''}:${keyboardFrame ?? ''}:${mouseFrame ?? ''}:${skin.id}`;
   let a = cache.get(key);
   if (!a) {
     if (tool.id === 'usb') a = usbArt(usbFrame ?? (mode === 2 ? 'flash' : mode === 1 ? 'recoil' : 'rest'), gender, skin);
     else if (tool.id === 'keyboard') a = keyboardArt(keyboardFrame ?? (mode > 0 ? 'swing' : 'rest'), gender, skin);
-    else if (tool.id === 'mouse') a = mouseArt(mode > 0);
+    else if (tool.id === 'mouse') a = mouseArt(mouseFrame ?? 'rest', gender, skin);
     else if (tool.id === 'badge') a = badgeArt(mode > 0);
     else return null;
     if (mode === 2 && tool.id !== 'keyboard') a = tintFlash(a, TOOL_FLASH[tool.id] ?? '255,255,255');
@@ -510,7 +597,10 @@ export function drawToolViewmodel(
   const keyboardFrame: KeyboardFrame | undefined = tool.id !== 'keyboard' ? undefined
     : ph ? keyboardFrameForUse(anim!.sinceUse, tool.windup ?? 0)
       : 'rest';
-  const a = art(tool, gender, lit ? 2 : fire ? 1 : 0, usbFrame, keyboardFrame);
+  const mouseFrame: MouseFrame | undefined = tool.id !== 'mouse' ? undefined
+    : ph ? mouseFrameForUse(anim!.sinceUse, tool.windup ?? 0)
+      : 'rest';
+  const a = art(tool, gender, lit ? 2 : fire ? 1 : 0, usbFrame, keyboardFrame, mouseFrame);
   // shared bob/strike/switch offsets for the art AND the rig-hand overlay
   const bx = Math.round(Math.sin(bob) * 6);
   const byy = Math.round(Math.abs(Math.cos(bob)) * 3);
@@ -651,7 +741,7 @@ const HAND_SINK = 4;
 const LIT_SWELL = 1.05;
 
 /** Per-tool viewmodel size multiplier (keyboard art runs ~25% of view width at 1). */
-const SIZE: Record<string, number> = { keyboard: 1.0, mouse: 0.68, badge: 0.66, usb: 1.0 };
+const SIZE: Record<string, number> = { keyboard: 1.0, mouse: 0.7, badge: 0.66, usb: 1.0 };
 
 /** Muzzle-flash tint per tool (rgb for edgeFlash); also feeds the world light flood. */
 export const TOOL_FLASH: Record<string, string> = {
@@ -667,7 +757,7 @@ export const TOOL_FLASH: Record<string, string> = {
 
 /** Per-tool [dx, dy] at full windup and at the impact frame. */
 /** Horizontal nudge so each tool's visible mass sits bottom-centre. */
-const SIDE: Record<string, number> = { mouse: 0, badge: 0, usb: 0 };
+const SIDE: Record<string, number> = { mouse: 24, badge: 0, usb: 0 };
 
 const POSE: Record<string, { wind: [number, number]; strike: [number, number] }> = {
   keyboard: { wind: [-3, 3], strike: [0, -14] }, // pull back a touch, slam up-forward
