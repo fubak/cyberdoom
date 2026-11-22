@@ -863,6 +863,126 @@ export function buildTextures(jobs = false): void {
     grime(p, 'rgba(0,0,0,0.5)', 120);
   });
 
+  // Episode 1: Corporate office wall — warm slate drywall, frosted glass band, wood-slat wainscoting.
+  wallV('wall-office', (p) => {
+    const { g } = p;
+    noiseFill(p, [126, 122, 114], 7);
+    // Frosted glass transom band near top
+    g.fillStyle = '#384654';
+    g.fillRect(0, 8, 64, 16);
+    noiseFill(p, [152, 178, 196], 8, 1, 2, 10, 28, 12);
+    noiseFill(p, [152, 178, 196], 8, 1, 34, 10, 28, 12);
+    g.fillStyle = 'rgba(255,255,255,0.22)';
+    g.fillRect(4, 11, 10, 2);
+    g.fillRect(36, 11, 10, 2);
+    // Brushed aluminum trim rail
+    g.fillStyle = '#8b94a0';
+    g.fillRect(0, 24, 64, 2);
+    g.fillRect(0, 48, 64, 2);
+    // Warm wood-slat lower wainscoting
+    noiseFill(p, [98, 68, 42], 10, 1, 0, 50, 64, 24);
+    for (let x = 0; x < 64; x += 6) {
+      g.fillStyle = 'rgba(34,20,10,0.55)';
+      g.fillRect(x, 50, 1, 24);
+      g.fillStyle = 'rgba(180,136,88,0.22)';
+      g.fillRect(x + 1, 50, 1, 24);
+    }
+    kickPlate(g, '#4a6e8c');
+    vShade(g, 0, 6, '18,22,26', 0.25, 0);
+    grime(p, 'rgba(20,16,12,0.25)', 65);
+  });
+
+  // Episode 2: Cold-aisle datacenter wall — slate steel panels, airflow louvres, cyan status strip.
+  wallV('wall-datacenter', (p) => {
+    const { g, glow } = p;
+    noiseFill(p, [44, 54, 68], 9);
+    for (const x of [2, 34]) {
+      noiseFill(p, [56, 70, 88], 10, 1, x, 6, 28, 62);
+      seam(g, x, 6, x + 28, 6);
+      seam(g, x, 68, x + 28, 68);
+      // Perforated cold-aisle louvres
+      for (let y = 14; y < 58; y += 4) {
+        g.fillStyle = '#18222e';
+        g.fillRect(x + 4, y, 20, 2);
+        g.fillStyle = 'rgba(120,180,220,0.18)';
+        g.fillRect(x + 4, y + 2, 20, 1);
+      }
+      bolt(g, x + 2, 8);
+      bolt(g, x + 24, 8);
+      bolt(g, x + 2, 64);
+      bolt(g, x + 24, 64);
+    }
+    // Glowing cyan cold-aisle vertical light strip
+    g.fillStyle = '#2ee8ff';
+    g.fillRect(31, 8, 2, 58);
+    glow.fillStyle = '#fff';
+    glow.fillRect(31, 8, 2, 58);
+    kickPlate(g, '#20a8c8');
+    vShade(g, 0, 8, '8,14,22', 0.35, 0);
+    grime(p, 'rgba(6,10,16,0.4)', 80);
+  });
+
+  // Episode 3: Reinforced vault / bunker wall — heavy blast concrete, steel ribs, hazard chevron, red alert LED.
+  wallV('wall-vault', (p) => {
+    const { g, glow } = p;
+    noiseFill(p, [64, 62, 60], 12);
+    // Steel buttress ribs left & right
+    noiseFill(p, [42, 44, 48], 8, 1, 0, 0, 8, 72);
+    noiseFill(p, [42, 44, 48], 8, 1, 56, 0, 8, 72);
+    seam(g, 8, 0, 8, 72);
+    seam(g, 56, 0, 56, 72);
+    for (let y = 8; y < 68; y += 16) {
+      bolt(g, 3, y);
+      bolt(g, 59, y);
+    }
+    // Hazard stripe band across mid-wall
+    hazard(g, 9, 44, 46, 6);
+    // Recessed crimson lockdown beacon slit
+    g.fillStyle = '#161214';
+    g.fillRect(22, 16, 20, 6);
+    g.fillStyle = '#ff3830';
+    g.fillRect(24, 18, 16, 2);
+    glow.fillStyle = '#fff';
+    glow.fillRect(24, 18, 16, 2);
+    kickPlate(g, '#c83428');
+    vShade(g, 0, 10, '10,8,8', 0.4, 0);
+    grime(p, 'rgba(12,8,6,0.45)', 110);
+  });
+
+  // Episode 3 Finale: Tactical SOC war-room wall — dark obsidian frame, live SIEM telemetry display panes.
+  wallV('wall-soc', (p) => {
+    const { g, glow } = p;
+    noiseFill(p, [26, 28, 38], 8);
+    // Outer monitor bezel
+    g.fillStyle = '#141620';
+    g.fillRect(4, 10, 56, 42);
+    seam(g, 4, 10, 60, 10);
+    seam(g, 4, 52, 60, 52);
+    // Two glowing SIEM telemetry panes
+    g.fillStyle = '#0e1a28';
+    g.fillRect(7, 13, 24, 36);
+    g.fillRect(33, 13, 24, 36);
+    // Left pane: waveform / alert bars
+    for (let i = 0; i < 6; i++) {
+      const h = 4 + Math.floor(p.rnd() * 14);
+      g.fillStyle = i === 4 ? '#ff4455' : '#32d8ff';
+      g.fillRect(9 + i * 3, 44 - h, 2, h);
+      glow.fillStyle = '#fff';
+      glow.fillRect(9 + i * 3, 44 - h, 2, h);
+    }
+    // Right pane: violet/amber log lines
+    for (let y = 16; y < 44; y += 4) {
+      const w = 8 + Math.floor(p.rnd() * 12);
+      g.fillStyle = y === 24 ? '#ffb830' : '#a864ff';
+      g.fillRect(36, y, w, 2);
+      glow.fillStyle = '#fff';
+      glow.fillRect(36, y, w, 2);
+    }
+    kickPlate(g, '#7848d8');
+    vShade(g, 0, 8, '6,6,14', 0.35, 0);
+    grime(p, 'rgba(8,6,14,0.35)', 70);
+  });
+
   // Generic security door + role-coded variants.
   doorTexture('door', undefined);
   for (const role of Object.keys(ROLE_COLORS)) doorTexture(`door:${role}`, role);
@@ -999,6 +1119,67 @@ export function buildTextures(jobs = false): void {
       g.fillRect(46 + Math.cos(a) * r, 20 + Math.sin(a) * r * 0.6, 2, 1);
     }
     grime(p, 'rgba(20,10,4,0.5)', 140);
+  });
+
+  // Episode 1: Corporate carpet tiles (subtle slate/navy weave).
+  flatV('floor-carpet', (p) => {
+    const { g } = p;
+    noiseFill(p, [54, 62, 74], 8);
+    for (let y = 0; y < 64; y += 2) {
+      g.fillStyle = y % 4 === 0 ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.08)';
+      g.fillRect(0, y, 64, 1);
+    }
+    for (let x = 0; x < 64; x += 4) {
+      g.fillStyle = 'rgba(20,26,34,0.12)';
+      g.fillRect(x, 0, 1, 64);
+    }
+    // Carpet tile seams
+    g.fillStyle = '#242b36';
+    g.fillRect(0, 0, 64, 1);
+    g.fillRect(0, 0, 1, 64);
+    g.fillRect(32, 0, 1, 64);
+    g.fillRect(0, 32, 64, 1);
+    grime(p, 'rgba(12,16,22,0.25)', 80);
+  });
+
+  // Episode 2: Cold-aisle datacenter steel grating with recessed cyan fiber conduit.
+  flatV('floor-datacenter', (p) => {
+    const { g, glow } = p;
+    noiseFill(p, [42, 48, 58], 9);
+    for (let y = 4; y < 60; y += 6) {
+      for (let x = 4; x < 60; x += 6) {
+        g.fillStyle = '#181e28';
+        g.fillRect(x, y, 4, 3);
+      }
+    }
+    // Recessed glowing cyan fiber channel down center
+    g.fillStyle = '#102230';
+    g.fillRect(28, 0, 8, 64);
+    g.fillStyle = '#24c8e8';
+    g.fillRect(31, 0, 2, 64);
+    glow.fillStyle = '#a0f0ff';
+    glow.fillRect(31, 0, 2, 64);
+    g.fillStyle = '#141820';
+    g.fillRect(0, 0, 64, 1);
+    g.fillRect(0, 0, 1, 64);
+    grime(p, 'rgba(8,12,18,0.35)', 70);
+  });
+
+  // Episode 3 Finale: Dark tactical SOC floor with faint violet/cyan grid traces.
+  flatV('floor-soc', (p) => {
+    const { g, glow } = p;
+    noiseFill(p, [28, 30, 40], 7);
+    g.fillStyle = '#161824';
+    g.fillRect(0, 0, 64, 2);
+    g.fillRect(0, 0, 2, 64);
+    g.fillRect(31, 0, 2, 64);
+    g.fillRect(0, 31, 64, 2);
+    // Faint glowing corner nodes
+    g.fillStyle = '#7848d8';
+    g.fillRect(30, 30, 4, 4);
+    glow.fillStyle = '#b080ff';
+    glow.fillRect(31, 31, 2, 2);
+    grime(p, 'rgba(6,6,14,0.35)', 60);
   });
 
   // Acoustic ceiling tile + fluorescent light panel variant.

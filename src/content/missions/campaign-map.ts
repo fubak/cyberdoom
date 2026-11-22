@@ -209,3 +209,42 @@ export function stagedThreatWave(
   }
   return wave;
 }
+
+export interface MissionTheme {
+  wall: string;
+  floor: string;
+  props: readonly string[];
+}
+
+export const MISSION_THEMES: Record<string, MissionTheme> = {
+  m01: { wall: 'wall-office', floor: 'floor-carpet', props: ['whiteboard', 'office-plant', 'water-cooler'] },
+  m02: { wall: 'wall-datacenter', floor: 'floor-datacenter', props: ['server-rack', 'whiteboard', 'warning-beacon'] },
+  m03: { wall: 'wall-office', floor: 'floor-carpet', props: ['office-plant', 'water-cooler', 'whiteboard'] },
+  m04: { wall: 'wall-office', floor: 'floor-carpet', props: ['whiteboard', 'office-plant', 'water-cooler'] },
+  m05: { wall: 'wall-vault', floor: 'floor-datacenter', props: ['hazard-barrel', 'warning-beacon', 'server-rack'] },
+  m06: { wall: 'wall-vault', floor: 'floor-datacenter', props: ['server-rack', 'warning-beacon', 'hazard-barrel'] },
+  m07: { wall: 'wall-datacenter', floor: 'floor-datacenter', props: ['server-rack', 'warning-beacon', 'whiteboard'] },
+  m08: { wall: 'wall-datacenter', floor: 'floor-datacenter', props: ['server-rack', 'hazard-barrel', 'warning-beacon'] },
+  m09: { wall: 'wall-vault', floor: 'floor-datacenter', props: ['warning-beacon', 'hazard-barrel', 'server-rack'] },
+  m10: { wall: 'wall-datacenter', floor: 'floor-datacenter', props: ['server-rack', 'whiteboard', 'office-plant'] },
+  m11: { wall: 'wall-vault', floor: 'floor-datacenter', props: ['hazard-barrel', 'server-rack', 'warning-beacon'] },
+  m12: { wall: 'wall-soc', floor: 'floor-soc', props: ['whiteboard', 'server-rack', 'warning-beacon'] },
+};
+
+/** Apply per-mission wall/floor textures and environmental prop sprites so
+ *  corporate offices, data centers, vaults, and the SOC look visually distinct. */
+export function applyMissionTheme(mission: Mission): void {
+  const theme = MISSION_THEMES[mission.id];
+  if (!theme) return;
+  for (const def of Object.values(mission.map.legend)) {
+    if (def.kind === 'wall' && def.tex === 'wall-panel') def.tex = theme.wall;
+    if (def.kind === 'floor' && def.tex === 'floor') def.tex = theme.floor;
+  }
+  let propIdx = 0;
+  for (const ent of mission.entities) {
+    if (ent.kind !== 'prop') continue;
+    if (ent.sprite === 'duck') continue;
+    ent.sprite = theme.props[propIdx % theme.props.length]!;
+    propIdx += 1;
+  }
+}

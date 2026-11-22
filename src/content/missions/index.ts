@@ -1,6 +1,7 @@
 import { Registry } from '../../core/registry';
 import type { Mission } from '../../core/types';
 import type { MissionTeaching } from '../curriculum';
+import { applyMissionTheme } from './campaign-map';
 import { m01, m01Teach } from './m01-patch-tuesday';
 import { m02, m02Teach } from './m02-need-to-know';
 import { m03, m03Teach } from './m03-quiet-one';
@@ -18,7 +19,10 @@ import { m13, m13Teach } from './m13-honeypot';
 /** CURRICULUM: all missions, keyed by id (arc order). */
 export const missionRegistry = new Registry<Mission>();
 
-for (const m of [m01, m02, m03, m04, m05, m06, m07, m08, m09, m10, m11, m12]) missionRegistry.register(m.id, m);
+for (const m of [m01, m02, m03, m04, m05, m06, m07, m08, m09, m10, m11, m12]) {
+  applyMissionTheme(m);
+  missionRegistry.register(m.id, m);
+}
 
 /** CURRICULUM: briefing dossier + after-action lessons, keyed by mission id. */
 export const teachingRegistry = new Registry<MissionTeaching>();
