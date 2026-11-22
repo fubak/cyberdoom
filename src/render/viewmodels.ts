@@ -1445,8 +1445,8 @@ export function drawToolViewmodel(
 
 /** Opaque art may rest this far under the bar line (the Doom bottom-crop look). */
 const BLEED = 1;
-/** Rig hands off: capsule-baked digits read as mitts at this scale — tools draw bare, Doom-style. */
-const SHOW_HANDS = false;
+/** Rig hands off: all tools ship with painted 2D hands; 3D rig is kept as reference. */
+export const SHOW_HANDS = false;
 /** Rig hands render ~22% smaller than authored — grips stay readable without the hand owning the frame. */
 const HAND_SCALE = 0.78;
 /** Extra pixels the hand sprite sinks toward the bar line (Doom keeps hands low). */
