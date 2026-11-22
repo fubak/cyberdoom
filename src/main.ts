@@ -1113,6 +1113,7 @@ class Game {
         this.player,
         (doorId) => this.runtime?.isSecretDoorRevealed(doorId) ?? false,
         this.runtime ? `${this.runtime.mission.id.toUpperCase()}: ${this.runtime.mission.title}` : undefined,
+        this.runtime?.automapOverlay(),
       );
       this.dossier.draw();
       this.composeFrame();
