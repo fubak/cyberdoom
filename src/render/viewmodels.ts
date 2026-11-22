@@ -627,6 +627,106 @@ function badgeArt(frame: BadgeFrame, gender: Gender, skin: SkinTone): Art {
 }
 
 /** Art variant: 0 rest, 1 fire pose, 2 fire pose lit in the tool's flash colour. */
+export type MfaFrame = 'rest' | 'touch' | 'glow' | 'release';
+
+export function mfaFrameForUse(sinceUse: number, windup: number): MfaFrame {
+  const phase = usePhase(sinceUse, windup);
+  if (phase.phase === 'wind') return 'touch';
+  if (phase.phase === 'impact') return 'glow';
+  if (phase.phase === 'recover') return phase.u < 0.5 ? 'release' : 'rest';
+  return 'rest';
+}
+
+function mfaArt(frame: MfaFrame, gender: Gender, skin: SkinTone): Art {
+  type Pt = [number, number];
+  const look = vmHandArt(gender, skin);
+  const [deep, shadow, base, highlight] = look.ramp;
+  return paint(96, 92, 44, (_px, P) => {
+    const shape = (color: string, pts: Pt[]) => P.poly(pts, color);
+    const shrink = (pts: Pt[], d: number): Pt[] => {
+      const cx = pts.reduce((s, p) => s + p[0], 0) / pts.length;
+      const cy = pts.reduce((s, p) => s + p[1], 0) / pts.length;
+      return pts.map(([x, y]): Pt => {
+        const l = Math.hypot(x - cx, y - cy) || 1;
+        return [x - ((x - cx) / l) * d, y - ((y - cy) / l) * d];
+      });
+    };
+    const flesh = (pts: Pt[], lightEdge?: Pt[]) => {
+      shape(deep, pts);
+      shape(shadow, shrink(pts, 1));
+      shape(base, shrink(pts, 2.2));
+      if (lightEdge) P.line(lightEdge, highlight, 1.2);
+    };
+    // rounded finger/thumb capsule from (x0,y0) to a rounded tip at (x1,y1)
+    const capsule = (x0: number, y0: number, x1: number, y1: number, r0: number, r1: number): Pt[] => {
+      const a = Math.atan2(y1 - y0, x1 - x0);
+      const nx = -Math.sin(a);
+      const ny = Math.cos(a);
+      const pts: Pt[] = [[x0 + nx * r0, y0 + ny * r0]];
+      for (let i = 0; i <= 6; i++) {
+        const t = a + Math.PI / 2 - (Math.PI * i) / 6;
+        pts.push([x1 + Math.cos(t) * r1, y1 + Math.sin(t) * r1]);
+      }
+      pts.push([x0 - nx * r0, y0 - ny * r0]);
+      return pts;
+    };
+
+    const rrect = (x: number, y: number, w: number, h: number, r: number, color: string) =>
+      shape(color, [[x + r, y], [x + w - r, y], [x + w, y + r], [x + w, y + h - r], [x + w - r, y + h], [x + r, y + h], [x, y + h - r], [x, y + r]]);
+    // palm behind the key, wrist running out to the bottom-right
+    flesh([[50, 46], [60, 44], [70, 50], [76, 62], [84, 76], [90, 92], [64, 92], [56, 78], [48, 64]]);
+
+    // FIDO2 key, upright, connector away from the camera
+    shape('#8a909c', [[37, 6], [51, 6], [52, 22], [36, 22]]);
+    shape('#d6dae4', [[38, 7], [50, 7], [50, 9], [38, 9]]);
+    shape('#5e6470', [[49, 9], [51, 9], [52, 22], [50, 22]]);
+    shape('#22262e', [[40, 12], [43, 12], [43, 17], [40, 17]]);
+    shape('#22262e', [[45, 12], [48, 12], [48, 17], [45, 17]]);
+    rrect(32, 20, 25, 58, 6, '#121419');
+    rrect(33, 21, 23, 56, 5, '#262a33');
+    shape('#3c4250', [[35, 23], [54, 23], [54, 26], [35, 26]]);
+    shape('#1a1d24', [[53, 26], [55, 26], [55, 74], [53, 74]]);
+    // gold touch pad with fingerprint rings
+    const lit = frame === 'glow';
+    const ring = lit ? '#b8fff0' : '#f0c040';
+    P.ell(44.5, 43, 7.5, 7.5, '#5a4008');
+    P.ell(44.5, 43, 6.5, 6.5, lit ? '#3ac8a8' : '#b88a18');
+    for (const r of [5.2, 3.4, 1.6]) {
+      P.ell(44.5, 43, r, r, ring);
+      P.ell(44.5, 43, r - 0.8, r - 0.8, lit ? '#3ac8a8' : '#b88a18');
+    }
+    // status LED + key-ring hole and ring swinging left
+    P.ell(44.5, 57, 2, 1.3, lit ? '#ffffff' : '#2ad83a');
+    P.ell(44.5, 70, 3, 3, '#06070a');
+    P.line([[44, 70], [38, 70], [30, 73], [29, 79], [35, 82], [42, 80], [44, 72]], '#7a8296', 1.6);
+    P.line([[38, 70], [31, 73]], '#e6ecf4', 1);
+
+    // fingers wrap from behind and curl round the key's left edge
+    for (const [fy, len] of [[50, 6], [57, 7], [64, 6]] as Pt[]) {
+      flesh(capsule(40, fy + 1, 40 - len, fy, 3.4, 3.1), [[39, fy - 2], [34, fy - 2.5]]);
+      P.ell(41 - len, fy - 1, 1.2, 0.9, highlight);
+    }
+
+    // thumb: beside the pad at rest, flat on it to touch, lifting on release
+    const tip: Record<MfaFrame, Pt> = { rest: [54, 47], touch: [46.5, 44], glow: [46, 44.5], release: [53, 41] };
+    const [tx, ty] = tip[frame];
+    flesh(capsule(68, 64, tx, ty, 6, 4.2), [[64, 55], [tx + 2, ty - 3]]);
+    P.ell(tx - 0.5, ty - 0.8, 2.2, 1.7, '#f2dccb');
+    if (lit) P.line([[tx - 4, ty + 3], [tx + 3, ty + 4.5]], '#b8fff0', 1);
+
+    // jacket sleeve over the wrist, out of the bottom-right corner
+    const sp = (x: number, y: number): Pt => [78 + (x - 73.5) * 2.1 + (y - 65) * 0.9, 76 + (y - 65) * 1.4];
+    paintVmJacketSleeve(look, {
+      shape: (color, pts) => P.poly(pts.map(([x, y]) => sp(x, y)), color),
+      seamLine: (pts) => P.line(pts.map(([x, y]) => sp(x, y)), look.seam),
+      ell: (color, x, y, rx, ry) => {
+        const [cx, cy] = sp(x, y);
+        P.ell(cx, cy, rx * 2.1, ry * 1.4, color);
+      },
+    });
+  });
+}
+
 function art(
   tool: ToolDef,
   gender: Gender,
@@ -635,15 +735,17 @@ function art(
   keyboardFrame?: KeyboardFrame,
   mouseFrame?: MouseFrame,
   badgeFrame?: BadgeFrame,
+  mfaFrame?: MfaFrame,
 ): Art | null {
   const skin = currentSkin();
-  const key = `${tool.id}:${gender}:${mode}:${usbFrame ?? ''}:${keyboardFrame ?? ''}:${mouseFrame ?? ''}:${badgeFrame ?? ''}:${skin.id}`;
+  const key = `${tool.id}:${gender}:${mode}:${usbFrame ?? ''}:${keyboardFrame ?? ''}:${mouseFrame ?? ''}:${badgeFrame ?? ''}:${mfaFrame ?? ''}:${skin.id}`;
   let a = cache.get(key);
   if (!a) {
     if (tool.id === 'usb') a = usbArt(usbFrame ?? (mode === 2 ? 'flash' : mode === 1 ? 'recoil' : 'rest'), gender, skin);
     else if (tool.id === 'keyboard') a = keyboardArt(keyboardFrame ?? (mode > 0 ? 'swing' : 'rest'), gender, skin);
     else if (tool.id === 'mouse') a = mouseArt(mouseFrame ?? 'rest', gender, skin);
     else if (tool.id === 'badge') a = badgeArt(badgeFrame ?? 'rest', gender, skin);
+    else if (tool.id === 'mfa') a = mfaArt(mfaFrame ?? 'rest', gender, skin);
     else return null;
     if (mode === 2 && tool.id !== 'keyboard') a = tintFlash(a, TOOL_FLASH[tool.id] ?? '255,255,255');
     cache.set(key, a);
@@ -687,7 +789,10 @@ export function drawToolViewmodel(
   const badgeFrame: BadgeFrame | undefined = tool.id !== 'badge' ? undefined
     : ph ? badgeFrameForUse(anim!.sinceUse, tool.windup ?? 0)
       : 'rest';
-  const a = art(tool, gender, lit ? 2 : fire ? 1 : 0, usbFrame, keyboardFrame, mouseFrame, badgeFrame);
+  const mfaFrame: MfaFrame | undefined = tool.id !== 'mfa' ? undefined
+    : ph ? mfaFrameForUse(anim!.sinceUse, tool.windup ?? 0)
+      : 'rest';
+  const a = art(tool, gender, lit ? 2 : fire ? 1 : 0, usbFrame, keyboardFrame, mouseFrame, badgeFrame, mfaFrame);
   // shared bob/strike/switch offsets for the art AND the rig-hand overlay
   const bx = Math.round(Math.sin(bob) * 6);
   const byy = Math.round(Math.abs(Math.cos(bob)) * 3);
@@ -828,7 +933,7 @@ const HAND_SINK = 4;
 const LIT_SWELL = 1.05;
 
 /** Per-tool viewmodel size multiplier (keyboard art runs ~25% of view width at 1). */
-const SIZE: Record<string, number> = { keyboard: 1.0, mouse: 0.7, badge: 0.66, usb: 1.0 };
+const SIZE: Record<string, number> = { keyboard: 1.0, mouse: 0.7, badge: 0.66, mfa: 0.62, usb: 1.0 };
 
 /** Muzzle-flash tint per tool (rgb for edgeFlash); also feeds the world light flood. */
 export const TOOL_FLASH: Record<string, string> = {
@@ -851,4 +956,5 @@ const POSE: Record<string, { wind: [number, number]; strike: [number, number] }>
   mouse: { wind: [0, 2], strike: [0, -5] }, // press, then pop up
   usb: { wind: [-2, -2], strike: [4, -12] }, // anticipation lift, recoil kick up-back
   badge: { wind: [7, 3], strike: [-24, -11] }, // pull back, swipe across the reader left
+  mfa: { wind: [0, 1], strike: [0, -8] }, // settle, then seat up into the reader
 };
