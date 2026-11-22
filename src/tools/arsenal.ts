@@ -139,14 +139,24 @@ export class Arsenal {
     }
   }
 
-  /** Queue a long explanation as 2-line ticker pages so it is never cut off mid-sentence. */
-  private say(text: string): void {
-    this.face.talk();
-    const lines = wrapText(text.toUpperCase(), TICKER_COLS, Infinity);
+  private queuePages(texts: string[]): void {
+    const lines = texts.flatMap((text) => wrapText(text.toUpperCase(), TICKER_COLS, Infinity));
     this.pages = [];
     for (let i = 0; i < lines.length; i += 2) this.pages.push(lines.slice(i, i + 2).join(' '));
     // let "YOU GOT THE ...!" read first
     this.pageT = 1.2;
+  }
+
+  /** Queue a long explanation as 2-line ticker pages so it is never cut off mid-sentence. */
+  private say(text: string): void {
+    this.face.talk();
+    this.queuePages([text]);
+  }
+
+  introduce(tools: ToolDef[]): void {
+    if (!tools.length) return;
+    this.face.talk();
+    this.queuePages(tools.map((t) => `[${t.slot}] ${t.name}: ${t.control?.use ?? ''}`));
   }
 
   owns(id: string): boolean {

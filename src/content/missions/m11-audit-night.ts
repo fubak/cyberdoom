@@ -33,12 +33,7 @@ export const m11: Mission = {
   title: 'AUDIT NIGHT',
   difficulty: 11,
   objectives: ['4.2', '5.4', '5.5', '5.1'],
-  briefing:
-    'External auditors walk in at 08:00 and the asset register has not been touched since 2021. ' +
-    'Sweep the floor, reconcile the inventory, dispose of the retired drives the right way, clear ' +
-    'the data-subject queue and set the pen-test scope — then sign the attestation. ' +
-    'Your kit: MOUSE (2) inspects, KEYBOARD (1) operates consoles, USB SCANNER (3) cleans malware, ' +
-    'BADGE (4) opens doors your role covers, TOKEN (7) is the media vault\u2019s second factor.',
+  briefing: 'External auditors walk in at 08:00 and the asset register has not been touched since 2021. Sweep the floor, reconcile the inventory, dispose of the retired drives the right way, clear the data-subject queue and set the pen-test scope, then sign the attestation.',
   authorizedRoles: ['analyst'],
   loadout: ['keyboard', 'mouse', 'usb', 'badge', 'mfa'],
   map: {

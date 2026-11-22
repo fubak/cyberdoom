@@ -26,11 +26,7 @@ export const m12: Mission = {
   title: 'ROBO SOC',
   difficulty: 12,
   objectives: ['4.7', '4.4', '3.2', '2.5'],
-  briefing:
-    'Alert volume tripled. Leadership wants the SOC automated by Friday, and the attackers know it. ' +
-    'Your kit: MOUSE (2) inspects, KEYBOARD (1) operates consoles, USB SCANNER (3) cleans hostiles, ' +
-    'BADGE (4) opens doors your roles cover, MFA (7) opens the crypto vault, ' +
-    'EDR (6) fires a containment pulse that quarantines malware in an area.',
+  briefing: 'Alert volume tripled. Leadership wants the SOC automated by Friday, and the attackers know it.',
   authorizedRoles: ['analyst'],
   loadout: ['keyboard', 'mouse', 'usb', 'badge', 'mfa', 'tap', 'patch', 'edr'],
   map: {

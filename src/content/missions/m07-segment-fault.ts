@@ -22,9 +22,7 @@ export const m07: Mission = {
   title: 'SEGMENT FAULT',
   difficulty: 7,
   objectives: ['3.2', '3.1', '4.5', '2.3'],
-  briefing:
-    'The plant network is flat: web server, database, admin PCs and a 20-year-old SCADA controller all on one subnet. ' +
-    'Your kit: MOUSE (2) inspects, KEYBOARD (1) operates consoles, USB SCANNER (3) cleans malware, BADGE (4) opens doors your role covers.',
+  briefing: 'The plant network is flat: web server, database, admin PCs and a 20-year-old SCADA controller all on one subnet.',
   authorizedRoles: ['analyst'],
   loadout: ['keyboard', 'mouse', 'usb', 'badge'],
   map: {

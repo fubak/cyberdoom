@@ -30,10 +30,10 @@ import { MissionRuntime } from './missions/runtime';
 import { mfaPending } from './tools/badge';
 import { Arsenal, ammoUnit } from './tools/arsenal';
 import { bindAudio } from './tools/sfx';
-import { missionById, requireMission } from './content/missions';
+import { missionById, newToolsFor, requireMission } from './content/missions';
 import { objectiveById } from './content/objectives';
 import { CHEATS, CheatBuffer, KonamiBuffer } from './eggs/cheats';
-import { toolForSlot } from './tools';
+import { toolForSlot, toolRegistry } from './tools';
 
 import { USB_PLUG_RANGE } from './tools/usb';
 import { characterSelect } from './ui/characterSelect';
@@ -824,6 +824,7 @@ class Game {
     this.particles.clear();
     this.feel = new Feel();
     this.arsenal.reset(mission, this.gender);
+    this.arsenal.introduce(newToolsFor(mission.id).map((toolId) => toolRegistry.require(toolId)));
     this.god = false;
     this.arsenal.face.god = false;
     this.cheatBuf = new CheatBuffer();

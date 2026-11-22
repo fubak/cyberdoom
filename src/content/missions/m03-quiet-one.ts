@@ -22,13 +22,7 @@ export const m03: Mission = {
   title: 'THE QUIET ONE',
   difficulty: 3,
   objectives: ['2.1', '2.4', '4.9', '3.3', '4.8'],
-  briefing:
-    'A DLP alert fired overnight: confidential R&D designs left the network, taken with valid credentials. ' +
-    'Four employees on this floor had the opportunity. MOUSE (2) pulls up what the logs hold on a person: ' +
-    'badge records, file-server access, endpoint and application logs. ' +
-    'Press E on a suspect to mark them; the security console then files the report. ' +
-    'Accuse the wrong person and an innocent colleague\'s career burns. ' +
-    'Malware is also loose on the floor.',
+  briefing: 'A DLP alert fired overnight: confidential R&D designs left the network, taken with valid credentials. Four employees on this floor had the opportunity. Accuse the wrong person and an innocent colleague’s career burns. Malware is also loose on the floor.',
   authorizedRoles: ['analyst'],
   loadout: ['keyboard', 'mouse', 'usb', 'badge', 'mfa', 'tap'],
   map: {

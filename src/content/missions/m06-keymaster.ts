@@ -10,9 +10,7 @@ export const m06: Mission = {
   title: 'KEYMASTER',
   difficulty: 6,
   objectives: ['1.2', '1.4', '3.3', '4.6'],
-  briefing:
-    'KEYMASTER security audit, 2026-10-05. An expired certificate, a leaked VPN key and exposed card data are blocking release. ' +
-    'Your kit: KEYBOARD (1) operates consoles, MOUSE (2) inspects, BADGE (4) presents your role, and MFA TOKEN (7) confirms a second factor.',
+  briefing: 'KEYMASTER security audit, 2026-10-05. An expired certificate, a leaked VPN key and exposed card data are blocking release.',
   authorizedRoles: ['analyst'],
   loadout: ['keyboard', 'mouse', 'usb', 'badge', 'mfa'],
   map: {

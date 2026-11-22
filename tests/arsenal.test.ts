@@ -97,6 +97,23 @@ describe('arsenal runtime', () => {
     a.grant('usb-charge', 999);
     expect(a.ammo.get('usb-charge')).toBe(30);
   });
+
+  it('introduces tools through ticker pages without switching or claiming them', () => {
+    const bus = new EventBus();
+    const messages: string[] = [];
+    bus.on('message', ({ text }) => messages.push(text));
+    const a = new Arsenal(bus);
+    a.reset({ difficulty: 1, loadout: ['keyboard'] }, 'male');
+    settle(a);
+    a.introduce([toolRegistry.require('mfa'), toolRegistry.require('patch')]);
+    for (let i = 0; i < 500; i++) a.update(1 / 60, false, false, () => ctx());
+    const ticker = messages.join(' ');
+    expect(ticker).toContain('[7] MFA TOKEN:');
+    expect(ticker).toContain('[8] PATCH DISK:');
+    expect(a.current.id).toBe('keyboard');
+    expect(a.owns('mfa')).toBe(false);
+    expect(a.owns('patch')).toBe(false);
+  });
 });
 
 describe('tool mechanics', () => {
