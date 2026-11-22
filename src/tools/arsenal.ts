@@ -56,6 +56,10 @@ const PICKUP_NAME: Record<string, [string, string]> = {
 const TICKER_COLS = 52;
 const RES_LABEL: Record<string, string> = { 'usb-charge': 'SCAN', pcap: 'PCAP', 'edr-cell': 'CELL', 'patch-disk': 'DISK' };
 
+function toolIntroduction(t: ToolDef): string {
+  return `${t.passive ? '' : `[${t.slot}] `}${t.name}: ${t.control?.use ?? ''}`;
+}
+
 /** Tool-native unit name for an ammo resource ('-1 SCAN', '-1 PCAP', ...). */
 export function ammoUnit(resource: string): string {
   return RES_LABEL[resource] ?? resource.slice(0, 4).toUpperCase();
@@ -84,6 +88,9 @@ export class Arsenal {
   private confirmGood = true;
   private time = 0;
   private dryMsgT = 0;
+  private flashId: string | null = null;
+  private flashElapsed = 0;
+  private flashQueue: string[] = [];
 
   constructor(private bus: EventBus) {
     bus.on('tool-hit', ({ toolId, good }) => this.confirm(good, toolId));
@@ -107,9 +114,13 @@ export class Arsenal {
     this.gender = gender;
     this.owned.clear();
     this.ammo.clear();
+    this.flashId = null;
+    this.flashElapsed = 0;
+    this.flashQueue = [];
     for (const id of defaultLoadout(mission)) this.own(toolRegistry.require(id), false);
     for (const t of sorted()) if (t.ammo && !this.ammo.has(t.ammo.resource)) this.ammo.set(t.ammo.resource, 0);
-    this.current = sorted().find((t) => this.owned.has(t.id)) ?? sorted()[0];
+    const activeTools = sorted().filter((t) => !t.passive);
+    this.current = activeTools.find((t) => this.owned.has(t.id)) ?? activeTools[0];
     this.next = null;
     this.swapPhase = 'raise';
     this.swapT = 0;
@@ -134,8 +145,8 @@ export class Arsenal {
       this.face.talk();
       this.gotT = 0;
       this.gotSlot = t.slot;
-      this.say(`[${t.slot}] ${t.name}: ${t.control?.use ?? ''}`);
-      this.switchTo(t);
+      this.say(toolIntroduction(t));
+      if (!t.passive) this.switchTo(t);
     }
   }
 
@@ -156,7 +167,7 @@ export class Arsenal {
   introduce(tools: ToolDef[]): void {
     if (!tools.length) return;
     this.face.talk();
-    this.queuePages(tools.map((t) => `[${t.slot}] ${t.name}: ${t.control?.use ?? ''}`));
+    this.queuePages(tools.map(toolIntroduction));
   }
 
   owns(id: string): boolean {
@@ -215,6 +226,13 @@ export class Arsenal {
   select(slot: number): boolean {
     const t = sorted().find((x) => x.slot === slot);
     if (!t) return false;
+    if (t.passive) {
+      this.bus.emit('message', {
+        text: 'BADGE and TOKEN work automatically: press E at a reader.',
+        kind: 'info',
+      });
+      return false;
+    }
     if (!this.owned.has(t.id)) {
       playTool('dry');
       this.bus.emit('message', { text: `Slot ${slot} empty: ${t.name} not issued yet.`, kind: 'info' });
@@ -225,7 +243,7 @@ export class Arsenal {
   }
 
   cycle(dir: number): void {
-    const owned = sorted().filter((t) => this.owned.has(t.id));
+    const owned = sorted().filter((t) => !t.passive && this.owned.has(t.id));
     if (owned.length < 2) return;
     const target = this.next ?? this.current;
     const i = owned.indexOf(target);
@@ -233,6 +251,7 @@ export class Arsenal {
   }
 
   private switchTo(t: ToolDef): void {
+    if (t.passive) return;
     this.queued = false;
     if (t === this.current && !this.next) return;
     this.next = t;
@@ -247,6 +266,29 @@ export class Arsenal {
   /** Is a switch in progress (tool unusable)? */
   get switching(): boolean {
     return this.swapPhase !== 'none';
+  }
+
+  get viewTool(): ToolDef {
+    return this.flashId ? toolRegistry.require(this.flashId) : this.current;
+  }
+
+  flash(toolId: string): void {
+    const tool = toolRegistry.get(toolId);
+    if (!tool) return;
+    if (this.flashId) {
+      this.flashQueue.push(tool.id);
+      return;
+    }
+    this.flashId = tool.id;
+    this.flashElapsed = 0;
+  }
+
+  private tickFlash(dt: number): void {
+    if (!this.flashId) return;
+    this.flashElapsed += dt;
+    if (this.flashElapsed < 0.6) return;
+    this.flashId = this.flashQueue.shift() ?? null;
+    this.flashElapsed = 0;
   }
 
   get cooldownFrac(): number {
@@ -270,6 +312,7 @@ export class Arsenal {
     this.gotT += dt;
     this.sinceUse += dt;
     this.sinceConfirm += dt;
+    this.tickFlash(dt);
     this.dryMsgT = Math.max(0, this.dryMsgT - dt);
     this.pageT -= dt;
     if (this.pages.length && this.pageT <= 0) {
@@ -368,14 +411,15 @@ export class Arsenal {
     let lower = 0;
     if (this.swapPhase === 'lower') lower = Math.min(1, this.swapT / LOWER);
     else if (this.swapPhase === 'raise') lower = Math.max(0, 1 - this.swapT / RAISE);
+    const flashing = this.flashId !== null;
     return {
-      sinceUse: this.sinceUse,
+      sinceUse: flashing ? this.flashElapsed : this.sinceUse,
       sinceConfirm: this.sinceConfirm,
       confirmGood: this.confirmGood,
       time: this.time,
-      ammo: this.ammoFor(),
+      ammo: this.ammoFor(this.viewTool),
       skin: skinTriple(),
-      lower,
+      lower: flashing ? 0 : lower,
     };
   }
 

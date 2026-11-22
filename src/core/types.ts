@@ -385,6 +385,8 @@ export interface ToolDef {
   name: string;
   /** Slot key 1-9. */
   slot: number;
+  /** Passive tools are owned for gating but are not selectable weapons. */
+  passive?: boolean;
   /** Ammo resource id and starting amount; null = infinite. */
   ammo: { resource: string; start: number; max: number } | null;
   /** Seconds between uses. */

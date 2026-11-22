@@ -62,17 +62,14 @@ describe('tool behavior', () => {
     );
     expect(seen).toEqual(['e1']);
   });
-  it('badge emits allowed=false for unauthorized role', () => {
-    const bus = new EventBus();
-    const events: boolean[] = [];
-    bus.on('badge-door', ({ allowed }) => events.push(allowed));
-    toolForSlot(4)!.use(
-      ctx({
-        bus,
-        authorizedRoles: ['analyst'],
-        isDoorAhead: () => ({ doorId: 'd', accessRole: 'admin', dist: 1 }),
-      }),
+  it('badge and MFA token are passive in their existing slots', () => {
+    expect(toolForSlot(4)).toMatchObject({ id: 'badge', passive: true });
+    expect(toolForSlot(7)).toMatchObject({ id: 'mfa', passive: true });
+    expect(toolForSlot(4)?.control?.use).toBe(
+      'Press E at a reader door and your badge swipes itself. Doors open only for roles you hold; trying a door outside your role is logged as a violation.',
     );
-    expect(events).toEqual([false]);
+    expect(toolForSlot(7)?.control?.use).toBe(
+      'MFA doors: press E and the reader takes your badge (something you have), then your fingerprint on the token (something you are). The key refuses look-alike sign-in prompts on its own.',
+    );
   });
 });

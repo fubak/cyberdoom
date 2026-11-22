@@ -1,10 +1,39 @@
-import type { ToolDef, ToolUseContext } from '../core/types';
+import type { Entity, ToolDef, ToolUseContext } from '../core/types';
 import { impactBurst, usePhase, tipY } from './anim';
 import { bevel, rect } from './pixel';
 import { mfaPending } from './badge';
 import { targetNoun } from './hint';
 
 const WINDUP = 0.08;
+
+export function completeMfa(
+  ctx: Pick<ToolUseContext, 'bus' | 'entities'>,
+  door: { doorId: string; accessRole?: string; mfa?: boolean },
+): boolean {
+  if (!door.mfa) return false;
+  const pending = mfaPending(ctx.entities);
+  if (!pending.has(door.doorId)) return false;
+  pending.delete(door.doorId);
+  ctx.bus.emit('tool-hit', { toolId: 'mfa', good: true });
+  ctx.bus.emit('message', {
+    text: 'MFA PASSED: badge (have) + fingerprint on the token (are). Door released.',
+    kind: 'good',
+  });
+  ctx.bus.emit('badge-door', { doorId: door.doorId, accessRole: door.accessRole, allowed: true });
+  return true;
+}
+
+export function refuseMfaPrompt(ctx: Pick<ToolUseContext, 'bus'>, e: Entity): boolean {
+  const tags = e.def.tags ?? [];
+  if (e.def.inspect?.category !== 'phishing' && !tags.includes('phish-prompt')) return false;
+  e.state.mfaRefused = true;
+  ctx.bus.emit('tool-hit', { toolId: 'mfa', entityId: e.def.id, good: false });
+  ctx.bus.emit('message', {
+    text: `KEY REFUSED: ${e.def.inspect?.label ?? 'this prompt'} is not the enrolled origin. FIDO2 won't sign for a look-alike. MOUSE (2) it and flag it.`,
+    kind: 'warn',
+  });
+  return true;
+}
 
 /**
  * Slot 7 — MFA TOKEN (FIDO2 security key with a fingerprint sensor).
@@ -18,6 +47,7 @@ export const mfaTool: ToolDef = {
   id: 'mfa',
   name: 'MFA TOKEN',
   slot: 7,
+  passive: true,
   ammo: null,
   cooldown: 0.5,
   windup: WINDUP,
@@ -28,7 +58,7 @@ export const mfaTool: ToolDef = {
     category: 'technical',
     types: ['preventive'],
     objectives: ['4.6', '2.2'],
-    use: 'MFA doors: swipe the BADGE (something you have), then touch the token (your fingerprint: something you are). It refuses phishing prompts and shared accounts, because the key is bound to your identity and to the real site.',
+    use: 'MFA doors: press E and the reader takes your badge (something you have), then your fingerprint on the token (something you are). The key refuses look-alike sign-in prompts on its own.',
     lesson: 'Real MFA mixes factor types: know, have, are. Two of one type is not MFA. FIDO2 keys check the origin, so they resist phishing.',
   },
   drawViewmodel(g, w, h, _bob, _gender, _cd, anim) {
@@ -82,23 +112,17 @@ export const mfaTool: ToolDef = {
     ctx.bus.emit('tool-used', { toolId: 'mfa' });
     const door = ctx.isDoorAhead();
     if (door) {
-      const pending = mfaPending(ctx.entities);
       if (!door.mfa) {
         ctx.bus.emit('message', { text: 'This reader is badge-only: no MFA prompt here.', kind: 'info' });
         return;
       }
-      if (!pending.has(door.doorId)) {
+      if (!completeMfa(ctx, door)) {
         ctx.bus.emit('tool-hit', { toolId: 'mfa', good: false });
         ctx.bus.emit('message', {
-          text: 'MFA needs TWO factors: swipe the BADGE (4) first, then the token. One factor alone does not open it.',
+          text: 'MFA needs TWO factors: the badge and the token. One factor alone does not open it.',
           kind: 'warn',
         });
-        return;
       }
-      pending.delete(door.doorId);
-      ctx.bus.emit('tool-hit', { toolId: 'mfa', good: true });
-      ctx.bus.emit('message', { text: 'MFA PASSED: badge (have) + fingerprint (are). Door released.', kind: 'good' });
-      ctx.bus.emit('badge-door', { doorId: door.doorId, accessRole: door.accessRole, allowed: true });
       return;
     }
     const e = ctx.aimEntity(2.5, 0.4);
@@ -107,15 +131,7 @@ export const mfaTool: ToolDef = {
       return;
     }
     const tags = e.def.tags ?? [];
-    if (e.def.inspect?.category === 'phishing' || tags.includes('phish-prompt')) {
-      e.state.mfaRefused = true;
-      ctx.bus.emit('tool-hit', { toolId: 'mfa', entityId: e.def.id, good: false });
-      ctx.bus.emit('message', {
-        text: `KEY REFUSED: ${e.def.inspect?.label ?? 'this prompt'} is not the enrolled origin. FIDO2 won't sign for a look-alike. MOUSE (2) it and flag it.`,
-        kind: 'warn',
-      });
-      return;
-    }
+    if (refuseMfaPrompt(ctx, e)) return;
     if (tags.includes('shared-account')) {
       ctx.bus.emit('tool-hit', { toolId: 'mfa', entityId: e.def.id, good: false });
       ctx.bus.emit('message', {

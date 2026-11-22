@@ -37,6 +37,32 @@ const MSG_RAMP: Record<string, string[]> = {
 /** Objective strip never exceeds 12% of the 168px 3D view. */
 const OBJ_STRIP_MAX = 20;
 
+function drawPassiveKeycard(g: CanvasRenderingContext2D, id: string, x: number, y: number): void {
+  if (id === 'badge') {
+    g.fillStyle = '#1f5f9b';
+    g.fillRect(x + 2, y + 1, 7, 5);
+    g.fillStyle = '#82c7ff';
+    g.fillRect(x + 2, y + 1, 7, 1);
+    g.fillStyle = '#d8edff';
+    g.fillRect(x + 3, y + 3, 2, 2);
+    g.fillStyle = '#a6d4f5';
+    g.fillRect(x + 6, y + 3, 2, 1);
+    g.fillRect(x + 6, y + 5, 2, 1);
+  } else if (id === 'mfa') {
+    g.fillStyle = '#9a9da5';
+    g.fillRect(x + 1, y + 1, 5, 5);
+    g.fillStyle = '#191b20';
+    g.fillRect(x + 2, y + 1, 4, 4);
+    g.fillStyle = '#c6a23e';
+    g.fillRect(x + 3, y + 2, 2, 2);
+    g.fillStyle = '#626a78';
+    g.fillRect(x + 5, y + 2, 5, 3);
+    g.fillStyle = '#24272d';
+    g.fillRect(x + 5, y + 3, 4, 1);
+    g.fillRect(x + 7, y + 4, 1, 2);
+  }
+}
+
 let tickerPattern: CanvasPattern | null = null;
 
 function getTickerPattern(g: CanvasRenderingContext2D): CanvasPattern | null {
@@ -184,6 +210,8 @@ export class Hud {
     ammo: number | null;
     ammoName: string;
     tool: ToolDef;
+    /** Passive use feedback draws its painted viewmodel without changing the held tool. */
+    viewTool?: ToolDef;
     bob: number;
     cooldownFrac: number;
     gender: Gender;
@@ -235,9 +263,10 @@ export class Hud {
     if (opts.viewmodelOffset) {
       g.translate(Math.round(opts.viewmodelOffset.x), Math.round(opts.viewmodelOffset.y));
     }
-    if (!drawToolViewmodel(g, opts.tool, BASE_W, BASE_H - BASE_STATUS, bob, opts.gender, opts.cooldownFrac, this.time, opts.anim)) {
-      opts.tool.drawViewmodel(g, BASE_W, BASE_H - BASE_STATUS, Math.sin(bob) * 2, opts.gender, opts.cooldownFrac, opts.anim);
-      if (opts.anim) opts.tool.drawFx?.(g, BASE_W, BASE_H - BASE_STATUS, opts.anim);
+    const viewTool = opts.viewTool ?? opts.tool;
+    if (!drawToolViewmodel(g, viewTool, BASE_W, BASE_H - BASE_STATUS, bob, opts.gender, opts.cooldownFrac, this.time, opts.anim)) {
+      viewTool.drawViewmodel(g, BASE_W, BASE_H - BASE_STATUS, Math.sin(bob) * 2, opts.gender, opts.cooldownFrac, opts.anim);
+      if (opts.anim) viewTool.drawFx?.(g, BASE_W, BASE_H - BASE_STATUS, opts.anim);
     }
     g.restore();
     g.restore();
@@ -266,7 +295,7 @@ export class Hud {
     // tool use effects live in the aim space: drawn last so the beam/ring/
     // LED reads on top of the viewmodel and the tool's own screen flash,
     // like Doom's tracer + wall impact drawn over the gun sprite
-    if (opts.anim) this.drawUseFx(opts.tool, opts.anim);
+    if (opts.anim) this.drawUseFx(viewTool, opts.anim);
     this.drawBar(opts);
   }
 
@@ -705,20 +734,25 @@ export class Hud {
       alarmWell(g, P_AMMO, by, pulse);
     }
 
-    // TOOLS grid wells (Doom ARMS): 4x2, slots 1-8, boxed when held,
-    // blinking gold right after a tool is found
+    // Active tools use the Doom ARMS wells; passive slots hold reader keycards.
     const tools = sortedTools();
     for (let i = 0; i < 8; i++) {
       const slot = i + 1;
       const t = tools.find((tt) => tt.slot === slot);
       const x = P_TOOLS[0] + 3 + (i % 4) * 11;
       const y = by + 6 + Math.floor(i / 4) * 10;
-      const active = !!t && t.slot === o.tool.slot;
+      const passive = !!t?.passive;
+      const owned = !!t && (o.owned ?? []).includes(t.id);
+      const active = !!t && !passive && t.slot === o.tool.slot;
       const fresh = !!o.got && o.got.slot === slot && o.got.blink;
       g.fillStyle = fresh ? '#ffd040' : active ? '#3a3010' : '#0c0e12';
       g.fillRect(x, y, 11, 7);
       g.fillStyle = active || fresh ? '#ffd040' : '#2a2e38';
       g.fillRect(x, y, 11, 1);
+      if (passive) {
+        if (owned) drawPassiveKeycard(g, t.id, x, y);
+        continue;
+      }
     }
 
     // FACE

@@ -1,6 +1,4 @@
 import type { Entity } from '../core/types';
-import { badgeTool } from '../tools/badge';
-import { mfaTool } from '../tools/mfa';
 
 /**
  * The single source of truth for what E/Space does: both the actual E action
@@ -18,6 +16,7 @@ export interface UseTargetContext {
   /** Player's authorized roles and whether they own the badge tool. */
   roles: string[];
   hasBadge: boolean;
+  hasToken: boolean;
   /** Door ids where the badge factor was already presented (MFA in progress). */
   mfaPending: Set<string>;
 }
@@ -42,14 +41,12 @@ export function resolveUse(ctx: UseTargetContext): UseTarget {
 }
 
 /**
- * E-line text for a door, mirroring what the runtime does on E today:
- * open unrestricted doors; for role readers warn when out of role / advise
- * the badge tool, swipe when authorized; advise the token while MFA pends.
+ * E-line text for a door, mirroring the passive badge/MFA reader flow.
  */
 export function doorUseHint(ctx: UseTargetContext, door: { doorId: string; accessRole?: string; mfa?: boolean }): string {
   if (door.accessRole === undefined) return 'OPEN DOOR';
-  if (door.mfa && ctx.mfaPending.has(door.doorId)) return `SECOND FACTOR: TOKEN [${mfaTool.slot}]`;
   if (!ctx.roles.includes(door.accessRole)) return `READER: ${door.accessRole.toUpperCase()} ONLY`;
-  if (!ctx.hasBadge) return `READER: SELECT BADGE [${badgeTool.slot}]`;
+  if (!ctx.hasBadge) return 'READER: NO BADGE';
+  if (door.mfa) return ctx.hasToken ? 'BADGE + TOKEN AT READER' : 'MFA READER: NO TOKEN';
   return 'SWIPE BADGE AT READER';
 }
