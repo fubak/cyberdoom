@@ -1206,6 +1206,57 @@ export class MissionRuntime {
     };
   }
 
+  /** Active objective text, verdict-neutral target points, and secrets count for the automap. */
+  automapOverlay(): {
+    objectiveText?: string;
+    objectivePoints: { x: number; y: number }[];
+    secrets: number;
+    secretsTotal: number;
+  } {
+    const stats = this.stats();
+    const active = this.requiredObjectives().find((o) => !o.done);
+    const points: { x: number; y: number }[] = [];
+    if (active) {
+      if (active.def.kind === 'reach-exit') {
+        const grid = this.mission.map.grid;
+        for (let y = 0; y < grid.length; y++) {
+          for (let x = 0; x < grid[y].length; x++) {
+            if (this.mission.map.legend[grid[y][x]]?.kind === 'exit') {
+              points.push({ x: x + 0.5, y: y + 0.5 });
+            }
+          }
+        }
+      } else if (active.def.kind === 'report') {
+        for (const e of this.entities) {
+          if (e.alive && e.def.kind === 'npc') points.push({ x: e.x, y: e.y });
+        }
+      } else {
+        const doneIds = this.counted.get(active.def.id);
+        for (const e of this.entities) {
+          if (!e.alive || doneIds?.has(e.def.id)) continue;
+          if (active.def.tag) {
+            if (e.def.tags?.includes(active.def.tag)) points.push({ x: e.x, y: e.y });
+          } else if (active.def.kind === 'clean' && e.infected) {
+            points.push({ x: e.x, y: e.y });
+          } else if (active.def.kind === 'patch' && e.def.kind === 'workstation' && !e.state.patched) {
+            points.push({ x: e.x, y: e.y });
+          }
+        }
+      }
+    }
+    const objectiveText = active
+      ? (active.target > 1
+          ? `${active.def.text} (${Math.min(active.progress, active.target)}/${active.target})`
+          : active.def.text)
+      : undefined;
+    return {
+      objectiveText,
+      objectivePoints: points,
+      secrets: stats.secrets,
+      secretsTotal: stats.secretsTotal,
+    };
+  }
+
   objectiveTitle(id: string): string {
     return objectiveById(id)?.title ?? id;
   }
