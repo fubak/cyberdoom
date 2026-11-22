@@ -24,7 +24,7 @@ export const m07: Mission = {
   objectives: ['3.2', '3.1', '4.5', '2.3'],
   briefing: 'The plant network is flat: web server, database, admin PCs and a 20-year-old SCADA controller all on one subnet.',
   authorizedRoles: ['analyst'],
-  loadout: ['keyboard', 'mouse', 'usb', 'badge'],
+  loadout: ['keyboard', 'mouse', 'usb', 'badge', 'firewall'],
   map: {
     grid: [
     '##############################################',

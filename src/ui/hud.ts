@@ -824,21 +824,21 @@ export class Hud {
 
     // Active tools use the Doom ARMS wells; passive slots hold reader keycards.
     const tools = sortedTools();
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < 9; i++) {
       const slot = i + 1;
       const t = tools.find((tt) => tt.slot === slot);
-      const x = P_TOOLS[0] + 3 + (i % 4) * 11;
-      const y = by + 6 + Math.floor(i / 4) * 10;
+      const x = P_TOOLS[0] + 2 + (i % 5) * 9;
+      const y = by + 6 + Math.floor(i / 5) * 10;
       const passive = !!t?.passive;
       const owned = !!t && (o.owned ?? []).includes(t.id);
       const active = !!t && !passive && t.slot === o.tool.slot;
       const fresh = !!o.got && o.got.slot === slot && o.got.blink;
       g.fillStyle = fresh ? '#ffd040' : active ? '#3a3010' : '#0c0e12';
-      g.fillRect(x, y, 11, 7);
+      g.fillRect(x, y, 8, 7);
       g.fillStyle = active || fresh ? '#ffd040' : '#2a2e38';
-      g.fillRect(x, y, 11, 1);
+      g.fillRect(x, y, 8, 1);
       if (passive) {
-        if (owned) drawPassiveKeycard(g, t.id, x, y);
+        if (owned) drawPassiveKeycard(g, t.id, x - 1, y);
         continue;
       }
     }

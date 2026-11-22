@@ -33,7 +33,7 @@ export const m10: Mission = {
   objectives: ['5.3', '5.2', '2.2', '3.1'],
   briefing: 'A new SaaS vendor wants remote access to production next week, and their rep is already in the meeting room pushing to skip the assessment. Meanwhile a compromised MSP is pushing an unscheduled update through the trusted RMM channel.',
   authorizedRoles: ['analyst'],
-  loadout: ['keyboard', 'mouse', 'usb', 'badge', 'mfa'],
+  loadout: ['keyboard', 'mouse', 'usb', 'badge', 'mfa', 'firewall'],
   map: {
     grid: [
     '########################################',

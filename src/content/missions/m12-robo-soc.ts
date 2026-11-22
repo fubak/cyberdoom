@@ -28,7 +28,7 @@ export const m12: Mission = {
   objectives: ['4.7', '4.4', '3.2', '2.5'],
   briefing: 'Alert volume tripled. Leadership wants the SOC automated by Friday, and the attackers know it.',
   authorizedRoles: ['analyst'],
-  loadout: ['keyboard', 'mouse', 'usb', 'badge', 'mfa', 'tap', 'patch', 'edr'],
+  loadout: ['keyboard', 'mouse', 'usb', 'badge', 'mfa', 'tap', 'patch', 'edr', 'firewall'],
   map: {
     grid: [
     '################################################',

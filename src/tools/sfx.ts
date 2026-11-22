@@ -17,7 +17,7 @@ export type ToolSound =
   | 'kb-swing' | 'kb-impact' | 'mouse-click' | 'mouse-flag' | 'usb-fire' | 'usb-hit'
   | 'badge-swipe' | 'badge-ok' | 'badge-deny' | 'door-clunk' | 'tap-sweep' | 'edr-charge' | 'edr-blast'
   | 'dry' | 'lower' | 'raise' | 'new-tool' | 'ammo' | 'menu-move' | 'menu-pick' | 'menu-back'
-  | 'fizzle' | 'confirm' | 'mfa-beep' | 'patch-insert' | 'patch-fire';
+  | 'fizzle' | 'confirm' | 'mfa-beep' | 'patch-insert' | 'patch-fire' | 'firewall-blast';
 
 export type VoiceLine = 'pain' | 'grunt' | 'ready' | 'pickup' | 'death';
 
