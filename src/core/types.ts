@@ -51,6 +51,14 @@ export interface CellDef {
    *  second factor (ARSENAL, SY0-701 4.6). */
   mfa?: boolean;
   lockText?: string;
+  /** Optional floor elevation in world units (default 0; e.g. 0.16 for a raised dais). */
+  floorHeight?: number;
+  /** Optional ceiling elevation in world units (defaults to automatic room height). */
+  ceilHeight?: number;
+  /** Open-air / skylight cell: omits ceiling quad to reveal the episode skybox. */
+  sky?: boolean;
+  /** Reinforced glass window wall: blocks movement while letting the player see through. */
+  window?: boolean;
 }
 
 /** Grid map. `grid` rows must all have equal length; the border must be enclosed. */

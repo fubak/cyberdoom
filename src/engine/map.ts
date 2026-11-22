@@ -1,5 +1,10 @@
 import type { CellDef, MapDef } from '../core/types';
 
+export const DEFAULT_CEIL_H = 1.25;
+export const VAULT_CEIL_H = 1.68;
+export const DOOR_CEIL_H = 1.12;
+export const SKY_PARAPET_H = 2.05;
+
 export interface WorldMapSnapshot {
   doors: Map<string, number>;
   openingDoors: Set<string>;
@@ -94,6 +99,63 @@ export class WorldMap {
   lightAt(tx: number, ty: number): number {
     const key = `${tx},${ty}`;
     return this.def.lights?.[key] ?? this.def.defaultLight ?? 0.9;
+  }
+
+  /** Floor elevation in world units (0 for flat floor, >0 for raised dais/steps). */
+  floorHeightAt(tx: number, ty: number): number {
+    const c = this.cellAt(tx, ty);
+    if (!c) return 0;
+    return Math.max(0, c.floorHeight ?? 0);
+  }
+
+  floorHeightAtF(x: number, y: number): number {
+    return this.floorHeightAt(Math.floor(x), Math.floor(y));
+  }
+
+  /** True if the cell opens to the episode skybox instead of a solid ceiling. */
+  isSky(tx: number, ty: number): boolean {
+    const c = this.cellAt(tx, ty);
+    return !!c && c.kind !== 'wall' && !!c.sky;
+  }
+
+  /** True if the cell is a reinforced glass window wall (blocks movement, transparent). */
+  isWindow(tx: number, ty: number): boolean {
+    const c = this.cellAt(tx, ty);
+    return !!c && c.kind === 'wall' && !!c.window;
+  }
+
+  /**
+   * Ceiling height in world units. Explicit `ceilHeight` wins; otherwise doors
+   * get a slight Doom-style header drop and wide open rooms (>=7 non-wall
+   * neighbors in 3x3) get vaulted ceilings.
+   */
+  ceilHeightAt(tx: number, ty: number): number {
+    const c = this.cellAt(tx, ty);
+    if (!c) return DEFAULT_CEIL_H;
+    if (c.ceilHeight !== undefined) return c.ceilHeight;
+    if (c.sky) return SKY_PARAPET_H;
+    if (c.kind === 'door') return DOOR_CEIL_H;
+    if (c.kind === 'floor' || c.kind === 'exit') {
+      let open = 0;
+      for (let oy = -1; oy <= 1; oy++) {
+        for (let ox = -1; ox <= 1; ox++) {
+          if (ox === 0 && oy === 0) continue;
+          const n = this.cellAt(tx + ox, ty + oy);
+          if (n && n.kind !== 'wall') open++;
+        }
+      }
+      if (open >= 7) return VAULT_CEIL_H;
+    }
+    return DEFAULT_CEIL_H;
+  }
+
+  /** True if a tile blocks line-of-sight (solid wall or closed door; windows are transparent). */
+  opaque(tx: number, ty: number): boolean {
+    const c = this.cellAt(tx, ty);
+    if (!c) return true;
+    if (c.kind === 'wall') return !c.window;
+    if (c.kind === 'door') return !this.isDoorOpen(c.doorId ?? '');
+    return false;
   }
 
   /**

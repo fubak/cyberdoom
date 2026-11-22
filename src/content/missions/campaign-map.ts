@@ -248,3 +248,105 @@ export function applyMissionTheme(mission: Mission): void {
     propIdx += 1;
   }
 }
+
+function pickUnusedGlyph(legend: MapDef['legend'], candidates: string): string | null {
+  for (const ch of candidates) {
+    if (!(ch in legend)) return ch;
+  }
+  return null;
+}
+
+/** Add Doom-style architectural accents (open-air skylight wells, raised exit
+ *  dais platforms, and reinforced glass observation windows) without altering
+ *  walkability, doors, secrets, or mission scripting. */
+export function applyArchitecture(mission: Mission): void {
+  const { map } = mission;
+  const h = map.grid.length;
+  const w = map.grid[0]?.length ?? 0;
+  if (h < 5 || w < 5) return;
+
+  const baseFloorTex = Object.values(map.legend).find((d) => d.kind === 'floor')?.tex ?? 'floor';
+  const baseWallTex = Object.values(map.legend).find((d) => d.kind === 'wall' && d.tex !== 'wall-secret')?.tex ?? 'wall-panel';
+  const spawnX = Math.floor(map.spawn.x);
+  const spawnY = Math.floor(map.spawn.y);
+
+  // 1. Raised dais on exit cells (subtle 0.16-unit podium)
+  for (const def of Object.values(map.legend)) {
+    if (def.kind === 'exit' && def.floorHeight === undefined) {
+      def.floorHeight = 0.16;
+    }
+  }
+
+  // 2. Skylight well in a wide open 3x3 floor chamber (away from spawn)
+  const skyGlyph = pickUnusedGlyph(map.legend, '~$%^&*@');
+  if (skyGlyph) {
+    let best: { x: number; y: number; dist: number } | null = null;
+    for (let y = 2; y < h - 2; y++) {
+      for (let x = 2; x < w - 2; x++) {
+        let allFloor = true;
+        for (let oy = -1; oy <= 1 && allFloor; oy++) {
+          for (let ox = -1; ox <= 1; ox++) {
+            const def = map.legend[map.grid[y + oy]?.[x + ox] ?? ''];
+            if (!def || def.kind !== 'floor') {
+              allFloor = false;
+              break;
+            }
+          }
+        }
+        if (!allFloor) continue;
+        const dist = Math.hypot(x - spawnX, y - spawnY);
+        if (dist < 3) continue;
+        if (!best || dist < best.dist) best = { x, y, dist };
+      }
+    }
+    if (best) {
+      map.legend[skyGlyph] = { kind: 'floor', tex: baseFloorTex, sky: true };
+      setMapCell(map, best.x, best.y, skyGlyph);
+      // Expand skylight to a 2x2 well if the adjacent ring is also open floor
+      const neighbors: [number, number][] = [[1, 0], [0, 1], [1, 1]];
+      if (
+        neighbors.every(([ox, oy]) => {
+          const def = map.legend[map.grid[best!.y + oy]?.[best!.x + ox] ?? ''];
+          return def?.kind === 'floor';
+        })
+      ) {
+        for (const [ox, oy] of neighbors) setMapCell(map, best.x + ox, best.y + oy, skyGlyph);
+      }
+    }
+  }
+
+  // 3. Reinforced glass observation windows on interior divider walls
+  const winGlyph = pickUnusedGlyph(map.legend, '=+;:?/');
+  if (winGlyph) {
+    let placed = 0;
+    for (let y = 2; y < h - 2 && placed < 2; y++) {
+      for (let x = 2; x < w - 2 && placed < 2; x++) {
+        const ch = map.grid[y]?.[x];
+        const def = ch ? map.legend[ch] : undefined;
+        if (!def || def.kind !== 'wall' || def.secret || def.tex === 'wall-secret') continue;
+        const n = map.legend[map.grid[y - 1]?.[x] ?? ''];
+        const s = map.legend[map.grid[y + 1]?.[x] ?? ''];
+        const e = map.legend[map.grid[y]?.[x + 1] ?? ''];
+        const we = map.legend[map.grid[y]?.[x - 1] ?? ''];
+        const horizWindow = n?.kind === 'floor' && s?.kind === 'floor' && e?.kind === 'wall' && we?.kind === 'wall';
+        const vertWindow = e?.kind === 'floor' && we?.kind === 'floor' && n?.kind === 'wall' && s?.kind === 'wall';
+        if (!horizWindow && !vertWindow) continue;
+        // Skip walls adjacent to any door or secret
+        let nearDoor = false;
+        for (let oy = -1; oy <= 1 && !nearDoor; oy++) {
+          for (let ox = -1; ox <= 1; ox++) {
+            const adj = map.legend[map.grid[y + oy]?.[x + ox] ?? ''];
+            if (adj && (adj.kind === 'door' || adj.secret)) nearDoor = true;
+          }
+        }
+        if (nearDoor) continue;
+        if (placed === 0) {
+          map.legend[winGlyph] = { kind: 'wall', tex: baseWallTex, window: true };
+        }
+        setMapCell(map, x, y, winGlyph);
+        placed++;
+        x += 3; // space out windows
+      }
+    }
+  }
+}
