@@ -293,105 +293,104 @@ function keyboardArt(frame: KeyboardFrame, gender: Gender, skin: SkinTone): Art 
 
 function mouseArt(frame: MouseFrame, gender: Gender, skin: SkinTone): Art {
   const look = vmHandArt(gender, skin);
-  const [, shadow, base, highlight] = look.ramp;
+  const [deep, shadow, base, highlight] = look.ramp;
   const buttonDown = frame === 'press' ? 1 : frame === 'click' ? 2 : 0;
   const indexTravel = frame === 'press' ? 1 : frame === 'click' ? 2 : frame === 'release' ? -2 : 0;
-  return paint(160, 100, 52, (_px, P) => {
-    const shape = (color: string, points: [number, number][]) => P.poly(points, color);
-    const line = (points: [number, number][], color: string, width = 1) => P.line(points, color, width);
+  return paint(120, 96, 52, (_px, P) => {
+    type Pt = [number, number];
+    const shape = (color: string, points: Pt[]) => P.poly(points, color);
+    const line = (points: Pt[], color: string, width = 1) => P.line(points, color, width);
     const ellipse = (color: string, x: number, y: number, rx: number, ry: number) => P.ell(x, y, rx, ry, color);
-    const indexPoints = (points: [number, number][]): [number, number][] =>
-      points.map(([x, y]): [number, number] => [x, y + (y < 45 ? indexTravel : 0)]);
-    const sleevePoint = (x: number, y: number): [number, number] => [
-      70 + (x - 73.5) * 1.5 + (y - 65) * 2.8,
-      53 + (y - 65) * 1.6,
-    ];
-    const sleeveDraw: VmSleeveDraw = {
+    // mouse seen from behind and above: rounded front (top), wide palm hump (bottom)
+    const egg = (cx: number, cy: number, rx: number, ry: number, taper = 0.22): Pt[] => {
+      const pts: Pt[] = [];
+      for (let i = 0; i < 28; i++) {
+        const a = (i / 28) * Math.PI * 2;
+        const c = Math.cos(a);
+        pts.push([cx + rx * Math.sin(a) * (1 - taper * (1 + c) * 0.5), cy - ry * c]);
+      }
+      return pts;
+    };
+    const shrink = (pts: Pt[], d: number): Pt[] => {
+      const cx = pts.reduce((s, p) => s + p[0], 0) / pts.length;
+      const cy = pts.reduce((s, p) => s + p[1], 0) / pts.length;
+      return pts.map(([x, y]): Pt => {
+        const l = Math.hypot(x - cx, y - cy) || 1;
+        return [x - ((x - cx) / l) * d, y - ((y - cy) / l) * d];
+      });
+    };
+    // skin part: deep rim, shadow body, base face, inset highlight edge
+    const flesh = (pts: Pt[], lightEdge?: Pt[]) => {
+      shape(deep, pts);
+      shape(shadow, shrink(pts, 1));
+      shape(base, shrink(pts, 2.2));
+      if (lightEdge) line(lightEdge, highlight, 1.2);
+    };
+    const idx = (pts: Pt[]): Pt[] => pts.map(([x, y]): Pt => [x, y + (y < 38 ? indexTravel : 0)]);
+
+    // pad shadow + cable
+    line([[52, 16], [52, 13], [54, 11]], '#262b35', 2.4);
+    line([[52, 16], [52, 13]], '#6d7684', 0.8);
+
+    // shell
+    shape('#3c4554', egg(52, 40, 21, 24));
+    shape('#7d8899', egg(51, 39, 19, 22.5));
+    shape('#2c3340', [[66, 30], [70, 40], [71, 50], [68, 58], [62, 62], [66, 52], [67, 42]]);
+    shape('#b4bdc9', egg(49, 37, 14, 19));
+    line([[35, 30], [34, 40], [36, 50]], '#dfe4ea', 1.2);
+
+    // buttons (front half), split, wheel, LED
+    const lb: Pt[] = [[51, 18], [51, 37], [36, 38], [36, 30], [40, 22], [45, 18]];
+    shape(frame === 'click' ? '#8e99a8' : '#c6ced8', lb.map(([x, y]): Pt => [x, y + buttonDown]));
+    shape('#d8dee6', [[46, 19 + buttonDown], [51, 18 + buttonDown], [51, 20 + buttonDown], [45, 21 + buttonDown]]);
+    shape('#bcc5d0', [[53, 18], [58, 18], [63, 22], [66, 30], [66, 37], [53, 37]]);
+    line([[52, 17], [52, 38]], '#2a303b', 1.2);
+    line([[36, 38.5], [66, 38.5]], '#59626f', 0.8);
+    ellipse('#1c2129', 52, 25, 2.2, 3.6);
+    ellipse('#6e7989', 52, 24.5, 1, 2.4);
+    ellipse('#0f4a5c', 60, 21, 1.4, 1.1);
+    ellipse('#5beaff', 60, 21, 0.8, 0.6);
+    if (frame === 'click') {
+      ellipse('#1c7a3c', 41, 24 + buttonDown, 2.6, 1.8);
+      ellipse('#9affaa', 41, 24 + buttonDown, 1.3, 0.9);
+    }
+
+    // thumb along the left wall, pointing forward
+    flesh([[37, 58], [32, 54], [30, 47], [31, 41], [34, 39], [37, 43], [39, 51]], [[31, 46], [32, 41], [34, 40]]);
+    // ring + pinky curled down the right wall
+    flesh([[63, 44], [68, 41], [72, 44], [73, 50], [70, 53], [65, 51]], [[68, 42], [71, 44]]);
+    flesh([[66, 52], [71, 50], [75, 53], [75, 59], [71, 61], [67, 58]], [[71, 51], [74, 53]]);
+    // back of the hand over the palm hump; wrist runs off toward the bottom-right
+    flesh(
+      [[37, 45], [41, 40], [48, 38], [57, 38], [64, 40], [69, 45], [74, 54], [82, 64], [92, 76], [96, 96], [66, 96], [58, 80], [48, 70], [40, 60], [36, 52]],
+      [[39, 44], [44, 40], [52, 39], [60, 39], [66, 42]],
+    );
+    // tendons + knuckle ridge
+    line([[45, 44], [50, 56], [58, 70]], shadow, 1);
+    line([[53, 43], [58, 55], [66, 70]], shadow, 1);
+    line([[61, 44], [66, 55], [73, 68]], shadow, 1);
+    for (const [kx, ky] of [[44, 41], [51, 40], [58, 40], [65, 43]] as Pt[]) {
+      ellipse(shadow, kx, ky + 1, 2.4, 1.6);
+      ellipse(highlight, kx, ky, 1.4, 0.8);
+    }
+    // index on the left button, middle on the right: two foreshortened segments + nail
+    flesh(idx([[39, 41], [39, 33], [40, 27], [42, 23], [46, 22], [48, 25], [48, 32], [48, 41]]), idx([[40, 33], [41, 27], [43, 24]]));
+    line(idx([[40, 32], [47, 32]]), shadow, 1);
+    shape('#f2dccb', idx([[42, 24.5], [45, 23.5], [46.5, 26], [43, 27]]));
+    flesh([[54, 41], [54, 32], [55, 26], [57, 22], [61, 21], [63, 24], [63, 31], [63, 41]], [[55, 32], [56, 26], [58, 23]]);
+    line([[55, 31], [62, 31]], shadow, 1);
+    shape('#f2dccb', [[57, 23.5], [60, 22.5], [61.5, 25], [58, 26]]);
+
+    // forearm sleeve over the wrist, out of the bottom-right corner
+    const sleevePoint = (x: number, y: number): Pt => [80 + (x - 73.5) * 2.1 + (y - 65) * 1.1, 70 + (y - 65) * 1.4];
+    paintVmJacketSleeve(look, {
       shape: (color, points) => P.poly(points.map(([x, y]) => sleevePoint(x, y)), color),
       seamLine: (points) => P.line(points.map(([x, y]) => sleevePoint(x, y)), look.seam),
       ell: (color, x, y, rx, ry) => {
         const [cx, cy] = sleevePoint(x, y);
-        P.ell(cx, cy, rx * 1.5, ry * 1.6, color);
+        P.ell(cx, cy, rx * 2.1, ry * 1.4, color);
       },
-    };
-
-    line([[52, 10], [52, 8], [49, 6], [52, 4]], '#252a34', 3);
-    line([[52, 10], [52, 8], [50, 6]], '#788290', 1);
-    paintVmJacketSleeve(look, sleeveDraw);
-
-    const leftButton = (points: [number, number][]): [number, number][] =>
-      points.map(([x, y]): [number, number] => [x, y + buttonDown]);
-    shape('#151a22', [[52, 6], [58, 7], [63, 11], [67, 18], [71, 28], [75, 40], [78, 51], [78, 59], [74, 66], [68, 70], [52, 72], [36, 70], [30, 66], [26, 59], [26, 51], [29, 40], [33, 28], [37, 18], [41, 11], [46, 7]]);
-    shape('#737e8f', [[52, 8], [57, 9], [62, 13], [66, 20], [70, 30], [73, 42], [75, 52], [74, 59], [70, 65], [65, 68], [52, 69], [39, 68], [34, 65], [30, 59], [29, 52], [31, 42], [34, 30], [38, 20], [42, 13], [47, 9]]);
-    shape('#343c49', [[65, 15], [68, 24], [72, 37], [75, 49], [75, 57], [71, 64], [66, 67], [61, 66], [65, 58], [66, 49], [64, 38], [62, 27]]);
-    shape('#aab4c1', [[52, 10], [57, 11], [61, 15], [64, 22], [67, 32], [69, 42], [70, 51], [68, 58], [63, 63], [52, 65], [41, 63], [36, 58], [34, 51], [35, 42], [37, 32], [40, 22], [44, 15], [47, 11]]);
-    shape('#d0d6de', [[48, 11], [52, 10], [56, 11], [59, 15], [61, 22], [62, 33], [60, 43], [57, 52], [52, 59], [47, 55], [42, 48], [39, 39], [40, 29], [43, 19], [45, 14]]);
-    line([[31, 43], [30, 51], [31, 58], [35, 63]], '#d7dce3', 2);
-    line([[69, 38], [73, 49], [73, 56], [69, 62]], '#252b34', 2);
-
-    shape('#687485', leftButton([[50, 11], [52, 11], [52, 39], [43, 41], [36, 37], [38, 27], [43, 17]]));
-    shape(frame === 'click' ? '#929eae' : '#c0c9d4', leftButton([[50, 13], [52, 13], [52, 37], [44, 39], [38, 35], [40, 27], [44, 18]]));
-    shape('#e4e9ef', leftButton([[48, 13], [52, 13], [52, 15], [47, 15]]));
-    shape('#667283', [[52, 11], [54, 11], [61, 17], [66, 27], [68, 37], [61, 41], [52, 39]]);
-    shape('#b6c0cd', [[52, 13], [54, 13], [60, 18], [64, 27], [66, 35], [60, 39], [52, 37]]);
-    shape('#e4e9ef', [[52, 13], [56, 14], [58, 16], [53, 15]]);
-    line([[52, 10], [52, 19], [52, 39]], '#252b34', 1.5);
-    ellipse('#202630', 52, 25, 2.8, 5.2);
-    ellipse('#788394', 52, 25, 1.4, 3.8);
-    line([[52, 21], [52, 28]], '#303744', 1);
-    ellipse('#135368', 38, 40, 2.2, 1.8);
-    ellipse('#5beaff', 38, 40, 1.2, 0.9);
-    if (frame === 'click') {
-      ellipse('#166b35', 37, 35 + buttonDown, 2.2, 1.6);
-      ellipse('#8aff9a', 37, 35 + buttonDown, 1.1, 0.8);
-    }
-
-    shape('#111720', [[37, 48], [40, 43], [45, 40], [50, 39], [56, 40], [62, 41], [68, 44], [73, 48], [76, 53], [75, 58], [71, 62], [66, 64], [61, 67], [54, 68], [47, 66], [41, 64], [36, 60], [33, 55], [33, 51]]);
-    shape(shadow, [[39, 49], [42, 45], [47, 42], [52, 42], [57, 43], [63, 44], [68, 47], [72, 51], [73, 55], [70, 59], [65, 62], [60, 64], [54, 65], [48, 63], [43, 61], [39, 58], [36, 54], [36, 51]]);
-    shape(base, [[42, 49], [45, 45], [50, 44], [55, 45], [61, 46], [66, 49], [69, 52], [69, 55], [66, 58], [61, 61], [55, 63], [49, 62], [44, 60], [40, 57], [39, 53]]);
-    line([[41, 47], [47, 43], [53, 42], [59, 43], [65, 46], [69, 49]], highlight, 2);
-    line([[43, 50], [49, 47], [55, 46], [61, 47], [66, 50]], shadow, 1.5);
-    line([[47, 58], [53, 60], [59, 60], [64, 58]], shadow, 2);
-
-    shape('#111720', [[37, 54], [33, 53], [31, 50], [31, 46], [32, 42], [34, 38], [37, 39], [39, 43], [39, 48], [40, 52]]);
-    shape(shadow, [[36, 51], [33, 49], [33, 46], [34, 42], [36, 40], [37, 43], [37, 47], [38, 50]]);
-    line([[34, 41], [36, 39], [37, 42]], highlight, 1);
-
-    shape('#111720', [[65, 44], [69, 41], [73, 42], [76, 45], [76, 49], [73, 52], [69, 51], [66, 48]]);
-    shape(base, [[68, 45], [71, 43], [73, 44], [74, 47], [72, 49], [69, 49]]);
-    line([[69, 43], [72, 43], [74, 45]], highlight, 1);
-    shape('#111720', [[68, 51], [72, 48], [76, 50], [78, 54], [76, 58], [72, 58], [69, 55]]);
-    shape(base, [[71, 52], [73, 50], [75, 52], [76, 55], [74, 56], [71, 55]]);
-    line([[72, 50], [74, 51], [76, 53]], highlight, 1);
-
-    shape('#111720', indexPoints([[39, 46], [37, 43], [38, 39], [40, 35], [42, 31], [45, 30], [48, 32], [49, 35], [48, 39], [49, 43], [47, 46]]));
-    shape(shadow, indexPoints([[41, 44], [40, 41], [41, 38], [43, 33], [45, 32], [47, 33], [47, 36], [46, 40], [47, 43], [45, 45]]));
-    shape(base, indexPoints([[42, 42], [42, 39], [44, 34], [46, 33], [46, 37], [45, 40], [45, 43]]));
-    line(indexPoints([[40, 38], [43, 37], [47, 38]]), shadow, 1);
-    shape('#111720', [[55, 46], [53, 43], [54, 40], [56, 36], [58, 32], [61, 31], [64, 33], [65, 36], [64, 40], [65, 43], [62, 46]]);
-    shape(shadow, [[57, 44], [56, 41], [57, 38], [59, 34], [61, 33], [63, 34], [63, 37], [62, 41], [63, 43], [60, 45]]);
-    shape(base, [[58, 42], [58, 39], [60, 35], [62, 35], [62, 38], [61, 42]]);
-    line([[56, 38], [59, 37], [63, 38]], shadow, 1);
-    ellipse(highlight, 44, 31 + indexTravel, 1.5, frame === 'click' ? 0.6 : 1);
-    line(indexPoints([[42, 31], [44, 30], [46, 31]]), '#f4e3c6', 1);
-    ellipse(highlight, 61, 32, 1.5, 1);
-    line([[59, 32], [61, 31], [63, 32]], '#f4e3c6', 1);
-
-    ellipse(shadow, 43, 43, 1.8, 1.5);
-    ellipse(base, 43, 42.5, 1.1, 0.8);
-    ellipse(shadow, 50, 41.5, 1.8, 1.5);
-    ellipse(base, 50, 41, 1.1, 0.8);
-    ellipse(shadow, 58, 42, 1.8, 1.5);
-    ellipse(base, 58, 41.5, 1.1, 0.8);
-    ellipse(shadow, 66, 44, 1.8, 1.5);
-    ellipse(base, 66, 43.5, 1.1, 0.8);
-    line([[45, 46], [46, 51], [48, 57]], shadow, 1);
-    line([[51, 45], [52, 51], [53, 59]], shadow, 1);
-    line([[58, 45], [58, 51], [57, 58]], shadow, 1);
-    line([[64, 47], [63, 52], [61, 57]], shadow, 1);
-
-    shape('#161a22', [[25, 72], [77, 72], [81, 75], [29, 75]]);
-    line([[29, 72], [76, 72]], '#56515a', 1);
+    });
   });
 }
 
@@ -742,7 +741,7 @@ const HAND_SINK = 4;
 const LIT_SWELL = 1.05;
 
 /** Per-tool viewmodel size multiplier (keyboard art runs ~25% of view width at 1). */
-const SIZE: Record<string, number> = { keyboard: 1.0, mouse: 0.68, badge: 0.66, usb: 1.0 };
+const SIZE: Record<string, number> = { keyboard: 1.0, mouse: 0.7, badge: 0.66, usb: 1.0 };
 
 /** Muzzle-flash tint per tool (rgb for edgeFlash); also feeds the world light flood. */
 export const TOOL_FLASH: Record<string, string> = {
