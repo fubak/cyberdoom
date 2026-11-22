@@ -713,6 +713,18 @@ m10.entities.push(
     grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
   { id: 'chg-x2', kind: 'item', ...floorSpot(m10, [22, 2, 37, 11]), sprite: 'charge', tags: ['arsenal-pickup'],
     grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
+  ...[
+    [13.5, 16.5], [3.5, 22.5], [8.5, 4.5], [20.5, 22.5],
+    [29.5, 17.5], [33.5, 17.5], [25.5, 29.5], [28.5, 31.5],
+  ].map(([x, y], i) => ({
+    id: `chg-x${i + 3}`, kind: 'item' as const, x, y, sprite: 'charge', tags: ['arsenal-pickup'],
+    grants: { resource: 'usb-charge', amount: 8 },
+    inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' as const },
+  })),
+  { id: 'chg-x11', kind: 'item', ...floorSpot(m10, [2, 2, 17, 11]), sprite: 'charge', tags: ['arsenal-pickup'],
+    grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
+  { id: 'chg-x12', kind: 'item', ...floorSpot(m10, [18, 21, 27, 26]), sprite: 'charge', tags: ['arsenal-pickup'],
+    grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
 );
 
 // — rF2 landmarks: east server hall = bright grid floor + console wall; west

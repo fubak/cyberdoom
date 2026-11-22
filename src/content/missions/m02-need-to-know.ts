@@ -436,13 +436,13 @@ addThreatEncounter(m02, 'se-rat', 'rat', 2, {
 }, [28, 21, 34, 26]);
 m02.entities.push(
   { id: 'chg-n', kind: 'item', ...floorSpot(m02, [15, 2, 25, 4]), sprite: 'charge', tags: ['arsenal-pickup'],
-    grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
+    grants: { resource: 'usb-charge', amount: 4 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
   { id: 'chg-e', kind: 'item', ...floorSpot(m02, [29, 9, 37, 19]), sprite: 'charge', tags: ['arsenal-pickup'],
-    grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
+    grants: { resource: 'usb-charge', amount: 4 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
   { id: 'chg-w', kind: 'item', ...floorSpot(m02, [5, 12, 8, 15]), sprite: 'charge', tags: ['arsenal-pickup'],
-    grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
+    grants: { resource: 'usb-charge', amount: 4 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
   { id: 'chg-c', kind: 'item', ...floorSpot(m02, [10, 17, 26, 19]), sprite: 'charge', tags: ['arsenal-pickup'],
-    grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
+    grants: { resource: 'usb-charge', amount: 4 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
   { id: 'med-c', kind: 'item', ...floorSpot(m02, [14, 21, 25, 27]), sprite: 'medkit',
     grants: { resource: 'integrity', amount: 25 }, inspect: { label: 'Integrity kit', detail: 'Restores 25 integrity.', category: 'item' } },
 );
@@ -461,7 +461,7 @@ m02.entities.push(
   { id: 'adm-desk-a', kind: 'prop', x: 6.5, y: 26.5, sprite: 'workstation' },
   { id: 'adm-desk-b', kind: 'prop', x: 9.5, y: 26.5, sprite: 'workstation' },
   { id: 'srv-cache', kind: 'item', x: 36.5, y: 23.5, sprite: 'charge', tags: ['arsenal-pickup'],
-    grants: { resource: 'usb-charge', amount: 8 } },
+    grants: { resource: 'usb-charge', amount: 4 } },
 );
 
 // rF4: 46x34 silhouette — NE zigzag server aisles (three stacked halls) plus a
@@ -472,7 +472,7 @@ m02.map.legend['4'] = { kind: 'door', tex: 'wall-secret', secret: true, doorId: 
 m02.map.legend['5'] = { kind: 'door', tex: 'wall-secret', secret: true, doorId: 'rf4-zigzag-cache-s' };
 m02.entities.push(
   { id: 'rf4-cache-n-item', kind: 'item', x: 43.5, y: 6.5, sprite: 'charge', tags: ['arsenal-pickup'],
-    grants: { resource: 'usb-charge', amount: 8 } },
+    grants: { resource: 'usb-charge', amount: 4 } },
   { id: 'rf4-cache-s-item', kind: 'item', x: 43.5, y: 18.5, sprite: 'medkit' },
   { id: 'rf4-gallery-prop', kind: 'prop', x: 19.5, y: 31.5, sprite: 'console' },
 );
