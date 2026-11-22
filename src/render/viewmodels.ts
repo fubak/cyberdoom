@@ -1,6 +1,8 @@
 import type { Gender, ToolDef, ViewmodelAnim } from '../core/types';
 import { fireFlash, fireLamp, usePhase, vmLine } from '../tools/anim';
-import { currentSkin } from '../tools/look';
+import { currentSkin, type SkinTone } from '../tools/look';
+import { handLook } from '../tools/shared';
+import { shade } from '../tools/pixel';
 import { outlineNative, painter, type Painter } from './hires';
 import { RES } from './res';
 import { bakeRig } from './handrig';
@@ -139,40 +141,91 @@ function mouseArt(fire: boolean): Art {
   });
 }
 
-function usbArt(fire: boolean): Art {
-  // the scanner is the shotgun-equivalent: a big chunky stick ~17% of view
-  // width, connector up, hard-edged flash blooming off the tip on the fire frame
-  return paint(92, 58, 46, (px, _P) => {
-    const cx = 46;
-    if (fire) {
-      px('#5affff', cx - 6, 2, 12, 9);
-      px('#5affff', cx - 10, 5, 20, 4);
-      px('#ffffff', cx - 3, 3, 6, 8);
-      px('#ffffff', cx - 8, 6, 16, 2);
-      px('#bff8ff', cx - 12, 4, 3, 3);
-      px('#bff8ff', cx + 10, 4, 3, 3);
+type UsbFrame = 'rest' | 'press' | 'flash' | 'recoil' | 'settle';
+
+function usbArt(frame: UsbFrame, gender: Gender, skin: SkinTone): Art {
+  const look = handLook(gender);
+  const [base, shadow, highlight] = [skin.base, skin.shadow, skin.highlight];
+  const deep = shade(shadow, 0.65);
+  const ramp = [deep, shadow, base, highlight];
+  const seam = '#30201b';
+  const recoil = frame === 'recoil';
+  return paint(84, 56, 42, (_px, P) => {
+    const point = (x: number, y: number): [number, number] => {
+      const rx = recoil ? x + Math.round((y - 42) * 0.06) : x;
+      const ry = recoil ? y + Math.round((42 - x) * 0.035) : y;
+      return [rx, 8 + ry * (48 / 88)];
+    };
+    const box = (color: string, x: number, y: number, w: number, h: number) =>
+      P.poly([point(x, y), point(x + w, y), point(x + w, y + h), point(x, y + h)], color);
+    const shape = (color: string, pts: [number, number][]) => P.poly(pts.map(([x, y]) => point(x, y)), color);
+    const seamLine = (pts: [number, number][]) => P.line(pts.map(([x, y]) => point(x, y)), seam);
+
+    const jacketShade = shade(look.jacket, 0.64);
+    const jacketLight = shade(look.jacket, 1.22);
+    shape(jacketShade, [[51, 65], [69, 60], [84, 68], [84, 88], [51, 88]]);
+    shape(look.jacket, [[54, 65], [69, 62], [82, 69], [82, 88], [56, 88]]);
+    shape(jacketLight, [[55, 66], [59, 65], [65, 88], [60, 88]]);
+    seamLine([[58, 68], [64, 76], [70, 88]]);
+    box(jacketShade, 56, 70, 25, 4);
+    box(look.accent, 57, 72, 24, 1.5);
+    box(jacketLight, 57, 70, 24, 0.75);
+    if (gender === 'female') {
+      box('#20242c', 54, 66, 9, 5);
+      box('#0b2a2a', 55, 67, 7, 3);
+      box(look.accent, 56, 67, 2, 1);
+      box('#ff5a7a', 60, 67, 1, 1);
     }
-    // metal connector
-    px('#c8ccd8', cx - 9, 11, 18, 11);
-    px('#eef0f6', cx - 9, 11, 18, 2);
-    px('#6a7288', cx + 5, 13, 4, 9);
-    px('#2a2e38', cx - 6, 14, 4, 4);
-    px('#2a2e38', cx + 1, 14, 4, 4);
-    // scanner body (dark polymer, chunky)
-    px('#2a2e38', cx - 22, 22, 44, 30);
-    px('#4a5060', cx - 22, 22, 44, 3);
-    px('#4a5060', cx - 22, 22, 3, 30);
-    px('#14161c', cx + 15, 24, 7, 28);
-    for (let y = 45; y < 52; y += 3) px('#1a1c22', cx - 19, y, 34, 1);
-    // little screen + LED
-    px('#0a1a14', cx - 17, 26, 30, 12);
-    px(fire ? '#8affff' : '#2ad83a', cx - 14, 28, 24, 2);
-    px(fire ? '#5affff' : '#14a024', cx - 14, 31, 15, 1);
-    px(fire ? '#5affff' : '#14a024', cx - 14, 33, 20, 1);
-    px(fire ? '#ffffff' : '#ff4a2a', cx - 5, 40, 9, 3);
-    // blue brand stripe
-    px('#2458d8', cx - 22, 46, 44, 3);
-    px('#8ab4ff', cx - 22, 46, 44, 1);
+
+    for (let i = 0; i < 4; i++) {
+      const x = 23 + i * 7;
+      const y = 61 + (i % 2);
+      box(ramp[2], x, y, 8, 13);
+      box(ramp[1], x + 1, y + 3, 6, 9);
+      box(ramp[3], x + 2, y + 10, 3, 1);
+      seamLine([[x + 7, y + 4], [x + 6, y + 8]]);
+    }
+    shape('#11151d', [[31, 4], [51, 4], [61, 49], [67, 68], [17, 68], [23, 49]]);
+    shape('#657084', [[33, 5], [49, 5], [58, 47], [63, 66], [21, 66], [26, 47]]);
+    if (frame === 'flash') {
+      shape('#5affff', [[34, 0], [38, 0], [38, 3], [30, 3], [30, 6], [27, 6], [27, 3], [34, 3]]);
+      shape('#bff8ff', [[47, 1], [51, 1], [51, 4], [55, 4], [55, 7], [49, 7], [49, 4], [47, 4]]);
+    }
+    shape('#aab4c5', [[34, 6], [48, 6], [54, 34], [29, 34]]);
+    shape('#454f61', [[29, 34], [54, 34], [62, 66], [22, 66]]);
+    shape('#778396', [[30, 35], [53, 35], [56, 40], [28, 40]]);
+    shape('#242b38', [[24, 41], [59, 41], [64, 66], [20, 66]]);
+    shape('#384353', [[25, 42], [57, 42], [60, 62], [23, 62]]);
+    shape('#171d27', [[20, 63], [64, 63], [67, 68], [17, 68]]);
+    shape('#4a5667', [[20, 63], [64, 63], [64, 65], [20, 65]]);
+
+    // Connector, screen, LED, and the thumb-side red trigger on the top face.
+    box('#b6c1d0', 36, 1, 11, 6);
+    box('#edf2f5', 36, 1, 11, 1.5);
+    box('#7b8798', 44, 2, 3, 5);
+    box('#141922', 38, 3, 2, 2);
+    box('#141922', 42, 3, 2, 2);
+    shape('#0a171b', [[32, 14], [51, 14], [54, 29], [29, 29]]);
+    box(frame === 'flash' ? '#8affff' : '#2ad83a', 32, 17, 17, 1.5);
+    box(frame === 'flash' ? '#5affff' : '#149d34', 32, 20, 11, 1);
+    box(frame === 'flash' ? '#5affff' : '#149d34', 32, 22, 14, 1);
+    box('#ff4a2a', 47, 41, 8, 2.5);
+    box('#ff9873', 47, 41, 8, 0.75);
+    box('#285fe0', 24, 47, 37, 2.5);
+    box('#8ab4ff', 24, 47, 37, 0.75);
+    box(frame === 'settle' ? '#53ff72' : '#22bb48', 52, 35, 4, 1.5);
+
+    // Palm and knuckles wrap the right edge; the thumb lands on the trigger.
+    shape(ramp[2], [[54, 51], [61, 51], [65, 56], [63, 67], [56, 69], [52, 62]]);
+    box(ramp[1], 55, 55, 8, 9);
+    for (let i = 0; i < 3; i++) {
+      box(ramp[2], 55 + i * 2, 53 + (i % 2), 2, 2);
+      box(ramp[3], 55 + i * 2, 53 + (i % 2), 1, 0.5);
+    }
+    const thumbY = frame === 'press' ? 42 : frame === 'recoil' ? 39 : 40;
+    shape(ramp[2], [[52, thumbY], [59, thumbY], [63, thumbY + 3], [60, thumbY + 6], [54, thumbY + 5], [51, thumbY + 3]]);
+    box(ramp[3], 55, thumbY + 1, 3, 1);
+    seamLine([[53, thumbY + 4], [57, thumbY + 5], [60, thumbY + 4]]);
   });
 }
 
@@ -204,13 +257,14 @@ function badgeArt(fire: boolean): Art {
 }
 
 /** Art variant: 0 rest, 1 fire pose, 2 fire pose lit in the tool's flash colour. */
-function art(tool: ToolDef, gender: Gender, mode: 0 | 1 | 2): Art | null {
-  const key = `${tool.id}:${gender}:${mode}:${currentSkin().id}`;
+function art(tool: ToolDef, gender: Gender, mode: 0 | 1 | 2, usbFrame?: UsbFrame): Art | null {
+  const key = `${tool.id}:${gender}:${mode}:${usbFrame ?? ''}:${currentSkin().id}`;
   let a = cache.get(key);
   if (!a) {
-    const maker = { keyboard: keyboardArt, mouse: mouseArt, usb: usbArt, badge: badgeArt }[tool.id];
-    if (!maker) return null;
-    a = maker(mode > 0);
+    const maker = { keyboard: keyboardArt, mouse: mouseArt, badge: badgeArt }[tool.id];
+    if (tool.id === 'usb') a = usbArt(usbFrame ?? (mode === 2 ? 'flash' : mode === 1 ? 'recoil' : 'rest'), gender, currentSkin());
+    else if (!maker) return null;
+    else a = maker(mode > 0);
     if (mode === 2) a = tintFlash(a, TOOL_FLASH[tool.id] ?? '255,255,255');
     cache.set(key, a);
   }
@@ -239,7 +293,12 @@ export function drawToolViewmodel(
   // ~77 ms of the 90 ms impact window, so >=4 rendered frames at 60 Hz
   const lit = !!ph && ph.phase === 'impact' && ph.u < 0.85;
   const fire = lit || (!!ph && (ph.phase === 'impact' || (ph.phase === 'recover' && ph.u < 0.25))) || (!ph && cooldownFrac > 0.55);
-  const a = art(tool, gender, lit ? 2 : fire ? 1 : 0);
+  const usbFrame: UsbFrame | undefined = tool.id !== 'usb' || !ph ? undefined
+    : ph.phase === 'wind' ? 'press'
+      : ph.phase === 'impact' ? 'flash'
+        : ph.phase === 'recover' ? (ph.u < 0.5 ? 'recoil' : 'settle')
+          : 'rest';
+  const a = art(tool, gender, lit ? 2 : fire ? 1 : 0, usbFrame);
   // shared bob/strike/switch offsets for the art AND the rig-hand overlay
   const bx = Math.round(Math.sin(bob) * 6);
   const byy = Math.round(Math.abs(Math.cos(bob)) * 3);
