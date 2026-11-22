@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { missionRegistry } from '../src/content/missions';
+import { m01 } from '../src/content/missions/m01-patch-tuesday';
 import { m05 } from '../src/content/missions/m05-change-freeze';
 import { ENEMY_PROFILES } from '../src/engine/ai';
+import { WorldMap } from '../src/engine/map';
 import type { Mission } from '../src/core/types';
 
 /** Malware-family sprite ids: base sets plus the recoloured threatSprites sets. */
@@ -78,5 +80,20 @@ describe('M05 combat economy', () => {
     );
     expect(spawns.size).toBe(wave4.length); // all of wave 4 still spawns, across the two triggers
     expect(triggers.some((t) => t.id === 'change-ambush-northeast-deep')).toBe(true);
+  });
+});
+
+describe('M01 spawn lighting', () => {
+  it('keeps the spawn tile and the next five tiles facing forward well lit', () => {
+    const map = new WorldMap(m01.map);
+    const { spawn } = m01.map;
+    const dx = Math.cos(spawn.angle);
+    const dy = Math.sin(spawn.angle);
+
+    for (let step = 0; step <= 5; step++) {
+      const tx = Math.floor(spawn.x + dx * step);
+      const ty = Math.floor(spawn.y + dy * step);
+      expect(map.lightAt(tx, ty), `spawn lane tile ${tx},${ty}`).toBeGreaterThanOrEqual(0.7);
+    }
   });
 });
