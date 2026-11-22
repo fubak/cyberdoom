@@ -35,13 +35,13 @@ const SMALL: Record<string, number[]> = {
   // Lowercase forms; g, j, p, q and y extend below the baseline.
   a: [0, 0, 14, 1, 15, 17, 15], b: [16, 16, 30, 17, 17, 17, 30], c: [0, 0, 14, 17, 16, 17, 14],
   d: [1, 1, 15, 17, 17, 17, 15], e: [0, 0, 14, 17, 31, 16, 14], f: [6, 9, 8, 30, 8, 8, 8],
-  g: [0, 15, 17, 17, 15, 1, 14, 4], h: [16, 16, 30, 17, 17, 17, 17], i: [4, 0, 12, 4, 4, 4, 14],
-  j: [2, 0, 6, 2, 2, 18, 12, 8], k: [16, 16, 18, 20, 24, 20, 18], l: [12, 4, 4, 4, 4, 4, 14],
+  g: [0, 0, 15, 17, 17, 15, 1, 14], h: [16, 16, 30, 17, 17, 17, 17], i: [4, 0, 12, 4, 4, 4, 14],
+  j: [2, 0, 6, 2, 2, 2, 18, 12], k: [16, 16, 18, 20, 24, 20, 18], l: [12, 4, 4, 4, 4, 4, 14],
   m: [0, 0, 27, 21, 21, 21, 21], n: [0, 0, 30, 17, 17, 17, 17], o: [0, 0, 14, 17, 17, 17, 14],
-  p: [0, 30, 17, 17, 30, 16, 16, 16], q: [0, 15, 17, 17, 15, 1, 1, 2], r: [0, 0, 22, 25, 16, 16, 16],
+  p: [0, 0, 30, 17, 17, 30, 16, 16], q: [0, 0, 15, 17, 17, 15, 1, 1], r: [0, 0, 22, 25, 16, 16, 16],
   s: [0, 0, 15, 16, 14, 1, 30], t: [8, 8, 30, 8, 8, 8, 6], u: [0, 0, 17, 17, 17, 17, 15],
   v: [0, 0, 17, 17, 17, 10, 4], w: [0, 0, 17, 17, 21, 21, 10], x: [0, 0, 17, 10, 4, 10, 17],
-  y: [0, 17, 17, 17, 15, 1, 14, 4], z: [0, 0, 31, 2, 4, 8, 31],
+  y: [0, 0, 17, 17, 17, 15, 1, 14], z: [0, 0, 31, 2, 4, 8, 31],
 };
 
 const TINY: Record<string, number[]> = {
@@ -287,8 +287,8 @@ const fatRows = (rows: number[]) => rows.map((b) => (b << 1) | b);
  * alternating-bit strokes in m/M/w/W, the arms of K/k/R, the diagonals of
  * N/Q/V/X/Y/v/x, and a handful of symbols and digits. Each row keeps the
  * source row's run count while thickening a stroke, and stays within 6 bits
- * so stems and gaps both read at least 1px. g/y pin the open-hook descender
- * so they cannot regress to reading as 9/0.
+ * so stems and gaps both read at least 1px. g/y pin the x-height bowl and
+ * open-hook descender so they cannot regress to reading as 9/0.
  */
 const CHUNKY_OVERRIDES: Record<string, number[]> = {
   '0': [30, 51, 55, 45, 59, 51, 30],
@@ -313,14 +313,14 @@ const CHUNKY_OVERRIDES: Record<string, number[]> = {
   '✓': [0, 3, 6, 6, 44, 24, 0],
   '✗': [0, 51, 26, 12, 22, 51, 0],
   '∞': [0, 0, 26, 45, 22, 0, 0],
-  g: [0, 31, 51, 51, 31, 3, 30, 12],
+  g: [0, 0, 31, 51, 51, 31, 3, 30],
   k: [48, 48, 54, 52, 56, 52, 54],
   m: [0, 0, 54, 45, 45, 45, 45],
   r: [0, 0, 55, 59, 48, 48, 48],
   v: [0, 0, 51, 51, 51, 26, 12],
   w: [0, 0, 51, 51, 45, 45, 26],
   x: [0, 0, 51, 26, 12, 22, 51],
-  y: [0, 51, 51, 51, 31, 3, 30, 12],
+  y: [0, 0, 51, 51, 51, 31, 3, 30],
 };
 
 /**

@@ -40,9 +40,17 @@ function renderBitmap(draw: (g: CanvasRenderingContext2D, ch: string) => void, c
     Array.from({ length: canvas.width }, (_, x) => image.data[(y * canvas.width + x) * 4 + 3] > 0));
 }
 
+function firstInkRow(rows: boolean[][]): number {
+  return rows.findIndex((row) => row.some(Boolean));
+}
+
 describe.each(PATHS)('$name font descenders', ({ draw, height }) => {
   it('renders lowercase g differently from 9', () => {
     expect(renderBitmap(draw, 'g')).not.toEqual(renderBitmap(draw, '9'));
+  });
+
+  it.each(['g', 'p', 'q', 'y'])('aligns %s with the a x-height', (ch) => {
+    expect(firstInkRow(renderBitmap(draw, ch))).toBe(firstInkRow(renderBitmap(draw, 'a')));
   });
 
   it.each(DESCENDERS)('draws %s below the baseline', (ch) => {
