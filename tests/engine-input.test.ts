@@ -21,6 +21,25 @@ function keyboardEvent(type: string, code: string): Event {
   return event;
 }
 
+function gamepad(
+  axes: number[],
+  pressed: number[] = [],
+  triggerValue = 0,
+): Gamepad {
+  const buttons = Array.from({ length: 16 }, (_, index) => ({
+    pressed: pressed.includes(index),
+    value: index === 7 ? triggerValue : pressed.includes(index) ? 1 : 0,
+  }));
+  return {
+    axes,
+    buttons,
+    connected: true,
+    id: 'mock-standard-pad',
+    index: 0,
+    mapping: 'standard',
+  } as unknown as Gamepad;
+}
+
 function fixture() {
   const fakeWindow = new EventTarget();
   const fakeDocument = new EventTarget() as EventTarget & { pointerLockElement: HTMLElement | null };
@@ -152,6 +171,88 @@ describe('Input bindings', () => {
     expect(input.firePressed).toBe(true);
     expect(input.fireHeld).toBe(true);
     expect(input.cyclePressed).toBe(true);
+  });
+});
+
+describe('Input gamepad', () => {
+  it('applies radial and turn deadzones and rescales the remaining range', () => {
+    const { input } = fixture();
+    let pad = gamepad([0.1, 0.1, 0.1]);
+    vi.stubGlobal('navigator', { getGamepads: () => [pad] });
+
+    input.poll();
+    expect(input.padMove).toEqual({ x: 0, y: 0 });
+    expect(input.padTurn).toBe(0);
+
+    pad = gamepad([0.6, 0, 0.575]);
+    input.poll();
+    expect(input.padMove.x).toBeCloseTo(0.5);
+    expect(input.padMove.y).toBe(0);
+    expect(input.padTurn).toBeCloseTo(0.5);
+
+    pad = gamepad([0, -0.6, 0]);
+    input.poll();
+    expect(input.padMove.x).toBe(0);
+    expect(input.padMove.y).toBeCloseTo(0.5);
+  });
+
+  it('emits one edge per mapped button press and preserves held controls', () => {
+    const { input } = fixture();
+    let pad = gamepad([0, 0, 0], [0, 2, 4, 5, 6, 8, 9, 10], 0.75);
+    vi.stubGlobal('navigator', { getGamepads: () => [pad] });
+
+    input.poll();
+    expect(input.usePressed).toBe(true);
+    expect(input.firePressed).toBe(true);
+    expect(input.fireHeld).toBe(true);
+    expect(input.cyclePrevPressed).toBe(true);
+    expect(input.cyclePressed).toBe(true);
+    expect(input.logPressed).toBe(true);
+    expect(input.mapPressed).toBe(true);
+    expect(input.pausePressed).toBe(true);
+    expect(input.padRun).toBe(true);
+
+    input.poll();
+    expect(input.usePressed).toBe(false);
+    expect(input.firePressed).toBe(false);
+    expect(input.fireHeld).toBe(true);
+    expect(input.cyclePrevPressed).toBe(false);
+    expect(input.cyclePressed).toBe(false);
+    expect(input.logPressed).toBe(false);
+    expect(input.mapPressed).toBe(false);
+    expect(input.pausePressed).toBe(false);
+    expect(input.padRun).toBe(true);
+
+    pad = gamepad([0, 0, 0]);
+    input.poll();
+    expect(input.fireHeld).toBe(false);
+    expect(input.padRun).toBe(false);
+
+    pad = gamepad([0, 0, 0], [0, 2, 4, 5, 6, 8, 9, 10], 0.75);
+    input.poll();
+    expect(input.usePressed).toBe(true);
+    expect(input.firePressed).toBe(true);
+    expect(input.cyclePrevPressed).toBe(true);
+    expect(input.cyclePressed).toBe(true);
+    expect(input.logPressed).toBe(true);
+    expect(input.mapPressed).toBe(true);
+    expect(input.pausePressed).toBe(true);
+  });
+
+  it('treats a missing Gamepad API and an empty pad list as no input', () => {
+    const { input } = fixture();
+    vi.stubGlobal('navigator', {});
+
+    expect(() => input.poll()).not.toThrow();
+    expect(input.padMove).toEqual({ x: 0, y: 0 });
+    expect(input.padTurn).toBe(0);
+    expect(input.fireHeld).toBe(false);
+    expect(input.pausePressed).toBe(false);
+
+    vi.stubGlobal('navigator', { getGamepads: () => [] });
+    expect(() => input.poll()).not.toThrow();
+    expect(input.padRun).toBe(false);
+    expect(input.mapPressed).toBe(false);
   });
 });
 
