@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { Curl, FingerName } from '../handrig';
 import { addOutlineHull, toonMaterial, toonRamp } from './materials';
 
 const USB_BODY_LENGTH = 0.14;
@@ -6,6 +7,19 @@ const USB_TRIGGER_Y = 0.026;
 const USB_TRIGGER_CONTACT_NUDGE = 0.00152;
 const USB_TRIGGER_Z = 0.00775;
 const USB_MODEL_DROP = 0.017;
+
+export const USB_GRIP_WRIST: [number, number, number] = [0.085, -0.037, 0.05];
+export const USB_GRIP_FINGER_DIR: [number, number, number] = [-0.556022, -0.556022, -0.617802];
+export const USB_GRIP_PALM_FACES: [number, number, number] = [-0.707107, 0.707107, 0];
+
+export interface UsbGripDebugOptions {
+  wrist?: [number, number, number];
+  fingers?: [number, number, number];
+  palm?: [number, number, number];
+  curls?: Partial<Record<FingerName, Curl>>;
+  thumbOut?: number;
+  tail?: [number, number, number];
+}
 
 export class UsbScannerRig {
   readonly group = new THREE.Group();
@@ -87,16 +101,15 @@ export class UsbScannerRig {
       this.box(0.004, 0.012, 0.024, side * 0.021, 0, -0.042, '#d38b13');
     }
 
-    this.addSocket('usb.grip.wrist', [0.0894, -0.01994, 0.07991], [
-      [0.258819, -0.965926, 0], [0, 0, -1], [0.965926, 0.258819, 0],
-    ]);
-    this.addSocket('usb.grip.palm', [0.0988, -0.038, 0.037]);
-    this.addSocket('usb.grip.index', [0.04594, 0.015, 0.01395]);
-    this.addSocket('usb.grip.middle', [0.06253, 0.002, 0.01575]);
-    this.addSocket('usb.grip.ring', [0.06651, -0.01433, 0.01783]);
-    this.addSocket('usb.grip.pinky', [0.06418, -0.0277, 0.0209]);
+    this.addSocket('usb.grip.wrist', USB_GRIP_WRIST);
+    this.addSocket('usb.grip.palm', [0.031, -0.02, 0.061]);
+    this.addSocket('usb.grip.index', [-0.027, -0.017, 0.058]);
+    this.addSocket('usb.grip.middle', [-0.027, -0.017, 0.045]);
+    this.addSocket('usb.grip.ring', [-0.027, -0.017, 0.032]);
+    this.addSocket('usb.grip.pinky', [-0.027, -0.017, 0.021]);
     this.addSocket('usb.trigger', [0.00013, USB_TRIGGER_Y + USB_TRIGGER_CONTACT_NUDGE, USB_TRIGGER_Z]);
     this.addSocket('usb.connector', [0, 0.020, farZ - 0.010]);
+    this.setGripFrame();
   }
 
   update(_dt: number): void {}
@@ -130,6 +143,24 @@ export class UsbScannerRig {
 
   socket(name: string): THREE.Object3D | undefined {
     return this.sockets.get(name);
+  }
+
+  setGripFrame(options: Pick<UsbGripDebugOptions, 'wrist' | 'fingers' | 'palm'> = {}): void {
+    const wrist = this.sockets.get('usb.grip.wrist');
+    if (!wrist) return;
+    const fingers = new THREE.Vector3(...(options.fingers ?? USB_GRIP_FINGER_DIR));
+    if (fingers.lengthSq() < 1e-8) throw new Error('vm3d: USB grip finger direction cannot be zero');
+    fingers.normalize();
+    const palmFaces = new THREE.Vector3(...(options.palm ?? USB_GRIP_PALM_FACES));
+    palmFaces.addScaledVector(fingers, -palmFaces.dot(fingers));
+    if (palmFaces.lengthSq() < 1e-8) throw new Error('vm3d: USB grip palm direction must be perpendicular to fingers');
+    palmFaces.normalize();
+    const dorsal = palmFaces.clone().negate();
+    const thumbAway = new THREE.Vector3().crossVectors(fingers, dorsal).normalize();
+    const basis = new THREE.Matrix4().makeBasis(thumbAway, fingers, dorsal);
+    const position = options.wrist ?? USB_GRIP_WRIST;
+    wrist.position.set(position[0], position[1], position[2]);
+    wrist.quaternion.setFromRotationMatrix(basis);
   }
 
   socketWorld(name: string, out = new THREE.Vector3()): THREE.Vector3 {

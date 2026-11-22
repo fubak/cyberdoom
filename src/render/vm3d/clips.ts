@@ -416,34 +416,27 @@ const PRESS_CURLS: Partial<Record<FingerName, Curl>> = { ...LIFT_CURLS };
 // home pose: board low-centre, tilted toward the camera, right end low
 const HOME_POS: V3 = [0.012, -0.148, -0.44];
 const HOME_ROT: V3 = [24, 5, -9];
-const USB_HOME_POS: V3 = [0.025, -0.09, -0.28];
+const USB_HOME_POS: V3 = [0.077, -0.09, -0.28];
 const USB_HOME_ROT: V3 = [0, 35, -12];
 const USB_GRIP_CURLS: Partial<Record<FingerName, Curl>> = {
-  index: { mcp: 82, pip: 100, abd: -4 },
-  middle: { mcp: 88, pip: 104, abd: 0 },
-  ring: { mcp: 86, pip: 102, abd: 5 },
-  pinky: { mcp: 80, pip: 94, abd: 9 },
-  thumb: { mcp: 16, pip: 24 },
+  index: { mcp: 85, pip: 105, dip: 70, abd: -5 },
+  middle: { mcp: 85, pip: 105, dip: 70, abd: -4 },
+  ring: { mcp: 85, pip: 105, dip: 70, abd: -3 },
+  pinky: { mcp: 85, pip: 105, dip: 70, abd: -2 },
+  thumb: { mcp: 40, pip: 30, abd: 35 },
 };
 const USB_HOLD = {
   wristSocket: 'usb.grip.wrist',
-  thumbOut: 0.5,
+  thumbOut: 1,
   curls: USB_GRIP_CURLS,
-  tail: [0.08, -0.98, -0.15] as V3,
-  ik: [
-    ikc('index', 'usb.grip.index'),
-    ikc('middle', 'usb.grip.middle'),
-    ikc('ring', 'usb.grip.ring'),
-    ikc('pinky', 'usb.grip.pinky'),
-    ikc('thumb', 'usb.trigger'),
-  ],
+  tail: [0.3, -0.5, 0.8] as V3,
 };
 const USB_PRESS = {
   ...USB_HOLD,
-  thumbOut: 0.5,
+  thumbOut: 1,
   curls: {
     ...USB_GRIP_CURLS,
-    thumb: { mcp: 26, pip: 36 },
+    thumb: { mcp: 50, pip: 40, abd: 35 },
   },
 };
 
@@ -462,7 +455,7 @@ export const CLIPS: Record<string, VmClip> = {
     loop: true,
     keys: [
       { t: 0, root: { pos: USB_HOME_POS, rot: USB_HOME_ROT }, R: USB_HOLD },
-      { t: 1.2, root: { pos: [0.027, -0.087, -0.28], rot: [0.5, 35.3, -12.4] }, R: USB_HOLD },
+      { t: 1.2, root: { pos: [0.079, -0.087, -0.28], rot: [0.5, 35.3, -12.4] }, R: USB_HOLD },
       { t: 2.4, root: { pos: USB_HOME_POS, rot: USB_HOME_ROT }, R: USB_HOLD },
     ],
   },
@@ -471,9 +464,9 @@ export const CLIPS: Record<string, VmClip> = {
     duration: 0.47,
     keys: [
       { t: 0, root: { pos: USB_HOME_POS, rot: USB_HOME_ROT }, R: USB_HOLD },
-      { t: 0.05, root: { pos: [0.023, -0.087, -0.28], rot: [0, 35, -11] }, R: USB_PRESS, keys: { trigger: 1 } },
-      { t: 0.11, root: { pos: [0.029, -0.075, -0.265], rot: [4, 40, -8] }, R: USB_PRESS, keys: { trigger: 1 } },
-      { t: 0.20, root: { pos: [0.027, -0.092, -0.274], rot: [1, 37, -10] }, R: USB_HOLD },
+      { t: 0.05, root: { pos: [0.075, -0.087, -0.28], rot: [0, 35, -11] }, R: USB_PRESS, keys: { trigger: 1 } },
+      { t: 0.11, root: { pos: [0.081, -0.075, -0.265], rot: [4, 40, -8] }, R: USB_PRESS, keys: { trigger: 1 } },
+      { t: 0.20, root: { pos: [0.079, -0.092, -0.274], rot: [1, 37, -10] }, R: USB_HOLD },
       { t: 0.32, root: { pos: USB_HOME_POS, rot: USB_HOME_ROT }, R: USB_HOLD },
       { t: 0.47, root: { pos: USB_HOME_POS, rot: USB_HOME_ROT }, R: USB_HOLD },
     ],

@@ -53,6 +53,7 @@ import { genDebugCompare } from './render/genpool';
 import { springStep, swayTarget, SWAY, breath as breathF } from './render/vmotion';
 import { handMods, setVm3dTool } from './render/viewmodels';
 import { Vm3d, vm3dFlashRgb } from './render/vm3d/scene';
+import type { UsbGripDebugOptions } from './render/vm3d/usb3d';
 const FIXED_DT = 1 / 60;
 const params = new URLSearchParams(location.search);
 const DEBUG = params.get('debug') === '1';
@@ -1847,6 +1848,15 @@ class Game {
         /** grip close-up: 'dorsal'|'side'|'under'|null (pair with play+freeze) */
         gripView(view: string | null) {
           g.vm3d?.gripCloseup(view === 'dorsal' || view === 'side' || view === 'under' ? view : null);
+        },
+        /** USB surface debug: 'game'|'right'|'top'|'below', null restores normal materials. */
+        debugUsbView(view: string | null) {
+          g.vm3d?.debugUsbView(
+            view === 'game' || view === 'right' || view === 'top' || view === 'below' ? view : null,
+          );
+        },
+        debugUsbGrip(options: UsbGripDebugOptions | null) {
+          return g.vm3d?.debugUsbGrip(options) ?? null;
         },
         /** debug: move/rotate a named board socket (pos metres, euler deg ZXY). */
         socket(name: string, pos?: number[], rot?: number[]) {

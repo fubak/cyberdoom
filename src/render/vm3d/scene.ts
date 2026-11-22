@@ -5,7 +5,7 @@ import { TOOL_FLASH } from '../viewmodels';
 import { CLIPS, KBD_ACTION_CLIP, type KbdAction, type VmClip } from './clips';
 import { KeyboardRig } from './keyboard3d';
 import { Vm3dRig, type Vm3dBoard } from './rig';
-import { UsbScannerRig } from './usb3d';
+import { UsbScannerRig, type UsbGripDebugOptions } from './usb3d';
 import { ensureHandAssets, HAND_FINGERS, LiveHand, type HandSpec } from './hand3d';
 import type { Curl, FingerName } from '../handrig';
 import { RES, VIEW3D_H, VIEW_W } from '../res';
@@ -14,6 +14,7 @@ import { RES, VIEW3D_H, VIEW_W } from '../res';
 const D2R = Math.PI / 180;
 const PX2M = (2 * Math.tan((54 / 2) * Math.PI / 180) * 0.45) / 168 * 0.6;
 export const VM3D_CAMERA_BACK = 0.02;
+type UsbDebugView = 'game' | 'right' | 'top' | 'below';
 
 export interface Vm3dFrame {
   dt: number;
@@ -92,6 +93,25 @@ export class Vm3d {
   private studySide: 'L' | 'R' = 'R';
   private studyView: 'palm' | 'back' | 'side' = 'back';
   private gripView: 'dorsal' | 'side' | 'under' | null = null;
+  private usbDebugView: UsbDebugView | null = null;
+  private usbGripDebugOverrides: UsbGripDebugOptions | null = null;
+  private readonly usbDebugCamera = new THREE.OrthographicCamera(-0.4, 0.4, 0.2, -0.2, 0.01, 5);
+  private readonly usbDebugMaterials = new Map<string, THREE.MeshBasicMaterial>(
+    ['index', '#ff3030', 'middle', '#38e85a', 'ring', '#3284ff', 'pinky', '#ffd43b',
+      'thumb', '#ff32d8', 'palm', '#ffffff', 'arm', '#32d6e5', 'scanner', '#858b94', 'trigger', '#ff881e']
+      .reduce<Array<[string, THREE.MeshBasicMaterial]>>((materials, value, index, values) => {
+        if (index % 2 === 0) {
+          materials.push([value, new THREE.MeshBasicMaterial({
+            color: values[index + 1],
+            side: THREE.DoubleSide,
+            toneMapped: false,
+          })]);
+        }
+        return materials;
+      }, []),
+  );
+  private readonly usbDebugOriginalMaterials = new Map<THREE.Mesh, THREE.Material | THREE.Material[]>();
+  private readonly usbDebugOriginalVisibility = new Map<THREE.Object3D, boolean>();
   private readonly vmWidth = VIEW_W / RES;
   private readonly vmHeight = VIEW3D_H / RES;
   private readonly vmTarget = new THREE.WebGLRenderTarget(this.vmWidth, this.vmHeight, {
@@ -192,6 +212,193 @@ export class Vm3d {
     this.gripView = view;
   }
 
+  /** Debug-only surface diagnostics for the USB grip. */
+  debugUsbView(view: UsbDebugView | null): void {
+    this.restoreUsbDebugMaterials();
+    if (!view || !(this.rig.board instanceof UsbScannerRig) || !this.rig.ready) {
+      this.usbDebugView = null;
+      return;
+    }
+    this.usbDebugView = view;
+    const setMaterial = (mesh: THREE.Mesh, material: THREE.MeshBasicMaterial): void => {
+      if (mesh.name.startsWith('outline-')) {
+        this.usbDebugOriginalVisibility.set(mesh, mesh.visible);
+        mesh.visible = false;
+        return;
+      }
+      this.usbDebugOriginalMaterials.set(mesh, mesh.material);
+      mesh.material = material;
+    };
+    this.rig.board.group.traverse((object) => {
+      const mesh = object as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      setMaterial(
+        mesh,
+        this.usbDebugMaterials.get(mesh.name === 'usb-red-trigger' ? 'trigger' : 'scanner')!,
+      );
+    });
+    this.rig.stage.traverse((object) => {
+      const mesh = object as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      if (mesh.name.startsWith('outline-')) {
+        setMaterial(mesh, this.usbDebugMaterials.get('palm')!);
+        return;
+      }
+      if (/^vm3d-(forearm|forecap|sleeve)/.test(mesh.name)) {
+        setMaterial(mesh, this.usbDebugMaterials.get('arm')!);
+        return;
+      }
+      const finger = (['index', 'middle', 'ring', 'pinky', 'thumb'] as const)
+        .find((name) => mesh.name.includes(`-${name}-`) || mesh.name.endsWith(`-${name}`));
+      setMaterial(mesh, this.usbDebugMaterials.get(finger ?? 'palm')!);
+    });
+  }
+
+  /** Override the USB hand frame live for pose sweeps; null restores defaults. */
+  debugUsbGrip(options: UsbGripDebugOptions | null): {
+    thumbGapMm: number;
+    thumbBody: [number, number, number];
+    triggerBody: [number, number, number];
+    fingertipsBody: Record<string, [number, number, number]>;
+    fingertipSurfaceMm: Record<string, number>;
+    deepestPenetration: { segment: string; endpoint: number; depthMm: number; point: [number, number, number] } | null;
+    palmBody: [number, number, number];
+    wristBody: [number, number, number];
+    wristNdc: [number, number, number];
+  } | null {
+    if (options) {
+      const previous = this.usbGripDebugOverrides ?? {};
+      this.usbGripDebugOverrides = {
+        ...previous,
+        ...options,
+        curls: options.curls ? { ...previous.curls, ...options.curls } : previous.curls,
+      };
+    } else {
+      this.usbGripDebugOverrides = null;
+    }
+    this.applyUsbGripDebugFrame();
+    if (this.rig.board instanceof UsbScannerRig && this.rig.ready) {
+      const t = this.freezeT ?? this.clipT;
+      this.rig.solve(this.clip, this.clip.loop ? t % this.clip.duration : Math.min(t, this.clip.duration));
+      this.reapplyUsbGripDebugPose();
+      this.rig.stage.updateMatrixWorld(true);
+      const board = this.rig.board;
+      const hand = this.rig.hands.R;
+      const trigger = board.group.getObjectByName('usb-red-trigger');
+      if (!trigger) return null;
+      const triggerTop = new THREE.Vector3(0, 0.002, 0).applyMatrix4(trigger.matrixWorld);
+      const thumb = hand.tipWorld('thumb');
+      const thumbBody = board.group.worldToLocal(thumb.clone()).toArray() as [number, number, number];
+      const triggerBody = board.group.worldToLocal(triggerTop.clone()).toArray() as [number, number, number];
+      const palm = hand.group.getObjectByName('vm3d-chunky-palm');
+      const palmBody = board.group.worldToLocal(
+        (palm ?? hand.group).getWorldPosition(new THREE.Vector3()),
+      ).toArray() as [number, number, number];
+      const wrist = hand.group.getWorldPosition(new THREE.Vector3());
+      const wristBody = board.group.worldToLocal(wrist.clone()).toArray() as [number, number, number];
+      const wristNdc = wrist.project(this.cam).toArray() as [number, number, number];
+      const body = board.bodyAABB();
+      const surfaceDistance = (point: THREE.Vector3): number => {
+        const left = new THREE.Vector3(
+          body.min.x,
+          THREE.MathUtils.clamp(point.y, body.min.y, body.max.y),
+          THREE.MathUtils.clamp(point.z, body.min.z, body.max.z),
+        );
+        const bottom = new THREE.Vector3(
+          THREE.MathUtils.clamp(point.x, body.min.x, body.max.x),
+          body.min.y,
+          THREE.MathUtils.clamp(point.z, body.min.z, body.max.z),
+        );
+        return Math.min(point.distanceTo(left), point.distanceTo(bottom)) * 1000;
+      };
+      const fingertipsBody = Object.fromEntries(
+        (['index', 'middle', 'ring', 'pinky'] as const).map((finger) => {
+          const local = board.group.worldToLocal(hand.tipWorld(finger));
+          return [finger, local.toArray() as [number, number, number]];
+        }),
+      );
+      const fingertipSurfaceMm = Object.fromEntries(
+        (['index', 'middle', 'ring', 'pinky'] as const).map((finger) => [
+          finger,
+          surfaceDistance(board.group.worldToLocal(hand.tipWorld(finger))),
+        ]),
+      );
+      let deepestPenetration: {
+        segment: string;
+        endpoint: number;
+        depthMm: number;
+        point: [number, number, number];
+      } | null = null;
+      hand.group.traverse((object) => {
+        const segment = object as THREE.Mesh;
+        if (!segment.isMesh || !segment.name.startsWith('vm3d-chunky-segment-')) return;
+        const child = segment.userData.childBone as THREE.Bone | undefined;
+        if (!child || !segment.parent) return;
+        const endpoints = [
+          segment.parent.getWorldPosition(new THREE.Vector3()),
+          child.getWorldPosition(new THREE.Vector3()),
+        ];
+        endpoints.forEach((worldPoint, endpoint) => {
+          const point = board.group.worldToLocal(worldPoint);
+          if (!body.containsPoint(point)) return;
+          const depthMm = Math.min(
+            point.x - body.min.x, body.max.x - point.x,
+            point.y - body.min.y, body.max.y - point.y,
+            point.z - body.min.z, body.max.z - point.z,
+          ) * 1000;
+          if (!deepestPenetration || depthMm > deepestPenetration.depthMm) {
+            deepestPenetration = {
+              segment: segment.name,
+              endpoint,
+              depthMm,
+              point: point.toArray() as [number, number, number],
+            };
+          }
+        });
+      });
+      return {
+        thumbGapMm: thumb.distanceTo(triggerTop) * 1000,
+        thumbBody,
+        triggerBody,
+        fingertipsBody,
+        fingertipSurfaceMm,
+        deepestPenetration,
+        palmBody,
+        wristBody,
+        wristNdc,
+      };
+    }
+    return null;
+  }
+
+  private applyUsbGripDebugFrame(): void {
+    if (this.rig.board instanceof UsbScannerRig) {
+      this.rig.board.setGripFrame(this.usbGripDebugOverrides ?? {});
+    }
+  }
+
+  private reapplyUsbGripDebugPose(): void {
+    if (!(this.rig.board instanceof UsbScannerRig) || !this.rig.ready) return;
+    const overrides = this.usbGripDebugOverrides;
+    if (overrides) {
+      const hand = this.rig.hands.R;
+      if (overrides.thumbOut !== undefined) hand.thumbOut = overrides.thumbOut;
+      if (overrides.curls) hand.setCurls(overrides.curls);
+      else if (overrides.thumbOut !== undefined) hand.setCurl('thumb', hand.getCurl('thumb'));
+      if (overrides.tail) hand.tailDir = new THREE.Vector3(...overrides.tail).normalize();
+      this.rig.stage.updateMatrixWorld(true);
+      hand.orientTail();
+      hand.orientThumbnailToward(new THREE.Vector3(0, 0, 1));
+    }
+  }
+
+  private restoreUsbDebugMaterials(): void {
+    for (const [mesh, material] of this.usbDebugOriginalMaterials) mesh.material = material;
+    for (const [object, visible] of this.usbDebugOriginalVisibility) object.visible = visible;
+    this.usbDebugOriginalMaterials.clear();
+    this.usbDebugOriginalVisibility.clear();
+  }
+
   /** Debug: nudge a named board socket (board-local pos metres, euler deg). */
   setSocket(name: string, pos?: [number, number, number], rot?: [number, number, number]): void {
     const s = this.rig.board.socket(name);
@@ -238,7 +445,9 @@ export class Vm3d {
       this.clip = CLIPS[this.toolId === 'usb' ? 'usb.idle' : 'kbd.idle'];
       this.clipT = 0;
     }
+    this.applyUsbGripDebugFrame();
     this.rig.solve(this.clip, this.clip.loop ? t % this.clip.duration : Math.min(t, this.clip.duration));
+    this.reapplyUsbGripDebugPose();
 
     // --- motion layer (vmotion inputs retargeted to the vm-space root) ---
     const g = this.rig.root;
@@ -332,6 +541,48 @@ export class Vm3d {
     r.setScissorTest(false);
     r.setClearColor(0x000000, 0);
     r.clear(true, true, true);
+    if (this.usbDebugView && this.rig.board instanceof UsbScannerRig) {
+      const previousColor = r.getClearColor(new THREE.Color());
+      const previousAlpha = r.getClearAlpha();
+      r.setClearColor('#303640', 1);
+      this.cam.aspect = this.vmWidth / this.vmHeight;
+      this.cam.fov = 54;
+      this.cam.updateProjectionMatrix();
+      let camera: THREE.Camera = this.cam;
+      if (this.usbDebugView === 'game') {
+        this.cam.position.set(0, 0, VM3D_CAMERA_BACK);
+        this.cam.lookAt(0, 0, -1);
+      } else {
+        const board = this.rig.board.group;
+        const boardQ = board.getWorldQuaternion(new THREE.Quaternion());
+        const center = board.localToWorld(new THREE.Vector3(0.02, -0.10, 0.035));
+        const views: Record<Exclude<UsbDebugView, 'game'>, [THREE.Vector3, THREE.Vector3]> = {
+          right: [new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 1, 0)],
+          top: [new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, -1)],
+          below: [new THREE.Vector3(0, -1, 0), new THREE.Vector3(0, 0, 1)],
+        };
+        const [direction, up] = views[this.usbDebugView];
+        direction.applyQuaternion(boardQ).normalize();
+        up.applyQuaternion(boardQ).normalize();
+        const viewHeight = 0.40;
+        const viewWidth = viewHeight * this.vmWidth / this.vmHeight;
+        this.usbDebugCamera.left = -viewWidth / 2;
+        this.usbDebugCamera.right = viewWidth / 2;
+        this.usbDebugCamera.top = viewHeight / 2;
+        this.usbDebugCamera.bottom = -viewHeight / 2;
+        this.usbDebugCamera.updateProjectionMatrix();
+        this.usbDebugCamera.position.copy(center).addScaledVector(direction, 0.75);
+        this.usbDebugCamera.up.copy(up);
+        this.usbDebugCamera.lookAt(center);
+        camera = this.usbDebugCamera;
+      }
+      camera.updateMatrixWorld(true);
+      r.clear(true, true, true);
+      r.render(this.scene, camera);
+      r.setClearColor(previousColor, previousAlpha);
+      composite();
+      return;
+    }
     if (this.studyHand) {
       const l = this.studyHand.palmL;
       this.cam.aspect = this.vmWidth / this.vmHeight;

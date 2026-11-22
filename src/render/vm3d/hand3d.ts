@@ -662,7 +662,7 @@ export class LiveHand {
     const dirL = new THREE.Vector3(0, -1, 0);
     const boneDir = toBoneLocal('wrist', dirL).normalize();
     const len = 0.15 / s;                    // forearm always exits the frame
-    const rw = this.palmW * 0.36 / s;        // wrist cross-section radius
+    const rw = this.palmW * (this.look === 'chunky' ? 0.20 : 0.36) / s; // wrist cross-section radius
     const jacket = ANALYSTS[this.spec.gender].jacket;
     const cuffStart = 0.04 / s;
     const cuffEnd = 0.15 / s;
