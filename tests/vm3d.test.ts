@@ -1086,6 +1086,38 @@ describe('vm3d clip contacts (plan §5)', () => {
       expect(projectedPalm.y, `palm projection ${projectedPalm.x.toFixed(3)}, ${projectedPalm.y.toFixed(3)}`).toBeLessThanOrEqual(-0.5);
     });
 
+    it('enters from the bottom-right with a compact projected hand', () => {
+      const rig = new Vm3dRig(spec, new UsbScannerRig());
+      rig.solve(CLIPS['usb.idle'], 0);
+      const camera = vmCamera();
+      const wrist = rig.hands.R.group.getWorldPosition(new THREE.Vector3()).project(camera);
+      const wristX = (wrist.x + 1) / 2;
+      expect(wristX, `wrist x ${(wristX * 100).toFixed(1)}%`).toBeGreaterThanOrEqual(0.55);
+      expect(wristX, `wrist x ${(wristX * 100).toFixed(1)}%`).toBeLessThanOrEqual(0.8);
+      expect(wrist.y, `wrist y ${wrist.y.toFixed(3)}`).toBeLessThanOrEqual(-0.84);
+
+      const points: THREE.Vector3[] = [];
+      rig.hands.R.group.updateMatrixWorld(true);
+      rig.hands.R.group.traverse((object) => {
+        const mesh = object as THREE.Mesh;
+        if (!mesh.isMesh || !mesh.visible || mesh.name.startsWith('outline-')) return;
+        if (/^vm3d-(forearm|forecap|sleeve|sleevecap)/.test(mesh.name)) return;
+        mesh.geometry.computeBoundingBox();
+        const bounds = mesh.geometry.boundingBox;
+        if (!bounds) return;
+        for (let x = 0; x < 2; x++) for (let y = 0; y < 2; y++) for (let z = 0; z < 2; z++) {
+          points.push(new THREE.Vector3(
+            x ? bounds.max.x : bounds.min.x,
+            y ? bounds.max.y : bounds.min.y,
+            z ? bounds.max.z : bounds.min.z,
+          ).applyMatrix4(mesh.matrixWorld));
+        }
+      });
+      const bounds = projectedBounds(points, camera);
+      const widthFraction = (bounds.maxX - bounds.minX) / 2;
+      expect(widthFraction, `hand bbox width ${(widthFraction * 100).toFixed(1)}%`).toBeLessThanOrEqual(0.22);
+    });
+
     it('keeps the resting thumb within 5 mm of the trigger socket', () => {
       const rig = new Vm3dRig(spec, new UsbScannerRig());
       rig.solve(CLIPS['usb.idle'], 0);

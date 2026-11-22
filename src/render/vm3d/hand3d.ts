@@ -477,7 +477,7 @@ export class LiveHand {
     s: number,
   ): void {
     const fingerWidth: Record<FingerName, number> = {
-      index: 1, middle: 1, ring: 1, pinky: 0.85, thumb: 1.25,
+      index: 1.15, middle: 1.15, ring: 1.15, pinky: 1.15 * 0.85, thumb: 1,
     };
     const getBone = (name: string): THREE.Bone => {
       const bone = bones.get(name);
@@ -513,7 +513,7 @@ export class LiveHand {
         const endpoint = bone.worldToLocal(child.getWorldPosition(new THREE.Vector3()));
         const length = endpoint.length();
         if (length < 1e-6) continue;
-        const radius = Math.min(length * 0.26 * fingerWidth[finger], (this.palmW / s) * 0.14);
+        const radius = Math.min(length * 0.20 * fingerWidth[finger], (this.palmW / s) * 0.14);
         const distalRadius = radius * (i === chain.length - 2 ? 0.82 : 0.9);
         const geometry = new THREE.CylinderGeometry(distalRadius, radius, length, 8, 1, false);
         geometry.translate(0, length / 2, 0);
@@ -540,7 +540,7 @@ export class LiveHand {
       const mcp = getBone(mcpName);
       const nextName = finger === 'thumb' ? 'thumb-phalanx-distal' : `${finger}-finger-phalanx-intermediate`;
       const mcpLength = mcp.worldToLocal(getBone(nextName).getWorldPosition(new THREE.Vector3())).length();
-      const radius = Math.min(mcpLength * 0.26 * fingerWidth[finger], (this.palmW / s) * 0.14);
+      const radius = Math.min(mcpLength * 0.20 * fingerWidth[finger], (this.palmW / s) * 0.14);
       const bump = new THREE.Mesh(new THREE.SphereGeometry(radius * 1.08, 8, 6), skinMat);
       bump.name = `vm3d-chunky-knuckle-${finger}`;
       const mcpFrame = framePoint(mcpName);

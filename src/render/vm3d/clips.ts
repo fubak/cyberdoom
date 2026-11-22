@@ -429,7 +429,7 @@ const USB_HOLD = {
   wristSocket: 'usb.grip.wrist',
   thumbOut: 0.5,
   curls: USB_GRIP_CURLS,
-  tail: [0.72, -0.55, 0.38] as V3,
+  tail: [0.08, -0.98, -0.15] as V3,
   ik: [
     ikc('index', 'usb.grip.index'),
     ikc('middle', 'usb.grip.middle'),
