@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ellipsizeWords, wrapText } from '../src/render/font';
 import { sortedTools } from '../src/tools';
-import { tickerRows } from '../src/ui/hud';
+import { tickerColor, tickerPrefix, tickerRows } from '../src/ui/hud';
 
 const msg = (text: string, kind = 'info', n = 1) => ({ text, kind, t: 5, n });
 
@@ -81,5 +81,21 @@ describe('tickerRows', () => {
     const rows = tickerRows([msg('first message'), msg('second message')]);
     expect(rows[0].line).toContain('FIRST');
     expect(rows[1].line).toContain('SECOND');
+  });
+
+  it('distinguishes good, warn, and bad messages by prefix as well as color, with a color-blind palette', () => {
+    const good = tickerRows([msg('Host cleaned', 'good')])[0].line;
+    const warn = tickerRows([msg('Door locked', 'warn')])[0].line;
+    const bad = tickerRows([msg('Integrity hit', 'bad')])[0].line;
+    expect(good.startsWith(tickerPrefix('good'))).toBe(true);
+    expect(warn.startsWith(tickerPrefix('warn'))).toBe(true);
+    expect(bad.startsWith(tickerPrefix('bad'))).toBe(true);
+    expect(new Set([tickerPrefix('good'), tickerPrefix('warn'), tickerPrefix('bad')]).size).toBe(3);
+
+    // Color-blind palette keeps all four kinds distinct and swaps red/green for vermilion/sky-blue.
+    const cbColors = new Set(['good', 'warn', 'bad', 'info'].map((k) => tickerColor(k, true)));
+    expect(cbColors.size).toBe(4);
+    expect(tickerColor('good', true)).not.toBe(tickerColor('good', false));
+    expect(tickerColor('bad', true)).not.toBe(tickerColor('bad', false));
   });
 });
