@@ -151,8 +151,8 @@ briefing: 'Ransomware is encrypting the finance VLAN right now. The CFO wants pa
       log: 'LESSONS LEARNED filed: root cause phishing macro; added MFA;\nkeep offline backups; re-test the IR plan quarterly.\nA threat hunting sweep opened for siblings of the C2 domain.',
       inspect: { label: 'Post-incident review', detail: 'Lessons learned: the final phase of incident response.', category: 'legit', objectives: ['4.8'] },
     },
-    { id: 'rw-a', kind: 'enemy', x: 14.5, y: 18.5, sprite: 'ransomware', ai: 'wander', hp: 4, infected: true, tags: ['malware'],
-      inspect: { label: 'Ransomware process', detail: 'Enumerating shares and encrypting files.', category: 'malware', objectives: ['2.4'] } },
+    { id: 'rw-a', kind: 'enemy', x: 14.5, y: 18.5, sprite: 'boss-locker', threat: 'boss-locker', ai: 'wander', hp: 16, infected: true, tags: ['malware'],
+      inspect: { label: 'Boss-Locker Overlord', detail: 'GHOSTLEDGER primary encryptor node — multi-bolt encryption volley and door-sealing daemon.', category: 'malware', objectives: ['2.4'] } },
     { id: 'rw-b', kind: 'enemy', x: 25.5, y: 11.5, sprite: 'ransomware', ai: 'wander', hp: 4, infected: true, tags: ['malware'],
       inspect: { label: 'Ransomware process', detail: 'Enumerating shares and encrypting files.', category: 'malware', objectives: ['2.4'] } },
     { id: 'worm-closet', kind: 'enemy', x: 5.5, y: 5.5, sprite: 'worm', ai: 'chase', hp: 2, infected: true, tags: ['malware'],
@@ -464,8 +464,8 @@ m09.entities.push(
 m09.script!.secrets!.push(
   { id: 'rf4-ring-cache', area: [42, 26, 44, 28], label: 'Ransom-evidence cache', grant: { resource: 'usb-charge', amount: 8 } },
 );
-mixedThreatEncounter(m09, 'ring-mix', [['ransomware', 1], ['worm', 2]],
+mixedThreatEncounter(m09, 'ring-mix', [['wiper', 1], ['botnet', 2]],
   { id: 'ring-ambush', area: [40, 14, 41, 20], kind: 'bad',
-    message: 'Ransomware still prowls the vault ring — worms ride with it.' },
+    message: 'A wiper anchors the vault ring — botnet drones flank it.' },
   [40, 6, 46, 24]);
 m09.map.lights = { ...m09.map.lights, ...lightRects([[40, 6, 46, 24, 0.55], [42, 26, 44, 28, 0.85], [43, 24, 43, 24, 0.35]]) };

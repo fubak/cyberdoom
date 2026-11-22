@@ -694,9 +694,9 @@ m08.script!.secrets!.push(
   { id: 'rf4-sample-locker', area: [40, 11, 41, 11], label: 'Sample quarantine locker', grant: { resource: 'usb-charge', amount: 8 } },
   { id: 'rf4-cold-locker', area: [42, 23, 44, 24], label: 'Cold-room evidence store', grant: { resource: 'integrity', amount: 20 } },
 );
-mixedThreatEncounter(m08, 'stair-mix', [['worm', 3], ['rat', 2]],
+mixedThreatEncounter(m08, 'stair-mix', [['botnet', 3], ['wiper', 2]],
   { id: 'stair-ambush', area: [40, 18, 43, 21], kind: 'bad',
-    message: 'The analysis room is still infected — variants crawl up the stair.' },
+    message: 'The analysis room is still infected — botnet drones and wipers crawl up the stair.' },
   [40, 13, 43, 21]);
 addThreatEncounter(m08, 'rescan-wave', 'worm', 4,
   { id: 'rescan-wave', after: ['rescan'], kind: 'warn',

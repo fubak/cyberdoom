@@ -925,8 +925,8 @@ m07.entities.push(
 m07.script!.secrets!.push(
   { id: 'rf4-comb-cache', area: [40, 26, 44, 26], label: 'Unsegmented shadow stub', grant: { resource: 'usb-charge', amount: 8 } },
 );
-mixedThreatEncounter(m07, 'comb-mix', [['worm', 3], ['trojan', 2]],
+mixedThreatEncounter(m07, 'comb-mix', [['botnet', 3], ['trojan', 2]],
   { id: 'comb-ambush', area: [40, 16, 44, 24], kind: 'bad',
-    message: 'Segmentation failed in the stub zone — a worm-trojan pack spills across the comb.' },
+    message: 'Segmentation failed in the stub zone — botnet drones and trojans spill across the comb.' },
   [40, 4, 44, 24]);
 m07.map.lights = { ...m07.map.lights, ...lightRects([[40, 4, 44, 24, 0.6], [40, 26, 44, 26, 0.85], [43, 25, 43, 25, 0.35]]) };

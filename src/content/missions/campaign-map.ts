@@ -51,6 +51,10 @@ export function threatWave(
     logicbomb: 1,
     rat: 2,
     rootkit: 3,
+    botnet: 3,
+    wiper: 6,
+    'boss-locker': 16,
+    'boss-ghostledger': 30,
   };
   const positions: { x: number; y: number }[] = [];
   const world = spawnSafe?.los ? new WorldMap(map) : null;
@@ -82,6 +86,10 @@ export function threatWave(
         rat: 'RAT',
         rootkit: 'Rootkit process',
         ransomware: 'Ransomware',
+        botnet: 'Botnet drone',
+        wiper: 'Wiper unit',
+        'boss-locker': 'Boss-Locker Overlord',
+        'boss-ghostledger': 'Boss-Ghostledger Core',
       } as Record<string, string>)[sprite] ?? 'Malware process',
       detail: ({
         worm: 'Self-propagating process scanning reachable hosts.',
@@ -90,6 +98,10 @@ export function threatWave(
         rat: 'Remote access session: source account and destination host recorded.',
         rootkit: 'Persistence record: service restart and privileged file access recorded.',
         ransomware: 'File-encryption process and ransom note recorded.',
+        botnet: 'C2 botnet drone firing rapid twin-bolt packet volleys.',
+        wiper: 'Destructive disk-wiper unit firing 3-bolt fan spreads.',
+        'boss-locker': 'GHOSTLEDGER primary encryptor node — 3-bolt encryption volley and door-sealing daemon.',
+        'boss-ghostledger': 'GHOSTLEDGER final C2 monolith — 5-bolt fan volley and full war-room persistence.',
       } as Record<string, string>)[sprite] ?? 'Malicious process recorded by endpoint telemetry.',
       category: 'malware',
     },

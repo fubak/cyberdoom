@@ -60,6 +60,12 @@ interface EnemyProfile {
   /** ranged types that sidestep perpendicular to the target after firing or
    *  when hit (Doom-style strafing) — keeps a firefight moving. */
   strafes?: boolean;
+  /** Number of projectiles in a ranged fan volley (default 1). */
+  spreadCount?: number;
+  /** Total angular spread (radians) across a multi-bolt volley. */
+  spreadAngle?: number;
+  /** Boss flag for HUD boss bar and encounter tracking. */
+  boss?: boolean;
 }
 
 export const ENEMY_PROFILES: Record<string, EnemyProfile> = {
@@ -69,6 +75,10 @@ export const ENEMY_PROFILES: Record<string, EnemyProfile> = {
   logicbomb: { speed: 0, ranged: false, damage: 22, painChance: 0, range: 2.2, windup: 1.4, aggroRange: 4, logicBomb: true },
   rat: { speed: 3.2, ranged: true, damage: 8, painChance: 0.6, projectileSpeed: 7, windup: 0.5, retreatAfterShot: 0.7, strafes: true },
   rootkit: { speed: 1.6, ranged: false, damage: 12, painChance: 0.4, range: 0.95, windup: 0.5, regenerate: true, hidesWhenIdle: true, stealthy: true },
+  botnet: { speed: 2.3, ranged: true, damage: 7, painChance: 0.65, projectileSpeed: 6.2, windup: 0.48, strafes: true, spreadCount: 2, spreadAngle: 0.14 },
+  wiper: { speed: 1.5, ranged: true, damage: 14, painChance: 0.35, projectileSpeed: 5.0, windup: 0.65, strafes: true, spreadCount: 3, spreadAngle: 0.22 },
+  'boss-locker': { speed: 1.25, ranged: true, damage: 16, painChance: 0.18, projectileSpeed: 4.8, windup: 0.65, seals: true, strafes: true, spreadCount: 3, spreadAngle: 0.24, boss: true },
+  'boss-ghostledger': { speed: 1.4, ranged: true, damage: 18, painChance: 0.12, projectileSpeed: 5.5, windup: 0.6, strafes: true, spreadCount: 5, spreadAngle: 0.36, boss: true },
 };
 
 export const ENEMY_RADIUS = 0.3;
@@ -646,18 +656,25 @@ export function updateEntities(
           } else if (profile.ranged) {
             const aimDx = (grudge ? grudge.x : player.x) - e.x;
             const aimDy = (grudge ? grudge.y : player.y) - e.y;
-            const aimDist = Math.hypot(aimDx, aimDy) || 1;
-            hooks.onFire(e, {
-              x: e.x,
-              y: e.y,
-              dx: aimDx / aimDist,
-              dy: aimDy / aimDist,
-              speed: profile.projectileSpeed ?? 5,
-              range: 16,
-              source: `enemy:${e.def.id}`,
-              hostile: true,
-              damage: Math.round(profile.damage * ((e.state.dmgMul as number | undefined) ?? 1)),
-            });
+            const baseAngle = Math.atan2(aimDy, aimDx);
+            const count = Math.max(1, profile.spreadCount ?? 1);
+            const spread = profile.spreadAngle ?? 0;
+            const projDmg = Math.round(profile.damage * ((e.state.dmgMul as number | undefined) ?? 1));
+            for (let b = 0; b < count; b++) {
+              const offset = count === 1 ? 0 : -spread / 2 + (spread * b) / (count - 1);
+              const ang = baseAngle + offset;
+              hooks.onFire(e, {
+                x: e.x,
+                y: e.y,
+                dx: Math.cos(ang),
+                dy: Math.sin(ang),
+                speed: profile.projectileSpeed ?? 5,
+                range: 16,
+                source: `enemy:${e.def.id}`,
+                hostile: true,
+                damage: projDmg,
+              });
+            }
           } else if (dist < (profile.range ?? 0.95) + 0.25) {
             if (grudge) hooks.onEnemyMelee?.(e, grudge, meleeDmg);
             else hooks.onMelee(e, meleeDmg);
