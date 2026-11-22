@@ -277,6 +277,7 @@ describe('resolveUse + doorUseHint', () => {
       wallDistance: 10,
       roles: ['analyst'],
       hasBadge: true,
+      hasToken: false,
       mfaPending: new Set(),
       ...o,
     };
@@ -297,11 +298,11 @@ describe('resolveUse + doorUseHint', () => {
     const c = uctx({ roles: ['analyst'] });
     expect(doorUseHint(c, door)).toBe('READER: ADMIN ONLY');
     const c2 = uctx({ roles: ['admin'], hasBadge: false });
-    expect(doorUseHint(c2, door)).toBe('READER: SELECT BADGE [4]');
+    expect(doorUseHint(c2, door)).toBe('READER: NO BADGE');
     const c3 = uctx({ roles: ['admin'], hasBadge: true });
-    expect(doorUseHint(c3, door)).toBe('SWIPE BADGE AT READER');
-    c3.mfaPending.add('d');
-    expect(doorUseHint(c3, door)).toBe('SECOND FACTOR: TOKEN [7]');
+    expect(doorUseHint(c3, door)).toBe('MFA READER: NO TOKEN');
+    expect(doorUseHint(uctx({ roles: ['admin'], hasBadge: true, hasToken: true }), door)).toBe('BADGE + TOKEN AT READER');
+    expect(doorUseHint(c3, { doorId: 'badge-only', accessRole: 'admin' })).toBe('SWIPE BADGE AT READER');
     expect(doorUseHint(c3, { doorId: 'x' })).toBe('OPEN DOOR');
   });
 });

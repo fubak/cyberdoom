@@ -207,6 +207,8 @@ export interface MissionObjective {
   ordered?: boolean;
   /** For 'avoid': violations allowed before the mission FAILS (default 1). */
   strikes?: number;
+  /** a violation is scored and marks the objective missed, but never ends the mission. */
+  penaltyOnly?: boolean;
   /** Avoid objective to violate when an interaction is attempted before its requirements. */
   earlyViolates?: string;
 }
@@ -383,6 +385,8 @@ export interface ToolDef {
   name: string;
   /** Slot key 1-9. */
   slot: number;
+  /** Passive tools are owned for gating but are not selectable weapons. */
+  passive?: boolean;
   /** Ammo resource id and starting amount; null = infinite. */
   ammo: { resource: string; start: number; max: number } | null;
   /** Seconds between uses. */

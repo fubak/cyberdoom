@@ -1,6 +1,7 @@
 import { h, bigButton } from './briefing';
 import { nextStep, SENS_STEPS, type Settings } from './settings';
 import { skillById } from '../missions/difficulty';
+import { keyLabel, resolveBindings, type Action } from '../engine/bindings';
 
 const VOLUME_STEPS = [1, 0.7, 0.4, 0.15, 0];
 
@@ -11,6 +12,7 @@ const VOLUME_STEPS = [1, 0.7, 0.4, 0.15, 0];
  */
 export function pauseMenu(actions: {
   onResume: () => void;
+  onControls: () => void;
   onRestart: () => void;
   onQuit: () => void;
   settings: Settings;
@@ -25,6 +27,7 @@ export function pauseMenu(actions: {
 
   const items: { id: string; label: string; go: () => void; alt: boolean }[] = [
     { id: 'resume', label: 'RESUME  [ESC]', go: actions.onResume, alt: false },
+    { id: 'controls', label: 'CONTROLS', go: actions.onControls, alt: true },
     { id: 'restart', label: 'RESTART MISSION', go: actions.onRestart, alt: true },
     { id: 'quit', label: 'MISSION SELECT', go: actions.onQuit, alt: true },
   ];
@@ -76,11 +79,14 @@ export function pauseMenu(actions: {
   }));
 
   const help = h('ul', 'cd-pause-help');
+  const bindings = resolveBindings(settings.bindings);
+  const key = (action: Action) => [...new Set(bindings[action].map(keyLabel))].join('/') || '—';
   for (const line of [
-    'WASD MOVE  ·  ARROWS TURN  ·  SHIFT RUN',
-    'CLICK TO LOOK  ·  LMB USE TOOL  ·  E / SPACE INTERACT',
-    '1-8 / WHEEL / Q SWITCH TOOL',
-    'TAB OBJECTIVES  ·  M MAP  ·  L EVIDENCE LOG',
+    `${key('forward')}/${key('back')} MOVE  ·  ${key('strafeLeft')}/${key('strafeRight')} STRAFE`,
+    `${key('turnLeft')}/${key('turnRight')} TURN  ·  ${key('run')} RUN`,
+    `CLICK TO LOOK  ·  LMB/${key('fire')} USE TOOL  ·  ${key('use')} INTERACT`,
+    `1-9 / WHEEL / ${key('cycle')} SWITCH TOOL`,
+    `TAB OBJECTIVES  ·  ${key('map')} MAP  ·  ${key('log')} EVIDENCE LOG`,
     `SKILL: ${skillById(settings.skill).label}`,
     'F5 QUICKSAVE / F9 QUICKLOAD',
     'ESC PAUSES, OR STEPS BACK THROUGH MENUS',

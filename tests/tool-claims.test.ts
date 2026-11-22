@@ -14,10 +14,10 @@ import type { Mission } from '../src/core/types';
  *   - MOUSE (2): inspects; second click flags a NON-person as malicious.
  *     REFUSES people — suspects are not triaged.
  *   - USB SCANNER (3): cleans/quarantines infected hosts and malware.
- *   - BADGE (4): presents your credential at badge readers.
+ *   - BADGE: passively swipes your credential at reader doors.
  *   - NETWORK TAP (5): passively copies traffic — cannot block.
  *   - EDR CONSOLE (6): containment pulse — kills processes in a burst.
- *   - MFA TOKEN (7): second factor at MFA readers.
+ *   - MFA TOKEN: passively completes the second factor at MFA readers.
  *   - PATCH DISK (8): remediates confirmed vulnerabilities.
  *   - E (interact): opens doors, uses consoles, hands over items,
  *     MARKS A SUSPECT (the only way to mark), manual cleanup.

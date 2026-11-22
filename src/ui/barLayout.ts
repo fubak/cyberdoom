@@ -75,7 +75,7 @@ export interface BarLayoutInput {
   credTint: string;
   tool: { slot: number };
   /** all eight slot defs in slot order. */
-  tools: { id: string; slot: number }[];
+  tools: { id: string; slot: number; passive?: boolean }[];
   /** owned tool ids. */
   owned: string[];
   got?: { k: number; slot: number; blink: boolean } | null;
@@ -120,6 +120,7 @@ export function statusBarText(o: BarLayoutInput, pulse: boolean): BarText[] {
   for (let i = 0; i < 8; i++) {
     const slot = i + 1;
     const t = o.tools.find((tt) => tt.slot === slot);
+    if (t?.passive) continue;
     const owned = !!t && o.owned.includes(t.id);
     const x = P_TOOLS[0] + 3 + (i % 4) * 11;
     const y = by + 6 + Math.floor(i / 4) * 10;

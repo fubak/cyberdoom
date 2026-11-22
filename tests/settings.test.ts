@@ -31,6 +31,7 @@ describe('settings persistence', () => {
       musicVol: 1,
       viewBob: false,
       skill: 'analyst',
+      bindings: {},
     });
   });
 
@@ -69,9 +70,25 @@ describe('settings persistence', () => {
       musicVol: 0.15,
       viewBob: false,
       skill: 'commander' as const,
+      bindings: { forward: ['KeyI'], use: [] },
     };
     saveSettings(settings, storage);
     expect(loadSettings(storage)).toEqual(settings);
+  });
+
+  it('validates saved bindings while preserving explicit empty actions', () => {
+    const settings = loadSettings(reader({
+      'cyberdoom-settings': JSON.stringify({
+        ...DEFAULT_SETTINGS,
+        bindings: {
+          forward: ['KeyI', '', 4],
+          use: [],
+          unknown: ['KeyZ'],
+          fire: 'KeyK',
+        },
+      }),
+    }));
+    expect(settings.bindings).toEqual({ forward: ['KeyI'], use: [] });
   });
 
   it('falls back to analyst for an invalid skill id', () => {

@@ -54,7 +54,7 @@ export function swipeBadge(
     mfaPending(ctx.entities).add(door.doorId);
     ctx.bus.emit('badge-confirm', { allowed: true });
     ctx.bus.emit('message', {
-      text: 'BADGE OK: one factor (something you have). This door enforces MFA: touch your TOKEN (7) to the reader.',
+      text: 'BADGE OK: one factor (something you have). The reader now wants your fingerprint on the TOKEN.',
       kind: 'warn',
     });
     return;
@@ -72,6 +72,7 @@ export const badgeTool: ToolDef = {
   id: 'badge',
   name: 'BADGE',
   slot: 4,
+  passive: true,
   ammo: null,
   cooldown: 0.55,
   windup: WINDUP,
@@ -81,7 +82,7 @@ export const badgeTool: ToolDef = {
     category: 'physical',
     types: ['preventive'],
     objectives: ['1.2', '4.6'],
-    use: 'Swipe at a door within arm\'s reach. Doors open only for roles you are authorised for in this mission; trying a door outside your role is logged as a violation.',
+    use: 'Press E at a reader door and your badge swipes itself. Doors open only for roles you hold; trying a door outside your role is logged as a violation.',
     lesson: 'Least privilege: hold only the access your job requires. Every badge swipe is logged, so attempts outside your role are visible to auditors.',
   },
   drawViewmodel(g, w, _h, _bob, gender, _cd, anim) {

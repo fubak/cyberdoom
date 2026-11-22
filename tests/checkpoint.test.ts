@@ -111,12 +111,23 @@ describe('mission checkpoints', () => {
     arsenal.ammo.set('usb-charge', 7);
     arsenal.current = toolRegistry.require('usb');
     arsenal.introduce([toolRegistry.require('patch')]);
+    arsenal.flash('badge');
+    arsenal.flash('mfa');
+    arsenal.update(0.2, false, false, () => {
+      throw new Error('no tool use expected');
+    });
+    const flashState = arsenal as unknown as { flashId: string | null; flashElapsed: number; flashQueue: string[] };
+    expect(arsenal.viewTool.id).toBe('badge');
+    expect(flashState.flashElapsed).toBeGreaterThan(0);
+    expect(flashState.flashQueue).toEqual(['mfa']);
     const snapshot = arsenal.snapshot();
 
     arsenal.owned.clear();
     arsenal.ammo.clear();
     arsenal.current = toolRegistry.require('keyboard');
     arsenal.restore(snapshot);
+    expect(arsenal.viewTool.id).toBe('usb');
+    expect(flashState).toMatchObject({ flashId: null, flashElapsed: 0, flashQueue: [] });
     for (let i = 0; i < 240; i++) arsenal.update(1 / 60, false, false, () => {
       throw new Error('no tool use expected');
     });

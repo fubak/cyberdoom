@@ -1,6 +1,7 @@
 import './ui/style.css';
 import { EventBus } from './core/events';
 import type { Entity, Gender, Mission, Projectile, Screen } from './core/types';
+import { resolveBindings } from './engine/bindings';
 import { WorldMap } from './engine/map';
 import { Input } from './engine/input';
 import { EYE_HEIGHT, Player } from './engine/player';
@@ -41,6 +42,7 @@ import { USB_PLUG_RANGE } from './tools/usb';
 import { characterSelect } from './ui/characterSelect';
 import { applyBack, LOOK_HINT, MENU_HINT } from './ui/nav';
 import { pauseMenu } from './ui/pause';
+import { controlsPanel } from './ui/controls';
 import { markCompleted, unlockEverything } from './missions/progress';
 import { registerThreatSprites } from './missions/threatSprites';
 import { genDebugCompare } from './render/genpool';
@@ -57,6 +59,7 @@ import { handMods } from './render/viewmodels';
 const FIXED_DT = 1 / 60;
 const params = new URLSearchParams(location.search);
 const DEBUG = params.get('debug') === '1';
+const clampInputAxis = (value: number): number => Math.max(-1, Math.min(1, value));
 
 /** Per-tool muzzle-flash colour (0-1 rgb) for the world light flood. */
 const TOOL_FIRE_RGB: Record<string, [number, number, number]> = Object.fromEntries(
@@ -219,6 +222,7 @@ class Game {
     prewarmLazySpriteFrames();
     this.renderer.canvas.classList.add('gl');
     this.input = new Input(this.renderer.canvas, () => this.audio.unlock(), () => this.lockWanted());
+    this.input.setBindings(resolveBindings(this.settings.bindings));
     this.hud = new Hud(viewport);
     this.automap = new Automap(this.hud.canvas);
     // EGGS: Doom-style typed cheats during play; the Konami code on title.
@@ -232,6 +236,10 @@ class Game {
         return;
       }
       if (this.screen !== 'play' || this.paused || this.dossier.isOpen) return;
+      if (
+        this.input.matchesAction('map', event.code) ||
+        this.input.matchesAction('log', event.code)
+      ) return;
       const cheat = this.cheatBuf.push(event.key);
       // A completed code, or a live prefix deep enough to be unambiguous,
       // eats the key so in-play hotkeys (L log, M map, E use, digit tools)
@@ -256,7 +264,7 @@ class Game {
         else this.hud.pushMessage('NO QUICKSAVE', 'warn');
         return;
       }
-      if (event.code === 'KeyM') {
+      if (this.input.matchesAction('map', event.code)) {
         if (this.paused || this.dossier.isOpen) return;
         event.preventDefault();
         this.automap.toggle();
@@ -317,6 +325,7 @@ class Game {
     this.dossier = new Dossier(
       () => this.runtime?.evidence ?? [],
       (entityId, action) => this.bus.emit('call-pick', { entityId, action }),
+      (code) => this.input.matchesAction('log', code),
     );
     viewport.appendChild(this.dossier.canvas);
 
@@ -550,21 +559,20 @@ class Game {
     });
   }
 
-  private showPause(): void {
-    if (this.paused || this.screen !== 'play' || !this.runtime || this.runtime.finished) return;
-    this.paused = true;
-    this.automap.close();
-    this.dossier.enabled = false;
-    this.releaseLock();
-    this.pauseNode = pauseMenu({
+  private applySettings(next: Settings): void {
+    this.settings = next;
+    saveSettings(next);
+    this.input.setBindings(resolveBindings(next.bindings));
+    this.audio.setMusicVolume(next.musicVol);
+    this.audio.setSfxVolume(next.sfxVol);
+    if (this.player) this.player.bobScale = next.viewBob ? 1 : 0;
+  }
+
+  private makePauseMenu(): HTMLElement {
+    return pauseMenu({
       settings: this.settings,
-      onSettings: (next) => {
-        this.settings = next;
-        saveSettings(next);
-        this.audio.setMusicVolume(next.musicVol);
-        this.audio.setSfxVolume(next.sfxVol);
-        if (this.player) this.player.bobScale = next.viewBob ? 1 : 0;
-      },
+      onSettings: (next) => this.applySettings(next),
+      onControls: () => this.showControls(),
       onResume: () => this.hidePause(true),
       onRestart: () => {
         const id = this.runtime?.mission.id;
@@ -573,6 +581,30 @@ class Game {
       },
       onQuit: () => this.showMissionSelect(),
     });
+  }
+
+  private showControls(): void {
+    if (!this.paused || !this.pauseNode) return;
+    const node = controlsPanel(
+      this.settings.bindings,
+      (bindings) => this.applySettings({ ...this.settings, bindings }),
+      () => {
+        const menu = this.makePauseMenu();
+        this.pauseNode?.replaceWith(menu);
+        this.pauseNode = menu;
+      },
+    );
+    this.pauseNode.replaceWith(node);
+    this.pauseNode = node;
+  }
+
+  private showPause(): void {
+    if (this.paused || this.screen !== 'play' || !this.runtime || this.runtime.finished) return;
+    this.paused = true;
+    this.automap.close();
+    this.dossier.enabled = false;
+    this.releaseLock();
+    this.pauseNode = this.makePauseMenu();
     document.getElementById('viewport')!.appendChild(this.pauseNode);
     this.syncChrome();
   }
@@ -1056,6 +1088,7 @@ class Game {
         ammo: ars.ammoFor(),
         ammoName: ars.current.ammo?.resource ?? '',
         tool: ars.current,
+        viewTool: ars.viewTool,
         bob: this.settings.viewBob ? this.player.bob : 0,
         cooldownFrac: ars.cooldownFrac,
         gender: this.gender,
@@ -1097,6 +1130,16 @@ class Game {
 
   private tick(dt: number): void {
     if (this.screen !== 'play' || !this.map || !this.player || !this.runtime) return;
+    if (this.input.pausePressed) {
+      if (this.dossier.isOpen) this.dossier.close();
+      else if (this.paused) this.hidePause(true);
+      else if (this.automap.isOpen) this.automap.close();
+      else this.showPause();
+    }
+    if (!this.paused) {
+      if (this.input.mapPressed && !this.dossier.isOpen) this.automap.toggle();
+      if (this.input.logPressed) this.dossier.toggleLog();
+    }
     if (this.paused) {
       this.consumeDossierInput();
       return;
@@ -1122,6 +1165,7 @@ class Game {
     const ending = runtime.finished !== null;
     if (!ending && this.input.slotPressed) this.arsenal.select(this.input.slotPressed);
     if (!ending && this.input.cyclePressed) this.arsenal.cycle(1);
+    if (!ending && this.input.cyclePrevPressed) this.arsenal.cycle(-1);
     const wheel = this.input.consumeWheel();
     if (!ending && wheel !== 0) this.arsenal.cycle(wheel);
 
@@ -1137,13 +1181,26 @@ class Game {
       .filter((e) => e.alive && ['enemy', 'npc', 'workstation', 'console'].includes(e.def.kind))
       .map((e) => ({ x: e.x, y: e.y, r: 0.3 }));
     const fwd =
-      !ending ? (this.input.down('KeyW') ? 1 : 0) - (this.input.down('KeyS') ? 1 : 0) : 0;
+      !ending
+        ? clampInputAxis(
+            (this.input.actionDown('forward') ? 1 : 0) -
+              (this.input.actionDown('back') ? 1 : 0) +
+              this.input.padMove.y,
+          )
+        : 0;
     const strafe =
-      !ending ? (this.input.down('KeyD') ? 1 : 0) - (this.input.down('KeyA') ? 1 : 0) : 0;
+      !ending
+        ? clampInputAxis(
+            (this.input.actionDown('strafeRight') ? 1 : 0) -
+              (this.input.actionDown('strafeLeft') ? 1 : 0) +
+              this.input.padMove.x,
+          )
+        : 0;
     const keyTurn =
-      !ending ? (this.input.down('ArrowLeft') ? -1 : 0) + (this.input.down('ArrowRight') ? 1 : 0) : 0;
-    const run = this.input.down('ShiftLeft') || this.input.down('ShiftRight');
+      !ending ? (this.input.actionDown('turnRight') ? 1 : 0) - (this.input.actionDown('turnLeft') ? 1 : 0) : 0;
+    const run = this.input.actionDown('run') || this.input.padRun;
     p.move(map, fwd, strafe, run, keyTurn, dt, solids);
+    if (!ending) p.angle += this.input.padTurn * 2.6 * dt * this.settings.sensitivity;
     if (p.consumeStep()) {
       this.audio.sfx('step', { pan: this.stepPan * 0.15 });
       this.stepPan *= -1;
@@ -1156,6 +1213,8 @@ class Game {
       use: this.input.usePressed,
       openDoor: (doorId) => this.openDoor(doorId),
       hasBadge: this.arsenal.owns('badge'),
+      hasToken: this.arsenal.owns('mfa'),
+      flashTool: (toolId) => this.arsenal.flash(toolId),
     });
     if (this.dossier.isOpen) {
       this.consumeDossierInput();
@@ -1542,6 +1601,7 @@ class Game {
       wallDistance: tool.wallDistance,
       roles: rt.roles,
       hasBadge: this.arsenal.owns('badge'),
+      hasToken: this.arsenal.owns('mfa'),
       mfaPending: mfaPending(rt.entities),
     };
   }
