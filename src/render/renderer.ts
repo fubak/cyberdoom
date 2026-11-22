@@ -10,6 +10,7 @@ import { buildSprites, prewarmLazySpriteFrames, spriteSets, type SpriteSet } fro
 import { LOOM_CAP_FRAC, LOOM_MAX_SCALE, farScale, loomK, loomTargetH, loomT, riseBase } from './melee';
 import { ENEMY_PROFILES } from '../engine/ai';
 import { WALL_H, buildTextures, decalTexture, doorTextureFor, hashStr, lookTheme, textureOr, textureRegistry, variantCount } from './textures';
+import { buildSkyTexture, skyEpisodeForMission } from './sky';
 import { RES, STATUS_H, VIEW3D_H, VIEW_H, VIEW_W } from './res';
 
 export { VIEW_W, VIEW_H, STATUS_H, VIEW3D_H } from './res';
@@ -388,6 +389,8 @@ export class Renderer {
   private lastPY = 0;
   private doorMeshes = new Map<string, THREE.Mesh>();
   private openingDoors: { mesh: THREE.Mesh; t: number }[] = [];
+  private skyMesh: THREE.Mesh | null = null;
+  private smoothFloorY = 0;
   private map: WorldMap | null = null;
   private light = new Float32Array(0);
   /** Per-tile strobe phase id (0 = steady). Set by computeLight. */
@@ -556,8 +559,29 @@ export class Renderer {
     this.fx = [];
     this.doorMeshes.clear();
     this.openingDoors = [];
+    this.smoothFloorY = map.floorHeightAtF(map.def.spawn.x, map.def.spawn.y);
     this.lastIntegrity = 100;
     this.hurt = 0;
+
+    // Episode procedural skybox dome (visible through `sky: true` skylights/atriums)
+    if (this.skyMesh) {
+      this.scene.remove(this.skyMesh);
+      this.skyMesh.geometry.dispose();
+      (this.skyMesh.material as THREE.Material).dispose();
+      this.skyMesh = null;
+    }
+    const skyTex = buildSkyTexture(skyEpisodeForMission(missionId ?? 'm01'));
+    const skyGeo = new THREE.CylinderGeometry(38, 38, 30, 24, 1, true);
+    const skyMat = new THREE.MeshBasicMaterial({
+      map: skyTex,
+      side: THREE.BackSide,
+      fog: false,
+      depthWrite: false,
+    });
+    this.skyMesh = new THREE.Mesh(skyGeo, skyMat);
+    this.skyMesh.renderOrder = -10;
+    this.skyMesh.position.set(map.def.spawn.x, EYE_H + this.smoothFloorY, map.def.spawn.y);
+    this.scene.add(this.skyMesh);
 
     const isWall = (x: number, y: number) => map.cellAt(x, y)?.kind === 'wall' || !map.cellAt(x, y);
     // per-mission look identity: wall-variant mix, decal pool, hue tint, floor
@@ -580,7 +604,19 @@ export class Renderer {
     };
 
     const H = WALL_H;
-    const wallFace = (b: GeoBuilder, tx: number, ty: number, nx: number, nz: number, shade: number, st = 0, tv?: [number, number, number]) => {
+    const glassBuilder = new GeoBuilder();
+    const wallFace = (
+      b: GeoBuilder,
+      tx: number,
+      ty: number,
+      nx: number,
+      nz: number,
+      shade: number,
+      st = 0,
+      tv?: [number, number, number],
+      y0 = 0,
+      y1 = H,
+    ) => {
       const cx = tx + 0.5 + nx * 0.5;
       const cz = ty + 0.5 + nz * 0.5;
       const rx = nz;
@@ -589,9 +625,11 @@ export class Renderer {
       const r = [cx + rx * 0.5, cz + rz * 0.5];
       // fake contrast: faces along x read brighter than faces along z
       const s = shade * (nz !== 0 ? 1.08 : 0.84);
+      const v0 = y0 / H;
+      const v1 = y1 / H;
       b.quad(
-        [[l[0], 0, l[1]], [r[0], 0, r[1]], [r[0], H, r[1]], [l[0], H, l[1]]],
-        [[0, 0], [1, 0], [1, 1], [0, 1]],
+        [[l[0], y0, l[1]], [r[0], y0, r[1]], [r[0], y1, r[1]], [l[0], y1, l[1]]],
+        [[0, v0], [1, v0], [1, v1], [0, v1]],
         [s * 0.8, s * 0.8, s, s],
         st,
         tv,
@@ -630,7 +668,8 @@ export class Renderer {
             const shade = lightAt(tx + dx, ty + dz) * flicker(tx + dx, ty + dz);
             const st = strobeAt(tx + dx, ty + dz);
             if (isTrack) {
-              wallFace(builder('doortrak', textureOr('doortrak')), tx, ty, dx, dz, shade, st);
+              const trackH = map.ceilHeightAt(tx + dx, ty + dz);
+              wallFace(builder('doortrak', textureOr('doortrak')), tx, ty, dx, dz, shade, st, undefined, 0, trackH);
               // door number plate on one jamb of each doorway (authored
               // signage, keyed to the door so both its tracks agree)
               if (dx + dz > 0 && n.doorId) {
@@ -652,11 +691,22 @@ export class Renderer {
             // the misaligned panel IS the secret-door tell and must stay legible
             const secret = texId === 'wall-secret';
             const jit = secret ? shade : shade * faceShade(h);
-            wallFace(builder(`w:${texId}`, textureOr(texId)), tx, ty, dx, dz, jit, st, secret ? [1, 1, 1] : faceTint(h));
-            if (DECALABLE.has(texId.split(':')[0]) && (h >>> 8) % 3 === 0) {
-              const did = theme.decals[(h >>> 12) % theme.decals.length];
-              const dt = decalTexture(did);
-              if (dt) decalFace(builder(`d:${did}`, dt), tx, ty, dx, dz, jit, st, faceTint(h));
+            const topH = map.ceilHeightAt(tx + dx, ty + dz);
+            const wallTint: [number, number, number] = secret ? [1, 1, 1] : faceTint(h);
+            if (cell.window) {
+              // Reinforced glass observation wall: bottom sill + upper lintel + translucent pane
+              wallFace(builder(`w:${texId}`, textureOr(texId)), tx, ty, dx, dz, jit, st, wallTint, 0, 0.42);
+              if (topH > 0.96) {
+                wallFace(builder(`w:${texId}`, textureOr(texId)), tx, ty, dx, dz, jit, st, wallTint, 0.96, topH);
+              }
+              wallFace(glassBuilder, tx, ty, dx, dz, Math.max(0.75, shade), 0, [0.55, 0.88, 1.0], 0.42, 0.96);
+            } else {
+              wallFace(builder(`w:${texId}`, textureOr(texId)), tx, ty, dx, dz, jit, st, wallTint, 0, topH);
+              if (DECALABLE.has(texId.split(':')[0]) && (h >>> 8) % 3 === 0) {
+                const did = theme.decals[(h >>> 12) % theme.decals.length];
+                const dt = decalTexture(did);
+                if (dt) decalFace(builder(`d:${did}`, dt), tx, ty, dx, dz, jit, st, faceTint(h));
+              }
             }
           }
           continue;
@@ -664,6 +714,7 @@ export class Renderer {
         if (cell.kind === 'door' && !map.isDoorOpen(cell.doorId ?? '')) {
           const id = cell.doorId ?? `d${tx},${ty}`;
           const tex = doorTextureFor(cell.tex, cell.accessRole);
+          const doorH = map.ceilHeightAt(tx, ty);
           const b = new GeoBuilder();
           for (const [dx, dz] of DIRS) {
             const n = map.cellAt(tx + dx, ty + dz);
@@ -672,7 +723,7 @@ export class Renderer {
             // doors skip jitter/tint so the misaligned tell stays legible
             const dh = cellHash(tx, ty, dx * 3 + dz * 5 + 7, seed);
             const dl = lightAt(tx + dx, ty + dz);
-            wallFace(b, tx, ty, dx, dz, cell.secret ? dl : dl * faceShade(dh), strobeAt(tx + dx, ty + dz), cell.secret ? [1, 1, 1] : faceTint(dh));
+            wallFace(b, tx, ty, dx, dz, cell.secret ? dl : dl * faceShade(dh), strobeAt(tx + dx, ty + dz), cell.secret ? [1, 1, 1] : faceTint(dh), 0, doorH);
           }
           b.quad(
             [[tx, 0.002, ty], [tx + 1, 0.002, ty], [tx + 1, 0.002, ty + 1], [tx, 0.002, ty + 1]],
@@ -701,13 +752,29 @@ export class Renderer {
         const nfv = variantCount(fTex);
         if (nfv > 1 && fh % nfv > 0) fTex = `${fTex}:v${fh % nfv}`;
         const fshade = s.map((v) => v * faceShade(fh));
+        const floorH = map.floorHeightAt(tx, ty);
+        const ceilH = map.ceilHeightAt(tx, ty);
         builder(`f:${fTex}`, textureOr(fTex, 'floor')).quad(
-          [[tx, 0, ty], [tx + 1, 0, ty], [tx + 1, 0, ty + 1], [tx, 0, ty + 1]],
+          [[tx, floorH, ty], [tx + 1, floorH, ty], [tx + 1, floorH, ty + 1], [tx, floorH, ty + 1]],
           flatUv((fh >>> 3) % 4, ((fh >>> 5) & 1) === 1),
           fshade,
           st,
           faceTint(fh),
         );
+        // Step risers (lower-sidedef) and ceiling beams (upper-sidedef) between different heights
+        for (const [dx, dz] of DIRS) {
+          const n = map.cellAt(tx + dx, ty + dz);
+          if (!n || n.kind === 'wall') continue;
+          const nFloorH = map.floorHeightAt(tx + dx, ty + dz);
+          if (nFloorH < floorH - 0.001) {
+            wallFace(builder(`w:${fTex}`, textureOr(fTex, 'floor')), tx, ty, dx, dz, L * 0.9, st, faceTint(fh), nFloorH, floorH);
+          }
+          const nCeilH = map.ceilHeightAt(tx + dx, ty + dz);
+          if (nCeilH > ceilH + 0.001) {
+            const soffitTex = theme.alts[0] ?? 'wall-panel';
+            wallFace(builder(`w:${soffitTex}`, textureOr(soffitTex)), tx, ty, dx, dz, lightAt(tx + dx, ty + dz) * 0.88, st, undefined, ceilH, nCeilH);
+          }
+        }
         const key = `${tx},${ty}`;
         const ch = cellHash(tx, ty, 23, seed);
         // occasional cable-tray cell keeps big ceilings authored, not tiled
@@ -723,20 +790,17 @@ export class Renderer {
         const ncv = variantCount(ceilTex);
         if (ncv > 1 && (ch >>> 6) % ncv > 0) ceilTex = `${ceilTex}:v${(ch >>> 6) % ncv}`;
         const isLamp = this.lamps.has(key);
-        // Ceiling shade tapers with sector light: dim corridors keep a
-        // slightly deeper ceiling than before (shadows, not grey rooms),
-        // while lit halls get a brighter, visibly authored ceiling — this is
-        // what keeps start-view/main-hall ceilings off flat black without
-        // lifting the readability floor in dark pockets.
         const ceilFactor = (v: number) => (v < 0.55 ? 0.74 : 0.74 + (v - 0.55) * 0.5);
-        builder(`${isLamp ? 'l' : 'c'}:${ceilTex}`, textureOr(ceilTex, 'ceil')).quad(
-          [[tx, H, ty], [tx + 1, H, ty], [tx + 1, H, ty + 1], [tx, H, ty + 1]],
-          flatUv((ch >>> 3) % 4, ((ch >>> 5) & 1) === 1),
-          s.map((v) => v * ceilFactor(v) * faceShade(ch)),
-          st,
-          faceTint(ch),
-        );
-        if (cell.kind === 'exit') this.addStatic('fx-exit', tx + 0.5, ty + 0.5, H - 0.26, L);
+        if (!cell.sky) {
+          builder(`${isLamp ? 'l' : 'c'}:${ceilTex}`, textureOr(ceilTex, 'ceil')).quad(
+            [[tx, ceilH, ty], [tx + 1, ceilH, ty], [tx + 1, ceilH, ty + 1], [tx, ceilH, ty + 1]],
+            flatUv((ch >>> 3) % 4, ((ch >>> 5) & 1) === 1),
+            s.map((v) => v * ceilFactor(v) * faceShade(ch)),
+            st,
+            faceTint(ch),
+          );
+        }
+        if (cell.kind === 'exit') this.addStatic('fx-exit', tx + 0.5, ty + 0.5, ceilH - 0.26, L);
       }
     }
     for (const [key, { tex, b }] of builders) {
@@ -745,6 +809,16 @@ export class Renderer {
         b.build(),
         worldMaterial(tex, 1, WORLD_FLOOR, key.startsWith('l:') ? accentV : tintV, wallish ? 0.055 : 0),
       ));
+    }
+    if (glassBuilder.pos.length > 0) {
+      const glassMat = new THREE.MeshBasicMaterial({
+        color: 0x70c8e8,
+        transparent: true,
+        opacity: 0.24,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      });
+      this.levelGroup.add(new THREE.Mesh(glassBuilder.build(), glassMat));
     }
   }
 
@@ -1085,9 +1159,10 @@ export class Renderer {
       const scale = typeof e.state.scale === 'number' && Number.isFinite(e.state.scale) ? e.state.scale : 1;
       // guard NaN (ai.ts hop uses state.phase, unset on some spawns): NaN y = invisible monster
       const hop = typeof e.state.hop === 'number' && Number.isFinite(e.state.hop) ? e.state.hop : 0;
+      const floorH = this.map?.floorHeightAtF(e.x, e.y) ?? 0;
       st.scale = scale;
       st.mesh.scale.set(set.w * scale, set.h * scale, 1);
-      st.mesh.position.set(e.x, hop, e.y);
+      st.mesh.position.set(e.x, floorH + hop, e.y);
       const lit = this.lightAt(e.x, e.y);
       // threats stay readable even in black sectors (Doom's monsters are rarely pure silhouette)
       const enemy = e.def.kind === 'enemy';
@@ -1152,7 +1227,8 @@ export class Renderer {
       }
       st.lastX = p.x;
       st.lastY = p.y;
-      st.mesh.position.set(p.x, EYE_H - 0.2, p.y);
+      const pFloor = this.map?.floorHeightAtF(p.x, p.y) ?? 0;
+      st.mesh.position.set(p.x, pFloor + EYE_H - 0.2, p.y);
       // the player's own shot only appears once clear of the camera, so it never fills the aim area
       st.mesh.visible = !this.debugSuppressFx && (p.hostile || p.traveled > SHOT_NEAR);
     }
@@ -1335,7 +1411,11 @@ export class Renderer {
     const cameraAngle = pose?.angle ?? player.angle;
     this.lastPX = player.x;
     this.lastPY = player.y;
-    this.camera.position.set(cameraX, pose ? EYE_H + pose.dz : EYE_H + bobY, cameraY);
+    const targetFloorY = this.map?.floorHeightAtF(cameraX, cameraY) ?? 0;
+    this.smoothFloorY += (targetFloorY - this.smoothFloorY) * Math.min(1, dt * 12);
+    const camY = this.smoothFloorY + (pose ? EYE_H + pose.dz : EYE_H + bobY);
+    this.camera.position.set(cameraX, camY, cameraY);
+    if (this.skyMesh) this.skyMesh.position.set(cameraX, camY, cameraY);
     this.camera.rotation.set(pose?.pitch ?? 0, -cameraAngle - Math.PI / 2, pose?.roll ?? 0, 'YXZ');
     const yaw = this.camera.rotation.y;
 
