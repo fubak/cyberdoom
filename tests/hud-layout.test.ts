@@ -115,4 +115,36 @@ describe('statusBarText layout', () => {
     expect(labels).not.toContain('7');
     for (const slot of ['1', '2', '3', '5', '6', '8']) expect(labels).toContain(slot);
   });
+
+  it('replaces the READY cell with wrapped current objective text when holding an unlimited tool', () => {
+    const input: BarLayoutInput = {
+      ...worstCase(),
+      ammo: null,
+      objectives: [
+        { text: 'Quarantine all infected workstations', done: false, failed: false },
+        { text: 'Reach the exit', done: false, failed: false },
+      ],
+    };
+    const runs = statusBarText(input, false);
+    const ammoRuns = runs.filter((t) => {
+      const b = barTextBox(t);
+      return b.x >= 58 && b.x + b.w <= 100;
+    });
+    expect(ammoRuns.length).toBeGreaterThanOrEqual(1);
+    expect(ammoRuns.length).toBeLessThanOrEqual(3);
+    expect(ammoRuns.map((r) => r.text)).not.toContain('READY');
+    for (const r of ammoRuns) {
+      const b = barTextBox(r);
+      expect(b.x).toBeGreaterThanOrEqual(58);
+      expect(b.x + b.w).toBeLessThanOrEqual(100);
+      expect(b.y).toBeGreaterThanOrEqual(BAR_TOP);
+      expect(b.y + b.h).toBeLessThanOrEqual(BAR_BOTTOM);
+    }
+    const boxes = runs.map((t) => ({ ...barTextBox(t), t: t.text }));
+    for (let i = 0; i < boxes.length; i++) {
+      for (let j = i + 1; j < boxes.length; j++) {
+        expect(overlap(boxes[i], boxes[j]), `"${boxes[i].t}" x "${boxes[j].t}"`).toBe(false);
+      }
+    }
+  });
 });
