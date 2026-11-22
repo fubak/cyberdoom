@@ -31,6 +31,7 @@ export class Player {
   vy = 0;
   /** View bob phase. */
   bob = 0;
+  bobScale = 1;
   t = 0;
   hurtT = 0;
   lastHurtFrom: number | undefined;
@@ -186,20 +187,20 @@ export class Player {
   }
 
   get viewBobZ(): number {
-    return 0.045 * this.bobAmt * Math.sin((2 * Math.PI * this.t) / 0.571);
+    return this.bobScale === 0 ? 0 : 0.045 * this.bobAmt * Math.sin((2 * Math.PI * this.t) / 0.571) * this.bobScale;
   }
 
   get weaponBobX(): number {
-    return 22 * this.bobAmt * Math.cos((2 * Math.PI * this.t) / 1.83);
+    return this.bobScale === 0 ? 0 : 22 * this.bobAmt * Math.cos((2 * Math.PI * this.t) / 1.83) * this.bobScale;
   }
 
   get weaponBobY(): number {
-    return 26 * this.bobAmt * Math.abs(Math.sin((2 * Math.PI * this.t) / 1.83));
+    return this.bobScale === 0 ? 0 : 26 * this.bobAmt * Math.abs(Math.sin((2 * Math.PI * this.t) / 1.83)) * this.bobScale;
   }
 
   /** spec §5.5: hand bob pitch ≈ 3°·amt·sin(φ) for the baked roll variants. */
   get bobPitchDeg(): number {
-    return 3 * this.bobAmt * Math.sin((2 * Math.PI * this.t) / 1.83);
+    return this.bobScale === 0 ? 0 : 3 * this.bobAmt * Math.sin((2 * Math.PI * this.t) / 1.83) * this.bobScale;
   }
 
   get bobAmount(): number {

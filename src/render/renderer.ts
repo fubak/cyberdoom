@@ -1329,7 +1329,7 @@ export class Renderer {
     }
 
     const speed = Math.min(1, Math.hypot(player.vx, player.vy) / 4);
-    const bobY = Math.abs(Math.sin(player.bob)) * 0.035 * speed;
+    const bobY = Math.abs(Math.sin(player.bob)) * 0.035 * speed * player.bobScale;
     const cameraX = pose?.x ?? player.x;
     const cameraY = pose?.y ?? player.y;
     const cameraAngle = pose?.angle ?? player.angle;
