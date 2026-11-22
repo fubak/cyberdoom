@@ -254,7 +254,7 @@ export const m03: Mission = {
       options: [
         { id: 'a', text: 'Nation-state; espionage', correct: false, explanation: 'Nation-states sometimes recruit insiders, but the person acting here is an employee using authorized access. Nothing points to a foreign government.' },
         { id: 'b', text: 'Insider threat; data exfiltration (likely driven by revenge)', correct: true, explanation: 'Authorized access misused from inside is the definition of an insider threat. Copying data out is exfiltration, and the denied promotion suggests revenge.' },
-        { id: 'c', text: 'Hacktivist; philosophical/political beliefs', correct: false, explanation: 'Hacktivists act for a cause and usually publicize it. A quiet copy to a personal drive after a grievance does not fit.' },
+        { id: 'c', text: 'Hacktivist; philosophical or political beliefs about the company’s research', correct: false, explanation: 'Hacktivists act for a cause and usually publicize it. A quiet copy to a personal drive after a grievance does not fit.' },
         { id: 'd', text: 'Unskilled attacker; disruption/chaos', correct: false, explanation: 'Unskilled attackers are outsiders running ready-made tools. This person needed no tools, just legitimate access.' },
       ],
     },
@@ -263,7 +263,7 @@ export const m03: Mission = {
       prompt: 'Which observation set is the STRONGEST evidence of an insider exfiltrating data?',
       objectives: ['2.4'],
       options: [
-        { id: 'a', text: 'A developer committing code at 23:40 during release week, all to his own repository', correct: false, explanation: 'One unusual-hours signal that matches his role and a known deadline. It is innocent until other sources corroborate it.' },
+        { id: 'a', text: 'A developer committing code at 23:40 during release week, all of it to his own team’s repository on the build server', correct: false, explanation: 'One unusual-hours signal that matches his role and a known deadline. It is innocent until other sources corroborate it.' },
         { id: 'b', text: 'An HR specialist opening hundreds of personnel records a day', correct: false, explanation: 'High volume, but within the role baseline, and the data never leaves the HR system. Volume only matters compared with what is normal for the job.' },
         { id: 'c', text: 'An intern who seems nervous and avoids security staff', correct: false, explanation: 'Demeanor is an impression, not a technical indicator. Acting on it leads to false accusations.' },
         { id: 'd', text: 'A 03:12 Sunday badge-in, bulk access to files outside the user\u2019s project, then a USB mass-storage write', correct: true, explanation: 'Three independent signals (physical access, file access outside role, an exfiltration channel) all point the same way. Corroboration is what makes it actionable.' },
@@ -277,7 +277,7 @@ export const m03: Mission = {
         { id: 'a', text: 'Firewall logs', correct: false, explanation: 'Copying to USB never touches the network, so the firewall saw nothing.' },
         { id: 'b', text: 'Endpoint logs (OS/EDR device-connection and file-write events)', correct: true, explanation: 'Only the host records that a mass-storage device was mounted and which files were written to it.' },
         { id: 'c', text: 'Badge access logs', correct: false, explanation: 'They place her in the building at 03:12, which is useful for correlation, but they cannot show what happened on the laptop.' },
-        { id: 'd', text: 'Vulnerability scan results', correct: false, explanation: 'Scans list weaknesses in systems, not what a user did with them.' },
+        { id: 'd', text: 'Vulnerability scan results from the weekly authenticated scan of the laptop', correct: false, explanation: 'Scans list weaknesses in systems, not what a user did with them.' },
       ],
     },
     {
@@ -285,7 +285,7 @@ export const m03: Mission = {
       prompt: 'The exfiltrated files are unreleased product designs that give the company its competitive edge. How are they BEST described?',
       objectives: ['3.3'],
       options: [
-        { id: 'a', text: 'Regulated data', correct: false, explanation: 'Regulated data is controlled by law or regulation, such as health records, PII or cardholder data. Product designs are valuable but not regulated.' },
+        { id: 'a', text: 'Regulated data, because product designs must be reported to a government regulator', correct: false, explanation: 'Regulated data is controlled by law or regulation, such as health records, PII or cardholder data. Product designs are valuable but not regulated.' },
         { id: 'b', text: 'Public data', correct: false, explanation: 'Unreleased designs are deliberately kept from competitors. Public data can be disclosed freely.' },
         { id: 'c', text: 'Intellectual property / trade secret, classified confidential', correct: true, explanation: 'Unreleased designs are intellectual property, and keeping them secret is what gives them value, so they are a trade secret. Confidential classification requires the strongest controls, such as DLP and USB restrictions.' },
         { id: 'd', text: 'Financial information', correct: false, explanation: 'Financial information means records like accounts, payroll and transactions. Designs have value, but they are not financial records.' },
@@ -296,9 +296,9 @@ export const m03: Mission = {
       prompt: 'You have three corroborating indicators against one employee. What should you do NEXT?',
       objectives: ['4.8', '2.4'],
       options: [
-        { id: 'a', text: 'Report through the incident response process and preserve the evidence with chain of custody', correct: true, explanation: 'Escalating through IR keeps the investigation coordinated with HR and legal. Chain of custody keeps the logs and device usable as evidence.' },
+        { id: 'a', text: 'Report via the IR process and preserve evidence with chain of custody', correct: true, explanation: 'Escalating through IR keeps the investigation coordinated with HR and legal. Chain of custody keeps the logs and device usable as evidence.' },
         { id: 'b', text: 'Confront the employee at their desk', correct: false, explanation: 'Confronting her tips her off, so evidence may be destroyed, and it puts you at personal and legal risk. Containment is a coordinated IR step.' },
-        { id: 'c', text: 'Remotely wipe their laptop to stop further leaks', correct: false, explanation: 'Wiping destroys the evidence you need. Containment should isolate the device while preserving it.' },
+        { id: 'c', text: 'Remotely wipe their laptop right away so no further copies can leave the building', correct: false, explanation: 'Wiping destroys the evidence you need. Containment should isolate the device while preserving it.' },
         { id: 'd', text: 'Quietly keep watching for a few weeks to collect more', correct: false, explanation: 'Confidential data is already leaving. Waiting without reporting lets the damage grow and leaves the response to one person.' },
       ],
     },
@@ -308,7 +308,7 @@ export const m03: Mission = {
       objectives: ['2.1'],
       options: [
         { id: 'a', text: 'Their motivations and resources — espionage, financial gain, ideology, and an insider acting accidentally', correct: true, explanation: 'SY0-701 distinguishes threat actors by attributes: motivation (espionage, financial gain, ideology, revenge, chaos), plus resources/funding and sophistication. Nation-state, organized crime, hacktivist and unskilled insider each map to a different pairing.' },
-        { id: 'b', text: 'Their physical locations — internal actors are always inside the building', correct: false, explanation: 'Internal vs external is about authorized access, not geography. A disgruntled insider can attack from home, and an external group can recruit someone inside.' },
+        { id: 'b', text: 'Their physical locations, because internal actors are always inside the building and external actors never are', correct: false, explanation: 'Internal vs external is about authorized access, not geography. A disgruntled insider can attack from home, and an external group can recruit someone inside.' },
         { id: 'c', text: 'The tools they use — ransomware means organized crime every time', correct: false, explanation: 'Tools are shared across actors: nation-states also run ransomware, and criminals also conduct espionage. Motivation and funding, not the malware family, distinguish them.' },
         { id: 'd', text: 'Whether they are caught — actors who are caught were always insiders', correct: false, explanation: 'Attribution difficulty does not define the actor type. Each group has external and internal members and a different intent.' },
       ],

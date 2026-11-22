@@ -82,6 +82,35 @@ describe('M05 combat economy', () => {
     expect(triggers.some((t) => t.id === 'change-ambush-northeast-deep')).toBe(true);
   });
 });
+describe('debrief question answer balance', () => {
+  const missions = missionRegistry.all();
+
+  it('limits uniquely longest correct answers to 35% per mission', () => {
+    for (const mission of missions) {
+      const questions = mission.debriefQuestions;
+      const longestCorrect = questions.filter((question) => {
+        const correct = question.options.find((option) => option.correct);
+        expect(correct, `${mission.id}/${question.id} correct option`).toBeDefined();
+        if (!correct) return false;
+        const longest = Math.max(...question.options.map((option) => option.text.length));
+        return correct.text.length === longest
+          && question.options.filter((option) => option.text.length === longest).length === 1;
+      }).length;
+      expect(longestCorrect, mission.id).toBeLessThanOrEqual(Math.floor(0.35 * questions.length));
+    }
+  });
+
+  it('balances correct answer positions across all missions', () => {
+    const questions = missions.flatMap((mission) => mission.debriefQuestions);
+    for (let index = 0; index < 4; index++) {
+      const count = questions.filter(
+        (question) => question.options.findIndex((option) => option.correct) === index,
+      ).length;
+      expect(count, `correct option position ${index}`).toBeGreaterThanOrEqual(Math.ceil(0.15 * questions.length));
+      expect(count, `correct option position ${index}`).toBeLessThanOrEqual(Math.floor(0.35 * questions.length));
+    }
+  });
+});
 
 describe('M01 spawn lighting', () => {
   it('keeps the spawn tile and the next five tiles facing forward well lit', () => {

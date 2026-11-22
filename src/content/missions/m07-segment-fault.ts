@@ -551,18 +551,18 @@ export const m07: Mission = {
   debriefQuestions: [
     q('q1', ['3.2'], 'Admins must manage servers in a high-security zone from the user network. Which design MOST reduces the attack surface?', 3, [
       ['Allow RDP into the zone from every workstation', 'Every workstation becomes a path into the zone, so one phished PC reaches the servers.'],
-      ['Port-forward each server\u2019s management port through the firewall', 'This exposes many management interfaces instead of one controlled path.'],
+      ['Port-forward each server’s management port through the firewall, restricted to admin hours', 'This exposes many management interfaces instead of one controlled path.'],
       ['Put admin workstations on the same subnet as the servers', 'That removes the zone boundary entirely.'],
       ['Allow access only through a hardened jump server with MFA and session logging', 'A jump server is the single, monitored entry point into the zone, so there is only one door to harden and watch.'],
     ]),
     q('q2', ['3.2'], 'An IPS must block attacks in real time in front of the database. How must it be deployed?', 0, [
-      ['Inline (active), choosing whether a failure should fail-open or fail-closed', 'Only an inline device sits in the traffic path and can drop packets. Its failure mode is a trade-off between availability and security.'],
+      ['Inline (active), with a fail-open or fail-closed choice', 'Only an inline device sits in the traffic path and can drop packets. Its failure mode is a trade-off between availability and security.'],
       ['On a network tap', 'A tap gives the device a copy of the traffic. It can detect and alert, but it cannot block.'],
       ['On a SPAN/mirror port', 'Mirroring is also passive monitoring, so the original packets still reach the database.'],
-      ['On the admin\u2019s workstation', 'A host there protects only that workstation, not the database\u2019s network path.'],
+      ['On the admin’s workstation, where it can watch every query sent to the database', 'A host there protects only that workstation, not the database\u2019s network path.'],
     ]),
     q('q3', ['3.1'], 'A plant\u2019s SCADA controller runs an OS the vendor no longer patches, and it cannot be replaced for three years. What is BEST?', 1, [
-      ['Connect it to the internet so the vendor can support it remotely', 'This exposes an unpatchable system to the whole internet, the worst possible move.'],
+      ['Connect it to the internet so the vendor can support and monitor it remotely around the clock', 'This exposes an unpatchable system to the whole internet, the worst possible move.'],
       ['Isolate it (air gap or a strictly segmented zone), allow only required flows, and monitor it', 'When you cannot patch, you reduce reachability. Segmentation plus monitoring compensates for the inability to patch.'],
       ['Force-install the newest desktop OS updates on it', 'Updates for a different OS can break an industrial controller, and none exist for its own OS.'],
       ['Accept the risk with no additional controls', 'Acceptance should be a documented decision after reasonable controls, not a substitute for them.'],
@@ -583,7 +583,7 @@ export const m07: Mission = {
       ['Physical isolation / logical segmentation of the device in a restricted zone', 'Correct. Inability to patch is a classic driver for isolation: put the device behind controls that limit who and what can reach it.'],
       ['Installing an antivirus agent on the scanner', 'You cannot install agents on closed embedded systems - that is precisely why isolation is the answer.'],
       ['Giving it internet access for vendor updates', 'More connectivity means more attack surface on an un-patchable device - the opposite of risk reduction.'],
-      ['Moving it to the general workstation VLAN for monitoring', 'Flattening the network exposes every workstation to an un-patchable device. Monitor it in place, segmented.'],
+      ['Moving it to the general workstation VLAN so the SOC can monitor it with everything else', 'Flattening the network exposes every workstation to an un-patchable device. Monitor it in place, segmented.'],
     ]),
     q('q7', ['4.5'], 'The fire marshal requires the datacenter door to unlock automatically during a power failure so staff can escape. The electronic door controller must be configured:', 1, [
       ['Fail-closed', 'Fail-closed keeps the door locked on power loss - correct for a vault, deadly in an escape path.'],

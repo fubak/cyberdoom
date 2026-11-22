@@ -475,10 +475,10 @@ export const m12: Mission = {
   },
   debriefQuestions: [
     q('q1', ['4.7'], 'A SOAR playbook disables any account that shows impossible travel. A false positive could lock the CEO out mid-deal. What design is BEST?', 3, [
-      ['Turn the automation off and handle everything manually', 'This throws away the reaction-time benefit, and attackers act in minutes.'],
+      ['Turn the automation off entirely and have analysts handle every impossible-travel alert by hand, around the clock', 'This throws away the reaction-time benefit, and attackers act in minutes.'],
       ['Automate it for everyone, with no exceptions', 'There are no guard rails, so one bad signal can disrupt the business at the highest level.'],
       ['Send an email alert only', 'Too slow for an account takeover in progress.'],
-      ['Auto-contain standard accounts, require human approval for privileged/VIP accounts, and auto-create and escalate a ticket', 'Guard rails keep automation fast where it is safe and put a human in the loop where the impact is high.'],
+      ['Auto-contain standard accounts; require human approval for VIP/privileged ones; auto-open a ticket', 'Guard rails keep automation fast where it is safe and put a human in the loop where the impact is high.'],
     ]),
     q('q2', ['4.7'], 'The single SOAR server that runs every playbook goes down mid-incident, and nobody remembers the manual steps. Which automation consideration was ignored?', 1, [
       ['Workforce multiplier', 'That is a benefit of automation, not the risk that bit the team.'],
@@ -499,15 +499,15 @@ export const m12: Mission = {
       ['Reboot repeatedly until it recovers', 'That is not a failure-mode design. Traffic handling during the outage is still undefined.'],
     ]),
     q('q5', ['2.5'], 'Automation pushes an application allow list to every kiosk. What is the effect?', 1, [
-      ['Known-bad applications are blocked and everything else runs', 'That describes a deny list.'],
+      ['Known-bad applications are blocked, and everything not on the block list is allowed to run', 'That describes a deny list.'],
       ['Only explicitly approved applications can run, and everything else is blocked', 'Allow listing is default-deny for software, so unknown malware cannot execute.'],
       ['Every application runs inside a sandbox', 'Sandboxing isolates software. It does not decide what may run.'],
       ['Applications auto-update to the latest version', 'That is patching, a different mitigation.'],
     ]),
     q('q6', ['4.4'], 'The SIEM fires 400 "failed login" alerts a day, almost all from one misconfigured service account, and analysts now ignore that rule. What is BEST?', 1, [
       ['Disable the rule', 'You would also lose real password-spraying and brute-force alerts.'],
-      ['Fix the service account and tune the rule (a narrow exception or threshold), then validate it still catches real attacks', 'Alert tuning cuts false positives while keeping true positives. Alert fatigue is how real attacks get missed.'],
-      ['Hire more analysts to read every alert', 'More people reading noise does not fix the noise.'],
+      ['Fix the service account, tune the rule (narrow exception or threshold), then confirm it still catches attacks', 'Alert tuning cuts false positives while keeping true positives. Alert fatigue is how real attacks get missed.'],
+      ['Hire more analysts so every one of the 400 daily alerts still gets read by a person, and leave the rule exactly as it is', 'More people reading noise does not fix the noise.'],
       ['Raise every rule\u2019s threshold tenfold', 'A blanket change hides real attacks across every rule, not just the noisy one.'],
     ]),
       q('q7', ['2.5'], 'The SOC runs a simulated phishing campaign as part of the awareness program. Which metric BEST shows the program is working?', 1, [
