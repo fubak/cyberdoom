@@ -9,7 +9,7 @@ import { alertNear, damageEntity, ENEMY_PROFILES, hurtEntity, traceShot, updateE
 import type { SealTarget } from './engine/ai';
 import { enemyInTheWay, exitEdge } from './engine/interact';
 import { doorUseHint, resolveUse, type UseTargetContext } from './engine/useTarget';
-import { Audio, type MusicTier } from './engine/audio';
+import { Audio, musicTierForMission } from './engine/audio';
 import { loadSettings, saveSettings, type Settings } from './ui/settings';
 import { Feel, FlashRateLimiter } from './engine/feel';
 import { CueGate, spawnCueText } from './engine/spawnCue';
@@ -71,7 +71,7 @@ const TOOL_FIRE_RGB: Record<string, [number, number, number]> = Object.fromEntri
 
 /** Tools that fire a world light flood — damaging attacks only, like Doom
  *  weapons. Inspect/utility tools (mouse, badge, mfa) don't flash. */
-const ATTACK_TOOLS = new Set(['keyboard', 'usb', 'edr', 'patch', 'tap']);
+const ATTACK_TOOLS = new Set(['keyboard', 'usb', 'edr', 'firewall', 'patch', 'tap']);
 
 /** Data-blood spray tint per threat (matches each enemy's palette). */
 const THREAT_BLOOD: Record<string, [number, number, number]> = {
@@ -89,14 +89,11 @@ const THREAT_BLOOD: Record<string, [number, number, number]> = {
 const bloodOf = (e: Entity): [number, number, number] =>
   THREAT_BLOOD[e.def.threat ?? e.def.sprite] ?? [1, 0.28, 0.08];
 
-/** Music tier per mission difficulty (1-4 early, 5-8 mid, 9+ late). */
-const musicTierFor = (difficulty: number): MusicTier =>
-  difficulty >= 9 ? 'late' : difficulty >= 5 ? 'mid' : 'early';
-
 /** Viewmodel recoil jolt per tool — heavy attacks kick harder. */
 const TOOL_KICK: Record<string, number> = {
   keyboard: 1.3,
   edr: 1.5,
+  firewall: 1.4,
   usb: 1,
   patch: 0.6,
   tap: 0.5,
@@ -567,7 +564,10 @@ class Game {
     this.prepareMission(id);
     this.audio.startMusic('briefing');
     // warm the mission's tier on the worker so Deploy hits a cached buffer
-    this.audio.prefetchMusic(musicTierFor(m.difficulty));
+    this.audio.prefetchMusic(musicTierForMission(m.id, m.difficulty));
+    if (m.entities.some((e) => e.threat === 'boss-locker' || e.threat === 'boss-ghostledger')) {
+      this.audio.prefetchMusic('boss');
+    }
     this.setScreen('briefing', screens.briefing(
       m,
       () => this.deploy(id),
@@ -965,7 +965,7 @@ class Game {
     this.audio.setRoomSize(Math.max(0.15, Math.min(1, (open / cells) * 1.9)));
     this.bossStung = false;
     this.deathStung = false;
-    this.audio.startMusic(musicTierFor(mission.difficulty));
+    this.audio.startMusic(musicTierForMission(mission.id, mission.difficulty));
     this.setScreen('play', null);
     if (!DEBUG) this.input.requestLock();
     this.hud.clearMessages();
@@ -1025,7 +1025,7 @@ class Game {
     if (!alreadyPlaying) {
       this.audio.stopMusic();
       this.audio.startAmbience();
-      this.audio.startMusic(musicTierFor(this.runtime!.mission.difficulty));
+      this.audio.startMusic(musicTierForMission(this.runtime!.mission.id, this.runtime!.mission.difficulty));
     }
     this.setScreen('play', null);
     this.hud.clearMessages();
@@ -1461,7 +1461,21 @@ class Game {
       Math.hypot(e.x - p.x, e.y - p.y) <= 12 &&
       ['chase', 'windup', 'recover', 'pain'].includes(String(e.state.mode)),
     );
-    this.audio.setCombat(combat || this.simT - this.lastHurtT < 3);
+    const bossEngaged = runtime.entities.some((e) =>
+      e.alive &&
+      e.def.kind === 'enemy' &&
+      (e.def.threat === 'boss-locker' || e.def.threat === 'boss-ghostledger') &&
+      ['chase', 'windup', 'recover', 'pain'].includes(String(e.state.mode)),
+    );
+    const activeTier = this.audio.activeMusicTier();
+    if (bossEngaged && activeTier !== 'boss' && activeTier !== 'rick') {
+      this.audio.startMusic('boss');
+    } else if (!bossEngaged && activeTier === 'boss' && !runtime.entities.some((e) =>
+      e.alive && (e.def.threat === 'boss-locker' || e.def.threat === 'boss-ghostledger'),
+    )) {
+      this.audio.startMusic(musicTierForMission(runtime.mission.id, runtime.mission.difficulty));
+    }
+    this.audio.setCombat(combat || bossEngaged || this.simT - this.lastHurtT < 3);
 
     if (runtime.finished && this.endTimer === null) {
       this.endTimer = runtime.finished === 'lost' ? 1.6 : 0.5;
