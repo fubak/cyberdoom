@@ -14,7 +14,7 @@ import { addThreatEncounter, mixedThreatEncounter, retex, setMapCell } from './c
  *   2. BACKUP VAULT opens only once every host is eradicated. Restoring onto
  *      a live infection would re-encrypt the backups.
  *   3. EXIT opens after recovery from offline backups. Lessons learned at the exit.
- * Paying the ransom FAILS the mission.
+ * Paying the ransom is a scored bad outcome; the incident still has to be worked.
  * Loop: war room → finance floor → east hall → war room; central server ring.
  * Secrets: war-room storeroom, finance east closet.
  */
@@ -275,7 +275,7 @@ briefing: 'Ransomware is encrypting the finance VLAN right now. The CFO wants pa
     { id: 'eradicate', text: 'Eradicate: clean all 4 encrypted hosts', kind: 'clean', tag: 'enc-host', count: 4 },
     { id: 'recover', text: 'Recover: restore from offline backup', kind: 'interact', tag: 'recover', requires: ['eradicate'] },
     { id: 'lessons', text: 'File lessons learned', kind: 'interact', tag: 'lessons', requires: ['recover'] },
-    { id: 'no-pay', text: 'Do not pay the ransom', kind: 'avoid', tag: 'pay-ransom' },
+    { id: 'no-pay', text: 'Do not pay the ransom', kind: 'avoid', tag: 'pay-ransom', penaltyOnly: true },
     { id: 'wrong-call', text: 'Make the right call on each case file', kind: 'avoid', tag: 'wrong-call', strikes: 3 },
     { id: 'exit', text: 'Reach the exit', kind: 'reach-exit' },
   ],
@@ -416,7 +416,7 @@ export const m09Teach: MissionTeaching = {
     'no-pay': {
       objective: '4.8',
       done: 'You did not pay. Payment funds the attacker and does not guarantee a working key.',
-      missed: 'You paid the ransom. Payment funds the attacker, may breach sanctions rules, and does not guarantee decryption.',
+      missed: 'You paid. US Treasury (OFAC) warns that paying a sanctioned group can itself be a violation. Payment funds the next attack, marks you as a payer for repeat extortion, and decryptors are often slow or broken. You still had to eradicate and restore from offline backups.',
     },
     'exit': {
       objective: '4.8',

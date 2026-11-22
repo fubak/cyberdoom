@@ -357,6 +357,10 @@ export class MissionRuntime {
   private violate(obj: ObjectiveStatus, points = -50): void {
     obj.violations++;
     this.log(`Violation: ${obj.def.text}`, points, [obj.def.id]);
+    if (obj.def.penaltyOnly) {
+      obj.failed = true;
+      return;
+    }
     if (obj.violations >= (obj.def.strikes ?? 1)) {
       obj.failed = true;
       this.finished = 'lost';
@@ -602,6 +606,14 @@ export class MissionRuntime {
         }
         if (matching.some((objective) => this.rejectRequirements(objective, e))) return;
         if (this.rejectOutOfOrderInteract(e, matching)) return;
+        if (e.def.tags?.includes('pay-ransom')) {
+          this.violateMatchingAvoid(e, -250);
+          this.message(
+            'PAID 14 BTC. The decryptor is slow and corrupts files, and the attacker is still inside. Legal, the insurer and law enforcement now have to be told.',
+            'bad',
+          );
+          return;
+        }
         if (this.violateMatchingAvoid(e)) return;
         const text = e.def.log ?? e.def.inspect?.detail ?? '';
         const label = e.def.inspect?.label ?? e.def.id;
