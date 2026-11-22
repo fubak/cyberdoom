@@ -207,6 +207,8 @@ export interface MissionObjective {
   ordered?: boolean;
   /** For 'avoid': violations allowed before the mission FAILS (default 1). */
   strikes?: number;
+  /** a violation is scored and marks the objective missed, but never ends the mission. */
+  penaltyOnly?: boolean;
   /** Avoid objective to violate when an interaction is attempted before its requirements. */
   earlyViolates?: string;
 }
