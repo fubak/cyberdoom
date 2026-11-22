@@ -127,6 +127,16 @@ export function keyboardFrameForUse(sinceUse: number, windup: number): KeyboardF
   return 'rest';
 }
 
+export type MouseFrame = 'rest' | 'press' | 'click' | 'release';
+
+export function mouseFrameForUse(sinceUse: number, windup: number): MouseFrame {
+  const phase = usePhase(sinceUse, windup);
+  if (phase.phase === 'wind') return 'press';
+  if (phase.phase === 'impact') return 'click';
+  if (phase.phase === 'recover') return phase.u < 0.5 ? 'release' : 'rest';
+  return 'rest';
+}
+
 function keyboardArt(frame: KeyboardFrame, gender: Gender, skin: SkinTone): Art {
   const look = vmHandArt(gender, skin);
   const [deep, shadow, base, highlight] = look.ramp;
@@ -281,30 +291,99 @@ function keyboardArt(frame: KeyboardFrame, gender: Gender, skin: SkinTone): Art 
   });
 }
 
-function mouseArt(fire: boolean): Art {
-  return paint(72, 84, 36, (px, _P) => {
-    // cable going up/forward
-    px('#3a404c', 34, 0, 2, 14);
-    px('#5a6070', 34, 0, 1, 14);
-    // mouse shell
-    const shell = ['#f0f2f8', '#c8ccd8', '#9aa0b0', '#5a6070'];
-    for (let r = 0; r < 40; r++) {
-      const half = Math.round(Math.sqrt(Math.max(0, 1 - ((r - 22) / 24) ** 2)) * 16);
-      px(shell[1], 35 - half, 12 + r, half * 2, 1);
-      px(shell[0], 35 - half + 2, 12 + r, Math.max(0, half - 4), 1);
-      px(shell[2], 35 + half - 3, 12 + r, 3, 1);
+function mouseArt(frame: MouseFrame, gender: Gender, skin: SkinTone): Art {
+  const look = vmHandArt(gender, skin);
+  const [deep, shadow, base, highlight] = look.ramp;
+  const buttonDown = frame === 'press' ? 1 : frame === 'click' ? 2 : 0;
+  const indexTravel = frame === 'press' ? 1 : frame === 'click' ? 2 : frame === 'release' ? -2 : 0;
+  return paint(128, 84, 64, (_px, P) => {
+    const shape = (color: string, points: [number, number][]) => P.poly(points, color);
+    const line = (points: [number, number][], color: string, width = 1) => P.line(points, color, width);
+    const ellipse = (color: string, x: number, y: number, rx: number, ry: number) => P.ell(x, y, rx, ry, color);
+    const indexPoints = (points: [number, number][]): [number, number][] =>
+      points.map(([x, y]): [number, number] => [x, y + (y < 46 ? indexTravel : 0)]);
+    const sleevePoint = (x: number, y: number): [number, number] => [
+      107 + (x - 73.5),
+      62 + (y - 65) * 0.95,
+    ];
+    const sleeveDraw: VmSleeveDraw = {
+      shape: (color, points) => P.poly(points.map(([x, y]) => sleevePoint(x, y)), color),
+      seamLine: (points) => P.line(points.map(([x, y]) => sleevePoint(x, y)), look.seam),
+      ell: (color, x, y, rx, ry) => {
+        const [cx, cy] = sleevePoint(x, y);
+        P.ell(cx, cy, rx, ry * 0.95, color);
+      },
+    };
+
+    shape('#151820', [[14, 74], [110, 74], [117, 80], [19, 80]]);
+    line([[17, 74], [111, 74]], '#48444c', 1);
+    line([[20, 78], [114, 78]], '#25232b', 1);
+    line([[64, 14], [64, 10], [60, 7], [61, 3], [58, 0]], '#252a34', 3);
+    line([[64, 12], [63, 9], [61, 6], [61, 3]], '#666e7c', 1);
+
+    shape('#11151d', [[50, 12], [78, 12], [99, 52], [101, 58], [91, 70], [37, 70], [27, 58], [29, 52]]);
+    shape('#343b49', [[78, 13], [99, 52], [101, 58], [91, 70], [83, 65], [88, 54]]);
+    shape('#303744', [[29, 53], [99, 53], [91, 70], [37, 70]]);
+    shape('#7a8495', [[50, 14], [77, 14], [89, 52], [83, 61], [43, 61], [37, 52]]);
+    shape('#a2acbb', [[50, 15], [62, 15], [62, 55], [44, 58], [38, 52]]);
+    shape('#626d7e', [[43, 58], [83, 58], [80, 63], [46, 63]]);
+    line([[50, 14], [77, 14]], '#c0c7d2', 1);
+    line([[87, 51], [99, 53], [91, 68]], '#202631', 2);
+
+    const leftButton = (points: [number, number][]): [number, number][] =>
+      points.map(([x, y]): [number, number] => [x, y + buttonDown]);
+    shape('#505a6b', leftButton([[49, 17], [62, 17], [62, 41], [42, 42], [36, 31]]));
+    shape(frame === 'click' ? '#9da7b6' : '#c6cdd8', leftButton([[50, 19], [60, 19], [59, 39], [44, 40], [39, 31]]));
+    shape('#e5e9ef', leftButton([[50, 19], [60, 19], [60, 21], [50, 21]]));
+    shape('#515b6b', [[66, 17], [78, 17], [85, 31], [88, 41], [68, 41]]);
+    shape('#c1c8d4', [[68, 19], [77, 19], [82, 31], [84, 39], [68, 39]]);
+    shape('#e5e9ef', [[68, 19], [77, 19], [78, 21], [68, 21]]);
+    line([[64, 15], [64, 22], [64, 41]], '#252b35', 1.5);
+    ellipse('#1c222b', 64, 29, 3.2, 7.2);
+    ellipse('#707b8c', 64, 29, 1.7, 5.4);
+    line([[64, 25], [64, 32]], '#303744', 1);
+    ellipse('#12536a', 83, 42, 2.2, 1.7);
+    ellipse('#55eaff', 83, 42, 1.2, 0.9);
+    if (frame === 'click') {
+      ellipse('#1e8c42', 43, 36 + buttonDown, 3.2, 2.1);
+      ellipse('#8aff9a', 43, 36 + buttonDown, 1.7, 1.1);
     }
-    // buttons split + wheel
-    px(shell[3], 34, 12, 1, 18);
-    px(fire ? '#2ad83a' : '#8a90a0', 22, 16, 11, fire ? 12 : 1);
-    px('#1a1c22', 33, 16, 4, 8);
-    px('#2458d8', 34, 17, 2, 6);
-    px('#8ab4ff', 34, 17, 2, 1);
-    // contact shadow + thin dark mousepad in perspective (wider toward camera)
-    px('#14100e', 22, 50, 34, 3);
-    px('#242228', 4, 54, 64, 4);
-    px('#1a181e', 0, 58, 72, 6);
-    px('#2a2830', 0, 58, 72, 1);
+
+    paintVmJacketSleeve(look, sleeveDraw);
+
+    shape(deep, [[48, 50], [43, 46], [38, 43], [32, 43], [26, 45], [20, 48], [15, 52], [16, 56], [21, 58], [27, 55], [32, 52], [38, 52], [44, 56], [50, 57]]);
+    shape(shadow, [[47, 50], [42, 47], [37, 45], [32, 45], [27, 47], [22, 50], [20, 53], [23, 55], [28, 53], [33, 50], [39, 50], [45, 54]]);
+
+    shape(deep, indexPoints([[44, 50], [42, 46], [43, 40], [44, 33], [45, 27], [47, 23], [50, 22], [54, 23], [56, 27], [56, 34], [55, 40], [56, 46], [54, 50]]));
+    shape(base, indexPoints([[46, 48], [45, 44], [46, 38], [47, 31], [48, 27], [50, 25], [53, 26], [54, 29], [54, 35], [53, 41], [54, 47], [52, 49]]));
+    shape(deep, [[68, 50], [66, 46], [66, 40], [67, 33], [68, 27], [70, 23], [74, 22], [78, 24], [80, 28], [79, 35], [80, 42], [82, 47], [79, 51]]);
+    shape(base, [[70, 48], [69, 44], [69, 38], [70, 31], [71, 27], [74, 25], [77, 27], [78, 30], [77, 37], [78, 43], [79, 47], [76, 49]]);
+
+    shape(deep, [[77, 49], [82, 46], [87, 47], [93, 50], [99, 54], [104, 58], [106, 62], [103, 65], [98, 64], [94, 60], [89, 57], [84, 55], [79, 54]]);
+    shape(base, [[80, 50], [84, 48], [88, 49], [94, 53], [99, 57], [102, 61], [100, 63], [96, 61], [91, 57], [86, 55], [81, 53]]);
+    shape(deep, [[74, 55], [80, 52], [86, 53], [92, 57], [97, 62], [100, 66], [97, 69], [92, 67], [88, 64], [83, 61], [78, 60]]);
+    shape(base, [[77, 56], [81, 54], [86, 55], [91, 59], [96, 64], [97, 66], [94, 66], [89, 62], [84, 59], [79, 58]]);
+
+    shape(deep, [[46, 45], [51, 42], [57, 42], [63, 43], [69, 43], [75, 45], [81, 48], [86, 52], [91, 57], [91, 62], [87, 66], [81, 66], [75, 64], [69, 62], [62, 62], [56, 60], [51, 57], [47, 53], [44, 49]]);
+    shape(base, [[49, 46], [53, 44], [58, 44], [64, 45], [70, 45], [75, 47], [81, 50], [85, 54], [88, 58], [88, 61], [84, 64], [79, 63], [73, 61], [67, 60], [61, 60], [56, 58], [52, 55], [49, 51], [47, 49]]);
+    shape(shadow, [[57, 57], [63, 58], [69, 58], [75, 60], [81, 63], [78, 65], [72, 63], [66, 61], [60, 61]]);
+    line([[53, 45], [58, 44], [64, 45], [69, 46]], highlight, 2);
+    line([[76, 49], [81, 52], [84, 55]], shadow, 2);
+
+    ellipse(shadow, 19, 52, 4.2, 3.2);
+    ellipse(base, 19, 51, 3.2, 2.3);
+    line([[17, 50], [20, 49], [22, 50]], highlight, 1);
+    ellipse(shadow, 104, 61, 3.8, 2.8);
+    ellipse(base, 103, 60, 2.8, 1.9);
+    ellipse(shadow, 97, 66, 3.5, 2.6);
+    ellipse(base, 96, 65, 2.6, 1.7);
+
+    ellipse(shadow, 50, 28 + indexTravel, 4.1, frame === 'click' ? 2 : 2.8);
+    ellipse(base, 50, 27.5 + indexTravel, 3.3, frame === 'click' ? 1.5 : 2.1);
+    line([[48, 26 + indexTravel], [50, 25.5 + indexTravel], [52, 26 + indexTravel]], highlight, 1);
+    ellipse(shadow, 74, 27, 4, 2.8);
+    ellipse(base, 74, 26.5, 3.1, 2);
+    line([[72, 25], [74, 24.5], [76, 25]], highlight, 1);
   });
 }
 
@@ -464,14 +543,15 @@ function art(
   mode: 0 | 1 | 2,
   usbFrame?: UsbFrame,
   keyboardFrame?: KeyboardFrame,
+  mouseFrame?: MouseFrame,
 ): Art | null {
   const skin = currentSkin();
-  const key = `${tool.id}:${gender}:${mode}:${usbFrame ?? ''}:${keyboardFrame ?? ''}:${skin.id}`;
+  const key = `${tool.id}:${gender}:${mode}:${usbFrame ?? ''}:${keyboardFrame ?? ''}:${mouseFrame ?? ''}:${skin.id}`;
   let a = cache.get(key);
   if (!a) {
     if (tool.id === 'usb') a = usbArt(usbFrame ?? (mode === 2 ? 'flash' : mode === 1 ? 'recoil' : 'rest'), gender, skin);
     else if (tool.id === 'keyboard') a = keyboardArt(keyboardFrame ?? (mode > 0 ? 'swing' : 'rest'), gender, skin);
-    else if (tool.id === 'mouse') a = mouseArt(mode > 0);
+    else if (tool.id === 'mouse') a = mouseArt(mouseFrame ?? 'rest', gender, skin);
     else if (tool.id === 'badge') a = badgeArt(mode > 0);
     else return null;
     if (mode === 2 && tool.id !== 'keyboard') a = tintFlash(a, TOOL_FLASH[tool.id] ?? '255,255,255');
@@ -510,7 +590,10 @@ export function drawToolViewmodel(
   const keyboardFrame: KeyboardFrame | undefined = tool.id !== 'keyboard' ? undefined
     : ph ? keyboardFrameForUse(anim!.sinceUse, tool.windup ?? 0)
       : 'rest';
-  const a = art(tool, gender, lit ? 2 : fire ? 1 : 0, usbFrame, keyboardFrame);
+  const mouseFrame: MouseFrame | undefined = tool.id !== 'mouse' ? undefined
+    : ph ? mouseFrameForUse(anim!.sinceUse, tool.windup ?? 0)
+      : 'rest';
+  const a = art(tool, gender, lit ? 2 : fire ? 1 : 0, usbFrame, keyboardFrame, mouseFrame);
   // shared bob/strike/switch offsets for the art AND the rig-hand overlay
   const bx = Math.round(Math.sin(bob) * 6);
   const byy = Math.round(Math.abs(Math.cos(bob)) * 3);
