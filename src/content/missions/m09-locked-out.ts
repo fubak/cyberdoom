@@ -442,6 +442,12 @@ m09.entities.push(
   { id: 'den-chg-c', kind: 'item', x: 35.5, y: 19.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 8 } },
   { id: 'store-chg-a', kind: 'item', x: 12.5, y: 25.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 8 } },
   { id: 'store-chg-b', kind: 'item', x: 11.5, y: 26.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 8 } },
+  { id: 'war-vest', kind: 'item', x: 18.5, y: 15.5, sprite: 'firewall-vest',
+    grants: { resource: 'armor', amount: 50 },
+    inspect: { label: 'Firewall vest', detail: 'Absorbs 50% of incoming damage (+50 shield).', category: 'item' } },
+  { id: 'ring-airgap', kind: 'item', x: 40.5, y: 16.5, sprite: 'airgap-shield',
+    grants: { resource: 'airgap', amount: 12 },
+    inspect: { label: 'Air-gap shield', detail: 'Full damage immunity for 12s.', category: 'item' } },
 );
 
 // rF4: 48x30 silhouette — east ring of corridors around a sealed ransom vault;

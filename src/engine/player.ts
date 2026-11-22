@@ -24,6 +24,9 @@ export interface PlayerSnapshot {
   vx: number;
   vy: number;
   integrity: number;
+  armor: number;
+  overclockT: number;
+  airgapT: number;
   hurtT: number;
   lastHurtFrom: number | undefined;
   turnDir: number;
@@ -56,6 +59,12 @@ export class Player {
   private turnHeld = 0;
   readonly radius = 0.28;
   integrity = 100;
+  /** Firewall vest armor (0-100): absorbs 50% of incoming damage. */
+  armor = 0;
+  /** SOC Overclock timer (seconds): 2x fire rate and 1.25x movement speed. */
+  overclockT = 0;
+  /** Air-Gap Shield timer (seconds): blocks incoming damage while active. */
+  airgapT = 0;
 
   constructor(x: number, y: number, angle: number) {
     this.x = x;
@@ -73,6 +82,9 @@ export class Player {
       vx: this.vx,
       vy: this.vy,
       integrity: this.integrity,
+      armor: this.armor,
+      overclockT: this.overclockT,
+      airgapT: this.airgapT,
       hurtT: this.hurtT,
       lastHurtFrom: this.lastHurtFrom,
       turnDir: this.turnDir,
@@ -89,6 +101,9 @@ export class Player {
     this.vx = snapshot.vx;
     this.vy = snapshot.vy;
     this.integrity = snapshot.integrity;
+    this.armor = snapshot.armor ?? 0;
+    this.overclockT = snapshot.overclockT ?? 0;
+    this.airgapT = snapshot.airgapT ?? 0;
     this.hurtT = snapshot.hurtT;
     this.lastHurtFrom = snapshot.lastHurtFrom;
     this.turnDir = snapshot.turnDir;
@@ -131,7 +146,8 @@ export class Player {
       this.turnHeld += dt;
     }
 
-    const speed = run ? MOVE.runSpeed : MOVE.walkSpeed;
+    const speedBoost = this.overclockT > 0 ? 1.25 : 1;
+    const speed = (run ? MOVE.runSpeed : MOVE.walkSpeed) * speedBoost;
     const friction = MOVE.friction;
     const decay = Math.exp(-friction * dt);
     const accel = speed * (1 - decay) / (dt * decay);
@@ -183,6 +199,7 @@ export class Player {
     this.stepReady = sp > 1 && Math.floor(oldBob / Math.PI) !== Math.floor(this.bob / Math.PI);
     this.t += dt;
     this.hurtT = Math.max(0, this.hurtT - dt);
+    this.tickPowerups(dt);
     // spec §5.5: amt 0.55 walk / 1.0 sprint, chase k=6 while moving; on stop a
     // critically-damped-ish spring(10,0.9) eases the amplitude back to zero
     const moving = sp > 0.4;
@@ -256,8 +273,26 @@ export class Player {
     return this.bobAmt;
   }
 
+  addArmor(amount: number): number {
+    const before = this.armor;
+    this.armor = Math.min(100, this.armor + Math.max(0, amount));
+    return this.armor - before;
+  }
+
+  tickPowerups(dt: number): void {
+    this.overclockT = Math.max(0, this.overclockT - dt);
+    this.airgapT = Math.max(0, this.airgapT - dt);
+  }
+
   damage(n: number, fromX?: number, fromY?: number): void {
-    this.integrity = Math.max(0, this.integrity - n);
+    if (this.airgapT > 0) return;
+    let remaining = n;
+    if (this.armor > 0 && remaining > 0) {
+      const absorbed = Math.min(this.armor, Math.ceil(remaining * 0.5));
+      this.armor -= absorbed;
+      remaining -= absorbed;
+    }
+    this.integrity = Math.max(0, this.integrity - remaining);
     this.hurtT = 0.5;
     if (fromX !== undefined && fromY !== undefined) {
       const towardSource = Math.atan2(fromY - this.y, fromX - this.x);

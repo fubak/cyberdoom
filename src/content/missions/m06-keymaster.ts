@@ -680,6 +680,10 @@ m06.entities.push(
     grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
   { id: 'med-hall', kind: 'item', ...floorSpot(m06, [2, 19, 37, 27]), sprite: 'medkit',
     grants: { resource: 'integrity', amount: 25 }, inspect: { label: 'Integrity kit', detail: 'Restores 25 integrity.', category: 'item' } },
+  { id: 'vest-hall', kind: 'item', ...floorSpot(m06, [2, 19, 37, 27]), sprite: 'firewall-vest',
+    grants: { resource: 'armor', amount: 50 }, inspect: { label: 'Firewall vest', detail: 'Absorbs 50% of incoming damage (+50 shield).', category: 'item' } },
+  { id: 'overclock-e', kind: 'item', ...floorSpot(m06, [26, 6, 37, 16]), sprite: 'overclock-chip',
+    grants: { resource: 'overclock', amount: 15 }, inspect: { label: 'SOC overclock chip', detail: '2x fire rate and +25% move speed for 15s.', category: 'item' } },
 );
 
 m06.entities.push(

@@ -464,7 +464,12 @@ m03.map.legend['5'] = { kind: 'door', tex: 'wall-secret', secret: true, doorId: 
 m03.entities.push(
   { id: 'rf4-mail-cache-a-item', kind: 'item', x: 15.5, y: 35.5, sprite: 'charge', tags: ['arsenal-pickup'],
     grants: { resource: 'usb-charge', amount: 8 } },
-  { id: 'rf4-mail-cache-b-item', kind: 'item', x: 25.5, y: 35.5, sprite: 'medkit' },
+  { id: 'rf4-mail-cache-b-item', kind: 'item', x: 25.5, y: 35.5, sprite: 'siem-map',
+    grants: { resource: 'siem-map', amount: 1 },
+    inspect: { label: 'SIEM topology map', detail: 'Syncs floor blueprint to your automap.', category: 'item' } },
+  { id: 'vest-gallery', kind: 'item', x: 18.5, y: 32.5, sprite: 'firewall-vest',
+    grants: { resource: 'armor', amount: 50 },
+    inspect: { label: 'Firewall vest', detail: 'Absorbs 50% of incoming damage (+50 shield).', category: 'item' } },
   { id: 'rf4-gallery-prop', kind: 'prop', x: 20.5, y: 32.5, sprite: 'workstation' },
 );
 m03.script!.secrets!.push(

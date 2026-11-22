@@ -1330,6 +1330,89 @@ export function buildSprites(jobs = false): void {
     },
   }]);
 
+  // Firewall Vest (armor pickup)
+  makeSet('firewall-vest', 32, 32, 0.54, 'static', [{
+    key: 'idle',
+    draw: (p) => {
+      const { g } = p;
+      g.fillStyle = '#143056';
+      g.fillRect(7, 8, 18, 20);
+      g.fillStyle = '#2660a8';
+      g.fillRect(9, 10, 14, 16);
+      g.fillStyle = '#0c1c34';
+      g.fillRect(12, 8, 8, 4);
+      g.fillStyle = '#48d8ff';
+      g.fillRect(10, 14, 12, 3);
+      g.fillRect(10, 20, 12, 2);
+      g.fillStyle = '#c8f8ff';
+      g.fillRect(14, 12, 4, 10);
+      p.glow.fillStyle = '#fff';
+      p.glow.fillRect(10, 12, 12, 10);
+    },
+  }]);
+
+  // SOC Overclock Chip (2x fire rate + 1.25x speed for 15s)
+  makeSet('overclock-chip', 32, 32, 0.5, 'flicker', [0, 1].map((f) => ({
+    key: `f${f}`,
+    draw: (p: PaintCtx) => {
+      const { g } = p;
+      g.fillStyle = '#202630';
+      g.fillRect(8, 8, 16, 16);
+      g.fillStyle = '#c89220';
+      for (let i = 0; i < 4; i++) {
+        g.fillRect(6, 10 + i * 4, 2, 2);
+        g.fillRect(24, 10 + i * 4, 2, 2);
+        g.fillRect(10 + i * 4, 6, 2, 2);
+        g.fillRect(10 + i * 4, 24, 2, 2);
+      }
+      g.fillStyle = f ? '#ffe066' : '#ff9a20';
+      g.fillRect(11, 11, 10, 10);
+      g.fillStyle = '#fff8cc';
+      g.fillRect(14, 13, 4, 6);
+      p.glow.fillStyle = '#fff';
+      p.glow.fillRect(10, 10, 12, 12);
+    },
+  })));
+
+  // Air-Gap Shield (damage immunity for 12s)
+  makeSet('airgap-shield', 32, 32, 0.56, 'flicker', [0, 1].map((f) => ({
+    key: `f${f}`,
+    draw: (p: PaintCtx) => {
+      const { g } = p;
+      g.fillStyle = f ? '#ffe878' : '#d8a828';
+      g.fillRect(8, 7, 16, 14);
+      g.fillRect(10, 21, 12, 4);
+      g.fillRect(13, 25, 6, 3);
+      g.fillStyle = '#182438';
+      g.fillRect(10, 9, 12, 11);
+      g.fillStyle = f ? '#ffffff' : '#90f8ff';
+      g.fillRect(14, 11, 4, 8);
+      g.fillRect(12, 13, 8, 3);
+      p.glow.fillStyle = '#fff';
+      p.glow.fillRect(8, 7, 16, 20);
+    },
+  })));
+
+  // SIEM Topology Map (reveals full automap floor)
+  makeSet('siem-map', 32, 32, 0.5, 'static', [{
+    key: 'idle',
+    draw: (p) => {
+      const { g } = p;
+      g.fillStyle = '#1c2824';
+      g.fillRect(6, 9, 20, 16);
+      g.fillStyle = '#28a868';
+      g.fillRect(8, 11, 16, 12);
+      g.fillStyle = '#0c1c14';
+      g.fillRect(9, 12, 14, 10);
+      g.fillStyle = '#68ff9a';
+      g.fillRect(10, 14, 5, 3);
+      g.fillRect(17, 14, 4, 6);
+      g.fillRect(10, 19, 6, 2);
+      p.glow.fillStyle = '#fff';
+      p.glow.fillRect(8, 11, 16, 12);
+    },
+  }]);
+
   // Projectile (scanner charge) + impact puff
   makeSet('fx-scan-trail', 8, 8, 0.12, 'static', [0, 1].map((f) => ({
     key: `f${f}`,

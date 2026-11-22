@@ -634,6 +634,12 @@ m08.entities.push(
     grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
   { id: 'med-c', kind: 'item', ...floorSpot(m08, [14, 13, 37, 20]), sprite: 'medkit',
     grants: { resource: 'integrity', amount: 25 }, inspect: { label: 'Integrity kit', detail: 'Restores 25 integrity.', category: 'item' } },
+  { id: 'vest-dmz', kind: 'item', ...floorSpot(m08, [2, 2, 17, 11]), sprite: 'firewall-vest',
+    grants: { resource: 'armor', amount: 50 }, inspect: { label: 'Firewall vest', detail: 'Absorbs 50% of incoming damage (+50 shield).', category: 'item' } },
+  { id: 'overclock-srv', kind: 'item', ...floorSpot(m08, [22, 2, 37, 11]), sprite: 'overclock-chip',
+    grants: { resource: 'overclock', amount: 15 }, inspect: { label: 'SOC overclock chip', detail: '2x fire rate and +25% move speed for 15s.', category: 'item' } },
+  { id: 'siem-map-s', kind: 'item', ...floorSpot(m08, [2, 22, 12, 27]), sprite: 'siem-map',
+    grants: { resource: 'siem-map', amount: 1 }, inspect: { label: 'SIEM topology map', detail: 'Syncs floor blueprint to your automap.', category: 'item' } },
 );
 
 m08.entities.push(

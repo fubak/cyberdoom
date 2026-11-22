@@ -431,17 +431,7 @@ class Game {
     // Secret payoffs: runtime emits the grant; apply it like a floor pickup and
     // say what was found so every secret visibly pays off.
     this.bus.on('grant-item', ({ resource, amount }) => {
-      const runtime = this.runtime;
-      const scaledAmount = runtime
-        ? scaledPickupGrant(resource, amount, this.arsenal.ammo, (n) => runtime.pickupAmount(n))
-        : amount;
-      let text: string;
-      if (resource === 'integrity') {
-        if (this.player) this.player.integrity = Math.min(100, this.player.integrity + scaledAmount);
-        text = `PICKED UP ${scaledAmount} INTEGRITY.`;
-      } else {
-        text = this.arsenal.grant(resource, scaledAmount);
-      }
+      const text = this.applyResourceGrant(resource, amount);
       this.audio.sfx('pickup', this.player ? { x: this.player.x, y: this.player.y } : {});
       this.hud.pushPickup(text);
     });
@@ -498,6 +488,40 @@ class Game {
     if (!text) return;
     if (kind === 'replica' && !this.replicaGate.allow(this.runtime?.elapsed ?? 0)) return;
     this.hud.pushMessage(text, 'warn');
+  }
+
+  private applyResourceGrant(resource: string, amount: number): string {
+    const runtime = this.runtime;
+    const p = this.player;
+    const scaledAmount = runtime
+      ? scaledPickupGrant(resource, amount, this.arsenal.ammo, (n) => runtime.pickupAmount(n))
+      : amount;
+    if (resource === 'integrity') {
+      if (p) p.integrity = Math.min(100, p.integrity + scaledAmount);
+      return `PICKED UP ${scaledAmount} INTEGRITY.`;
+    }
+    if (resource === 'armor') {
+      if (p) p.addArmor(scaledAmount);
+      return `EQUIPPED FIREWALL VEST (+${scaledAmount} SHIELD).`;
+    }
+    if (resource === 'overclock') {
+      const secs = Math.max(5, amount);
+      if (p) p.overclockT = Math.max(p.overclockT, secs);
+      return `SOC OVERCLOCK ACTIVE (${secs}S — 2X FIRE RATE & SPEED).`;
+    }
+    if (resource === 'airgap') {
+      const secs = Math.max(5, amount);
+      if (p) p.airgapT = Math.max(p.airgapT, secs);
+      return `AIR-GAP SHIELD ACTIVE (${secs}S — DAMAGE IMMUNITY).`;
+    }
+    if (resource === 'siem-map') {
+      runtime?.revealAll();
+      return 'SIEM TOPOLOGY SYNCED — FULL FLOOR MAP REVEALED.';
+    }
+    if (resource.startsWith('role:')) {
+      return `Access granted: ${resource.slice(5).toUpperCase()}`;
+    }
+    return this.arsenal.grant(resource, scaledAmount);
   }
 
   private setScreen(s: Screen, node: HTMLElement | null): void {
@@ -1088,6 +1112,9 @@ class Game {
       const integrity = this.player.integrity;
       this.hud.draw({
         integrity,
+        armor: this.player.armor,
+        overclockT: this.player.overclockT,
+        airgapT: this.player.airgapT,
         ammo: ars.ammoFor(),
         ammoName: ars.current.ammo?.resource ?? '',
         tool: ars.current,
@@ -1240,7 +1267,8 @@ class Game {
       }
     }
     this.debugFire = false;
-    this.arsenal.update(dt, !ending && this.input.fireHeld, fired, () => this.toolCtx());
+    const arsenalDt = this.player.overclockT > 0 ? dt * 2 : dt;
+    this.arsenal.update(arsenalDt, !ending && this.input.fireHeld, fired, () => this.toolCtx());
 
     if (!ending && !this.arsenal.switching && this.input.usePressed && this.useCd <= 0) {
       const r = resolveUse(this.useCtx());
@@ -1393,21 +1421,7 @@ class Game {
       if (Math.hypot(e.x - p.x, e.y - p.y) < 0.6) {
         e.alive = false;
         const { resource, amount } = e.def.grants;
-        const scaledAmount = scaledPickupGrant(
-          resource,
-          amount,
-          this.arsenal.ammo,
-          (n) => runtime.pickupAmount(n),
-        );
-        let text: string;
-        if (resource === 'integrity') {
-          p.integrity = Math.min(100, p.integrity + scaledAmount);
-          text = `PICKED UP ${scaledAmount} INTEGRITY.`;
-        } else if (resource.startsWith('role:')) {
-          text = `Access granted: ${resource.slice(5).toUpperCase()}`;
-        } else {
-          text = this.arsenal.grant(resource, scaledAmount);
-        }
+        const text = this.applyResourceGrant(resource, amount);
         this.bus.emit('pickup', { entityId: e.def.id });
         this.hud.pushPickup(text);
       }
