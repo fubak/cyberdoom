@@ -44,16 +44,16 @@ export const m01: Mission = {
     '######..##############..##########.######..##..#',
     '######..##############...............####..##..#',
     '######..##############...............####..##..#',
-    '###BBB..BBBBBBB###############rr#########..##..#',
-    '###B..........B###############..#########..##..#',
-    'BBBB..........B#......................###..##..#',
-    'B..B..........B#......................###......#',
-    'B..1........S.B#....##.....##.........###......#',
-    'B..B.......S.Sp.....##.....##..........T.......#',
-    'BBBB..........B#......................##########',
-    '###B.......S.SB#......................##########',
-    '###B........S.B#################################',
-    '###BBBBBBBBBBBB#################################',
+    '######..######################rr#########..##..#',
+    '####..........################..#########..##..#',
+    '####..........##......................###..##..#',
+    '#..#..........##......................###......#',
+    '#..1..........##....##.....##.........###......#',
+    '#..#..........p.....##.....##..........T.......#',
+    '####..........##......................##########',
+    '####..........##......................##########',
+    '####..........##################################',
+    '################################################',
   ],
     legend: {
       '#': { kind: 'wall', tex: 'wall-panel' },
@@ -71,7 +71,7 @@ export const m01: Mission = {
         kind: 'door', tex: 'door', doorId: 'quarantine', locked: true,
         lockText: 'QUARANTINE: exit stays sealed until every infected host is clean',
       },
-      '1': { kind: 'door', tex: 'wall-brick', doorId: 'secret-closet', secret: true },
+      '1': { kind: 'door', tex: 'wall-office', doorId: 'secret-closet', secret: true },
       '2': { kind: 'door', tex: 'wall-server', doorId: 'secret-crawl', secret: true },
       '3': { kind: 'door', tex: 'wall-server', doorId: 'secret-core', secret: true },
     },
@@ -310,10 +310,10 @@ export const m01Walkthrough: WalkStep[] = [
   { goto: [19, 1] },
 ];
 
-setMapCell(m01.map, 6, 22, 'S');
-setMapCell(m01.map, 8, 22, 'S');
-setMapCell(m01.map, 6, 23, 'S');
-setMapCell(m01.map, 8, 23, 'S');
+setMapCell(m01.map, 6, 22, '#');
+setMapCell(m01.map, 8, 22, '#');
+setMapCell(m01.map, 6, 23, '#');
+setMapCell(m01.map, 8, 23, '#');
 setMapCell(m01.map, 30, 4, '.');
 setMapCell(m01.map, 31, 4, '3');
 m01.map.lights = { ...m01.map.lights, ...lightRects([[5, 20, 9, 24, 1]]) };
@@ -407,15 +407,13 @@ export const m01Teach: MissionTeaching = {
 };
 
 // — rF2 landmarks: the east server hall reads as the NOC (grid floor, bright,
-// console video wall), the south-west brick office as the dim ops bullpen
-// (rust floor, workstations) so navigation can be learned without the marker.
+// console video wall), while the south-west office lobby keeps corporate carpet
+// tiles and office walls so M01 opens in a recognizable Meridian Freight office.
 m01.map.legend[','] = { kind: 'floor', tex: 'floor-grid' };
-m01.map.legend[';'] = { kind: 'floor', tex: 'floor-rust' };
 retex(m01, [30, 1, 38, 15], 'floor', ',');
-retex(m01, [0, 19, 14, 28], 'floor', ';');
-m01.map.lights = { ...m01.map.lights, ...lightRects([[31, 1, 38, 14, 0.85], [0, 20, 14, 28, 0.55]]) };
-// keep the spawn lane readable inside the dim bullpen
-m01.map.lights = { ...m01.map.lights, ...lightRects([[5, 20, 9, 27, 0.8]]) };
+m01.map.lights = { ...m01.map.lights, ...lightRects([[31, 1, 38, 14, 0.85], [0, 20, 14, 28, 0.78]]) };
+// keep the spawn lane bright and legible inside the office lobby
+m01.map.lights = { ...m01.map.lights, ...lightRects([[5, 20, 9, 27, 0.9]]) };
 m01.entities.push(
   { id: 'noc-wall-a', kind: 'prop', x: 33.5, y: 1.8, sprite: 'console' },
   { id: 'noc-wall-b', kind: 'prop', x: 35.5, y: 1.8, sprite: 'console' },

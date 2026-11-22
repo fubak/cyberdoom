@@ -231,6 +231,157 @@ export const MISSION_THEMES: Record<string, MissionTheme> = {
   m12: { wall: 'wall-soc', floor: 'floor-soc', props: ['whiteboard', 'server-rack', 'warning-beacon'] },
 };
 
+export const POWERUP_SPECS = {
+  armor: {
+    sprite: 'firewall-vest',
+    amount: 50,
+    label: 'Firewall vest',
+    detail: 'Absorbs 50% of incoming damage (+50 shield).',
+  },
+  overclock: {
+    sprite: 'overclock-chip',
+    amount: 15,
+    label: 'SOC overclock chip',
+    detail: '2x fire rate and +25% move speed for 15s.',
+  },
+  airgap: {
+    sprite: 'airgap-shield',
+    amount: 12,
+    label: 'Air-gap shield',
+    detail: 'Brief invulnerability against network attacks (12s).',
+  },
+  'siem-map': {
+    sprite: 'siem-map',
+    amount: 1,
+    label: 'SIEM topology map',
+    detail: 'Syncs floor blueprint to your automap.',
+  },
+} as const;
+
+export type PowerupKind = keyof typeof POWERUP_SPECS;
+
+const MISSION_POWERUP_PLACEMENTS: Record<string, ReadonlyArray<{ id: string; kind: PowerupKind; area: TileRect }>> = {
+  m01: [
+    { id: 'pwr-m01-siem', kind: 'siem-map', area: [1, 23, 2, 25] },
+    { id: 'pwr-m01-vest', kind: 'armor', area: [43, 15, 44, 16] },
+  ],
+  m02: [
+    { id: 'pwr-m02-vest', kind: 'armor', area: [27, 25, 31, 28] },
+    { id: 'pwr-m02-siem', kind: 'siem-map', area: [42, 5, 44, 7] },
+  ],
+  m04: [
+    { id: 'pwr-m04-vest', kind: 'armor', area: [2, 4, 4, 8] },
+    { id: 'pwr-m04-oc', kind: 'overclock', area: [43, 10, 44, 12] },
+  ],
+  m05: [
+    { id: 'pwr-m05-vest', kind: 'armor', area: [2, 4, 4, 8] },
+    { id: 'pwr-m05-airgap', kind: 'airgap', area: [40, 6, 41, 8] },
+  ],
+  m07: [
+    { id: 'pwr-m07-oc', kind: 'overclock', area: [14, 9, 16, 10] },
+    { id: 'pwr-m07-airgap', kind: 'airgap', area: [34, 3, 36, 5] },
+  ],
+  m10: [
+    { id: 'pwr-m10-vest', kind: 'armor', area: [2, 5, 4, 9] },
+    { id: 'pwr-m10-siem', kind: 'siem-map', area: [2, 21, 4, 26] },
+  ],
+  m11: [
+    { id: 'pwr-m11-oc', kind: 'overclock', area: [2, 5, 3, 7] },
+    { id: 'pwr-m11-airgap', kind: 'airgap', area: [40, 25, 42, 26] },
+  ],
+};
+
+/** Ensure every campaign mission has meaningful Doom-style powerups placed in
+ *  secret caches and tactical rooms without overlapping existing entities. */
+export function applyMissionPowerups(mission: Mission): void {
+  const placements = MISSION_POWERUP_PLACEMENTS[mission.id];
+  if (!placements) return;
+  for (const p of placements) {
+    if (mission.entities.some((e) => e.id === p.id)) continue;
+    const spec = POWERUP_SPECS[p.kind];
+    const spot = floorSpot(mission, p.area);
+    mission.entities.push({
+      id: p.id,
+      kind: 'item',
+      x: spot.x,
+      y: spot.y,
+      sprite: spec.sprite,
+      grants: { resource: p.kind, amount: spec.amount },
+      inspect: { label: spec.label, detail: spec.detail, category: 'item' },
+    });
+  }
+}
+
+/** Populate wall-adjacent environmental props across a mission so every floor
+ *  feels inhabited (target ~18 props) while keeping doorways, narrow corridors,
+ *  and spawn lanes completely clear. */
+function populateThemeProps(mission: Mission, theme: MissionTheme, targetCount = 18): void {
+  const existingProps = mission.entities.filter((e) => e.kind === 'prop');
+  if (existingProps.length >= targetCount) return;
+
+  const { map } = mission;
+  const h = map.grid.length;
+  const w = map.grid[0]?.length ?? 0;
+  const cellKind = (x: number, y: number): string | undefined =>
+    map.legend[map.grid[y]?.[x] ?? '']?.kind;
+
+  const candidates: Array<{ x: number; y: number }> = [];
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      if (cellKind(x, y) !== 'floor') continue;
+      const n = cellKind(x, y - 1);
+      const s = cellKind(x, y + 1);
+      const e = cellKind(x + 1, y);
+      const west = cellKind(x - 1, y);
+      const ortho = [n, s, e, west];
+      // Hug a wall, never block a door or exit, and keep 1-tile corridors clear
+      if (!ortho.includes('wall')) continue;
+      if (ortho.includes('door') || ortho.includes('exit')) continue;
+      const floorNeighbors = ortho.filter((k) => k === 'floor').length;
+      if (floorNeighbors < 2) continue;
+      // Avoid diagonal door clearance crowding
+      const diags = [
+        cellKind(x - 1, y - 1),
+        cellKind(x + 1, y - 1),
+        cellKind(x - 1, y + 1),
+        cellKind(x + 1, y + 1),
+      ];
+      if (diags.includes('door') || diags.includes('exit')) continue;
+
+      const px = x + 0.5;
+      const py = y + 0.5;
+      if (Math.hypot(px - map.spawn.x, py - map.spawn.y) < 2.2) continue;
+      if (mission.entities.some((ent) => Math.hypot(ent.x - px, ent.y - py) < 1.6)) continue;
+      candidates.push({ x: px, y: py });
+    }
+  }
+
+  // Spread props evenly across the map by stepping through candidates and enforcing spacing
+  const needed = targetCount - existingProps.length;
+  const placed: Array<{ x: number; y: number }> = existingProps.map((e) => ({ x: e.x, y: e.y }));
+  const stride = Math.max(1, Math.floor(candidates.length / Math.max(1, needed * 2)));
+  let added = 0;
+
+  for (const minGap of [3.2, 2.2]) {
+    for (let offset = 0; offset < stride && added < needed; offset++) {
+      for (let i = offset; i < candidates.length && added < needed; i += stride) {
+        const c = candidates[i]!;
+        if (placed.some((p) => Math.hypot(p.x - c.x, p.y - c.y) < minGap)) continue;
+        const sprite = theme.props[(existingProps.length + added) % theme.props.length]!;
+        mission.entities.push({
+          id: `theme-prop-${mission.id}-${added + 1}`,
+          kind: 'prop',
+          x: c.x,
+          y: c.y,
+          sprite,
+        });
+        placed.push(c);
+        added += 1;
+      }
+    }
+  }
+}
+
 /** Apply per-mission wall/floor textures and environmental prop sprites so
  *  corporate offices, data centers, vaults, and the SOC look visually distinct. */
 export function applyMissionTheme(mission: Mission): void {
@@ -247,6 +398,7 @@ export function applyMissionTheme(mission: Mission): void {
     ent.sprite = theme.props[propIdx % theme.props.length]!;
     propIdx += 1;
   }
+  populateThemeProps(mission, theme, 18);
 }
 
 function pickUnusedGlyph(legend: MapDef['legend'], candidates: string): string | null {

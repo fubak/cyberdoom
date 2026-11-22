@@ -40,11 +40,16 @@ describe('D1 powerups', () => {
     expect(p2.airgapT).toBe(7.25);
   });
 
-  it('all four powerup types are placed across the campaign', () => {
+  it('every campaign mission M01-M12 places at least 2 powerups on walkable tiles', () => {
+    const POWERUPS = new Set(['armor', 'overclock', 'airgap', 'siem-map']);
     const resources = new Set<string>();
     for (const m of missionRegistry.all()) {
-      for (const e of m.entities) {
-        if (e.kind === 'item' && e.grants) resources.add(e.grants.resource);
+      const found = m.entities.filter((e) => e.kind === 'item' && e.grants && POWERUPS.has(e.grants.resource));
+      expect(found.length, `${m.id} should have at least 2 powerups`).toBeGreaterThanOrEqual(2);
+      for (const e of found) {
+        resources.add(e.grants!.resource);
+        const ch = m.map.grid[Math.floor(e.y)]?.[Math.floor(e.x)] ?? '';
+        expect(m.map.legend[ch]?.kind, `${m.id} powerup ${e.id} must be on a floor tile`).toBe('floor');
       }
     }
     expect(resources.has('armor')).toBe(true);
