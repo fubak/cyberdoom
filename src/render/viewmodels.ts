@@ -28,6 +28,7 @@ interface Art {
 }
 
 const cache = new Map<string, Art>();
+const dimmedCache = new WeakMap<Art, Map<number, Art>>();
 
 /** Overall on-screen size of the bespoke viewmodels (1 = native 1:1 pixels). */
 export const VIEWMODEL_SCALE = 1;
@@ -115,6 +116,27 @@ function tintFlash(a: Art, rgb: string): Art {
   }
   g.putImageData(img, 0, 0);
   return { c, ox: a.ox, top: a.top, bot: a.bot };
+}
+
+function dimArt(a: Art, light: number): Art {
+  let variants = dimmedCache.get(a);
+  if (!variants) {
+    variants = new Map();
+    dimmedCache.set(a, variants);
+  }
+  const cached = variants.get(light);
+  if (cached) return cached;
+
+  const c = document.createElement('canvas');
+  c.width = a.c.width;
+  c.height = a.c.height;
+  const g = c.getContext('2d')!;
+  g.drawImage(a.c, 0, 0);
+  g.globalCompositeOperation = 'source-atop';
+  g.fillStyle = `rgba(0,0,0,${1 - light})`;
+  g.fillRect(0, 0, c.width, c.height);
+  variants.set(light, { ...a, c });
+  return variants.get(light)!;
 }
 
 export type KeyboardFrame = 'rest' | 'raise' | 'swing' | 'contact' | 'recover';
@@ -1146,6 +1168,7 @@ export function drawToolViewmodel(
   // ~77 ms of the 90 ms impact window, so >=4 rendered frames at 60 Hz
   const lit = !!ph && ph.phase === 'impact' && ph.u < 0.85;
   const fire = lit || (!!ph && (ph.phase === 'impact' || (ph.phase === 'recover' && ph.u < 0.25))) || (!ph && cooldownFrac > 0.55);
+  const light = Math.round((anim?.light === undefined ? 1 : Math.min(1, Math.max(0.35, anim.light))) * 10) / 10;
   const usbFrame: UsbFrame | undefined = tool.id !== 'usb' || !ph ? undefined
     : ph.phase === 'wind' ? 'press'
       : ph.phase === 'impact' ? 'flash'
@@ -1175,7 +1198,8 @@ export function drawToolViewmodel(
   const detail = tool.id === 'tap' ? tapDetail(anim?.time ?? 0, anim?.ammo ?? null, !!ph && ph.phase !== 'idle')
     : tool.id === 'edr' ? String(Math.max(0, Math.min(4, anim?.ammo ?? 0)))
       : '';
-  const a = art(tool, gender, lit ? 2 : fire ? 1 : 0, usbFrame, keyboardFrame, mouseFrame, badgeFrame, mfaFrame, patchFrame, tapFrame, detail, edrFrame);
+  let a = art(tool, gender, lit ? 2 : fire ? 1 : 0, usbFrame, keyboardFrame, mouseFrame, badgeFrame, mfaFrame, patchFrame, tapFrame, detail, edrFrame);
+  if (a && !lit && light < 1) a = dimArt(a, light);
   // shared bob/strike/switch offsets for the art AND the rig-hand overlay
   const bx = Math.round(Math.sin(bob) * 6);
   const byy = Math.round(Math.abs(Math.cos(bob)) * 3);

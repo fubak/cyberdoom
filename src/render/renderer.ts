@@ -847,6 +847,10 @@ export class Renderer {
     }
   }
 
+  viewLight(x: number, y: number): number {
+    return this.lightAt(x, y);
+  }
+
   private lightAt(x: number, y: number): number {
     return this.tileLight(Math.floor(x), Math.floor(y));
   }

@@ -166,6 +166,7 @@ class Game {
   probeLock = false;
   /** Viewmodel sway/lag state: lags mouse yaw + strafe, springs back to rest. */
   private vmSway = { x: 0, y: 0 };
+  private vmLight = 1;
   private swayX = { x: 0, v: 0, acc: 0 };
   private swayY = { x: 0, v: 0, acc: 0 };
   private lastHurtMessageT = -Infinity;
@@ -818,6 +819,7 @@ class Game {
     const sp = mission.map.spawn;
     this.player = new Player(sp.x, sp.y, sp.angle);
     this.player.snap();
+    this.vmLight = 1;
     this.projectiles = [];
     this.particles.clear();
     this.feel = new Feel();
@@ -952,6 +954,8 @@ class Game {
         bonus: this.feel.bonusAmt,
       };
       this.renderer.render(this.player, pose);
+      const targetLight = this.renderer.viewLight(this.player.x, this.player.y);
+      this.vmLight += (targetLight - this.vmLight) * Math.min(1, dt * 6);
       const ars = this.arsenal;
       const integrity = this.player.integrity;
       this.hud.draw({
@@ -962,7 +966,7 @@ class Game {
         bob: this.player.bob,
         cooldownFrac: ars.cooldownFrac,
         gender: this.gender,
-        anim: ars.anim(),
+        anim: { ...ars.anim(), light: this.vmLight },
         owned: [...ars.owned],
         resources: ars.resources(),
         got: ars.got(),
