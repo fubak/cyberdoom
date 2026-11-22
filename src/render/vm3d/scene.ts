@@ -8,10 +8,12 @@ import { Vm3dRig, type Vm3dBoard } from './rig';
 import { UsbScannerRig } from './usb3d';
 import { ensureHandAssets, HAND_FINGERS, LiveHand, type HandSpec } from './hand3d';
 import type { Curl, FingerName } from '../handrig';
+import { RES, VIEW3D_H, VIEW_W } from '../res';
 
 /** base-px → viewmodel-space metres at the board's working distance (~0.45 m). */
 const D2R = Math.PI / 180;
 const PX2M = (2 * Math.tan((54 / 2) * Math.PI / 180) * 0.45) / 168 * 0.6;
+export const VM3D_CAMERA_BACK = 0.01;
 
 export interface Vm3dFrame {
   dt: number;
@@ -90,19 +92,39 @@ export class Vm3d {
   private studySide: 'L' | 'R' = 'R';
   private studyView: 'palm' | 'back' | 'side' = 'back';
   private gripView: 'dorsal' | 'side' | 'under' | null = null;
+  private readonly vmWidth = VIEW_W / RES;
+  private readonly vmHeight = VIEW3D_H / RES;
+  private readonly vmTarget = new THREE.WebGLRenderTarget(this.vmWidth, this.vmHeight, {
+    minFilter: THREE.NearestFilter,
+    magFilter: THREE.NearestFilter,
+    depthBuffer: true,
+    generateMipmaps: false,
+  });
+  private readonly compositeScene = new THREE.Scene();
+  private readonly compositeCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+  private readonly compositeMat = new THREE.MeshBasicMaterial({
+    map: this.vmTarget.texture,
+    transparent: true,
+    depthTest: false,
+    depthWrite: false,
+    toneMapped: false,
+  });
 
   constructor(spec: HandSpec) {
     this.spec = spec;
     this.rig = new Vm3dRig<Vm3dBoard>(spec, new KeyboardRig());
     this.scene.add(this.rig.root, this.rig.stage);
-    this.key = new THREE.PointLight('#fdf6ec', 2.2, 4, 1.8);
-    this.key.position.set(0.25, 0.35, 0.15);
-    this.fill = new THREE.DirectionalLight('#e8c8a8', 0.45);
-    this.fill.position.set(-0.4, -0.2, 0.3);
-    this.hemi = new THREE.HemisphereLight('#b8c4de', '#3a2a22', 0.5);
+    this.key = new THREE.PointLight('#fff1df', 1.8, 4, 1.8);
+    this.key.position.set(-0.28, 0.40, 0.20);
+    this.fill = new THREE.DirectionalLight('#b9c5dd', 0.14);
+    this.fill.position.set(0.35, -0.2, -0.3);
+    this.hemi = new THREE.HemisphereLight('#b8c4de', '#3a2a22', 0.12);
     this.flashLight = new THREE.PointLight('#ffc85a', 0, 3.5, 2);
     this.flashLight.position.set(0, 0.04, -0.75);
     this.scene.add(this.key, this.fill, this.hemi, this.flashLight);
+    const compositePlane = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.compositeMat);
+    compositePlane.frustumCulled = false;
+    this.compositeScene.add(compositePlane);
     ensureHandAssets(); // kick the glb fetch at startup; hands join when ready
   }
 
@@ -262,10 +284,10 @@ export class Vm3d {
 
     // --- lights follow the sector light at the player tile ---
     const lv = Math.min(1.3, f.light);
-    this.key.intensity = 0.6 + lv * 1.9;
-    this.hemi.intensity = 0.25 + lv * 0.4;
-    this.fill.position.set(-0.4, -0.2, 0.3);
-    this.fill.intensity = 0.45;
+    this.key.intensity = 0.45 + lv * 1.5;
+    this.hemi.intensity = 0.08 + lv * 0.16;
+    this.fill.position.set(0.35, -0.2, -0.3);
+    this.fill.intensity = 0.14;
     if (this.rig.board instanceof UsbScannerRig) {
       this.flashLight.position.copy(this.rig.board.socketWorld('usb.connector'));
     } else {
@@ -285,11 +307,34 @@ export class Vm3d {
     this.rig.board.blinkLed(f.simT + this.flickT);
   }
 
-  /** Render into the bound world RT; caller keeps the viewport/scissor state. */
-  renderInto(r: THREE.WebGLRenderer, w: number, h: number): void {
+  /** Render at base resolution, then composite into the bound world RT. */
+  renderInto(r: THREE.WebGLRenderer, _w: number, _h: number): void {
+    if (!this.toolId && !this.studyHand) return;
+    const outputTarget = r.getRenderTarget();
+    const outputViewport = r.getViewport(new THREE.Vector4());
+    const outputScissor = r.getScissor(new THREE.Vector4());
+    const outputScissorTest = r.getScissorTest();
+    const outputClearColor = r.getClearColor(new THREE.Color());
+    const outputClearAlpha = r.getClearAlpha();
+    const outputAutoClear = r.autoClear;
+    const composite = () => {
+      r.setRenderTarget(outputTarget);
+      r.setViewport(outputViewport);
+      r.setScissor(outputScissor);
+      r.setScissorTest(outputScissorTest);
+      r.autoClear = false;
+      r.render(this.compositeScene, this.compositeCam);
+      r.autoClear = outputAutoClear;
+      r.setClearColor(outputClearColor, outputClearAlpha);
+    };
+    r.setRenderTarget(this.vmTarget);
+    r.setViewport(0, 0, this.vmWidth, this.vmHeight);
+    r.setScissorTest(false);
+    r.setClearColor(0x000000, 0);
+    r.clear(true, true, true);
     if (this.studyHand) {
       const l = this.studyHand.palmL;
-      this.cam.aspect = w / h;
+      this.cam.aspect = this.vmWidth / this.vmHeight;
       this.cam.updateProjectionMatrix();
       const d = 0.30;
       const cy = l * 0.55;
@@ -313,14 +358,14 @@ export class Vm3d {
       r.setClearColor(prev, prevA);
       this.cam.position.set(0, 0, 0);
       this.cam.lookAt(0, 0, -1);
+      composite();
       return;
     }
-    if (!this.toolId) return;
     if (this.gripView) {
       // evidence shot: the board's left end centred on a neutral gray
       // background, narrow fov for an orthographic-style read — the world
       // pass is wiped so this is the vm3d scene alone
-      this.cam.aspect = w / h;
+      this.cam.aspect = this.vmWidth / this.vmHeight;
       this.cam.fov = 30;
       this.cam.updateProjectionMatrix();
       const end = this.rig.board.group.localToWorld(new THREE.Vector3(-0.155, -0.01, 0));
@@ -351,6 +396,7 @@ export class Vm3d {
       this.cam.updateProjectionMatrix();
       this.cam.position.set(0, 0, 0);
       this.cam.lookAt(0, 0, -1);
+      composite();
       return;
     }
     // the swing's strike is the only time the board may reach above
@@ -358,13 +404,16 @@ export class Vm3d {
     // flight — grab lift through strike and settle (0.014–0.34 s)
     const crossing = (this.clip === CLIPS['kbd.swing'] && this.clipT >= 0.10 && this.clipT <= 0.25)
       || (this.clip === CLIPS['usb.fire'] && this.clipT >= 0.05 && this.clipT <= 0.14);
-    const bandH = crossing ? Math.floor(h * 0.58) : Math.floor(h * (1 - VM_CLEAR));
-    this.cam.aspect = w / h;
+    const bandH = crossing ? Math.floor(this.vmHeight * 0.58) : Math.floor(this.vmHeight * (1 - VM_CLEAR));
+    this.cam.aspect = this.vmWidth / this.vmHeight;
+    this.cam.position.set(0, 0, this.toolId === 'usb' ? VM3D_CAMERA_BACK : 0);
+    this.cam.lookAt(0, 0, -1);
     this.cam.updateProjectionMatrix();
     r.setScissorTest(true);
-    r.setScissor(0, 0, w, bandH);
+    r.setScissor(0, 0, this.vmWidth, bandH);
     r.render(this.scene, this.cam);
     r.setScissorTest(false);
+    composite();
   }
 }
 

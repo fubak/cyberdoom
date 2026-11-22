@@ -27,6 +27,7 @@ export class Vm3dRig<B extends Vm3dBoard = KeyboardRig> {
   constructor(spec: HandSpec, board: B = new KeyboardRig() as B) {
     this.spec = spec;
     this.board = board;
+    if (this.board instanceof UsbScannerRig) this.board.setSkinPalette(this.spec.skin);
     ensureHandAssets();
     this.root.add(this.board.group);
     this.ensureHands();
@@ -40,7 +41,10 @@ export class Vm3dRig<B extends Vm3dBoard = KeyboardRig> {
     if (this._hands) return true;
     if (!handAssetsReady()) return false;
     this._hands = { L: new LiveHand('L', this.spec), R: new LiveHand('R', this.spec) };
-    if (this.board instanceof UsbScannerRig) this._hands.L.group.visible = false;
+    if (this.board instanceof UsbScannerRig) {
+      this._hands.L.group.visible = false;
+      this._hands.R.setGripKnucklesVisible(true);
+    }
     this._hands.L.thumbOut = 0.9; // gripping hand wraps its thumb around the board end
     this._hands.R.thumbOut = 0.6; // typing/backup hand keeps the thumb tucked
     this.stage.add(this._hands.L.group, this._hands.R.group);
@@ -131,5 +135,6 @@ export class Vm3dRig<B extends Vm3dBoard = KeyboardRig> {
     }
     this.stage.updateMatrixWorld(true);
     hand.orientTail();
+    hand.orientThumbnailToward(new THREE.Vector3(0, 0, 1));
   }
 }

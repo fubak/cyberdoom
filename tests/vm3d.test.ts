@@ -8,6 +8,8 @@ import { keyTopWorld } from '../src/render/vm3d/keyboard3d';
 import { UsbScannerRig } from '../src/render/vm3d/usb3d';
 import { HAND_FINGERS, setHandAsset } from '../src/render/vm3d/hand3d';
 import { SKIN_TONES } from '../src/tools/look';
+import { VM3D_CAMERA_BACK } from '../src/render/vm3d/scene';
+import { VM_CLEAR } from '../src/tools/anim';
 
 const spec = { gender: 'male' as const, skin: SKIN_TONES[1] };
 const MM = 0.001;
@@ -55,6 +57,87 @@ function insideBoard(rig: Vm3dRig, world: THREE.Vector3, margin: number): boolea
   const bb = rig.board.solidAABB(new THREE.Box3());
   bb.expandByScalar(-margin);
   return bb.containsPoint(local);
+}
+
+function vmCamera(): THREE.PerspectiveCamera {
+  const camera = new THREE.PerspectiveCamera(54, 320 / 168, 0.01, 5);
+  camera.position.set(0, 0, VM3D_CAMERA_BACK);
+  camera.lookAt(0, 0, -1);
+  camera.updateProjectionMatrix();
+  camera.updateMatrixWorld(true);
+  return camera;
+}
+
+function projectedBounds(points: THREE.Vector3[], camera: THREE.Camera): { minX: number; maxX: number; minY: number; maxY: number } {
+  const projected = points.map((point) => point.clone().project(camera));
+  return {
+    minX: Math.min(...projected.map((point) => point.x)),
+    maxX: Math.max(...projected.map((point) => point.x)),
+    minY: Math.min(...projected.map((point) => point.y)),
+    maxY: Math.max(...projected.map((point) => point.y)),
+  };
+}
+
+function projectedPixelDepth(root: THREE.Object3D, camera: THREE.Camera, include: (mesh: THREE.Mesh) => boolean): Float32Array {
+  const width = 320, height = 168;
+  const depth = new Float32Array(width * height).fill(Infinity);
+  const local = new THREE.Vector3();
+  root.updateMatrixWorld(true);
+  root.traverse((object) => {
+    const mesh = object as THREE.Mesh;
+    if (!mesh.isMesh || mesh.name.startsWith('outline-') || !include(mesh)) return;
+    const position = mesh.geometry.getAttribute('position');
+    const vertices: THREE.Vector3[] = [];
+    for (let i = 0; i < position.count; i++) {
+      mesh.getVertexPosition(i, local);
+      vertices.push(local.clone().applyMatrix4(mesh.matrixWorld).project(camera));
+    }
+    const index = mesh.geometry.index;
+    const count = index?.count ?? position.count;
+    const at = (i: number) => index ? index.getX(i) : i;
+    for (let i = 0; i + 2 < count; i += 3) {
+      const a = vertices[at(i)], b = vertices[at(i + 1)], c = vertices[at(i + 2)];
+      const ax = (a.x + 1) * width / 2, ay = (1 - a.y) * height / 2;
+      const bx = (b.x + 1) * width / 2, by = (1 - b.y) * height / 2;
+      const cx = (c.x + 1) * width / 2, cy = (1 - c.y) * height / 2;
+      const area = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
+      if (Math.abs(area) < 1e-5) continue;
+      const x0 = Math.max(0, Math.floor(Math.min(ax, bx, cx)));
+      const x1 = Math.min(width - 1, Math.ceil(Math.max(ax, bx, cx)));
+      const y0 = Math.max(0, Math.floor(Math.min(ay, by, cy)));
+      const y1 = Math.min(height - 1, Math.ceil(Math.max(ay, by, cy)));
+      for (let y = y0; y <= y1; y++) {
+        for (let x = x0; x <= x1; x++) {
+          const px = x + 0.5, py = y + 0.5;
+          const w0 = ((bx - px) * (cy - py) - (by - py) * (cx - px)) / area;
+          const w1 = ((cx - px) * (ay - py) - (cy - py) * (ax - px)) / area;
+          const w2 = 1 - w0 - w1;
+          if (w0 >= 0 && w1 >= 0 && w2 >= 0) {
+            const z = w0 * a.z + w1 * b.z + w2 * c.z;
+            const offset = y * width + x;
+            if (z < depth[offset]) depth[offset] = z;
+          }
+        }
+      }
+    }
+  });
+  return depth;
+}
+
+function projectedTop(root: THREE.Object3D, camera: THREE.Camera): number {
+  let top = -Infinity;
+  const local = new THREE.Vector3();
+  root.updateMatrixWorld(true);
+  root.traverse((object) => {
+    const mesh = object as THREE.Mesh;
+    if (!mesh.isMesh || mesh.name.startsWith('outline-')) return;
+    const position = mesh.geometry.getAttribute('position');
+    for (let i = 0; i < position.count; i++) {
+      mesh.getVertexPosition(i, local);
+      top = Math.max(top, local.clone().applyMatrix4(mesh.matrixWorld).project(camera).y);
+    }
+  });
+  return top;
 }
 
 describe('vm3d clip contacts (plan §5)', () => {
@@ -133,7 +216,12 @@ describe('vm3d clip contacts (plan §5)', () => {
           const meshes: THREE.Mesh[] = [];
           hand.group.traverse((o) => {
             const m = o as THREE.Mesh;
-            if (m.isMesh && !(m as THREE.SkinnedMesh).isSkinnedMesh) meshes.push(m);
+            if (
+              m.isMesh
+              && !(m as THREE.SkinnedMesh).isSkinnedMesh
+              && !m.name.includes('vm3d-grip-knuckle-')
+              && !m.name.includes('vm3d-thumb-nail')
+            ) meshes.push(m);
           });
           expect(meshes.length, `${side} has arm-tail meshes`).toBeGreaterThan(0);
           for (const mesh of meshes) {
@@ -881,15 +969,101 @@ describe('vm3d clip contacts (plan §5)', () => {
   describe('USB scanner grip', () => {
     const clip = CLIPS['usb.fire'];
 
+    it('projects the scanner 20–30% of view width at rest, bottom-right with its near end cropped', () => {
+      const rig = new Vm3dRig(spec, new UsbScannerRig());
+      rig.solve(CLIPS['usb.idle'], 0);
+      const camera = vmCamera();
+      const box = rig.board.bodyAABB();
+      const corners: THREE.Vector3[] = [];
+      for (const x of [box.min.x, box.max.x]) {
+        for (const y of [box.min.y, box.max.y]) {
+          for (const z of [box.min.z, box.max.z]) {
+            corners.push(rig.board.group.localToWorld(new THREE.Vector3(x, y, z)));
+          }
+        }
+      }
+      const bounds = projectedBounds(corners, camera);
+      expect((bounds.maxX - bounds.minX) / 2).toBeGreaterThanOrEqual(0.20);
+      expect((bounds.maxX - bounds.minX) / 2).toBeLessThanOrEqual(0.30);
+      expect((bounds.minX + bounds.maxX) / 4 + 0.5).toBeGreaterThan(0.52);
+      expect(bounds.minY).toBeLessThan(-1);
+    });
+
+    it('keeps the tool and hand below VM_CLEAR outside the fire impact window', () => {
+      const rig = new Vm3dRig(spec, new UsbScannerRig());
+      const camera = vmCamera();
+      const clearanceY = 1 - 2 * VM_CLEAR;
+      for (let i = 0; i <= 94; i++) {
+        const t = i / 200;
+        if (t >= 0.05 && t <= 0.20) continue;
+        rig.solve(clip, t);
+        expect(projectedTop(rig.root, camera), `usb.fire@${t.toFixed(3)} scanner crossed VM_CLEAR`)
+          .toBeLessThanOrEqual(clearanceY);
+        expect(projectedTop(rig.hands.R.group, camera), `usb.fire@${t.toFixed(3)} hand crossed VM_CLEAR`)
+          .toBeLessThanOrEqual(clearanceY);
+      }
+    });
+
+    for (const { gender, skin } of [
+      { gender: 'male' as const, skin: SKIN_TONES[0] },
+      { gender: 'female' as const, skin: SKIN_TONES[4] },
+    ]) {
+      it(`keeps the ${gender}/${skin.id} grip readable and shows curled fingertips`, () => {
+        const rig = new Vm3dRig({ gender, skin }, new UsbScannerRig());
+        rig.solve(CLIPS['usb.idle'], 0);
+        const camera = vmCamera();
+        const body = rig.board.group.getObjectByName('usb-body')!;
+        const scannerDepth = projectedPixelDepth(body, camera, (mesh) => mesh.name === 'usb-body');
+        const handDepth = projectedPixelDepth(
+          rig.hands.R.group,
+          camera,
+          (mesh) => (mesh as THREE.SkinnedMesh).isSkinnedMesh || mesh.name.startsWith('vm3d-grip-knuckle-'),
+        );
+        const fingertipDepth = projectedPixelDepth(
+          rig.board.group,
+          camera,
+          (mesh) => mesh.name.startsWith('usb-finger-peek-'),
+        );
+        for (let i = 0; i < handDepth.length; i++) handDepth[i] = Math.min(handDepth[i], fingertipDepth[i]);
+        const scannerArea = scannerDepth.reduce((sum, value) => sum + Number(Number.isFinite(value)), 0);
+        const coveredArea = scannerDepth.reduce((sum, value, i) => sum + Number(Number.isFinite(value) && handDepth[i] < value), 0);
+        expect(coveredArea / scannerArea, `${gender}/${skin.id} scanner area covered by hand`).toBeLessThanOrEqual(0.40);
+
+        const visibleTips = (['index', 'middle'] as const).filter((finger) => {
+          const tip = rig.board.group.getObjectByName(`usb-finger-peek-${finger}`)!;
+          const worldTip = tip.getWorldPosition(new THREE.Vector3());
+          const localTip = rig.board.group.worldToLocal(worldTip.clone());
+          const screen = worldTip.project(camera);
+          return localTip.x < -0.03 && screen.x >= -1 && screen.x <= 1 && screen.y >= -1 && screen.y <= 1;
+        });
+        expect(visibleTips.length, `${gender}/${skin.id} fingertips peeking past the left edge`).toBeGreaterThanOrEqual(2);
+        expect(visibleTips.length).toBeLessThanOrEqual(4);
+
+        const nail = rig.hands.R.group.getObjectByName('vm3d-thumb-nail') as THREE.Mesh;
+        const normal = nail.getWorldDirection(new THREE.Vector3());
+        const towardCamera = camera.position.clone().sub(nail.getWorldPosition(new THREE.Vector3())).normalize();
+        expect(normal.dot(towardCamera), `${gender}/${skin.id} thumbnail faces camera`).toBeGreaterThan(0.8);
+      });
+    }
+
+    it('keeps the resting thumb within 5 mm of the trigger socket', () => {
+      const rig = new Vm3dRig(spec, new UsbScannerRig());
+      rig.solve(CLIPS['usb.idle'], 0);
+      const tip = rig.hands.R.tipWorld('thumb');
+      const trigger = rig.board.socketWorld('usb.trigger');
+      expect(tip.distanceTo(trigger), `tip=${tip.toArray()} trigger=${trigger.toArray()}`).toBeLessThan(0.005);
+    });
+
     it('keeps the right palm at the grip and fingertips on named sockets', () => {
       const rig = new Vm3dRig(spec, new UsbScannerRig());
       for (const key of clip.keys) {
         rig.solve(clip, key.t);
         const frame = resolveClip(clip, key.t);
         const palm = rig.hands.R.palmCentreWorld(new THREE.Vector3());
+        const palmSocket = rig.board.socketWorld('usb.grip.palm');
         expect(
-          palm.distanceTo(rig.board.socketWorld('usb.grip.palm')),
-          `usb.fire@${key.t.toFixed(3)} palm away from the grip`,
+          palm.distanceTo(palmSocket),
+          `usb.fire@${key.t.toFixed(3)} palm=${palm.toArray()} socket=${palmSocket.toArray()}`,
         ).toBeLessThan(0.03);
         for (const contact of frame.hands.R.contacts) {
           if (contact.weight < 0.8) continue;

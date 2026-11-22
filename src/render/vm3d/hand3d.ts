@@ -9,6 +9,7 @@ import {
   clampCurl, defaultCurl, JOINT_LIMITS, PALM_LEN,
   type Curl, type FingerName,
 } from '../handrig';
+import { addOutlineHull, addSkinnedOutlineHull, toonMaterial } from './materials';
 
 /**
  * LIVE HAND (vm3d): the MIT generic WebXR hand meshes
@@ -127,6 +128,7 @@ export class LiveHand {
   private readonly spec: HandSpec;
   private readonly chains = {} as Record<FingerName, Chain>;
   private readonly curls = {} as Record<FingerName, Required<Curl>>;
+  private readonly gripKnucklePads: THREE.Mesh[] = [];
   /** extra CMC rotation pulling the thumb across the palm (deg at thumbOut=0). */
   thumbOut = 1;
   private readonly thumbTuckAxis: THREE.Vector3;
@@ -348,16 +350,48 @@ export class LiveHand {
     if (fem) wrist.scale.x *= 0.94; // slimmer palm across the metacarpal fan
 
     // ---- materials ----
-    const skinMat = new THREE.MeshStandardMaterial({
-      color: new THREE.Color(spec.skin.base), roughness: 0.92, metalness: 0,
-    });
+    const skinMat = toonMaterial([
+      shade(spec.skin.shadow, 0.58),
+      spec.skin.shadow,
+      spec.skin.base,
+      spec.skin.highlight,
+    ]);
+    const skinMeshes: THREE.Mesh[] = [];
     inner.traverse((o) => {
       const m = o as THREE.Mesh;
-      if ((m as THREE.SkinnedMesh).isSkinnedMesh || m.isMesh) {
-        m.material = skinMat;
-        m.frustumCulled = false;
-      }
+      if (m.isMesh) skinMeshes.push(m);
     });
+    for (const mesh of skinMeshes) {
+      mesh.material = skinMat;
+      mesh.frustumCulled = false;
+      if ((mesh as THREE.SkinnedMesh).isSkinnedMesh) addSkinnedOutlineHull(mesh as THREE.SkinnedMesh);
+      else addOutlineHull(mesh);
+    }
+    for (const finger of ['index', 'middle', 'ring', 'pinky'] as const) {
+      const bump = new THREE.Mesh(new THREE.SphereGeometry(1, 8, 6), skinMat);
+      bump.name = `vm3d-grip-knuckle-${finger}`;
+      bump.position.copy(toLocal(pos(`${finger}-finger-phalanx-proximal`)))
+        .addScaledVector(palmIn.clone().negate(), 0.006 / s);
+      bump.scale.set(0.005 / s, 0.004 / s, 0.003 / s);
+      bump.visible = false;
+      scaleWrap.add(bump);
+      this.gripKnucklePads.push(bump);
+      addOutlineHull(bump, 1.12);
+    }
+    const nailNormal = toBoneLocal('thumb-tip', new THREE.Vector3(0, 0, 1));
+    const nailFrame = new THREE.Group();
+    nailFrame.name = 'vm3d-thumb-nail-frame';
+    nailFrame.position.copy(nailNormal).multiplyScalar(0.001 / s);
+    nailFrame.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), nailNormal);
+    const nail = new THREE.Mesh(
+      new THREE.SphereGeometry(1, 8, 6),
+      toonMaterial([shade(spec.skin.shadow, 0.58), spec.skin.shadow, spec.skin.base, spec.skin.highlight]),
+    );
+    nail.name = 'vm3d-thumb-nail';
+    nail.scale.set(0.005 / s, 0.008 / s, 0.001 / s);
+    nailFrame.add(nail);
+    this.chains.thumb.tip.add(nailFrame);
+    addOutlineHull(nail, 1.16);
 
     // ---- forearm + sleeve cuff parented to the wrist bone ----
     this.buildWristTail(
@@ -464,7 +498,9 @@ export class LiveHand {
     // an open cuff reads as a hollow tube of backfaces end-on.
     const rForeAtStart = rw * (1 + 0.2 * (cuffStart / len));
     const cuffLen = cuffEnd - cuffStart;
-    const cuffMat = new THREE.MeshStandardMaterial({ color: shade(jacket, 0.7), roughness: 0.85, metalness: 0, side: THREE.FrontSide });
+    const cuffMat = toonMaterial([shade(jacket, 0.36), shade(jacket, 0.62), jacket, shade(jacket, 1.35)]);
+    const accent = ANALYSTS[this.spec.gender].accent;
+    const accentMat = toonMaterial([shade(accent, 0.42), shade(accent, 0.65), accent, shade(accent, 1.35)]);
     const cuffGeo = new THREE.CylinderGeometry(rForeAtStart * 1.08, rForeAtStart * 1.04, cuffLen, 12, 1, true);
     cuffGeo.translate(0, cuffStart + cuffLen / 2, 0);
     const cuff = new THREE.Mesh(cuffGeo, cuffMat);
@@ -476,12 +512,25 @@ export class LiveHand {
     );
     cuffCap.name = 'vm3d-sleevecap';
     cuffCap.quaternion.copy(fore.quaternion);
+    const stripeLen = 0.006 / s;
+    const stripeGeo = new THREE.CylinderGeometry(
+      rForeAtStart * 1.10, rForeAtStart * 1.06, stripeLen, 12, 1, true,
+    );
+    stripeGeo.translate(0, cuffStart + stripeLen / 2, 0);
+    const stripe = new THREE.Mesh(stripeGeo, accentMat);
+    stripe.name = 'vm3d-sleeve-accent';
+    stripe.quaternion.copy(fore.quaternion);
     // cosmetic tail group: the solver re-aims it each pose so the arm
     // always exits toward a screen corner instead of following the wrist
     // bone's own axis
     const tail = new THREE.Group();
     tail.name = 'vm3d-tail';
-    tail.add(fore, foreCap, cuff, cuffCap);
+    tail.add(fore, foreCap, cuff, cuffCap, stripe);
+    addOutlineHull(fore);
+    addOutlineHull(foreCap);
+    addOutlineHull(cuff);
+    addOutlineHull(cuffCap);
+    addOutlineHull(stripe);
     this.tail = tail;
     this.wristBone.add(tail);
     this.tailBindQuat = fore.quaternion.clone();
@@ -568,6 +617,21 @@ export class LiveHand {
     return pts.map((p) => p.getWorldPosition(new THREE.Vector3()));
   }
 
+  orientThumbnailToward(direction: THREE.Vector3): void {
+    const frame = this.chains.thumb.tip.getObjectByName('vm3d-thumb-nail-frame') as THREE.Group;
+    if (!frame) return;
+    this.group.updateWorldMatrix(true, true);
+    const normal = direction.clone().applyQuaternion(
+      this.chains.thumb.tip.getWorldQuaternion(new THREE.Quaternion()).invert(),
+    ).normalize();
+    frame.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), normal);
+    this.group.updateWorldMatrix(true, true);
+  }
+
+  setGripKnucklesVisible(visible: boolean): void {
+    for (const pad of this.gripKnucklePads) pad.visible = visible;
+  }
+
   /** Palm-centre world position (used by grip tests). */
   palmCentreWorld(out = new THREE.Vector3()): THREE.Vector3 {
     this.group.updateWorldMatrix(true, true);
@@ -606,7 +670,7 @@ export class LiveHand {
         this.setCurl(f, { mcp: d.mcp * 0.4, pip: d.pip * 0.4, abd: 0 });
       }
       let converged = false;
-      for (let iter = 0; iter < 24; iter++) {
+      for (let iter = 0; iter < 32; iter++) {
         const c0 = read();
         this.tipWorld(f, base);
         err.copy(target).sub(base);
@@ -672,5 +736,3 @@ function solve3(A: number[][], b: number[]): number[] {
   }
   return m.map((row) => row[n]);
 }
-
-
