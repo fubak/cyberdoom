@@ -11,7 +11,7 @@ import { missionRegistry, teachingRegistry } from '../content/missions';
 import type { LossCause } from '../missions/runtime';
 import { failureExplanation } from './failure';
 import { objectiveById } from '../content/objectives';
-import { drawBigText, drawChunky, drawText, measureBig, measureText } from '../render/font';
+import { drawBigText, drawChunky, drawText, ellipsizeWords, measureBig, measureText } from '../render/font';
 import { RES } from '../render/res';
 import { h, onKeysWhileMounted } from './briefing';
 import {
@@ -166,6 +166,7 @@ interface View {
   onHit?: (i: number) => void;
   onKey?: (e: KeyboardEvent) => boolean;
   extraButton?: { label: string; go: () => void };
+  retryButton?: { checkpointLabel: string; ariaLabel: string; go: () => void };
   animate?: number;
 }
 
@@ -242,6 +243,8 @@ export function debrief(opts: {
   unscored?: boolean;
   /** Why the mission was lost (integrity vs objective breach). */
   loss?: LossCause | null;
+  /** Restore the selected auto/quick checkpoint instead of redeploying. */
+  retryCheckpoint?: { label: string; onRetry: () => void };
   /** Restart the same mission; falls back to leaving the debrief. */
   onRedeploy?: () => void;
   onDone: (quizScore: number) => void;
@@ -381,6 +384,23 @@ export function debrief(opts: {
 
     const fy = DB_H - 17;
     const n = view.pages.length;
+    if (view.retryButton) {
+      const label = 'RETRY CHECKPOINT [R]';
+      const width = measureText(label) + 10;
+      const left = DB_W - 10 - width;
+      const name = view.retryButton.checkpointLabel.replace(/^CHECKPOINT: /, '');
+      const nameWidth = Math.max(0, left - 6 - 10);
+      let maxChars = 0;
+      while (measureText('M'.repeat(maxChars + 1)) <= nameWidth) maxChars += 1;
+      drawText(
+        g,
+        measureText(name) <= nameWidth ? name : ellipsizeWords(name, maxChars),
+        10,
+        fy - 14 + 3,
+        C.dim,
+      );
+      button(label, DB_W - 10, fy - 14, true, view.retryButton.go, 'r');
+    }
     let x = 10;
     if (n > 1) x += button('< PREV', x, fy, page > 0, () => go(-1)) + 4;
     x += button(`EVIDENCE ${entries.length} [L]`, x, fy, true, () => { ev.open = true; }) + 4;
@@ -393,7 +413,9 @@ export function debrief(opts: {
       drawText(g, label, DB_W - 10 - nw - 6 - measureText(label), fy + 3, C.dim);
     }
     if (ev.open) drawEvidence();
-    const text = ev.open ? 'Evidence log' : [view.title, view.sub ?? '', p.label ?? (p.lines ?? []).map((l) => `${l.prefix ?? ''} ${l.text}`).join(' ')].join(' | ');
+    const text = ev.open
+      ? 'Evidence log'
+      : [view.title, view.sub ?? '', p.label ?? (p.lines ?? []).map((l) => `${l.prefix ?? ''} ${l.text}`).join(' '), view.retryButton?.ariaLabel ?? ''].filter(Boolean).join(' | ');
     canvas.setAttribute('aria-label', text);
     canvas.dataset.page = `${page + 1}/${n}`;
     if (t < 1) setTimeout(() => { if (s.isConnected) render(); }, 33);
@@ -569,7 +591,18 @@ export function debrief(opts: {
       canNext: () => true,
       next: opts.won ? () => runCheck(buildFirstCheck(), 'first') : redeploy,
       extraButton: opts.won ? undefined : { label: 'QUIZ [K]', go: () => runCheck(buildFirstCheck(), 'first') },
+      retryButton: !opts.won && opts.retryCheckpoint
+        ? {
+            checkpointLabel: opts.retryCheckpoint.label,
+            ariaLabel: `RETRY CHECKPOINT: ${opts.retryCheckpoint.label}`,
+            go: opts.retryCheckpoint.onRetry,
+          }
+        : undefined,
       onKey: opts.won ? undefined : (e) => {
+        if ((e.key === 'r' || e.key === 'R') && opts.retryCheckpoint) {
+          opts.retryCheckpoint.onRetry();
+          return true;
+        }
         if (e.key === 'k' || e.key === 'K') {
           runCheck(buildFirstCheck(), 'first');
           return true;

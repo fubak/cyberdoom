@@ -1,5 +1,10 @@
 import type { CellDef, MapDef } from '../core/types';
 
+export interface WorldMapSnapshot {
+  doors: Map<string, number>;
+  openingDoors: Set<string>;
+}
+
 /**
  * Runtime grid map: cell lookup, door open state, wall collision, raycast.
  * Pure logic — no Three.js here so it stays unit-testable.
@@ -25,6 +30,15 @@ export class WorldMap {
         if (c?.kind === 'door' && c.doorId) this.doors.set(c.doorId, 0);
       }
     }
+  }
+
+  snapshot(): WorldMapSnapshot {
+    return { doors: new Map(this.doors), openingDoors: new Set(this.openingDoors) };
+  }
+
+  restore(snapshot: WorldMapSnapshot): void {
+    this.doors = new Map(snapshot.doors);
+    this.openingDoors = new Set(snapshot.openingDoors);
   }
 
   cellAt(tx: number, ty: number): CellDef | null {

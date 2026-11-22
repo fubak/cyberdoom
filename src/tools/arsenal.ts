@@ -56,6 +56,12 @@ const PICKUP_NAME: Record<string, [string, string]> = {
 const TICKER_COLS = 52;
 const RES_LABEL: Record<string, string> = { 'usb-charge': 'SCAN', pcap: 'PCAP', 'edr-cell': 'CELL', 'patch-disk': 'DISK' };
 
+export interface ArsenalSnapshot {
+  owned: string[];
+  ammo: [string, number][];
+  currentId: string;
+}
+
 function toolIntroduction(t: ToolDef): string {
   return `${t.passive ? '' : `[${t.slot}] `}${t.name}: ${t.control?.use ?? ''}`;
 }
@@ -128,6 +134,38 @@ export class Arsenal {
     this.windT = -1;
     this.sinceUse = 9;
     this.sinceConfirm = 9;
+    this.face.reset();
+  }
+
+  snapshot(): ArsenalSnapshot {
+    return { owned: [...this.owned], ammo: [...this.ammo], currentId: this.current.id };
+  }
+
+  restore(snapshot: ArsenalSnapshot): void {
+    this.owned.clear();
+    for (const id of snapshot.owned) this.owned.add(id);
+    this.ammo.clear();
+    for (const [resource, amount] of snapshot.ammo) this.ammo.set(resource, amount);
+    const savedTool = toolRegistry.get(snapshot.currentId);
+    this.current = savedTool && !savedTool.passive ? savedTool : sorted().find((tool) => !tool.passive) ?? sorted()[0];
+    this.next = null;
+    this.swapT = 0;
+    this.swapPhase = 'none';
+    this.cooldown = 0;
+    this.windT = -1;
+    this.queued = false;
+    this.sinceUse = 9;
+    this.sinceConfirm = 9;
+    this.confirmGood = true;
+    this.time = 0;
+    this.dryMsgT = 0;
+    this.flashId = null;
+    this.flashElapsed = 0;
+    this.flashQueue = [];
+    this.gotT = 9;
+    this.gotSlot = 0;
+    this.pages = [];
+    this.pageT = 0;
     this.face.reset();
   }
 

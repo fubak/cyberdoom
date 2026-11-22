@@ -29,6 +29,7 @@ import { RES } from './render/res';
 import { Dossier } from './ui/dossier';
 import * as screens from './ui/screens';
 import { MissionRuntime, scaledPickupGrant } from './missions/runtime';
+import { latestRetryCheckpoint, objectiveCheckpointLabel, type Checkpoint } from './missions/checkpoint';
 import { mfaPending } from './tools/badge';
 import { Arsenal, ammoUnit } from './tools/arsenal';
 import { bindAudio } from './tools/sfx';
@@ -148,6 +149,9 @@ class Game {
   private runtime: MissionRuntime | null = null;
   private player: Player | null = null;
   private projectiles: Projectile[] = [];
+  private automaticCheckpoint: Checkpoint | null = null;
+  private quickCheckpoint: Checkpoint | null = null;
+  private checkpointClock = 0;
   private arsenal = new Arsenal(this.bus);
   private useCd = 0;
   private debugFire = false;
@@ -246,6 +250,20 @@ class Game {
     }, true);
     window.addEventListener('keydown', (event) => {
       if (event.repeat || this.screen !== 'play') return;
+      if (event.code === 'F5') {
+        event.preventDefault();
+        if (!this.paused && this.runtime && !this.runtime.finished) {
+          this.quickCheckpoint = this.captureCheckpoint('QUICKSAVE');
+          this.hud.pushMessage('QUICKSAVED', 'good');
+        }
+        return;
+      }
+      if (event.code === 'F9') {
+        event.preventDefault();
+        if (this.quickCheckpoint) this.restoreCheckpoint(this.quickCheckpoint);
+        else this.hud.pushMessage('NO QUICKSAVE', 'warn');
+        return;
+      }
       if (this.input.matchesAction('map', event.code)) {
         if (this.paused || this.dossier.isOpen) return;
         event.preventDefault();
@@ -507,6 +525,7 @@ class Game {
   }
 
   private showMissionSelect(): void {
+    this.clearCheckpoints();
     this.audio.stopAmbience();
     this.audio.startMusic('title');
     this.releaseLock();
@@ -819,6 +838,9 @@ class Game {
   private showDebrief(): void {
     const rt = this.runtime!;
     const mission = rt.mission;
+    const retryCheckpoint = rt.finished === 'lost'
+      ? latestRetryCheckpoint(this.automaticCheckpoint, this.quickCheckpoint)
+      : null;
     this.releaseLock();
     this.audio.startMusic('debrief');
     this.setScreen('debrief', screens.debrief({
@@ -831,8 +853,12 @@ class Game {
       stats: rt.stats(),
       loss: rt.lossCause,
       unscored: rt.unscored,
+      retryCheckpoint: retryCheckpoint
+        ? { label: retryCheckpoint.label, onRetry: () => this.restoreCheckpoint(retryCheckpoint) }
+        : undefined,
       onRedeploy: () => this.startMission(mission.id),
       onDone: () => {
+        this.clearCheckpoints();
         // EGGS: a secret exit routes onward to the hidden mission's briefing.
         if (rt.nextMission) this.showBriefing(rt.nextMission);
         else this.showMissionSelect();
@@ -844,6 +870,7 @@ class Game {
 
   private startMission(id: string): void {
     const mission = requireMission(id);
+    this.clearCheckpoints();
     registerThreatSprites();
     const prep = this.prepared && this.prepared.id === id ? this.prepared : null;
     this.prepared = null; // prep is consumed; a retry re-runs the synchronous path
@@ -912,6 +939,7 @@ class Game {
     if (!DEBUG) this.input.requestLock();
     this.hud.clearMessages();
     this.hud.pushMessage(`${mission.title} — good luck, analyst`, 'info');
+    this.automaticCheckpoint = this.captureCheckpoint('MISSION START');
     // finish warming the tool hand bakes in idle slices during play so a
     // first equip never stalls a frame on the WebGL mesh bake
     let hw = 0;
@@ -923,6 +951,55 @@ class Game {
       if (hw < warmTools.length) this.scheduleIdle(warmStep);
     };
     this.scheduleIdle(warmStep);
+  }
+
+  private captureCheckpoint(label: string): Checkpoint {
+    const runtime = this.runtime!;
+    this.checkpointClock = Math.max(performance.now(), this.checkpointClock + 0.001);
+    return {
+      label,
+      runtime: runtime.snapshot(),
+      player: this.player!.snapshot(),
+      arsenal: this.arsenal.snapshot(),
+      doors: this.map!.snapshot(),
+      elapsedAt: this.checkpointClock,
+    };
+  }
+
+  private clearCheckpoints(): void {
+    this.automaticCheckpoint = null;
+    this.quickCheckpoint = null;
+  }
+
+  private restoreCheckpoint(checkpoint: Checkpoint): void {
+    const alreadyPlaying = this.screen === 'play';
+    this.runtime!.restore(checkpoint.runtime);
+    this.player!.restore(checkpoint.player as ReturnType<Player['snapshot']>);
+    this.arsenal.restore(checkpoint.arsenal as ReturnType<Arsenal['snapshot']>);
+    this.arsenal.face.god = this.god;
+    this.map!.restore(checkpoint.doors as ReturnType<WorldMap['snapshot']>);
+    this.projectiles = [];
+    this.particles.clear();
+    this.endTimer = null;
+    this.endCalled = false;
+    this.deathDrop = 0;
+    this.deathRoll = 0;
+    this.deathStung = false;
+    this.wasOnExit = false;
+    this.useCd = 0;
+    this.automap.close();
+    this.dossier.close();
+    this.audio.setListener(this.player!.x, this.player!.y, this.player!.angle);
+    this.audio.setCombat(false);
+    if (!alreadyPlaying) {
+      this.audio.stopMusic();
+      this.audio.startAmbience();
+      this.audio.startMusic(musicTierFor(this.runtime!.mission.difficulty));
+    }
+    this.setScreen('play', null);
+    this.hud.clearMessages();
+    this.hud.pushMessage(`RESTORED: ${checkpoint.label}`, 'good');
+    if (!DEBUG) this.input.requestLock();
   }
 
   private endMission(): void {
@@ -947,8 +1024,19 @@ class Game {
       // probeLock freezes the sim while the look probes capture frames, so a
       // game tick can't drift the camera or the staged enemy between shots.
       if (!this.probeLock) {
+        const runtime = this.runtime;
+        const completedBefore = runtime
+          ? new Set(runtime.objectives.filter((objective) => objective.done).map((objective) => objective.def.id))
+          : null;
         this.input.poll();
         this.tick(FIXED_DT);
+        if (runtime && this.runtime === runtime && completedBefore) {
+          const label = objectiveCheckpointLabel(completedBefore, runtime.objectives, runtime.finished !== null);
+          if (label) {
+            this.automaticCheckpoint = this.captureCheckpoint(label);
+            this.hud.pushMessage('CHECKPOINT SAVED', 'good');
+          }
+        }
       }
       this.acc -= FIXED_DT;
     }
@@ -1653,6 +1741,7 @@ class Game {
         return {
           screen: g.screen,
           paused: g.paused,
+          hudMessages: g.hud.debugMessages(),
           mission: g.runtime?.mission.id ?? null,
           x: g.player?.x ?? null,
           y: g.player?.y ?? null,

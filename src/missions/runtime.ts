@@ -145,6 +145,20 @@ export class MissionRuntime {
     this.bind();
   }
 
+  snapshot(): unknown {
+    const excluded = new Set(['mission', 'skill', 'bus', 'currentPlayer']);
+    return structuredClone(
+      Object.fromEntries(Object.entries(this).filter(([key]) => !excluded.has(key))),
+    );
+  }
+
+  restore(data: unknown): void {
+    Object.assign(this, structuredClone(data as Record<string, unknown>));
+    this.finished = null;
+    this.lossReason = null;
+    this.lossCause = null;
+  }
+
   private log(text: string, points: number, objectives: string[] = [], tag?: string): void {
     this.score += points;
     this.scoreLog.push({ text, points, good: points >= 0, objectives, ...(tag ? { tag } : {}) });
