@@ -239,6 +239,9 @@ export class Hud {
 
   draw(opts: {
     integrity: number;
+    armor?: number;
+    overclockT?: number;
+    airgapT?: number;
     ammo: number | null;
     ammoName: string;
     tool: ToolDef;
@@ -328,7 +331,28 @@ export class Hud {
     // LED reads on top of the viewmodel and the tool's own screen flash,
     // like Doom's tracer + wall impact drawn over the gun sprite
     if (opts.anim) this.drawUseFx(viewTool, opts.anim);
+    this.drawPowerupBadges(opts.armor ?? 0, opts.overclockT ?? 0, opts.airgapT ?? 0);
     this.drawBar(opts);
+  }
+
+  private drawPowerupBadges(armor: number, overclockT: number, airgapT: number): void {
+    const badges: { label: string; fg: string; border: string }[] = [];
+    if (armor > 0) badges.push({ label: `SHIELD ${Math.round(armor)}`, fg: '#78ecff', border: '#2670a8' });
+    if (overclockT > 0) badges.push({ label: `OVERCLOCK ${Math.ceil(overclockT)}S`, fg: '#ffd65a', border: '#a86e18' });
+    if (airgapT > 0) badges.push({ label: `AIR-GAP ${Math.ceil(airgapT)}S`, fg: '#ffffff', border: '#d8a828' });
+    if (badges.length === 0) return;
+    const g = this.g;
+    let y = 16;
+    for (const b of badges) {
+      const w = measureText(b.label, 'tiny') + 8;
+      const x = BASE_W - w - 4;
+      g.fillStyle = 'rgba(10, 14, 22, 0.82)';
+      g.fillRect(x, y, w, 10);
+      g.fillStyle = b.border;
+      g.fillRect(x, y, 2, 10);
+      drawText(g, b.label, x + 4, y + 2, b.fg, 'tiny', null);
+      y += 12;
+    }
   }
 
   /**

@@ -767,9 +767,18 @@ m12.map.legend['6'] = { kind: 'door', tex: 'door', doorId: 'rf4-sweep-loop', loc
 m12.map.legend['4'] = { kind: 'door', tex: 'wall-secret', secret: true, doorId: 'rf4-war-n' };
 m12.map.legend['5'] = { kind: 'door', tex: 'wall-secret', secret: true, doorId: 'rf4-war-s' };
 m12.entities.push(
-  { id: 'rf4-war-n-item', kind: 'item', x: 44.5, y: 5.5, sprite: 'charge', tags: ['arsenal-pickup'],
-    grants: { resource: 'usb-charge', amount: 8 } },
-  { id: 'rf4-war-s-item', kind: 'item', x: 43.5, y: 22.5, sprite: 'medkit' },
+  { id: 'rf4-war-n-item', kind: 'item', x: 44.5, y: 5.5, sprite: 'overclock-chip',
+    grants: { resource: 'overclock', amount: 15 },
+    inspect: { label: 'SOC overclock chip', detail: '2x fire rate and +25% move speed for 15s.', category: 'item' } },
+  { id: 'rf4-war-s-item', kind: 'item', x: 43.5, y: 22.5, sprite: 'airgap-shield',
+    grants: { resource: 'airgap', amount: 12 },
+    inspect: { label: 'Air-gap shield', detail: 'Full damage immunity for 12s.', category: 'item' } },
+  { id: 'soc-vest', kind: 'item', x: 14.5, y: 16.5, sprite: 'firewall-vest',
+    grants: { resource: 'armor', amount: 50 },
+    inspect: { label: 'Firewall vest', detail: 'Absorbs 50% of incoming damage (+50 shield).', category: 'item' } },
+  { id: 'soc-siem-map', kind: 'item', x: 24.5, y: 16.5, sprite: 'siem-map',
+    grants: { resource: 'siem-map', amount: 1 },
+    inspect: { label: 'SIEM topology map', detail: 'Syncs floor blueprint to your automap.', category: 'item' } },
 );
 m12.script!.secrets!.push(
   { id: 'rf4-war-n', area: [44, 4, 45, 7], label: 'War-room north cache', grant: { resource: 'usb-charge', amount: 8 } },
