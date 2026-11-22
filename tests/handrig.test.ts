@@ -215,6 +215,12 @@ describe('thumb stays below the index MCP on grip poses (no hook)', () => {
 });
 
 describe('use cycles emit only named poses (motion is draw-space offsets)', () => {
+  it('handles negative and non-finite cycle variants', async () => {
+    const { handCycleFrame } = await import('../src/render/handcycles');
+    expect(handCycleFrame('keyboard', 50, -1)).not.toBeNull();
+    expect(handCycleFrame('keyboard', 50, NaN)).not.toBeNull();
+  });
+
   it('rest at t=null and after the cycle ends; use pose inside strike/hold', async () => {
     const { handCycleFrame, CYCLES } = await import('../src/render/handcycles');
     for (const [tool, th] of Object.entries(TOOL_HANDS)) {
