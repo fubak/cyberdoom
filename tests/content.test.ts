@@ -139,28 +139,30 @@ describe('missions', () => {
     });
     expect(new Set(pairs).size, pairs.join(' | ')).toBe(pairs.length);
   });
-  it('USB charge supply covers post-difficulty infected HP with reserve', () => {
+  it('USB scan-session supply sits within 1.2x-2.0x of normal-skill sessions needed across all built missions', () => {
     const usb = toolRegistry.get('usb')!;
     for (const m of ARC
-      .filter((entry) => entry.built && levelsOwnedMissionIds.has(entry.id))
+      .filter((entry) => entry.built)
       .map((entry) => missionRegistry.get(entry.id)!)) {
       const loadout = defaultLoadout(m);
       const loadoutSupply = loadout.includes('usb') ? usb.ammo?.start ?? 0 : 0;
       const pickupSupply = m.entities
         .filter((entity) => entity.kind === 'item' && entity.grants?.resource === 'usb-charge')
         .reduce((sum, entity) => sum + (entity.grants?.amount ?? 0), 0);
-      const infectedHp = m.entities
+      const sessionsNeeded = m.entities
         .filter((entity) => entity.infected && (entity.kind === 'enemy' || entity.kind === 'workstation'))
-        .reduce((sum, entity) => sum + (entity.hp ?? 1) +
-          (entity.kind === 'enemy' ? difficultyScale(m.difficulty).hpBonus : 0), 0);
+        .reduce((sum, entity) => {
+          const hp = (entity.hp ?? 1) + (entity.kind === 'enemy' ? difficultyScale(m.difficulty).hpBonus : 0);
+          return sum + Math.ceil(hp / 2);
+        }, 0);
       expect(
         loadoutSupply + pickupSupply,
-        `${m.id} USB supply`,
-      ).toBeGreaterThanOrEqual(1.25 * infectedHp);
+        `${m.id} USB supply (need ${sessionsNeeded})`,
+      ).toBeGreaterThanOrEqual(Math.ceil(1.2 * sessionsNeeded));
       expect(
         loadoutSupply + pickupSupply,
-        `${m.id} USB supply upper bound`,
-      ).toBeLessThanOrEqual(2 * infectedHp);
+        `${m.id} USB supply upper bound (need ${sessionsNeeded})`,
+      ).toBeLessThanOrEqual(Math.floor(2.0 * sessionsNeeded));
       for (const pickup of m.entities.filter((entity) => entity.grants?.resource === 'usb-charge')) {
         expect(pickup.grants?.amount, `${m.id}/${pickup.id} pickup cap`).toBeLessThanOrEqual(8);
       }

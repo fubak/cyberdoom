@@ -355,11 +355,11 @@ addThreatEncounter(m01, 'exit-trojan', 'trojan', 1, {
   kind: 'bad',
 }, [18, 10, 29, 15]);
 m01.entities.push(
-  { id: 'chg-mid', kind: 'item', x: 25.5, y: 18.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 8 },
+  { id: 'chg-mid', kind: 'item', x: 25.5, y: 18.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 3 },
     inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for your write-protected scanner stick: ammo for the USB scanner.', category: 'item' } },
-  { id: 'chg-east', kind: 'item', x: 36.5, y: 22.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 8 },
+  { id: 'chg-east', kind: 'item', x: 36.5, y: 22.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 3 },
     inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for your write-protected scanner stick: ammo for the USB scanner.', category: 'item' } },
-  { id: 'chg-lobby-e', kind: 'item', x: 17.5, y: 26.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 8 },
+  { id: 'chg-lobby-e', kind: 'item', x: 17.5, y: 26.5, sprite: 'charge', grants: { resource: 'usb-charge', amount: 3 },
     inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for your write-protected scanner stick: ammo for the USB scanner.', category: 'item' } },
   { id: 'med-hub', kind: 'item', x: 10.5, y: 13.5, sprite: 'medkit', grants: { resource: 'integrity', amount: 25 },
     inspect: { label: 'Integrity kit', detail: 'Restores 25 integrity.', category: 'item' } },
@@ -422,7 +422,7 @@ m01.entities.push(
   { id: 'bullpen-desk-a', kind: 'prop', x: 5.5, y: 22.5, sprite: 'workstation' },
   { id: 'bullpen-desk-b', kind: 'prop', x: 11.5, y: 22.5, sprite: 'workstation' },
   { id: 'core-cache', kind: 'item', x: 30.5, y: 4.5, sprite: 'charge', tags: ['arsenal-pickup'],
-    grants: { resource: 'usb-charge', amount: 8 } },
+    grants: { resource: 'usb-charge', amount: 3 } },
 );
 
 // rF4: 48x30 silhouette — east maintenance-ring annex (ring of corridors around
@@ -433,10 +433,10 @@ m01.map.legend['4'] = { kind: 'door', tex: 'wall-secret', secret: true, doorId: 
 m01.map.legend['5'] = { kind: 'door', tex: 'wall-secret', secret: true, doorId: 'annex-cache-b' };
 m01.entities.push(
   { id: 'annex-cache-a-item', kind: 'item', x: 43.5, y: 15.5, sprite: 'charge', tags: ['arsenal-pickup'],
-    grants: { resource: 'usb-charge', amount: 8 } },
+    grants: { resource: 'usb-charge', amount: 3 } },
   { id: 'annex-cache-a-item-b', kind: 'item', x: 44.5, y: 16.5, sprite: 'medkit' },
   { id: 'annex-cache-b-item', kind: 'item', x: 45.5, y: 4.5, sprite: 'charge', tags: ['arsenal-pickup'],
-    grants: { resource: 'usb-charge', amount: 8 } },
+    grants: { resource: 'usb-charge', amount: 3 } },
 );
 m01.script!.secrets!.push(
   { id: 'annex-cache-a', area: [43, 15, 44, 16], label: 'Cold-site cache', grant: { resource: 'usb-charge', amount: 8 } },

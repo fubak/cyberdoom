@@ -1060,6 +1060,16 @@ m11.entities.push(
     grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
   { id: 'chg-x2', kind: 'item', ...floorSpot(m11, [2, 13, 37, 19]), sprite: 'charge', tags: ['arsenal-pickup'],
     grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
+  ...[
+    [23.5, 13.5], [13.5, 13.5], [9.5, 13.5], [5.5, 21.5],
+    [4.5, 23.5], [6.5, 7.5], [27.5, 3.5], [37.5, 4.5],
+  ].map(([x, y], i) => ({
+    id: `chg-x${i + 3}`, kind: 'item' as const, x, y, sprite: 'charge', tags: ['arsenal-pickup'],
+    grants: { resource: 'usb-charge', amount: 8 },
+    inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' as const },
+  })),
+  { id: 'chg-x11', kind: 'item', ...floorSpot(m11, [2, 2, 17, 11]), sprite: 'charge', tags: ['arsenal-pickup'],
+    grants: { resource: 'usb-charge', amount: 8 }, inspect: { label: 'Scan sessions', detail: 'Boot-and-quarantine sessions for the USB scanner.', category: 'item' } },
 );
 
 // — rF2 landmarks: east server hall = bright grid floor + console audit wall;
