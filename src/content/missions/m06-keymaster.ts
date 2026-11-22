@@ -500,6 +500,7 @@ export const m06: Mission = {
       {
         id: 'key-room-worms',
         area: [26, 3, 37, 16],
+        unless: ['rotate'],
         spawn: ['key-worm-a', 'key-worm-b'],
         kind: 'warn',
         message: 'Attack traffic: worms are probing the key-management room!',
@@ -507,6 +508,7 @@ export const m06: Mission = {
       {
         id: 'vault-trojans',
         area: [15, 6, 24, 11],
+        unless: ['data'],
         spawn: ['vault-trojan-a', 'vault-trojan-b'],
         kind: 'warn',
         message: 'Attackers want the card data!',
