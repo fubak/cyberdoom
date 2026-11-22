@@ -102,8 +102,9 @@ const RDELAY = 20;
 export function handCycleFrame(toolId: string, tMs: number | null, variant: number): HandFrame | null {
   const th = TOOL_HANDS[toolId];
   if (!th) return null;
+  variant = Number.isFinite(variant) ? variant : 0;
   const defs = CYCLES[toolId] ?? [{ ms: { a: 60, s: 80, h: 100, r: 220 } }];
-  const def = defs[variant % defs.length];
+  const def = defs[((variant % defs.length) + defs.length) % defs.length] ?? defs[0];
   if (tMs === null || tMs < 0) {
     return { key: th.rest, frame: POSES[th.rest], move: [0, 0, 1], objMove: [0, 0, 1], stage: 'idle' };
   }
@@ -111,7 +112,8 @@ export function handCycleFrame(toolId: string, tMs: number | null, variant: numb
   const evObj = evalCycle(def, tMs, RDELAY, 0.6);
   // frame == one of main's named poses, so the pose name is the bake key:
   // the PartCache holds exactly main's sprite set
-  const poseName = ev.useU >= 0.5 ? th.use[variant % th.use.length] : th.rest;
+  const useVariant = ((variant % th.use.length) + th.use.length) % th.use.length;
+  const poseName = ev.useU >= 0.5 ? th.use[useVariant] : th.rest;
   return { key: poseName, frame: POSES[poseName], move: ev.move, objMove: evObj.move, stage: ev.stage };
 }
 
