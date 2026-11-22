@@ -243,7 +243,15 @@ export class Hud {
     overclockT?: number;
     airgapT?: number;
     /** Active boss encounter health bar (shown when a boss is awake and alive). */
-    boss?: { name: string; hp: number; maxHp: number } | null;
+    boss?: {
+      name: string;
+      hp: number;
+      maxHp: number;
+      phase?: number;
+      phaseCount?: number;
+      phaseLabel?: string;
+      telegraph?: string | null;
+    } | null;
     ammo: number | null;
     ammoName: string;
     tool: ToolDef;
@@ -335,7 +343,7 @@ export class Hud {
     if (opts.anim) this.drawUseFx(viewTool, opts.anim);
     this.drawPowerupBadges(opts.armor ?? 0, opts.overclockT ?? 0, opts.airgapT ?? 0);
     if (opts.boss && opts.boss.hp > 0 && opts.boss.maxHp > 0) {
-      this.drawBossBar(opts.boss.name, opts.boss.hp, opts.boss.maxHp);
+      this.drawBossBar(opts.boss);
     }
     this.drawBar(opts);
   }
@@ -360,24 +368,57 @@ export class Hud {
     }
   }
 
-  private drawBossBar(name: string, hp: number, maxHp: number): void {
+  private drawBossBar(boss: {
+    name: string;
+    hp: number;
+    maxHp: number;
+    phase?: number;
+    phaseCount?: number;
+    phaseLabel?: string;
+    telegraph?: string | null;
+  }): void {
     const g = this.g;
-    const barW = 148;
+    const barW = 164;
     const barH = 6;
     const x = Math.round((BASE_W - barW) / 2);
     const y = 26;
-    const frac = Math.max(0, Math.min(1, hp / maxHp));
-    g.fillStyle = 'rgba(10, 12, 18, 0.85)';
-    g.fillRect(x - 3, y - 9, barW + 6, barH + 12);
-    g.fillStyle = '#a82430';
+    const frac = Math.max(0, Math.min(1, boss.hp / boss.maxHp));
+    const phase = boss.phase ?? 1;
+    const phaseCount = Math.max(1, boss.phaseCount ?? 1);
+    const hasTelegraph = typeof boss.telegraph === 'string' && boss.telegraph.length > 0;
+    const hasPhaseLabel = typeof boss.phaseLabel === 'string' && boss.phaseLabel.length > 0;
+    const hasSub = hasTelegraph || hasPhaseLabel;
+    const boxH = barH + (hasSub ? 21 : 13);
+    g.fillStyle = 'rgba(10, 12, 18, 0.88)';
+    g.fillRect(x - 3, y - 9, barW + 6, boxH);
+    g.fillStyle = hasTelegraph ? '#ffb830' : '#a82430';
     g.fillRect(x - 3, y - 9, barW + 6, 1);
-    const label = `${name.toUpperCase()}  ${Math.ceil(hp)}/${Math.ceil(maxHp)}`;
+    const phaseTag = phaseCount > 1 ? ` P${phase}/${phaseCount}` : '';
+    const label = `${boss.name.toUpperCase()}${phaseTag}  ${Math.ceil(boss.hp)}/${Math.ceil(boss.maxHp)}`;
     const lw = measureText(label, 'tiny');
-    drawText(g, label, Math.round(BASE_W / 2 - lw / 2), y - 7, '#ff6858', 'tiny', null);
+    drawText(g, label, Math.round(BASE_W / 2 - lw / 2), y - 7, hasTelegraph ? '#ffd65a' : '#ff6858', 'tiny', null);
     g.fillStyle = '#241418';
     g.fillRect(x, y, barW, barH);
-    g.fillStyle = frac > 0.35 ? '#e03028' : '#ff9820';
+    const fillCol = phase >= 3 ? '#c840ff' : frac > 0.35 ? '#e03028' : '#ff9820';
+    g.fillStyle = fillCol;
     g.fillRect(x, y, Math.round(barW * frac), barH);
+    // Phase threshold dividers on the health bar so players anticipate phase shifts.
+    if (phaseCount > 1) {
+      g.fillStyle = '#0a0c12';
+      for (let p = 1; p < phaseCount; p++) {
+        const divX = x + Math.round((barW * p) / phaseCount);
+        g.fillRect(divX, y, 1, barH);
+      }
+    }
+    if (hasTelegraph && boss.telegraph) {
+      const warn = `! ${boss.telegraph.toUpperCase()} !`;
+      const ww = measureText(warn, 'tiny');
+      drawText(g, warn, Math.round(BASE_W / 2 - ww / 2), y + barH + 2, '#ffe066', 'tiny', null);
+    } else if (hasPhaseLabel && boss.phaseLabel) {
+      const sub = boss.phaseLabel.toUpperCase();
+      const sw = measureText(sub, 'tiny');
+      drawText(g, sub, Math.round(BASE_W / 2 - sw / 2), y + barH + 2, '#b8b8c8', 'tiny', null);
+    }
   }
 
   /**

@@ -74,7 +74,7 @@ const perThreat = (build: (kind: string, threat: string) => Layer[]): void => {
   }
 };
 
-const THREATS = ['worm', 'trojan', 'ransomware', 'logicbomb', 'rat', 'rootkit', 'botnet', 'wiper', 'boss-locker', 'boss-ghostledger'];
+const THREATS = ['worm', 'trojan', 'ransomware', 'logicbomb', 'rat', 'rootkit', 'botnet', 'wiper', 'boss-locker', 'boss-ghostledger', 'boss-phish', 'boss-zeroday'];
 
 export const SFX_DEFS: Record<string, SfxSpec> = {
   // ---------- engine events ----------
@@ -282,6 +282,16 @@ export const SFX_DEFS: Record<string, SfxSpec> = {
     osc('sawtooth', 78, 28, 0.88, 0.9, 0, { dist: 7 }),
     osc('square', 220, 110, 0.55, 0.45, 0.12),
     nz(1400, 220, 'bandpass', 0.75, 0.44, 0.04, 1.5),
+  ]),
+  'sight-boss-phish': one(() => [
+    osc('square', 660, 440, 0.22, 0.55, 0),
+    osc('square', 880, 320, 0.35, 0.5, 0.16),
+    nz(2400, 900, 'bandpass', 0.32, 0.32, 0.04, 2.2),
+  ]),
+  'sight-boss-zeroday': one(() => [
+    osc('sawtooth', 140, 42, 0.62, 0.82, 0, { dist: 6 }),
+    osc('triangle', 980, 180, 0.38, 0.42, 0.08),
+    nz(1800, 320, 'lowpass', 0.52, 0.4, 0.05),
   ]),
 
   // ---------- tool sounds (from src/tools/sfx.ts, now on the shared bus) ----------
@@ -546,8 +556,15 @@ perThreat((kind, threat) => {
       }
     case 'wiper':
     case 'boss-locker':
-    case 'boss-ghostledger': {
-      const pitch = threat === 'boss-ghostledger' ? 0.68 : threat === 'boss-locker' ? 0.8 : 1;
+    case 'boss-ghostledger':
+    case 'boss-phish':
+    case 'boss-zeroday': {
+      const pitch =
+        threat === 'boss-ghostledger' ? 0.68
+        : threat === 'boss-locker' ? 0.8
+        : threat === 'boss-zeroday' ? 0.86
+        : threat === 'boss-phish' ? 1.12
+        : 1;
       switch (kind) {
         case 'growl': return [
           osc('sawtooth', 95 * pitch, 52 * pitch, 0.55, 0.55, 0, { dist: 5 }),
