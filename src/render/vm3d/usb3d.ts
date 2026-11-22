@@ -5,7 +5,7 @@ import { addOutlineHull, toonMaterial, toonRamp } from './materials';
 
 const USB_BODY_LENGTH = 0.14;
 const USB_TRIGGER_Y = 0.0238;
-const USB_TRIGGER_CONTACT_NUDGE = 0.00591;
+const USB_TRIGGER_CONTACT_NUDGE = 0.00152;
 const USB_MODEL_DROP = 0.017;
 
 export class UsbScannerRig {
@@ -88,15 +88,15 @@ export class UsbScannerRig {
       this.box(0.004, 0.012, 0.024, side * 0.021, 0, -0.042, '#d38b13');
     }
 
-    this.addSocket('usb.grip.wrist', [0.0575, -0.0287, 0.0744], [
-      [0.5, -0.8660254, 0], [0, 0, -1], [0.8660254, 0.5, 0],
+    this.addSocket('usb.grip.wrist', [0.0644, -0.02194, 0.06991], [
+      [0.258819, -0.965926, 0], [0, 0, -1], [0.965926, 0.258819, 0],
     ]);
-    this.addSocket('usb.grip.palm', [0.05227, -0.02518, 0.058535]);
-    this.addSocket('usb.grip.index', [-0.028, -0.0112, 0.0096]);
-    this.addSocket('usb.grip.middle', [-0.0205, -0.0216, 0.0057]);
-    this.addSocket('usb.grip.ring', [0.034, -0.045, 0.018]);
-    this.addSocket('usb.grip.pinky', [0.035, -0.058, 0.021]);
-    this.addSocket('usb.trigger', [-0.02716, USB_TRIGGER_Y + USB_TRIGGER_CONTACT_NUDGE, -0.006803]);
+    this.addSocket('usb.grip.palm', [0.05917, -0.01842, 0.054045]);
+    this.addSocket('usb.grip.index', [0.02094, 0.013, 0.00395]);
+    this.addSocket('usb.grip.middle', [0.03753, -0.003, 0.00575]);
+    this.addSocket('usb.grip.ring', [0.04151, -0.01933, 0.00783]);
+    this.addSocket('usb.grip.pinky', [0.03918, -0.03270, 0.01090]);
+    this.addSocket('usb.trigger', [-0.02612, USB_TRIGGER_Y + USB_TRIGGER_CONTACT_NUDGE, -0.00259]);
     this.addSocket('usb.connector', [0, 0.020, farZ - 0.010]);
   }
 

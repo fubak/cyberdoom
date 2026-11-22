@@ -987,6 +987,10 @@ describe('vm3d clip contacts (plan §5)', () => {
       expect((bounds.maxX - bounds.minX) / 2).toBeLessThanOrEqual(0.30);
       expect((bounds.minX + bounds.maxX) / 4 + 0.5).toBeGreaterThan(0.52);
       expect(bounds.minY).toBeLessThan(-1);
+      const heightFraction = (bounds.maxY - bounds.minY) / 2;
+      const topFromBottomFraction = (bounds.maxY + 1) / 2;
+      expect(heightFraction, `scanner bbox height fraction ${heightFraction.toFixed(3)}`).toBeLessThanOrEqual(0.45);
+      expect(topFromBottomFraction, `scanner bbox top from bottom ${topFromBottomFraction.toFixed(3)}`).toBeLessThanOrEqual(0.45);
     });
 
     it('keeps the tool and hand below VM_CLEAR outside the fire impact window', () => {
@@ -1054,6 +1058,23 @@ describe('vm3d clip contacts (plan §5)', () => {
       expect(tip.distanceTo(trigger), `tip=${tip.toArray()} trigger=${trigger.toArray()}`).toBeLessThan(0.005);
     });
 
+    it('grips from the scanner side with the palm normal perpendicular to the top face', () => {
+      const rig = new Vm3dRig(spec, new UsbScannerRig());
+      rig.solve(CLIPS['usb.idle'], 0);
+      const palmNormal = new THREE.Vector3(0, 0, -1)
+        .applyQuaternion(rig.hands.R.group.getWorldQuaternion(new THREE.Quaternion()))
+        .normalize();
+      const topNormal = new THREE.Vector3(0, 1, 0)
+        .applyQuaternion(rig.board.group.getWorldQuaternion(new THREE.Quaternion()))
+        .normalize();
+      const palmNormalInBody = palmNormal.clone()
+        .transformDirection(new THREE.Matrix4().copy(rig.board.group.matrixWorld).invert());
+      const dot = palmNormal.dot(topNormal);
+      expect(palmNormalInBody.x).toBeLessThan(-0.8);
+      expect(dot).toBeGreaterThanOrEqual(-0.5);
+      expect(dot).toBeLessThanOrEqual(0.5);
+    });
+
     it('keeps the right palm at the grip and fingertips on named sockets', () => {
       const rig = new Vm3dRig(spec, new UsbScannerRig());
       for (const key of clip.keys) {
@@ -1078,6 +1099,14 @@ describe('vm3d clip contacts (plan §5)', () => {
           rig.hands.R.group.getWorldPosition(new THREE.Vector3())
             .distanceTo(rig.board.socketWorld('usb.grip.wrist')),
         ).toBeLessThan(2 * MM);
+      }
+    });
+
+    it('keeps the four resting fingers curled beneath the grip', () => {
+      const rig = new Vm3dRig(spec, new UsbScannerRig());
+      rig.solve(CLIPS['usb.idle'], 0);
+      for (const finger of ['index', 'middle', 'ring', 'pinky'] as const) {
+        expect(rig.hands.R.getCurl(finger).pip, `R.${finger} PIP curl`).toBeGreaterThanOrEqual(90);
       }
     });
 

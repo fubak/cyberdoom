@@ -417,7 +417,7 @@ const PRESS_CURLS: Partial<Record<FingerName, Curl>> = { ...LIFT_CURLS };
 const HOME_POS: V3 = [0.012, -0.148, -0.44];
 const HOME_ROT: V3 = [24, 5, -9];
 const USB_HOME_POS: V3 = [0.025, -0.09, -0.28];
-const USB_HOME_ROT: V3 = [24, 45, -12];
+const USB_HOME_ROT: V3 = [0, 35, -12];
 const USB_GRIP_CURLS: Partial<Record<FingerName, Curl>> = {
   index: { mcp: 82, pip: 100, abd: -4 },
   middle: { mcp: 88, pip: 104, abd: 0 },
@@ -427,7 +427,7 @@ const USB_GRIP_CURLS: Partial<Record<FingerName, Curl>> = {
 };
 const USB_HOLD = {
   wristSocket: 'usb.grip.wrist',
-  thumbOut: 1,
+  thumbOut: 0.5,
   curls: USB_GRIP_CURLS,
   tail: [0.72, -0.55, 0.38] as V3,
   ik: [
@@ -440,7 +440,7 @@ const USB_HOLD = {
 };
 const USB_PRESS = {
   ...USB_HOLD,
-  thumbOut: 1,
+  thumbOut: 0.5,
   curls: {
     ...USB_GRIP_CURLS,
     thumb: { mcp: 26, pip: 36 },
@@ -462,7 +462,7 @@ export const CLIPS: Record<string, VmClip> = {
     loop: true,
     keys: [
       { t: 0, root: { pos: USB_HOME_POS, rot: USB_HOME_ROT }, R: USB_HOLD },
-      { t: 1.2, root: { pos: [0.027, -0.087, -0.28], rot: [24.5, 45.3, -12.4] }, R: USB_HOLD },
+      { t: 1.2, root: { pos: [0.027, -0.087, -0.28], rot: [0.5, 35.3, -12.4] }, R: USB_HOLD },
       { t: 2.4, root: { pos: USB_HOME_POS, rot: USB_HOME_ROT }, R: USB_HOLD },
     ],
   },
@@ -471,9 +471,9 @@ export const CLIPS: Record<string, VmClip> = {
     duration: 0.47,
     keys: [
       { t: 0, root: { pos: USB_HOME_POS, rot: USB_HOME_ROT }, R: USB_HOLD },
-      { t: 0.05, root: { pos: [0.023, -0.087, -0.28], rot: [24, 45, -11] }, R: USB_PRESS, keys: { trigger: 1 } },
-      { t: 0.11, root: { pos: [0.029, -0.075, -0.265], rot: [28, 50, -8] }, R: USB_PRESS, keys: { trigger: 1 } },
-      { t: 0.20, root: { pos: [0.027, -0.095, -0.274], rot: [25, 47, -10] }, R: USB_HOLD },
+      { t: 0.05, root: { pos: [0.023, -0.087, -0.28], rot: [0, 35, -11] }, R: USB_PRESS, keys: { trigger: 1 } },
+      { t: 0.11, root: { pos: [0.029, -0.075, -0.265], rot: [4, 40, -8] }, R: USB_PRESS, keys: { trigger: 1 } },
+      { t: 0.20, root: { pos: [0.027, -0.092, -0.274], rot: [1, 37, -10] }, R: USB_HOLD },
       { t: 0.32, root: { pos: USB_HOME_POS, rot: USB_HOME_ROT }, R: USB_HOLD },
       { t: 0.47, root: { pos: USB_HOME_POS, rot: USB_HOME_ROT }, R: USB_HOLD },
     ],

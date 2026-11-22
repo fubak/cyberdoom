@@ -13,7 +13,7 @@ import { RES, VIEW3D_H, VIEW_W } from '../res';
 /** base-px → viewmodel-space metres at the board's working distance (~0.45 m). */
 const D2R = Math.PI / 180;
 const PX2M = (2 * Math.tan((54 / 2) * Math.PI / 180) * 0.45) / 168 * 0.6;
-export const VM3D_CAMERA_BACK = 0.01;
+export const VM3D_CAMERA_BACK = 0.02;
 
 export interface Vm3dFrame {
   dt: number;
