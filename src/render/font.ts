@@ -369,6 +369,15 @@ export function measureChunky(text: string): number {
   return n === 0 ? 0 : n * 7 - 1;
 }
 
+export function ellipsizeWords(line: string, maxChars: number): string {
+  if (maxChars <= 0) return '';
+  const budget = maxChars - 1;
+  const words = line.trim().split(/\s+/).filter(Boolean);
+  while (words.length > 1 && words.join(' ').length > budget) words.pop();
+  const prefix = words.join(' ');
+  return `${prefix.length > budget ? prefix.slice(0, budget) : prefix}…`;
+}
+
 /** Word-wrap to a max character count. */
 export function wrapText(text: string, maxChars: number, maxLines = 4): string[] {
   const words = text.split(/\s+/);
@@ -384,7 +393,7 @@ export function wrapText(text: string, maxChars: number, maxLines = 4): string[]
   if (cur) lines.push(cur);
   if (lines.length > maxLines) {
     const out = lines.slice(0, maxLines);
-    out[maxLines - 1] = out[maxLines - 1].slice(0, maxChars - 1) + '…';
+    out[maxLines - 1] = ellipsizeWords(out[maxLines - 1], maxChars);
     return out;
   }
   return lines;

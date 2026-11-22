@@ -33,7 +33,7 @@ export const keyboardTool: ToolDef = {
     types: ['corrective'],
     objectives: ['4.8'],
     use: 'Point-blank only (1.5 tiles), slow but infinite. Each strike runs a kill-process / isolate command on the malware in front of you (containment): two stop a worm, three a trojan, four ransomware. At range, the SCANNER (3) is the right tool. Also runs commands on a console.',
-    lesson: 'Containment comes before eradication and recovery in the incident response process: stop the malicious process spreading first, then clean and restore the host.',
+    lesson: 'Contain first, then eradicate and recover: stop the malicious process spreading, then clean and restore the host.',
   },
   drawViewmodel(g, w, _h, _bob, gender, _cd, anim) {
     const look = handLook(gender, anim);
