@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 
-const USB_LENGTH = 0.12;
+const USB_BODY_LENGTH = 0.14;
+const USB_TRIGGER_Y = 0.0238;
 
 export class UsbScannerRig {
   readonly group = new THREE.Group();
@@ -20,14 +21,14 @@ export class UsbScannerRig {
   constructor() {
     this.group.name = 'usb-scanner';
     const body = new THREE.BufferGeometry();
-    const farZ = -USB_LENGTH / 2;
-    const nearZ = USB_LENGTH / 2;
-    const farW = 0.015;
-    const nearW = 0.026;
-    const farBottom = -0.009;
-    const nearBottom = -0.012;
-    const farTop = 0.008;
-    const nearTop = 0.009;
+    const farZ = -USB_BODY_LENGTH / 2;
+    const nearZ = USB_BODY_LENGTH / 2;
+    const farW = 0.020;
+    const nearW = 0.030;
+    const farBottom = -0.013;
+    const nearBottom = -0.015;
+    const farTop = 0.013;
+    const nearTop = 0.015;
     const vertices = [
       -farW, farBottom, farZ, farW, farBottom, farZ,
       farW, farTop, farZ, -farW, farTop, farZ,
@@ -42,49 +43,49 @@ export class UsbScannerRig {
     ]);
     body.computeVertexNormals();
     this.group.add(new THREE.Mesh(body, new THREE.MeshStandardMaterial({
-      color: '#222733', roughness: 0.76, metalness: 0.18, flatShading: true,
+      color: '#353d49', roughness: 0.76, metalness: 0.14, flatShading: true,
     })));
 
-    const deck = this.box(0.046, 0.0014, 0.088, 0, 0.0091, 0.004, '#303847');
+    const deck = this.box(0.054, 0.0015, 0.108, 0, 0.0152, 0.002, '#414b59');
     deck.name = 'usb-top-deck';
-    this.box(0.030, 0.0012, 0.037, 0, 0.0104, -0.025, '#071b1c');
+    this.box(0.038, 0.0013, 0.040, 0, 0.0167, -0.042, '#071b1c');
     for (let i = 0; i < 3; i++) {
-      this.box(0.022 - i * 0.003, 0.0008, 0.0014, -0.002, 0.0112, -0.038 + i * 0.006, '#38e985');
+      this.box(0.028 - i * 0.004, 0.0008, 0.0016, -0.002, 0.0177, -0.058 + i * 0.008, '#38e985');
     }
 
-    this.box(0.046, 0.0014, 0.006, 0, 0.0104, 0.019, '#1659cc');
-    this.box(0.032, 0.0013, 0.003, 0, 0.0115, -0.005, undefined, this.ledMat);
+    this.box(0.054, 0.0015, 0.008, 0, 0.0165, 0.027, '#1659cc');
+    this.box(0.040, 0.0014, 0.004, 0, 0.0178, 0.002, undefined, this.ledMat);
 
-    const connector = this.box(0.025, 0.008, 0.014, 0, 0.010, farZ - 0.004, undefined, this.connectorMat);
+    const connector = this.box(0.032, 0.012, 0.020, 0, 0.014, farZ - 0.010, undefined, this.connectorMat);
     connector.name = 'usb-metal-connector';
-    for (const x of [-0.006, 0.006]) {
+    for (const x of [-0.007, 0.007]) {
       const hole = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.0022, 0.0022, 0.0008, 8),
+        new THREE.CylinderGeometry(0.0027, 0.0027, 0.001, 8),
         new THREE.MeshStandardMaterial({ color: '#252a33', roughness: 0.7 }),
       );
-      hole.position.set(x, 0.0142, farZ - 0.004);
+      hole.position.set(x, 0.020, farZ - 0.010);
       this.group.add(hole);
     }
 
-    this.button = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.007, 0.003, 8), this.buttonMat);
+    this.button = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.009, 0.004, 8), this.buttonMat);
     this.button.name = 'usb-red-trigger';
-    this.button.position.set(-0.004, 0.012, 0.043);
+    this.button.position.set(-0.025, 0.022, -0.008);
     this.group.add(this.button);
     for (const side of [-1, 1]) {
-      this.box(0.003, 0.008, 0.022, side * 0.024, -0.001, 0.032, '#d38b13');
-      this.box(0.003, 0.008, 0.020, side * 0.020, -0.001, -0.032, '#d38b13');
+      this.box(0.004, 0.012, 0.026, side * 0.028, 0, 0.041, '#d38b13');
+      this.box(0.004, 0.012, 0.024, side * 0.021, 0, -0.042, '#d38b13');
     }
 
-    this.addSocket('usb.grip.wrist', [0.041, -0.015, 0.066], [
+    this.addSocket('usb.grip.wrist', [0.052, -0.025, 0.080], [
       [0.5, -0.8660254, 0], [0, 0, -1], [0.8660254, 0.5, 0],
     ]);
-    this.addSocket('usb.grip.palm', [0.025, -0.008, 0.034]);
-    this.addSocket('usb.grip.index', [-0.029, -0.012, -0.020]);
-    this.addSocket('usb.grip.middle', [-0.010, -0.032, -0.016]);
-    this.addSocket('usb.grip.ring', [0.006, -0.048, -0.006]);
-    this.addSocket('usb.grip.pinky', [0.016, -0.052, 0.003]);
-    this.addSocket('usb.trigger', [-0.004, 0.012, 0.043]);
-    this.addSocket('usb.connector', [0, 0.014, farZ - 0.004]);
+    this.addSocket('usb.grip.palm', [0.052, -0.025, 0.060]);
+    this.addSocket('usb.grip.index', [0.004, -0.013, 0.014]);
+    this.addSocket('usb.grip.middle', [0.025, -0.028, 0.016]);
+    this.addSocket('usb.grip.ring', [0.034, -0.045, 0.018]);
+    this.addSocket('usb.grip.pinky', [0.035, -0.058, 0.021]);
+    this.addSocket('usb.trigger', [-0.025, USB_TRIGGER_Y, -0.008]);
+    this.addSocket('usb.connector', [0, 0.020, farZ - 0.010]);
   }
 
   update(_dt: number): void {}
@@ -103,8 +104,16 @@ export class UsbScannerRig {
   }
 
   pressButton(amount: number): void {
-    this.button.position.y = 0.012 - amount * 0.0012;
+    this.button.position.y = 0.022 - amount * 0.002;
     this.buttonMat.color.set(amount > 0.5 ? '#8d222c' : '#c82d35');
+    const trigger = this.sockets.get('usb.trigger');
+    if (trigger) trigger.position.y = USB_TRIGGER_Y - amount * 0.002;
+  }
+
+  bodyAABB(out = new THREE.Box3()): THREE.Box3 {
+    out.min.set(-0.03, -0.015, -USB_BODY_LENGTH / 2);
+    out.max.set(0.03, 0.015, USB_BODY_LENGTH / 2);
+    return out;
   }
 
   socket(name: string): THREE.Object3D | undefined {

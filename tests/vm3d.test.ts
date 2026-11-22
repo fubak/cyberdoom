@@ -890,7 +890,7 @@ describe('vm3d clip contacts (plan §5)', () => {
         expect(
           palm.distanceTo(rig.board.socketWorld('usb.grip.palm')),
           `usb.fire@${key.t.toFixed(3)} palm away from the grip`,
-        ).toBeLessThan(0.06);
+        ).toBeLessThan(0.03);
         for (const contact of frame.hands.R.contacts) {
           if (contact.weight < 0.8) continue;
           const tip = rig.hands.R.tipWorld(contact.finger);
@@ -905,6 +905,37 @@ describe('vm3d clip contacts (plan §5)', () => {
             .distanceTo(rig.board.socketWorld('usb.grip.wrist')),
         ).toBeLessThan(2 * MM);
       }
+    });
+
+    it('keeps the index fingertip curled within 2 cm of the body through the fire clip', () => {
+      const rig = new Vm3dRig(spec, new UsbScannerRig());
+      const body = rig.board.bodyAABB();
+      const nearest = new THREE.Vector3();
+      for (let i = 0; i <= 60; i++) {
+        const t = (i / 60) * clip.duration;
+        rig.solve(clip, t);
+        const index = rig.board.group.worldToLocal(rig.hands.R.tipWorld('index'));
+        const distance = body.containsPoint(index)
+          ? Math.min(
+            index.x - body.min.x, body.max.x - index.x,
+            index.y - body.min.y, body.max.y - index.y,
+            index.z - body.min.z, body.max.z - index.z,
+          )
+          : index.distanceTo(body.clampPoint(index, nearest));
+        expect(
+          distance,
+          `usb.fire@${t.toFixed(3)} R.index away from scanner body`,
+        ).toBeLessThan(0.02);
+      }
+    });
+
+    it('depresses the trigger target 2 mm during the windup', () => {
+      const rig = new Vm3dRig(spec, new UsbScannerRig());
+      rig.solve(clip, 0);
+      const restY = rig.board.socket('usb.trigger')!.position.y;
+      rig.solve(clip, 0.05);
+      const pressedY = rig.board.socket('usb.trigger')!.position.y;
+      expect(restY - pressedY).toBeCloseTo(0.002, 4);
     });
 
     it('keeps every joint inside limits across the fire clip', () => {

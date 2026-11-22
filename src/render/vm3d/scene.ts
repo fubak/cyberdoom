@@ -237,7 +237,9 @@ export class Vm3d {
     // idle finger fidgets: thumb tap + index lift + regrip on the free hand
     if (this.clip === CLIPS['kbd.idle'] || this.clip === CLIPS['usb.idle']) {
       const fig = fidgetAt(f.simT, f.seed);
-      if (fig) {
+      if (fig && this.toolId === 'usb') {
+        g.rotation.z += Math.sin(Math.PI * fig.u) * 0.8 * Math.PI / 180;
+      } else if (fig) {
         const u = Math.sin(Math.PI * fig.u);
         const r = this.rig.hands.R;
         if (fig.kind === 0) {
