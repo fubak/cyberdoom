@@ -214,6 +214,40 @@
   font: 700 clamp(13px, 1.4vw, 18px)/1.45 'Courier New', monospace;
 }
 .cd-pause-help li { margin: 4px 0; }
+.cd-controls .cd-controls-instruction {
+  margin: 0 0 1vh;
+  color: #e8dcc0;
+  font: 700 clamp(13px, 1.4vw, 18px)/1.4 'Courier New', monospace;
+}
+.cd-controls-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(5px, .7vh, 8px);
+  width: min(920px, 92vw);
+}
+.cd-controls-list .cd-control-row {
+  width: 100%;
+  min-width: 0;
+  padding: 9px 14px;
+  text-align: left;
+  font-size: clamp(13px, 1.25vw, 18px);
+}
+.cd-controls-note {
+  min-height: 1.5em;
+  margin: 6px 0 0;
+  color: #ffd040;
+  font: 700 clamp(12px, 1.2vw, 16px)/1.4 'Courier New', monospace;
+}
+.cd-controls-actions {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+@media (max-width: 700px) {
+  .cd-controls-list { grid-template-columns: 1fr; }
+  .cd-controls .cd-title { font-size: clamp(30px, 10vw, 56px); }
+}
 
 /* Pixel debrief: one fixed 400x250 bitmap-font canvas, letterboxed and scaled. */
 .screen.cd-inter.cd-pixel { padding: 0; justify-content: center; background: #000; overflow: hidden; }
