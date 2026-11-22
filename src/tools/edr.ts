@@ -28,7 +28,7 @@ export const edrTool: ToolDef = {
     types: ['detective', 'corrective'],
     objectives: ['4.5', '4.8'],
     use: 'Charge, then release a containment pulse that isolates every infected endpoint and malware process near you. It needs no line of sight, because the agent already runs on each endpoint. Charges are very scarce.',
-    lesson: 'EDR agents watch endpoint behaviour continuously and can respond automatically by killing processes or isolating hosts. That containment step is part of incident response.',
+    lesson: 'EDR watches endpoint behaviour and can respond on its own: kill a process or isolate the host. That is containment in incident response.',
   },
   drawViewmodel(g, w, _h, _bob, _gender, _cd, anim) {
     const ph = usePhase(anim?.sinceUse ?? 9, WINDUP);

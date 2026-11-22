@@ -1,10 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import { ellipsizeWords, wrapText } from '../src/render/font';
+import { sortedTools } from '../src/tools';
 import { tickerRows } from '../src/ui/hud';
 
 const msg = (text: string, kind = 'info', n = 1) => ({ text, kind, t: 5, n });
 
 describe('tickerRows', () => {
+  it('keeps every arsenal tool lesson within three ticker lines', () => {
+    for (const tool of sortedTools()) {
+      const lesson = tool.control?.lesson;
+      expect(lesson, `${tool.id} lesson`).toBeDefined();
+      if (!lesson) throw new Error(`${tool.id} has no lesson`);
+      expect(wrapText(lesson.toUpperCase(), 52, 99).length, tool.id).toBeLessThanOrEqual(3);
+    }
+  });
+
   it('ellipsizes at whole-word boundaries, with a character fallback for one long word', () => {
     const original = 'alpha bravo charlie';
     const clipped = ellipsizeWords(original, 13);
