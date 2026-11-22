@@ -58,6 +58,7 @@ import { handMods } from './render/viewmodels';
 const FIXED_DT = 1 / 60;
 const params = new URLSearchParams(location.search);
 const DEBUG = params.get('debug') === '1';
+const clampInputAxis = (value: number): number => Math.max(-1, Math.min(1, value));
 
 /** Per-tool muzzle-flash colour (0-1 rgb) for the world light flood. */
 const TOOL_FIRE_RGB: Record<string, [number, number, number]> = Object.fromEntries(
@@ -1040,6 +1041,16 @@ class Game {
 
   private tick(dt: number): void {
     if (this.screen !== 'play' || !this.map || !this.player || !this.runtime) return;
+    if (this.input.pausePressed) {
+      if (this.dossier.isOpen) this.dossier.close();
+      else if (this.paused) this.hidePause(true);
+      else if (this.automap.isOpen) this.automap.close();
+      else this.showPause();
+    }
+    if (!this.paused) {
+      if (this.input.mapPressed && !this.dossier.isOpen) this.automap.toggle();
+      if (this.input.logPressed) this.dossier.toggleLog();
+    }
     if (this.paused) {
       this.consumeDossierInput();
       return;
@@ -1065,6 +1076,7 @@ class Game {
     const ending = runtime.finished !== null;
     if (!ending && this.input.slotPressed) this.arsenal.select(this.input.slotPressed);
     if (!ending && this.input.cyclePressed) this.arsenal.cycle(1);
+    if (!ending && this.input.cyclePrevPressed) this.arsenal.cycle(-1);
     const wheel = this.input.consumeWheel();
     if (!ending && wheel !== 0) this.arsenal.cycle(wheel);
 
@@ -1080,13 +1092,26 @@ class Game {
       .filter((e) => e.alive && ['enemy', 'npc', 'workstation', 'console'].includes(e.def.kind))
       .map((e) => ({ x: e.x, y: e.y, r: 0.3 }));
     const fwd =
-      !ending ? (this.input.actionDown('forward') ? 1 : 0) - (this.input.actionDown('back') ? 1 : 0) : 0;
+      !ending
+        ? clampInputAxis(
+            (this.input.actionDown('forward') ? 1 : 0) -
+              (this.input.actionDown('back') ? 1 : 0) +
+              this.input.padMove.y,
+          )
+        : 0;
     const strafe =
-      !ending ? (this.input.actionDown('strafeRight') ? 1 : 0) - (this.input.actionDown('strafeLeft') ? 1 : 0) : 0;
+      !ending
+        ? clampInputAxis(
+            (this.input.actionDown('strafeRight') ? 1 : 0) -
+              (this.input.actionDown('strafeLeft') ? 1 : 0) +
+              this.input.padMove.x,
+          )
+        : 0;
     const keyTurn =
       !ending ? (this.input.actionDown('turnRight') ? 1 : 0) - (this.input.actionDown('turnLeft') ? 1 : 0) : 0;
-    const run = this.input.actionDown('run');
+    const run = this.input.actionDown('run') || this.input.padRun;
     p.move(map, fwd, strafe, run, keyTurn, dt, solids);
+    if (!ending) p.angle += this.input.padTurn * 2.6 * dt * this.settings.sensitivity;
     if (p.consumeStep()) {
       this.audio.sfx('step', { pan: this.stepPan * 0.15 });
       this.stepPan *= -1;
