@@ -119,6 +119,10 @@ export interface InspectInfo {
    * 'auto' derives the right call from category/tags (see content/calls.ts).
    */
   call?: CallAction | 'auto';
+  /** Optional MITRE ATT&CK Enterprise technique IDs (shown after call only). */
+  attack?: string[];
+  /** Optional NIST SP 800-61 IR phase (shown after call only). */
+  irPhase?: string;
 }
 
 export interface EvidenceEntry {
@@ -130,6 +134,10 @@ export interface EvidenceEntry {
   category?: InspectInfo['category'];
   /** Pending/answered triage call on this file (inspect entries only). */
   call?: CallState;
+  /** MITRE ATT&CK technique IDs (rendered only after triage call is resolved). */
+  attack?: string[];
+  /** NIST SP 800-61 IR phase (rendered only after triage call is resolved). */
+  irPhase?: string;
 }
 
 export interface EntityDef {
