@@ -127,6 +127,7 @@ export class Audio {
   private musicRequested: MusicTier | null = null;
   private musicPlaying: MusicTier | null = null;
   private musicVol = 0.7;
+  private sfxVol = 1;
   private layerGains: Record<MusicLayer, GainNode> | null = null;
   private musicSources: AudioBufferSourceNode[] = [];
   private threatUntil = 0;
@@ -148,6 +149,7 @@ export class Audio {
       this.ctx = new AudioContext();
       const ctx = this.ctx;
       this.sfxBus = ctx.createGain();
+      this.sfxBus.gain.value = this.sfxVol;
       // lo-fi grit shared by every sfx voice: subtle 32-step quantization
       // plus a 5.5 kHz lowpass keeps hits crunchy but tamed
       const shaper = ctx.createWaveShaper();
@@ -681,6 +683,13 @@ export class Audio {
     this.musicVol = Math.max(0, Math.min(1, v));
     if (this.ctx && this.musicBus) {
       this.musicBus.gain.setTargetAtTime(this.musicVol * MUSIC_SEND, this.ctx.currentTime, 0.05);
+    }
+  }
+
+  setSfxVolume(v: number): void {
+    this.sfxVol = Math.max(0, Math.min(1, v));
+    if (this.ctx && this.sfxBus) {
+      this.sfxBus.gain.setTargetAtTime(this.sfxVol, this.ctx.currentTime, 0.05);
     }
   }
 

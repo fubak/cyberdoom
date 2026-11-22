@@ -88,6 +88,18 @@ describe('Player movement', () => {
     expect(Math.hypot(run.vx, run.vy) / EYE_HEIGHT).toBeCloseTo(13.83, 1);
     expect(MOVE.stopSpeed / EYE_HEIGHT).toBeCloseTo(0.054);
   });
+  it('disables weapon, camera, and hand bob when bobScale is zero', () => {
+    const m = new WorldMap(def);
+    const p = new Player(2.5, 1.5, 0);
+    for (let i = 0; i < 20; i++) p.move(m, 1, 0, false, 0, 1 / 60);
+    expect(p.viewBobZ).not.toBe(0);
+    expect(p.bobPitchDeg).not.toBe(0);
+    p.bobScale = 0;
+    expect(p.weaponBobX).toBe(0);
+    expect(p.weaponBobY).toBe(0);
+    expect(p.viewBobZ).toBe(0);
+    expect(p.bobPitchDeg).toBe(0);
+  });
   it('accelerates to 90 percent of run terminal speed in about 0.65 seconds', () => {
     const open: MapDef = {
       ...def,

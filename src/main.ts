@@ -9,6 +9,7 @@ import type { SealTarget } from './engine/ai';
 import { enemyInTheWay, exitEdge } from './engine/interact';
 import { doorUseHint, resolveUse, type UseTargetContext } from './engine/useTarget';
 import { Audio, type MusicTier } from './engine/audio';
+import { loadSettings, saveSettings, type Settings } from './ui/settings';
 import { Feel, FlashRateLimiter } from './engine/feel';
 import { CueGate, spawnCueText } from './engine/spawnCue';
 import { ParticleSystem } from './engine/fx';
@@ -83,18 +84,6 @@ const bloodOf = (e: Entity): [number, number, number] =>
 /** Music tier per mission difficulty (1-4 early, 5-8 mid, 9+ late). */
 const musicTierFor = (difficulty: number): MusicTier =>
   difficulty >= 9 ? 'late' : difficulty >= 5 ? 'mid' : 'early';
-
-const MUSIC_VOL_KEY = 'cyberdoom-music-vol';
-function loadMusicVol(): number {
-  try {
-    const raw = localStorage.getItem(MUSIC_VOL_KEY);
-    if (raw === null) return 0.7;
-    const v = Number(raw);
-    return Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : 0.7;
-  } catch {
-    return 0.7;
-  }
-}
 
 /** Viewmodel recoil jolt per tool — heavy attacks kick harder. */
 const TOOL_KICK: Record<string, number> = {
@@ -210,7 +199,7 @@ class Game {
   /** WCAG 2.3.1: shared budget for all full-screen flashes (muzzle flood,
    *  landed-hit bloom, pain wash) — at most 3 per second, always. */
   private flashLimit = new FlashRateLimiter(3);
-  private musicVol = loadMusicVol();
+  private settings: Settings = loadSettings();
 
   constructor(app: HTMLElement) {
     const viewport = document.createElement('div');
@@ -218,6 +207,8 @@ class Game {
     app.appendChild(viewport);
     this.composeFrame = setupPresentation(viewport);
     this.renderer = new Renderer(viewport);
+    this.audio.setMusicVolume(this.settings.musicVol);
+    this.audio.setSfxVolume(this.settings.sfxVol);
     // warm lazy sprite frames in idle slices from boot — the player sits on
     // title/menus for seconds before the first level render, plenty of idle
     prewarmLazySpriteFrames();
@@ -533,15 +524,13 @@ class Game {
     this.dossier.enabled = false;
     this.releaseLock();
     this.pauseNode = pauseMenu({
-      musicVol: this.musicVol,
-      onMusicVol: (v) => {
-        this.musicVol = v;
-        this.audio.setMusicVolume(v);
-        try {
-          localStorage.setItem(MUSIC_VOL_KEY, String(v));
-        } catch {
-          // private mode: the setting just won't persist
-        }
+      settings: this.settings,
+      onSettings: (next) => {
+        this.settings = next;
+        saveSettings(next);
+        this.audio.setMusicVolume(next.musicVol);
+        this.audio.setSfxVolume(next.sfxVol);
+        if (this.player) this.player.bobScale = next.viewBob ? 1 : 0;
       },
       onResume: () => this.hidePause(true),
       onRestart: () => {
@@ -817,6 +806,7 @@ class Game {
     this.dossier.reset();
     const sp = mission.map.spawn;
     this.player = new Player(sp.x, sp.y, sp.angle);
+    this.player.bobScale = this.settings.viewBob ? 1 : 0;
     this.player.snap();
     this.projectiles = [];
     this.particles.clear();
@@ -855,7 +845,8 @@ class Game {
     this.audio.setVoice(this.gender);
     this.audio.setListener(this.player.x, this.player.y, this.player.angle);
     this.audio.startAmbience();
-    this.audio.setMusicVolume(this.musicVol);
+    this.audio.setMusicVolume(this.settings.musicVol);
+    this.audio.setSfxVolume(this.settings.sfxVol);
     // room-scale reverb: open-floor share of the grid is the room-size proxy
     let open = 0;
     for (const row of mission.map.grid) {
@@ -917,7 +908,7 @@ class Game {
     if (this.screen === 'play' && this.map && this.player && this.runtime) {
       const mouseDX = this.input.consumeMouseDX();
       if (!this.paused && !this.dossier.isOpen && this.runtime.finished === null) {
-        this.player.angle += mouseDX * 0.0028;
+        this.player.angle += mouseDX * 0.0028 * this.settings.sensitivity;
       }
       // hand sway (spec §5.6): second-order springs on the fixed 240 Hz step —
       // x: spring(16,.70) target ±28 from mouse dx + lateral velocity;
@@ -959,7 +950,7 @@ class Game {
         ammo: ars.ammoFor(),
         ammoName: ars.current.ammo?.resource ?? '',
         tool: ars.current,
-        bob: this.player.bob,
+        bob: this.settings.viewBob ? this.player.bob : 0,
         cooldownFrac: ars.cooldownFrac,
         gender: this.gender,
         anim: ars.anim(),
