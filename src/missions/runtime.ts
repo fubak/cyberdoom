@@ -10,6 +10,7 @@ import type {
 import { callFeedback, callOptions, requiredCall } from '../content/calls';
 import { deriveFrameworkTags } from '../content/frameworks';
 import { RADIO_LINES, formatRadioLine } from '../content/radio';
+import { applySeededPools } from './seed';
 import { objectiveById } from '../content/objectives';
 import type { WorldMap } from '../engine/map';
 import { completeMfa, refuseMfaPrompt } from '../tools/mfa';
@@ -107,12 +108,16 @@ export class MissionRuntime {
   /** EGGS: secret exit taken — debrief routes to this hidden mission's briefing. */
   nextMission?: string;
 
-  constructor(mission: Mission, private bus: EventBus, skill: SkillId = 'analyst') {
-    this.mission = mission;
+  readonly seed: number;
+
+  constructor(mission: Mission, private bus: EventBus, skill: SkillId = 'analyst', seed = 0) {
+    this.seed = seed;
+    const seeded = applySeededPools(mission, seed);
+    this.mission = seeded;
     this.skill = skillById(skill);
-    this.roles = [...mission.authorizedRoles];
-    const scaling = difficultyScale(mission.difficulty);
-    this.entities = mission.entities.map((def) => {
+    this.roles = [...seeded.authorizedRoles];
+    const scaling = difficultyScale(seeded.difficulty);
+    this.entities = seeded.entities.map((def) => {
       const hp = (def.hp ?? 1) + (def.kind === 'enemy' ? scaling.hpBonus + this.skill.hpBonus : 0);
       this.initialHp.set(def.id, hp);
       this.initialInfected.set(def.id, def.infected ?? false);

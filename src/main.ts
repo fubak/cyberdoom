@@ -877,7 +877,8 @@ class Game {
     const prep = this.prepared && this.prepared.id === id ? this.prepared : null;
     this.prepared = null; // prep is consumed; a retry re-runs the synchronous path
     this.map = prep?.map ?? new WorldMap(mission.map);
-    this.runtime = new MissionRuntime(mission, this.bus, this.settings.skill);
+    const seed = DEBUG ? 0 : ((Date.now() ^ Math.floor(Math.random() * 0x7fffffff)) >>> 0) || 1;
+    this.runtime = new MissionRuntime(mission, this.bus, this.settings.skill, seed);
     this.dossier.reset();
     const sp = mission.map.spawn;
     this.player = new Player(sp.x, sp.y, sp.angle);
