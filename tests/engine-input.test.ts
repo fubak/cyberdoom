@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Input } from '../src/engine/input';
+import { resolveBindings } from '../src/engine/bindings';
 
 function mouseEvent(type: string, button: number, buttons: number, movementX = 0): Event {
   const event = new Event(type);
@@ -125,6 +126,32 @@ describe('Input pointer-lock fire suppression', () => {
     fakeWindow.dispatchEvent(keyboardEvent('keyup', 'KeyF'));
     input.poll();
     expect(input.fireHeld).toBe(false);
+  });
+});
+
+describe('Input bindings', () => {
+  it('routes movement and key edges through the configured bindings', () => {
+    const { input, fakeWindow } = fixture();
+    input.setBindings(resolveBindings({
+      forward: ['KeyI'],
+      use: ['KeyJ'],
+      fire: ['KeyK'],
+      cycle: ['KeyN'],
+    }));
+
+    fakeWindow.dispatchEvent(keyboardEvent('keydown', 'KeyW'));
+    expect(input.actionDown('forward')).toBe(false);
+    fakeWindow.dispatchEvent(keyboardEvent('keydown', 'KeyI'));
+    expect(input.actionDown('forward')).toBe(true);
+
+    fakeWindow.dispatchEvent(keyboardEvent('keydown', 'KeyJ'));
+    fakeWindow.dispatchEvent(keyboardEvent('keydown', 'KeyK'));
+    fakeWindow.dispatchEvent(keyboardEvent('keydown', 'KeyN'));
+    input.poll();
+    expect(input.usePressed).toBe(true);
+    expect(input.firePressed).toBe(true);
+    expect(input.fireHeld).toBe(true);
+    expect(input.cyclePressed).toBe(true);
   });
 });
 

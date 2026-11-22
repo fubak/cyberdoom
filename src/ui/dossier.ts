@@ -92,6 +92,7 @@ export class Dossier {
   constructor(
     private getEntries: () => EvidenceEntry[],
     private onCall?: (entityId: string, action: CallAction) => void,
+    private isLogBinding: (code: string) => boolean = (code) => code === 'KeyL',
   ) {
     this.canvas = document.createElement('canvas');
     this.canvas.width = VIEW_W;
@@ -305,7 +306,7 @@ export class Dossier {
 
   private onKeyDown = (event: KeyboardEvent): void => {
     if (!this.enabled) return;
-    if (event.code === 'KeyL') {
+    if (this.isLogBinding(event.code)) {
       event.preventDefault();
       event.stopImmediatePropagation();
       if (!event.repeat) this.toggleLog();

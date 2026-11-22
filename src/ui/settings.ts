@@ -1,4 +1,5 @@
 import { SKILLS, type SkillId } from '../missions/difficulty';
+import { ACTION_LABELS, type Action } from '../engine/bindings';
 
 export interface Settings {
   sensitivity: number;
@@ -6,6 +7,7 @@ export interface Settings {
   musicVol: number;
   viewBob: boolean;
   skill: SkillId;
+  bindings: Partial<Record<Action, string[]>>;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -14,6 +16,7 @@ export const DEFAULT_SETTINGS: Settings = {
   musicVol: 0.7,
   viewBob: true,
   skill: 'analyst',
+  bindings: {},
 };
 
 export const SENS_STEPS = [0.5, 0.75, 1, 1.25, 1.5, 2, 3] as const;
@@ -39,6 +42,21 @@ function readNumber(value: unknown, fallback: number, min: number, max: number):
 
 function isSkillId(value: unknown): value is SkillId {
   return typeof value === 'string' && SKILLS.some((skill) => skill.id === value);
+}
+
+function readBindings(value: unknown): Partial<Record<Action, string[]>> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const saved = value as Record<string, unknown>;
+  const bindings: Partial<Record<Action, string[]>> = {};
+  for (const action of Object.keys(ACTION_LABELS) as Action[]) {
+    const codes = saved[action];
+    if (Array.isArray(codes)) {
+      bindings[action] = codes.filter(
+        (code): code is string => typeof code === 'string' && code.length > 0,
+      );
+    }
+  }
+  return bindings;
 }
 
 export function loadSettings(
@@ -82,6 +100,7 @@ export function loadSettings(
     musicVol: readNumber(values.musicVol, defaults.musicVol, 0, 1),
     viewBob: typeof values.viewBob === 'boolean' ? values.viewBob : defaults.viewBob,
     skill: isSkillId(values.skill) ? values.skill : defaults.skill,
+    bindings: readBindings(values.bindings),
   };
 }
 

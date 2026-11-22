@@ -1,11 +1,15 @@
+import type { Action } from './bindings';
+import { DEFAULT_BINDINGS } from './bindings';
+
 /**
- * Keyboard/mouse input with pointer lock.
- * WASD move, arrows turn, Shift run, E/Space use-interact,
- * 1-9 (Digit or Numpad) tool select, Q cycles to the next tool,
- * wheel cycles tools, LMB uses the tool.
+ * Keyboard/mouse input with pointer lock and configurable key bindings.
+ * Digit/Numpad 1-9, Escape, Tab, mouse, and wheel remain fixed controls.
  */
 export class Input {
   keys = new Set<string>();
+  bindings: Record<Action, string[]> = Object.fromEntries(
+    Object.entries(DEFAULT_BINDINGS).map(([action, codes]) => [action, [...codes]]),
+  ) as Record<Action, string[]>;
   mouseDX = 0;
   /** Wheel delta accumulated since last frame (+ = next tool). */
   wheel = 0;
@@ -41,11 +45,11 @@ export class Input {
       if (e.repeat) return;
       this.unlockOnce();
       this.keys.add(e.code);
-      if (e.code === 'Space' || e.code === 'KeyE') this.pendingUse = true;
-      if (e.code === 'KeyF') this.pendingKeyFire = true;
+      if (this.matchesAction('use', e.code)) this.pendingUse = true;
+      if (this.matchesAction('fire', e.code)) this.pendingKeyFire = true;
       if (/^Digit[1-9]$/.test(e.code)) this.pendingSlot = Number(e.code[5]);
       if (/^Numpad[1-9]$/.test(e.code)) this.pendingSlot = Number(e.code[6]);
-      if (e.code === 'KeyQ') this.pendingCycle = true;
+      if (this.matchesAction('cycle', e.code)) this.pendingCycle = true;
       if (e.code === 'Space') e.preventDefault();
     });
     window.addEventListener('keyup', (e) => this.keys.delete(e.code));
@@ -130,7 +134,7 @@ export class Input {
   /** Call once per simulation tick; edges are consumed by exactly one tick. */
   poll(): void {
     this.firePressed = this.pendingFire || this.pendingKeyFire;
-    this.fireHeld = (this.pointerLocked && this.mouseDown) || this.keys.has('KeyF');
+    this.fireHeld = (this.pointerLocked && this.mouseDown) || this.actionDown('fire');
     this.usePressed = this.pendingUse;
     this.slotPressed = this.pendingSlot;
     this.cyclePressed = this.pendingCycle;
@@ -167,6 +171,20 @@ export class Input {
 
   down(code: string): boolean {
     return this.keys.has(code);
+  }
+
+  setBindings(bindings: Record<Action, string[]>): void {
+    this.bindings = Object.fromEntries(
+      Object.entries(bindings).map(([action, codes]) => [action, [...codes]]),
+    ) as Record<Action, string[]>;
+  }
+
+  actionDown(action: Action): boolean {
+    return this.bindings[action].some((code) => this.keys.has(code));
+  }
+
+  matchesAction(action: Action, code: string): boolean {
+    return this.bindings[action].includes(code);
   }
 
   requestLock(): void {
