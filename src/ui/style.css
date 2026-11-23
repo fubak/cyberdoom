@@ -376,3 +376,13 @@ button.menu-hit:focus-visible {
   color: #f0c020;
   text-shadow: 3px 3px 0 #6a3800, 5px 5px 0 #000;
 }
+
+/* Mission select used fixed pixel sizes; scale it up on large windows to match the canvas. */
+@media (min-width: 1800px) and (min-height: 1000px) {
+  .cd-mission-select .menu-bar,
+  .cd-mission-select .mission-layout { zoom: 1.35; }
+}
+@media (min-width: 2400px) and (min-height: 1300px) {
+  .cd-mission-select .menu-bar,
+  .cd-mission-select .mission-layout { zoom: 1.8; }
+}

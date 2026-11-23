@@ -289,3 +289,11 @@
   font-size: clamp(14px, 1.5vw, 22px);
   padding: 8px 20px;
 }
+
+/* Pause/options/controls used fixed pixel sizes; scale them up on large windows to match the canvas. */
+@media (min-width: 1800px) and (min-height: 1000px) {
+  .cd-pause > * { zoom: 1.35; }
+}
+@media (min-width: 2400px) and (min-height: 1300px) {
+  .cd-pause > * { zoom: 1.8; }
+}
