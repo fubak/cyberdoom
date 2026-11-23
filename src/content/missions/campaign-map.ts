@@ -414,9 +414,10 @@ function pickUnusedGlyph(legend: MapDef['legend'], candidates: string): string |
   return null;
 }
 
-/** Add Doom-style architectural accents (open-air skylight wells, raised exit
- *  dais platforms, and reinforced glass observation windows) without altering
- *  walkability, doors, secrets, or mission scripting. */
+/** Add Doom-style architectural set-pieces (playable stepped balconies with
+ *  stairs and working vertical lifts, open-air courtyards/skylights, raised
+ *  exit dais platforms, and reinforced glass observation windows) without
+ *  breaking walkability, doors, secrets, or mission scripting. */
 export function applyArchitecture(mission: Mission): void {
   const { map } = mission;
   const h = map.grid.length;
@@ -428,6 +429,18 @@ export function applyArchitecture(mission: Mission): void {
   const spawnX = Math.floor(map.spawn.x);
   const spawnY = Math.floor(map.spawn.y);
 
+  const solidEntCells = new Set<string>();
+  for (const e of mission.entities) {
+    if (e.kind === 'workstation' || e.kind === 'console' || e.kind === 'npc') {
+      solidEntCells.add(`${Math.floor(e.x)},${Math.floor(e.y)}`);
+    }
+  }
+  const isPureFloor = (x: number, y: number): boolean => {
+    if (x < 1 || y < 1 || x >= w - 1 || y >= h - 1) return false;
+    const def = map.legend[map.grid[y]?.[x] ?? ''];
+    return Boolean(def && def.kind === 'floor' && !def.sky && !def.lift && !def.floorHeight);
+  };
+
   // 1. Raised dais on exit cells (subtle 0.16-unit podium)
   for (const def of Object.values(map.legend)) {
     if (def.kind === 'exit' && def.floorHeight === undefined) {
@@ -435,50 +448,142 @@ export function applyArchitecture(mission: Mission): void {
     }
   }
 
-  // 2. Skylight well in a wide open 3x3 floor chamber (away from spawn)
-  const skyGlyph = pickUnusedGlyph(map.legend, '~$%^&*@');
-  if (skyGlyph) {
-    let best: { x: number; y: number; dist: number } | null = null;
-    for (let y = 2; y < h - 2; y++) {
-      for (let x = 2; x < w - 2; x++) {
-        let allFloor = true;
-        for (let oy = -1; oy <= 1 && allFloor; oy++) {
-          for (let ox = -1; ox <= 1; ox++) {
-            const def = map.legend[map.grid[y + oy]?.[x + ox] ?? ''];
-            if (!def || def.kind !== 'floor') {
-              allFloor = false;
+  // 2. Playable multi-height set-piece: 2-step staircase -> raised balcony (0.66) -> working lift
+  const step1G = pickUnusedGlyph(map.legend, '([{<');
+  const step2G = step1G ? pickUnusedGlyph({ ...map.legend, [step1G]: map.legend['.']! }, ')]}>') : null;
+  const balcG = step1G && step2G ? pickUnusedGlyph({ ...map.legend, [step1G]: map.legend['.']!, [step2G]: map.legend['.']! }, '!`~|') : null;
+  const liftG = step1G && step2G && balcG
+    ? pickUnusedGlyph({ ...map.legend, [step1G]: map.legend['.']!, [step2G]: map.legend['.']!, [balcG]: map.legend['.']! }, '^%@&')
+    : null;
+
+  if (step1G && step2G && balcG && liftG) {
+    // Look for a clean 7x4 pure-floor footprint (5x2 set-piece with a 1-tile walkable apron)
+    let bestSet: { x: number; y: number; dist: number } | null = null;
+    for (let y = 2; y < h - 4; y++) {
+      for (let x = 2; x < w - 7; x++) {
+        let ok = true;
+        for (let oy = 0; oy < 4 && ok; oy++) {
+          for (let ox = 0; ox < 7; ox++) {
+            const cx = x + ox;
+            const cy = y + oy;
+            if (!isPureFloor(cx, cy)) {
+              ok = false;
+              break;
+            }
+            if (cx === spawnX && cy === spawnY) {
+              ok = false;
+              break;
+            }
+            // Keep stairs, balcony, and lift clear of solid interactive stations
+            if (ox >= 1 && ox <= 5 && oy >= 1 && oy <= 2 && solidEntCells.has(`${cx},${cy}`)) {
+              ok = false;
               break;
             }
           }
         }
-        if (!allFloor) continue;
-        const dist = Math.hypot(x - spawnX, y - spawnY);
-        if (dist < 3) continue;
-        if (!best || dist < best.dist) best = { x, y, dist };
+        if (!ok) continue;
+        const dist = Math.hypot(x + 3 - spawnX, y + 1.5 - spawnY);
+        if (dist < 3.5) continue;
+        if (!bestSet || dist < bestSet.dist) bestSet = { x, y, dist };
       }
     }
-    if (best) {
-      map.legend[skyGlyph] = { kind: 'floor', tex: baseFloorTex, sky: true };
-      setMapCell(map, best.x, best.y, skyGlyph);
-      // Expand skylight to a 2x2 well if the adjacent ring is also open floor
-      const neighbors: [number, number][] = [[1, 0], [0, 1], [1, 1]];
-      if (
-        neighbors.every(([ox, oy]) => {
-          const def = map.legend[map.grid[best!.y + oy]?.[best!.x + ox] ?? ''];
-          return def?.kind === 'floor';
-        })
-      ) {
-        for (const [ox, oy] of neighbors) setMapCell(map, best.x + ox, best.y + oy, skyGlyph);
+    if (bestSet) {
+      map.legend[step1G] = { kind: 'floor', tex: baseFloorTex, floorHeight: 0.22, ceilHeight: 1.98 };
+      map.legend[step2G] = { kind: 'floor', tex: baseFloorTex, floorHeight: 0.44, ceilHeight: 1.98 };
+      map.legend[balcG] = { kind: 'floor', tex: baseFloorTex, floorHeight: 0.66, ceilHeight: 1.98 };
+      map.legend[liftG] = {
+        kind: 'floor',
+        tex: baseFloorTex,
+        lift: { id: 'lift-main', low: 0, high: 0.66, speed: 0.85, hold: 3.5 },
+        ceilHeight: 1.98,
+      };
+      const bx = bestSet.x + 1;
+      const by = bestSet.y + 1;
+      // 2-tile-wide staircase + 2x2 raised balcony + 2-tile-wide lift platform
+      for (const rowOff of [0, 1]) {
+        setMapCell(map, bx, by + rowOff, step1G);
+        setMapCell(map, bx + 1, by + rowOff, step2G);
+        setMapCell(map, bx + 2, by + rowOff, balcG);
+        setMapCell(map, bx + 3, by + rowOff, balcG);
+        setMapCell(map, bx + 4, by + rowOff, liftG);
       }
     }
   }
 
-  // 3. Reinforced glass observation windows on interior divider walls
+  // 3. Open-air courtyard (3x3 / 4x4 sky plaza with central dais) or 2x2 skylight well
+  const skyGlyph = pickUnusedGlyph(map.legend, '~$%^&*@');
+  const skyDaisGlyph = skyGlyph ? pickUnusedGlyph({ ...map.legend, [skyGlyph]: map.legend['.']! }, ',_\\') : null;
+  if (skyGlyph) {
+    // Prefer a 4x4 open-air courtyard away from spawn and the balcony set-piece
+    let court: { x: number; y: number; dist: number } | null = null;
+    for (let y = 2; y < h - 5; y++) {
+      for (let x = 2; x < w - 5; x++) {
+        let allPure = true;
+        for (let oy = 0; oy < 4 && allPure; oy++) {
+          for (let ox = 0; ox < 4; ox++) {
+            if (!isPureFloor(x + ox, y + oy)) {
+              allPure = false;
+              break;
+            }
+          }
+        }
+        if (!allPure) continue;
+        const dist = Math.hypot(x + 1.5 - spawnX, y + 1.5 - spawnY);
+        if (dist < 3.5) continue;
+        if (!court || dist < court.dist) court = { x, y, dist };
+      }
+    }
+    if (court) {
+      map.legend[skyGlyph] = { kind: 'floor', tex: baseFloorTex, sky: true };
+      for (let oy = 0; oy < 4; oy++) {
+        for (let ox = 0; ox < 4; ox++) {
+          setMapCell(map, court.x + ox, court.y + oy, skyGlyph);
+        }
+      }
+      if (skyDaisGlyph) {
+        map.legend[skyDaisGlyph] = { kind: 'floor', tex: baseFloorTex, sky: true, floorHeight: 0.2 };
+        setMapCell(map, court.x + 1, court.y + 1, skyDaisGlyph);
+        setMapCell(map, court.x + 2, court.y + 1, skyDaisGlyph);
+        setMapCell(map, court.x + 1, court.y + 2, skyDaisGlyph);
+        setMapCell(map, court.x + 2, court.y + 2, skyDaisGlyph);
+      }
+    } else {
+      // Fallback: 2x2 skylight well in a 3x3 open floor chamber
+      let best: { x: number; y: number; dist: number } | null = null;
+      for (let y = 2; y < h - 2; y++) {
+        for (let x = 2; x < w - 2; x++) {
+          let allFloor = true;
+          for (let oy = -1; oy <= 1 && allFloor; oy++) {
+            for (let ox = -1; ox <= 1; ox++) {
+              if (!isPureFloor(x + ox, y + oy)) {
+                allFloor = false;
+                break;
+              }
+            }
+          }
+          if (!allFloor) continue;
+          const dist = Math.hypot(x - spawnX, y - spawnY);
+          if (dist < 3) continue;
+          if (!best || dist < best.dist) best = { x, y, dist };
+        }
+      }
+      if (best) {
+        map.legend[skyGlyph] = { kind: 'floor', tex: baseFloorTex, sky: true };
+        setMapCell(map, best.x, best.y, skyGlyph);
+        const neighbors: [number, number][] = [[1, 0], [0, 1], [1, 1]];
+        if (neighbors.every(([ox, oy]) => isPureFloor(best!.x + ox, best!.y + oy))) {
+          for (const [ox, oy] of neighbors) setMapCell(map, best.x + ox, best.y + oy, skyGlyph);
+        }
+      }
+    }
+  }
+
+  // 4. Reinforced glass observation windows on interior divider walls
   const winGlyph = pickUnusedGlyph(map.legend, '=+;:?/');
   if (winGlyph) {
     let placed = 0;
-    for (let y = 2; y < h - 2 && placed < 2; y++) {
-      for (let x = 2; x < w - 2 && placed < 2; x++) {
+    for (let y = 2; y < h - 2 && placed < 3; y++) {
+      for (let x = 2; x < w - 2 && placed < 3; x++) {
         const ch = map.grid[y]?.[x];
         const def = ch ? map.legend[ch] : undefined;
         if (!def || def.kind !== 'wall' || def.secret || def.tex === 'wall-secret') continue;
