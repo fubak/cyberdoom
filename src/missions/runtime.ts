@@ -678,7 +678,9 @@ export class MissionRuntime {
         if (e.def.inspect?.detail && this.objectivesFor('inspect', e).length) {
           this.bus.emit('inspect', { entityId: e.def.id });
         }
-        if (e.def.tags?.includes('decoy')) {
+        // Consoles an inspect objective asks the player to read are legit
+        // targets — the decoy trap is for consoles nobody should deploy to.
+        if (e.def.tags?.includes('decoy') && !this.objectivesFor('inspect', e).length) {
           this.falsePositive(e, -25, 'patch');
           return;
         }
