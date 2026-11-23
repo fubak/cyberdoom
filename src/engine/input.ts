@@ -275,7 +275,7 @@ export class Input {
     return this.bindings[action].includes(code);
   }
 
-  private standardGamepad(): Gamepad | null {
+  standardGamepad(): Gamepad | null {
     try {
       if (typeof navigator === 'undefined') return null;
       const gamepads = navigator.getGamepads?.();
