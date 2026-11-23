@@ -242,3 +242,15 @@ describe('dossier bounds', () => {
     expect(DOSSIER_ROWS * 8 + 26).toBeLessThanOrEqual(DOSSIER_H - 12); // content rows fit
   });
 });
+
+describe('entity state display sync', () => {
+  const ws = (over: Partial<Entity>): Entity =>
+    ({ def: { id: 'w', kind: 'workstation', x: 2, y: 2, sprite: 'workstation-infected' }, alive: true, infected: false, hp: 1, x: 2, y: 2, state: { revealed: true }, ...over }) as Entity;
+
+  it('a cleaned or false-positive workstation draws the clean set, not infected', async () => {
+    const { spriteSetIdFor } = await import('../src/render/renderer');
+    expect(spriteSetIdFor(ws({ infected: false }))).toBe('workstation');
+    expect(spriteSetIdFor(ws({ infected: true }))).toBe('workstation-infected');
+    expect(spriteSetIdFor(ws({ infected: true, state: { revealed: false } }))).toBe('workstation');
+  });
+});
