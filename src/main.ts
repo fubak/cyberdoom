@@ -1743,6 +1743,17 @@ class Game {
     } else if (hit) {
       if (hit.infected) {
         const dmg = hit.state.flagCorrect ? 4 : 2;
+        if (
+          hit.def.kind === 'enemy' &&
+          !hit.state.flagCorrect &&
+          this.simT - this.flagHintAt > 8
+        ) {
+          this.flagHintAt = this.simT;
+          this.hud.pushMessage(
+            'UNFLAGGED PROCESS: inspect + flag it with the MOUSE for double scan damage',
+            'info',
+          );
+        }
         const result = damageEntity(hit, dmg, dx, dy);
         this.bus.emit('tool-hit', { toolId: 'usb', entityId: hit.def.id, good: true });
         if (result === 'killed') {

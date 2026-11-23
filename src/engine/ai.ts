@@ -881,14 +881,18 @@ export function updateEntities(
           }
           return true;
         };
-        if ((e.state.movecount as number) <= 0) {
-          e.state.movedir = pickMoveDir(e, map, dx, dy);
-          e.state.movecount = Math.floor(Math.random() * 16) / 35;
-        }
-        if (!tryMove()) {
-          e.state.movedir = pickMoveDir(e, map, dx, dy);
-          e.state.movecount = Math.floor(Math.random() * 16) / 35;
-          tryMove();
+        // spawnGrace holds chase movement too, so ambushes land where the
+        // spawn telegraph says instead of converging on the player instantly.
+        if (spawnGrace <= 0) {
+          if ((e.state.movecount as number) <= 0) {
+            e.state.movedir = pickMoveDir(e, map, dx, dy);
+            e.state.movecount = Math.floor(Math.random() * 16) / 35;
+          }
+          if (!tryMove()) {
+            e.state.movedir = pickMoveDir(e, map, dx, dy);
+            e.state.movecount = Math.floor(Math.random() * 16) / 35;
+            tryMove();
+          }
         }
         e.state.reaction = Math.max(0, ((e.state.reaction as number | undefined) ?? 0) - dt);
         const attackCooldown = e.state.attackCooldown as number;
