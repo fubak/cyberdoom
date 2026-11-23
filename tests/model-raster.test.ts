@@ -200,6 +200,7 @@ function diffStats(a: Uint8ClampedArray, b: Uint8ClampedArray): { pixels: number
 
 describe('rasterize parity with the pre-optimization implementation', () => {
   for (const c of cases) {
+    // Rasterises every frame of the tool's art; takes 5-7 s under parallel load, so allow 30 s.
     it(`${c.name}: output matches within float-reorder tolerance`, () => {
       const expected = legacyRasterize(W, H, c.prims, c.opts);
       const actual = rasterize(W, H, c.prims, c.opts);
@@ -211,7 +212,7 @@ describe('rasterize parity with the pre-optimization implementation', () => {
         expect(pixels, `${c.name} ${label}: ${pixels}/${W * H} pixels differ`).toBeLessThanOrEqual(Math.ceil(W * H * 0.001));
         expect(worst, `${c.name} ${label}: worst channel diff ${worst}`).toBeLessThanOrEqual(2);
       }
-    });
+    }, 30_000);
   }
 
   it('incremental rasterizeRows produces identical output to one-shot rasterize', () => {

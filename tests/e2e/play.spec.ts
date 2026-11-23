@@ -74,7 +74,12 @@ test('perf: deploy→play has no gross frame stall (SwiftShader numbers logged)'
   console.log(
     `[frame-gaps] n=${gaps.length} median=${median.toFixed(1)}ms p95=${p95.toFixed(1)}ms max=${max.toFixed(1)}ms`,
   );
-  // Gross-regression tripwire only: SwiftShader pacing on CI is slow and noisy.
-  expect(max).toBeLessThan(1000);
+  // Two limits, because SwiftShader pacing on CI is slow and noisy. With only ~20-30 frames in
+  // the window on CI, p95 collapses to the worst frame (CI p95 values seen: 233 to 967 ms), so
+  // the sustained-stall check uses the median (CI medians seen: 17 to 167 ms) and the
+  // single-frame check only catches a multi-second freeze (CI maxima seen on unchanged main:
+  // 1167 to 2317 ms).
+  expect(max).toBeLessThan(4000);
+  expect(median).toBeLessThan(500);
   expect(probs.errors).toEqual([]);
 });

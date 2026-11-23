@@ -71,6 +71,7 @@ describe('held tools keep their art above the status bar', () => {
   it('covers all 8 tools', () => expect(tools.length).toBeGreaterThanOrEqual(8));
 
   for (const tool of tools) {
+    // Rasterises every frame of the tool's art; takes 5-7 s under parallel load, so allow 30 s.
     it(`${tool.id}: >=${Math.round(MIN_VISIBLE * 100)}% of painted art visible at rest/bob/every use frame`, () => {
       const bad: string[] = [];
       for (const gender of ['male', 'female'] as Gender[]) {
@@ -80,6 +81,6 @@ describe('held tools keep their art above the status bar', () => {
         }
       }
       expect(bad.slice(0, 8)).toEqual([]);
-    });
+    }, 30_000);
   }
 });

@@ -60,6 +60,7 @@ describe('mfa token viewmodel', () => {
     expect(mfaFrameForUse(WINDUP + IMPACT + RECOVER, WINDUP)).toBe('rest');
   });
 
+  // Rasterises every frame of the tool's art; takes 5-7 s under parallel load, so allow 30 s.
   it('keeps every frame below the clearance line and out of the aim box for both analysts and endpoint skins', () => {
     const previousSkin = currentSkin().id;
     const errors: string[] = [];
@@ -95,5 +96,5 @@ describe('mfa token viewmodel', () => {
       setSkin(previousSkin);
     }
     expect(errors).toEqual([]);
-  });
+  }, 30_000);
 });

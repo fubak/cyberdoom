@@ -58,6 +58,7 @@ describe('held tools never hide the target', () => {
   it('covers all 8 tools', () => expect(tools.length).toBeGreaterThanOrEqual(8));
 
   for (const tool of tools) {
+    // Rasterises every frame of the tool's art; takes 5-7 s under parallel load, so allow 30 s.
     it(`${tool.id}: nothing above ${Math.round(0.62 * 100)}% of view height or in the aim box, at rest/bob/every use frame`, () => {
       const bad: string[] = [];
       let restCoverage = 0;
@@ -89,6 +90,6 @@ describe('held tools never hide the target', () => {
       expect(bad.slice(0, 5)).toEqual([]);
       // and the tool is actually on screen, not pushed out of view
       expect(restCoverage).toBeGreaterThan(2 * 600);
-    });
+    }, 30_000);
   }
 });
