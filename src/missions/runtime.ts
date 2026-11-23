@@ -879,7 +879,14 @@ export class MissionRuntime {
           this.inventory.has(candidate.def.id) &&
           candidate.def.tags?.includes(e.def.accepts!),
       );
-      return item ? 'HAND OVER ITEM' : 'NOTHING TO HAND OVER';
+      if (item) return 'HAND OVER ITEM';
+      // Name what the console wants and whether it's still out in the level,
+      // so "NOTHING TO HAND OVER" becomes a pointer instead of a dead end.
+      const wanted = this.entities.find(
+        (candidate) => candidate.alive && candidate.def.tags?.includes(e.def.accepts!),
+      );
+      const label = wanted?.def.inspect?.label ?? wanted?.def.id;
+      return label ? `BRING THE ${label.toUpperCase()}` : 'NOTHING TO HAND OVER';
     }
 
     if (e.def.reportable) return 'MARK AS SUSPECT';

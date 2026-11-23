@@ -1498,8 +1498,13 @@ export class Renderer {
         // chase gets CHASE_BOOST of the full loom so the windup strike ramps
         // in over ~1.5-2.4 tiles instead of popping at the old 1.35 boundary.
         const loom = enemy ? loomK(d, attacking, melee) : 0;
-        const span = 2 * d * Math.tan((this.camera.fov * Math.PI) / 360);
-        const maxH = (0.65 + (LOOM_CAP_FRAC - 0.65) * loom) * span;
+        // Cap floor: once the sprite is pinned at MIN_D the real span shrinks
+        // to nothing, which used to squash the sprite exactly when the player
+        // collided with it. Measure the height cap at CAP_FLOOR so contact
+        // range keeps a Doom-scale silhouette instead of shrinking.
+        const CAP_FLOOR = 0.75;
+        const capSpan = 2 * Math.max(d, CAP_FLOOR) * Math.tan((this.camera.fov * Math.PI) / 360);
+        const maxH = (0.65 + (LOOM_CAP_FRAC - 0.65) * loom) * capSpan;
         const swell = melee && !attacking ? 0.5 * loomT(d) : 0;
         // ENEMIES F5: distance-compensating scale — past ~6 tiles a threat's
         // sprite grows so it never collapses into a speck (visual only).

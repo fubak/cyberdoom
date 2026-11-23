@@ -169,6 +169,10 @@ class Game {
   private acc = 0;
   private last = 0;
   private simT = 0;
+  /** Objective count seen at the last nudge; -1 until the first tick. */
+  private objectivesDone = -1;
+  /** Sim-time when the next "stuck?" hint may fire (45 s after each reset). */
+  private nudgeAt = 0;
   /** Debug: freeze sim ticks while look probes capture frames (?debug=1 only). */
   probeLock = false;
   /** Viewmodel sway/lag state: lags mouse yaw + strafe, springs back to rest. */
@@ -954,6 +958,8 @@ class Game {
     this.promptNextT = 0;
     this.lastFireT = -Infinity;
     this.bannerUntil = 0;
+    this.objectivesDone = -1;
+    this.nudgeAt = 45;
     this.lastToolId = this.arsenal.current.id;
     this.switchedTool = false;
     this.toolFxUntil.clear();
@@ -1332,6 +1338,7 @@ class Game {
     }
     this.useCd = Math.max(0, this.useCd - dt);
     this.hud.tick(dt);
+    this.guidanceNudge(runtime);
     this.runtime.update(dt, {
       player: p,
       map: this.map,
@@ -1764,6 +1771,14 @@ class Game {
       hasBadge: this.arsenal.owns('badge'),
       hasToken: this.arsenal.owns('mfa'),
       mfaPending: mfaPending(rt.entities),
+      // Name the entity that can badge the player into a role-gated door so a
+      // "READER: ITOPS ONLY" reader tells you where to go, not just "no".
+      roleSource: (role) => {
+        const giver = rt.entities.find(
+          (e) => e.alive && e.def.grants?.resource === `role:${role}`,
+        );
+        return giver ? giver.def.inspect?.label ?? giver.def.id : null;
+      },
     };
   }
 
@@ -1820,6 +1835,34 @@ class Game {
   }
 
   // ---------- tool context ----------
+
+  /**
+   * "Stuck?" ticker nudge: when no required objective has advanced for 45 s of
+   * live play, re-surface the active objective and where to look for targets.
+   * Any progress, or any message the game already shows, resets the clock so
+   * the nudge only fires when the player is actually drifting.
+   */
+  private guidanceNudge(runtime: MissionRuntime): void {
+    // Partial progress counts too: cleaning 2 of 5 hosts resets the clock.
+    const done = runtime.objectiveSummary().reduce(
+      (sum, o) => sum + o.progress + (o.done ? 1 : 0),
+      0,
+    );
+    if (done !== this.objectivesDone) {
+      this.objectivesDone = done;
+      this.nudgeAt = this.simT + 45;
+      return;
+    }
+    if (this.simT < this.nudgeAt) return;
+    const overlay = runtime.automapOverlay();
+    if (!overlay.objectiveText) return;
+    this.nudgeAt = this.simT + 45;
+    const tip =
+      overlay.objectivePoints.length > 0
+        ? 'targets are marked on the automap [M]'
+        : 'check the automap [M] for the next step';
+    this.hud.pushMessage(`OBJECTIVE: ${overlay.objectiveText} — ${tip}`, 'info');
+  }
 
   private toolCtx() {
     const p = this.player!;

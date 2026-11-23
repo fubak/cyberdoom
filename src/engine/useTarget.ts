@@ -19,6 +19,8 @@ export interface UseTargetContext {
   hasToken: boolean;
   /** Door ids where the badge factor was already presented (MFA in progress). */
   mfaPending: Set<string>;
+  /** Names the entity that can grant a badge role ("SECURITY DESK"), if any. */
+  roleSource?: (role: string) => string | null;
 }
 
 export type UseTarget =
@@ -45,7 +47,10 @@ export function resolveUse(ctx: UseTargetContext): UseTarget {
  */
 export function doorUseHint(ctx: UseTargetContext, door: { doorId: string; accessRole?: string; mfa?: boolean }): string {
   if (door.accessRole === undefined) return 'OPEN DOOR';
-  if (!ctx.roles.includes(door.accessRole)) return `READER: ${door.accessRole.toUpperCase()} ONLY`;
+  if (!ctx.roles.includes(door.accessRole)) {
+    const source = ctx.roleSource?.(door.accessRole);
+    return `READER: ${door.accessRole.toUpperCase()} ONLY${source ? ` — ${source.toUpperCase()} CAN BADGE YOU IN` : ''}`;
+  }
   if (!ctx.hasBadge) return 'READER: NO BADGE';
   if (door.mfa) return ctx.hasToken ? 'BADGE + TOKEN AT READER' : 'MFA READER: NO TOKEN';
   return 'SWIPE BADGE AT READER';

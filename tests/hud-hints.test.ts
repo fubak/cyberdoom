@@ -305,6 +305,12 @@ describe('resolveUse + doorUseHint', () => {
     expect(doorUseHint(c3, { doorId: 'badge-only', accessRole: 'admin' })).toBe('SWIPE BADGE AT READER');
     expect(doorUseHint(c3, { doorId: 'x' })).toBe('OPEN DOOR');
   });
+  it('a gated reader names who can badge the player in', () => {
+    const door = { doorId: 'd', accessRole: 'itops' };
+    const c = uctx({ roles: ['analyst'], roleSource: (r) => (r === 'itops' ? 'Security Desk' : null) });
+    expect(doorUseHint(c, door)).toBe('READER: ITOPS ONLY — SECURITY DESK CAN BADGE YOU IN');
+    expect(doorUseHint(uctx({ roles: ['analyst'], roleSource: () => null }), door)).toBe('READER: ITOPS ONLY');
+  });
 });
 
 const mapDef = {
@@ -403,6 +409,15 @@ describe('MissionRuntime.interactHint', () => {
     rt.byId('c')!.state.revealed = true;
     expect(rt.interactHint(rt.byId('i')!)).toBe('MANUAL CLEANUP');
     expect(rt.interactHint(rt.byId('c')!)).toBeNull();
+  });
+
+  it('an accepts console names the item it wants when your hands are empty', () => {
+    const desk: EntityDef = { id: 'desk', kind: 'console', x: 1, y: 1, sprite: 's', accepts: 'found-usb', grants: { resource: 'role:itops', amount: 1 } };
+    const usb: EntityDef = { id: 'usb1', kind: 'prop', x: 2, y: 2, sprite: 's', tags: ['found-usb'], inspect: { label: 'Found USB Drive', detail: '', category: 'item' } };
+    const rt = new MissionRuntime(hintMission([desk, usb]), new EventBus());
+    expect(rt.interactHint(rt.byId('desk')!)).toBe('BRING THE FOUND USB DRIVE');
+    rt.byId('usb1')!.alive = false;
+    expect(rt.interactHint(rt.byId('desk')!)).toBe('NOTHING TO HAND OVER');
   });
 
   it('interact handler still runs the real action after the hint (same branch)', () => {
