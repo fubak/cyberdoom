@@ -141,6 +141,7 @@ describe('baked hand sprites stay under the clearance line', () => {
     expect(a.bot).toBeGreaterThan(a.top);
   });
 
+  // Rasterises every frame of the tool's art; takes 5-7 s under parallel load, so allow 30 s.
   it('every tool\u2019s rest pose keeps all opaque pixels below the VM line', () => {
     const W = 320, H = 168;
     for (const tool of toolRegistry.all()) {
@@ -160,7 +161,7 @@ describe('baked hand sprites stay under the clearance line', () => {
         for (let x = 0; x < W * RES; x++) if (d[(y * W * RES + x) * 4 + 3] > 40) bad++;
       expect(bad).toBe(0);
     }
-  });
+  }, 30_000);
 });
 
 describe('fingertip layout (mesh readability, no WebGL)', () => {
