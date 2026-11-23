@@ -94,6 +94,16 @@ export const usbTool: ToolDef = {
     impactBurst(g, w / 2, tipY(h), anim.sinceConfirm, anim.confirmGood, 1, 'scan');
   },
   use(ctx) {
+    // Plugging in is arm's-length contact: a worm hovering near the host can't
+    // intercept a physical plug-in, so a workstation within plug range resolves
+    // directly instead of firing a shot that malware could body-block.
+    const plug = ctx.aimEntity(USB_PLUG_RANGE + 0.25, 0.35, true);
+    if (plug?.def.kind === 'workstation' &&
+        Math.hypot(plug.x - ctx.playerX, plug.y - ctx.playerY) <= USB_PLUG_RANGE && ctx.scanHit) {
+      ctx.bus.emit('tool-used', { toolId: 'usb' });
+      ctx.scanHit(plug);
+      return;
+    }
     const aim = ctx.aimEntity(12, 0.12);
     if (aim?.def.kind === 'workstation' && Math.hypot(aim.x - ctx.playerX, aim.y - ctx.playerY) > USB_PLUG_RANGE) {
       ctx.bus.emit('message', {
@@ -114,7 +124,7 @@ export const usbTool: ToolDef = {
     ctx.bus.emit('tool-used', { toolId: 'usb' });
   },
   hint(ctx) {
-    const aim = ctx.aimEntity(12, 0.12);
+    const aim = ctx.aimEntity(USB_PLUG_RANGE + 0.25, 0.35, true) ?? ctx.aimEntity(12, 0.12);
     if (aim?.def.kind === 'workstation') {
       if (Math.hypot(aim.x - ctx.playerX, aim.y - ctx.playerY) > USB_PLUG_RANGE) {
         return { text: 'TOO FAR: WALK UP TO PLUG IN', ready: false, fleeting: true };

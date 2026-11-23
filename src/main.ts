@@ -2004,6 +2004,12 @@ class Game {
       },
       authorizedRoles: rt.roles,
       role: rt.roles[rt.roles.length - 1] ?? this.role,
+      scanHit: (e: Entity) =>
+        this.resolveScannerHit(
+          e, e.x, e.y,
+          Math.cos(p.angle), Math.sin(p.angle),
+          Math.hypot(e.x - p.x, e.y - p.y),
+        ),
       isInspected: (entityId: string) => rt.wasInspected(entityId),
       needsCall: (entityId: string) => rt.callPending(entityId),
       lineOfSight: (x0: number, y0: number, x1: number, y1: number) => {
