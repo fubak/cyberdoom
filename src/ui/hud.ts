@@ -56,6 +56,8 @@ export function tickerColor(kind: string, colorBlind = false): string {
   const ramp = table[kind] ?? table.info;
   return ramp[ramp.length - 2];
 }
+/** Backing plate for ticker rows and the pinned objective: dark enough that tiny text holds over lit walls and bright sprites. */
+const TICKER_PLATE = 'rgba(4,6,10,0.76)';
 /** Objective strip never exceeds 12% of the 168px 3D view. */
 const OBJ_STRIP_MAX = 20;
 
@@ -335,7 +337,13 @@ export class Hud {
     this.lastObjKey = objKey;
     if (this.tabHeld) this.drawObjectivesOverlay(opts.objectives);
     else if (this.objShowT > 0 && opts.objectives[this.objIdx]) this.drawObjectiveStrip(opts.objectives, this.objIdx);
-    else this.drawTicker();
+    else {
+      // the big strip only flashes for a few seconds on a change: between
+      // flashes a slim pinned line keeps the open objective on screen, and
+      // the ticker gives up one row so the block's footprint stays the same
+      const pinned = this.drawPinnedObjective(opts.objectives, opts.progress);
+      this.drawTicker(1 + pinned, pinned > 0 ? 3 : 4);
+    }
     if (opts.prompt) this.drawPrompt(opts.prompt);
     // tool use effects live in the aim space: drawn last so the beam/ring/
     // LED reads on top of the viewmodel and the tool's own screen flash,
@@ -629,8 +637,34 @@ export class Hud {
    * top band, clear of the view centre. Collapsed repeats show "xN" on
    * the last wrapped line.
    */
-  private drawTicker(): void {
-    let y = 1;
+  /**
+   * Slim always-on objective line (one tiny row, top-left): the status bar's done count plus
+   * the current open objective, word-truncated to the ticker's 52 columns.
+   * Returns the height it used (0 when the mission has no objectives).
+   */
+  private drawPinnedObjective(
+    objs: { text: string; done: boolean; failed: boolean }[],
+    progress?: { done: number; total: number },
+  ): number {
+    if (objs.length === 0) return 0;
+    const g = this.g;
+    const open = objs.find((o) => !o.done && !o.failed);
+    // same count as the status bar's OBJ panel when the runtime supplies it
+    const head = `OBJ ${progress?.done ?? objs.filter((o) => o.done).length}/${progress?.total ?? objs.length}`;
+    const body = wrapText(open ? open.text.toUpperCase() : 'ALL OBJECTIVES SETTLED', Math.max(8, 52 - head.length - 2), 1)[0] ?? '';
+    const headW = measureText(head, 'tiny');
+    const w = 4 + headW + 5 + measureText(body, 'tiny');
+    g.fillStyle = TICKER_PLATE;
+    g.fillRect(1, 1, w + 3, 7);
+    g.fillStyle = '#a87a10';
+    g.fillRect(1, 1, 2, 7);
+    drawText(g, head, 5, 2, '#ffd040', 'tiny', null);
+    drawText(g, body, 5 + headW + 5, 2, open ? '#f0ece4' : '#5aff6a', 'tiny', null);
+    return 8;
+  }
+
+  private drawTicker(top = 1, maxRows = 4): void {
+    let y = top;
     if (this.pickup) {
       // pinned pickup lane: gold-edged plate, holds for ~1.9 s, blink-fades out
       const p = this.pickup;
@@ -645,14 +679,17 @@ export class Hud {
       }
       y += 9;
     }
-    for (const row of tickerRows(this.messages)) {
+    // one plate width for the whole block (the widest row) so the feed reads
+    // as a single panel instead of a ragged stack of per-line strips
+    const rows = tickerRows(this.messages, maxRows);
+    const plateW = rows.reduce((m, r) => Math.max(m, measureText(r.line, 'tiny')), 0) + 3;
+    for (const row of rows) {
       if (row.t < 0.4 && Math.floor(row.t * 20) % 2 === 0) {
         y += 7;
         continue;
       }
-      const w = measureText(row.line, 'tiny');
-      this.g.fillStyle = 'rgba(4,6,10,0.55)';
-      this.g.fillRect(1, y, w + 3, 6);
+      this.g.fillStyle = TICKER_PLATE;
+      this.g.fillRect(1, y, plateW, 7);
       drawText(this.g, row.line, 2, y + 1, tickerColor(row.kind, this.colorBlind), 'tiny', null);
       y += 7;
     }
@@ -690,9 +727,9 @@ export class Hud {
     if (p.footer) {
       const w = measureText(p.footer, 'small');
       const ny = viewH - 9 - (shown.length ? shown.length * 10 + 1 : 0);
-      g.fillStyle = 'rgba(6,8,12,0.6)';
+      g.fillStyle = 'rgba(6,8,12,0.74)';
       g.fillRect(0, ny, w + 8, 9);
-      drawText(g, p.footer, 4, ny + 1, '#7a8394', 'small', null);
+      drawText(g, p.footer, 4, ny + 1, '#aab3c2', 'small', null);
     }
     if (!lines.length) return;
     // bottom of the lowest plate sits 1px above the status bar
