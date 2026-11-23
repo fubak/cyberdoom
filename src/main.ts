@@ -1266,6 +1266,48 @@ class Game {
     }
   }
 
+  /**
+   * Resolve an E press against the crosshair target. `worldTicked` says whether
+   * runtime.update already ran this frame (normal path) — when the dossier is
+   * open it didn't, so doors get a zero-dt runtime pass for reader/swipe logic.
+   */
+  private resolveUsePress(worldTicked: boolean): void {
+    const runtime = this.runtime;
+    const p = this.player;
+    const map = this.map;
+    if (!runtime || !p || !map) return;
+    const r = resolveUse(this.useCtx());
+    if (r.kind === 'door') {
+      if (!worldTicked) {
+        runtime.update(0, {
+          player: p,
+          map,
+          use: true,
+          openDoor: (doorId) => this.openDoor(doorId),
+          hasBadge: this.arsenal.owns('badge'),
+          hasToken: this.arsenal.owns('mfa'),
+          flashTool: (toolId) => this.arsenal.flash(toolId),
+        });
+      }
+      this.useCd = 0.3;
+      if (r.door.accessRole !== undefined && !runtime.roles.includes(r.door.accessRole)) {
+        this.audio.sfx('oof');
+      }
+    } else if (r.kind === 'bump') {
+      this.audio.sfx('oof');
+    } else {
+      this.useCd = 0.3;
+      const aheadLift =
+        map.cellAt(Math.floor(p.x + Math.cos(p.angle) * 1.1), Math.floor(p.y + Math.sin(p.angle) * 1.1))?.lift ??
+        map.cellAt(Math.floor(p.x), Math.floor(p.y))?.lift;
+      if (r.kind === 'entity') this.bus.emit('interact', { entityId: r.entity.def.id });
+      else if (aheadLift && map.activateLift(aheadLift.id)) {
+        this.audio.sfx('door', { x: p.x, y: p.y });
+        this.hud.pushMessage('LIFT ENGAGED', 'info');
+      } else this.hud.pushMessage('Nothing in reach — aim at it and get closer.', 'info');
+    }
+  }
+
   private consumeDossierInput(): void {
     this.input.firePressed = false;
     this.input.usePressed = false;
@@ -1292,6 +1334,9 @@ class Game {
       return;
     }
     if (this.dossier.isOpen) {
+      // The world stays paused for reading, but E still resolves the
+      // crosshair target — fresh evidence swaps the dossier to it.
+      if (this.input.usePressed && this.useCd <= 0) this.resolveUsePress(false);
       this.consumeDossierInput();
       return;
     }
@@ -1388,26 +1433,7 @@ class Game {
     this.arsenal.update(arsenalDt, !ending && this.input.fireHeld, fired, () => this.toolCtx());
 
     if (!ending && !this.arsenal.switching && this.input.usePressed && this.useCd <= 0) {
-      const r = resolveUse(this.useCtx());
-      if (r.kind === 'door') {
-        // runtime.update() handled the door above (open / swipe / reader info).
-        this.useCd = 0.3;
-        if (r.door.accessRole !== undefined && !runtime.roles.includes(r.door.accessRole)) {
-          this.audio.sfx('oof');
-        }
-      } else if (r.kind === 'bump') {
-        this.audio.sfx('oof');
-      } else {
-        this.useCd = 0.3;
-        const aheadLift =
-          map.cellAt(Math.floor(p.x + Math.cos(p.angle) * 1.1), Math.floor(p.y + Math.sin(p.angle) * 1.1))?.lift ??
-          map.cellAt(Math.floor(p.x), Math.floor(p.y))?.lift;
-        if (r.kind === 'entity') this.bus.emit('interact', { entityId: r.entity.def.id });
-        else if (aheadLift && map.activateLift(aheadLift.id)) {
-          this.audio.sfx('door', { x: p.x, y: p.y });
-          this.hud.pushMessage('LIFT ENGAGED', 'info');
-        } else this.hud.pushMessage('Nothing in reach — aim at it and get closer.', 'info');
-      }
+      this.resolveUsePress(true);
     }
 
     updateEntities(runtime.entities, map, p, dt, {
