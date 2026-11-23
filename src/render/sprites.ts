@@ -1457,11 +1457,12 @@ export function buildSprites(jobs = false): void {
   makeMonster('logicbomb', 1.35, logicbombModel, { floor: 1.3, gain: 2.6, grow: 1.8, gib: [1.0, 0.85, 0.2] });
   makeMonster('rat', 1.45, ratModel, { floor: 1.55, gain: 2.7, gib: [0.7, 0.9, 0.3] });
   makeMonster('botnet', 1.38, botnetModel, { floor: 1.45, gain: 2.7, gib: [0.25, 0.85, 1.0] });
-  makeMonster('wiper', 1.62, wiperModel, { floor: 1.4, gain: 2.7, gib: [1.0, 0.32, 0.15] });
-  makeMonster('boss-locker', 1.92, bossLockerModel, { floor: 1.45, gain: 2.8, gib: [1.0, 0.65, 0.12] });
-  makeMonster('boss-ghostledger', 2.08, bossGhostledgerModel, { floor: 1.48, gain: 2.85, gib: [0.85, 0.2, 1.0] });
-  makeMonster('boss-phish', 1.78, bossPhishModel, { floor: 1.45, gain: 2.75, gib: [0.2, 0.95, 0.55] });
-  makeMonster('boss-zeroday', 1.86, bossZerodayModel, { floor: 1.45, gain: 2.8, gib: [1.0, 0.35, 0.15] });
+  // wiper and the four bosses were raised to meet the 3:1 threat-contrast target on dark corridors.
+  makeMonster('wiper', 1.62, wiperModel, { floor: 1.4, gain: 3.45, gib: [1.0, 0.32, 0.15] });
+  makeMonster('boss-locker', 1.92, bossLockerModel, { floor: 1.45, gain: 3.0, gib: [1.0, 0.65, 0.12] });
+  makeMonster('boss-ghostledger', 2.08, bossGhostledgerModel, { floor: 1.9, gain: 3.8, gib: [0.85, 0.2, 1.0] });
+  makeMonster('boss-phish', 1.78, bossPhishModel, { floor: 1.45, gain: 2.95, gib: [0.2, 0.95, 0.55] });
+  makeMonster('boss-zeroday', 1.86, bossZerodayModel, { floor: 1.9, gain: 3.8, gib: [1.0, 0.35, 0.15] });
 
   makeSet('workstation', 64, 64, 0.82, 'static', [{ key: 'idle', draw: workstation('clean', 0) }]);
   makeSet('workstation-infected', 64, 64, 0.82, 'flicker', [
