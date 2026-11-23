@@ -107,7 +107,7 @@ export const keyboardTool: ToolDef = {
   },
   use(ctx) {
     // point-blank targets fill more of the view, so the strike cone widens up close
-    const e = ctx.aimEntity(KEYBOARD_RANGE, 0.5) ?? ctx.aimEntity(0.9, 1.0);
+    const e = ctx.aimEntity(KEYBOARD_RANGE, 0.5) ?? ctx.aimEntity(1.2, 1.0);
     ctx.bus.emit('tool-used', { toolId: 'keyboard' });
     if (!e) return;
     const name = e.def.inspect?.label ?? e.def.id;
@@ -142,7 +142,7 @@ export const keyboardTool: ToolDef = {
     ctx.bus.emit('interact', { entityId: e.def.id });
   },
   hint(ctx) {
-    const e = ctx.aimEntity(KEYBOARD_RANGE, 0.5) ?? ctx.aimEntity(0.9, 1.0);
+    const e = ctx.aimEntity(KEYBOARD_RANGE, 0.5) ?? ctx.aimEntity(1.2, 1.0);
     if (!e) {
       const far = ctx.aimEntity(8, 0.26);
       if (far?.def.kind === 'enemy') return { text: 'TOO FAR: KEYBOARD IS POINT-BLANK', ready: false, fleeting: true };

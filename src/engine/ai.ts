@@ -1095,8 +1095,10 @@ export function updateEntities(
           if (profile.retreatAfterShot) {
             e.state.mode = 'retreat';
             e.state.retreatT = profile.retreatAfterShot;
-          } else if (profile.strafes && dist > 1.4 && Math.random() < 0.45) {
-            // post-shot sidestep: slips off the player's aim line (Doom-ish)
+          } else if (profile.strafes && dist > (profile.boss ? 2.4 : 1.4) && Math.random() < 0.45) {
+            // post-shot sidestep: slips off the player's aim line (Doom-ish).
+            // Bosses hold still inside ~2.4 tiles so melee and the scanner
+            // can actually reach them instead of whiffing a moving target.
             if (!enterStrafe(e, dx, dy, dist, map)) e.state.mode = 'recover';
           }
           if (mode(e) === 'recover') e.state.recoverT = profile.ranged ? 0.3 : 0.25;
@@ -1238,6 +1240,12 @@ export function alertNear(entities: Entity[], x: number, y: number, radius: numb
   }
 }
 
+/** Projectile hit radius — bosses get a wider one so a strafing boss does not
+ *  shrug off point-blank scan shots. */
+function entityRadius(e: Entity): number {
+  return ENEMY_PROFILES[e.def.threat ?? e.def.sprite]?.boss ? 0.8 : 0.45;
+}
+
 export function traceShot(
   x: number,
   y: number,
@@ -1258,11 +1266,14 @@ export function traceShot(
     if (!e.alive) continue;
     // floor pickups (charges, medkits, disks) shouldn't soak scan shots
     if (e.def.kind === 'item') continue;
+    // decorative props are scenery: shots pass them instead of scoring a
+    // FALSE POSITIVE against a wall terminal
+    if (e.def.kind === 'prop') continue;
     const toX = e.x - x;
     const toY = e.y - y;
     const along = toX * dirX + toY * dirY;
     const perpendicular = Math.abs(toX * dirY - toY * dirX);
-    if (along <= 0 || along > maxD || perpendicular >= 0.45 || along >= dist) continue;
+    if (along <= 0 || along > maxD || perpendicular >= entityRadius(e) || along >= dist) continue;
     hit = e;
     dist = along;
   }
@@ -1301,7 +1312,7 @@ export function updateProjectiles(
         // hostile projectiles can strike other enemies → Doom-style infighting
         for (const e of entities) {
           if (!e.alive || e.def.kind !== 'enemy' || e.def.id === shooterId) continue;
-          if (Math.hypot(e.x - p.x, e.y - p.y) < 0.45) {
+          if (Math.hypot(e.x - p.x, e.y - p.y) < entityRadius(e)) {
             p.alive = false;
             events.push({ p, hit: e, x: p.x, y: p.y });
             break;
@@ -1313,7 +1324,10 @@ export function updateProjectiles(
         if (!e.alive) continue;
         // floor pickups (charges, medkits, disks) shouldn't eat tool fire
         if (e.def.kind === 'item') continue;
-        if (Math.hypot(e.x - p.x, e.y - p.y) < 0.45) {
+        // decorative props are scenery, not targets — firing at a wall
+        // terminal must not score a FALSE POSITIVE
+        if (e.def.kind === 'prop') continue;
+        if (Math.hypot(e.x - p.x, e.y - p.y) < entityRadius(e)) {
           p.alive = false;
           events.push({ p, hit: e, x: p.x, y: p.y });
           break;
