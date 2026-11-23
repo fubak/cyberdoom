@@ -244,6 +244,14 @@ export class Input {
     this.pendingPause ||= this.pausePressed;
   }
 
+  /**
+   * Bank only the fire press for the next live frame — e.g. a tap while the
+   * dossier is open lands on the frame after it closes instead of whiffing.
+   */
+  bankFire(): void {
+    this.pendingKeyFire ||= this.firePressed;
+  }
+
   /** Consume accumulated mouse dx (call after reading). */
   consumeMouseDX(): number {
     const d = this.mouseDX;
