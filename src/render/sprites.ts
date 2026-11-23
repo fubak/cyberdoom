@@ -1272,45 +1272,91 @@ interface Look {
   lanyard: string;
 }
 
+/** Pixel-exact filled ellipse (quarter-unit scanlines, no anti-aliasing): sprites are rastered at RES x, so
+ *  curves authored in sub-units stay crisp instead of reading as stacked blocks. */
+function ellFill(g: CanvasRenderingContext2D, cx: number, cy: number, rx: number, ry: number, color: string): void {
+  const q = 0.25;
+  g.fillStyle = color;
+  for (let y = Math.ceil((cy - ry) / q) * q; y < cy + ry; y += q) {
+    const t = (y + q / 2 - cy) / ry;
+    if (Math.abs(t) >= 1) continue;
+    const dx = Math.round((rx * Math.sqrt(1 - t * t)) / q) * q;
+    if (dx > 0) g.fillRect(cx - dx, y, dx * 2, q);
+  }
+}
+
+/** Knock the square corner off a block: three shrinking steps cleared from (x, y) toward +dir. */
+function roundCorner(g: CanvasRenderingContext2D, x: number, y: number, dir: 1 | -1): void {
+  const steps: [number, number][] = [[1.5, 0.5], [0.75, 0.5], [0.25, 0.75]];
+  let yy = y;
+  for (const [w, h] of steps) {
+    g.clearRect(dir === 1 ? x : x - w, yy, w, h);
+    yy += h;
+  }
+}
+
+const SHADE = 'rgba(0,0,0,0.2)';
+const SHEEN = 'rgba(255,255,255,0.12)';
+
 function person(look: Look, view: 'front' | 'side' | 'back', step: number): Draw {
   return (p) => {
     const { g } = p;
     const cx = 16;
     const legSwing = step === 0 ? 0 : step === 1 ? 2 : -2;
-    // legs
-    g.fillStyle = look.pants;
+    // legs: trouser blocks with a shaded inner edge, rounded shoes
+    const leg = (x: number, w: number, h: number) => {
+      g.fillStyle = look.pants;
+      g.fillRect(x, 44, w, h);
+      g.fillStyle = SHADE;
+      g.fillRect(x + w - 1.5, 44, 1.5, h);
+    };
+    const shoe = (x: number, y: number, w: number) => {
+      g.fillStyle = '#121214';
+      g.fillRect(x, y + 0.75, w, 2.25);
+      ellFill(g, x + w / 2, y + 1, w / 2, 1, '#121214');
+      g.fillStyle = SHEEN;
+      g.fillRect(x + 1, y + 0.75, w - 3, 0.5);
+    };
     if (view === 'side') {
-      g.fillRect(cx - 3 + legSwing, 44, 5, 16);
-      g.fillRect(cx - 2 - legSwing, 44, 5, 16);
-      g.fillStyle = '#121214';
-      g.fillRect(cx - 3 + legSwing, 60, 7, 3);
-      g.fillRect(cx - 2 - legSwing, 60, 7, 3);
+      leg(cx - 3 + legSwing, 5, 16);
+      leg(cx - 2 - legSwing, 5, 16);
+      shoe(cx - 3 + legSwing, 60, 7);
+      shoe(cx - 2 - legSwing, 60, 7);
     } else {
-      g.fillRect(cx - 6, 44, 5, 16 + (step === 1 ? -1 : 0));
-      g.fillRect(cx + 1, 44, 5, 16 + (step === 2 ? -1 : 0));
-      g.fillStyle = '#121214';
-      g.fillRect(cx - 7, 60 + (step === 1 ? -1 : 0), 6, 3);
-      g.fillRect(cx + 1, 60 + (step === 2 ? -1 : 0), 6, 3);
+      leg(cx - 6, 5, 16 + (step === 1 ? -1 : 0));
+      leg(cx + 1, 5, 16 + (step === 2 ? -1 : 0));
+      shoe(cx - 7, 60 + (step === 1 ? -1 : 0), 6);
+      shoe(cx + 1, 60 + (step === 2 ? -1 : 0), 6);
     }
-    // torso
+    // torso: rounded shoulders, a lit left edge and a shaded right edge for volume
     const tw = view === 'side' ? 10 : 16;
     g.fillStyle = look.shirt;
     g.fillRect(cx - tw / 2, 22, tw, 23);
     g.fillStyle = look.shirtDark;
     g.fillRect(cx - tw / 2, 42, tw, 3);
-    // arms
+    g.fillStyle = SHEEN;
+    g.fillRect(cx - tw / 2 + 0.5, 23.5, 1.25, 18);
+    g.fillStyle = SHADE;
+    g.fillRect(cx + tw / 2 - 2.25, 23, 2.25, 19);
+    if (view === 'side') {
+      roundCorner(g, cx - tw / 2, 22, 1);
+      roundCorner(g, cx + tw / 2, 22, -1);
+    }
+    // arms: sleeves with rounded shoulders, hands as small ovals
+    const hand = (x: number, y: number) => ellFill(g, x + 2, y + 2, 2, 2.25, look.skin);
     if (view === 'side') {
       g.fillStyle = look.shirtDark;
       g.fillRect(cx - 2 - legSwing, 23, 5, 15);
-      g.fillStyle = look.skin;
-      g.fillRect(cx - 2 - legSwing, 38, 4, 4);
+      roundCorner(g, cx - 2 - legSwing, 23, 1);
+      hand(cx - 2 - legSwing, 38);
     } else {
       g.fillStyle = look.shirtDark;
       g.fillRect(cx - tw / 2 - 4, 23, 4, 16);
       g.fillRect(cx + tw / 2, 23, 4, 16);
-      g.fillStyle = look.skin;
-      g.fillRect(cx - tw / 2 - 4, 39 + (step === 1 ? 1 : 0), 4, 4);
-      g.fillRect(cx + tw / 2, 39 + (step === 2 ? 1 : 0), 4, 4);
+      roundCorner(g, cx - tw / 2 - 4, 23, 1);
+      roundCorner(g, cx + tw / 2 + 4, 23, -1);
+      hand(cx - tw / 2 - 4, 39 + (step === 1 ? 1 : 0));
+      hand(cx + tw / 2, 39 + (step === 2 ? 1 : 0));
     }
     if (view === 'front') {
       // collar, tie, lanyard + badge
@@ -1319,6 +1365,8 @@ function person(look: Look, view: 'front' | 'side' | 'back', step: number): Draw
       if (look.tie) {
         g.fillStyle = look.tie;
         g.fillRect(cx - 1, 24, 2, 12);
+        g.fillStyle = SHADE;
+        g.fillRect(cx + 0.25, 24, 0.75, 12);
       }
       g.fillStyle = look.lanyard;
       g.fillRect(cx - 4, 22, 1, 9);
@@ -1327,38 +1375,54 @@ function person(look: Look, view: 'front' | 'side' | 'back', step: number): Draw
       g.fillRect(cx - 3, 31, 6, 7);
       g.fillStyle = look.lanyard;
       g.fillRect(cx - 3, 31, 6, 2);
+      g.fillStyle = '#8a94a6';
+      g.fillRect(cx - 2, 34, 1.75, 2.25); // badge photo
+      g.fillRect(cx + 0.25, 34.25, 2, 0.5);
+      g.fillRect(cx + 0.25, 35.5, 1.5, 0.5);
     }
-    // head
+    // head: an oval instead of a block, with the jaw shaded on the unlit side
     const hw = view === 'side' ? 9 : 10;
     const hx = cx - hw / 2 + (view === 'side' ? 1 : 0);
+    const hcx = hx + hw / 2;
     g.fillStyle = look.skin;
-    g.fillRect(hx, 8, hw, 13);
     g.fillRect(cx - 2, 20, 4, 2);
-    // hair
+    ellFill(g, hcx, 14.5, hw / 2, 6.75, look.skin);
+    g.fillStyle = SHADE;
+    g.fillRect(hcx + hw / 2 - 1.75, 11, 1.25, 7);
+    // hair: a rounded cap rather than a slab
+    ellFill(g, hcx, 9, hw / 2 + 1, 3.25, look.hair);
     g.fillStyle = look.hair;
-    g.fillRect(hx - 1, 6, hw + 2, 4);
     if (view === 'back') {
-      g.fillRect(hx - 1, 6, hw + 2, look.longHair ? 22 : 14);
+      g.fillRect(hx - 1, 8.5, hw + 2, look.longHair ? 19.5 : 11.5);
+      ellFill(g, hcx, look.longHair ? 28 : 20, hw / 2 + 1, 1.25, look.hair);
     } else if (view === 'side') {
-      g.fillRect(hx - 1, 6, 5, look.longHair ? 22 : 9);
-      g.fillStyle = look.skin;
-      g.fillRect(hx + hw, 13, 2, 3); // nose
+      g.fillRect(hx - 1, 8.5, 5, look.longHair ? 19.5 : 6.5);
+      ellFill(g, hx + hw + 0.5, 14.5, 1.25, 1.5, look.skin); // nose
+      g.fillStyle = '#f4f6fa';
+      g.fillRect(hx + hw - 3.25, 12.25, 2.25, 1.5);
       g.fillStyle = '#16120e';
-      g.fillRect(hx + hw - 3, 12, 2, 2);
+      g.fillRect(hx + hw - 2.25, 12.25, 1.25, 1.5);
+      g.fillStyle = look.hair;
+      g.fillRect(hx + hw - 3.5, 11.25, 2.75, 0.5); // brow
       g.fillStyle = '#7a3a2a';
-      g.fillRect(hx + hw - 3, 17, 3, 1);
+      g.fillRect(hx + hw - 3, 17, 3, 0.75);
     } else {
       if (look.longHair) {
-        g.fillRect(hx - 2, 8, 3, 18);
-        g.fillRect(hx + hw - 1, 8, 3, 18);
+        g.fillRect(hx - 2, 8.5, 3, 17.5);
+        g.fillRect(hx + hw - 1, 8.5, 3, 17.5);
       }
-      g.fillStyle = '#16120e';
-      g.fillRect(hx + 2, 13, 2, 2);
-      g.fillRect(hx + hw - 4, 13, 2, 2);
-      g.fillStyle = 'rgba(0,0,0,0.25)';
-      g.fillRect(hx + 4, 15, 2, 2);
+      for (const ex of [hx + 2, hx + hw - 4]) {
+        g.fillStyle = '#f4f6fa';
+        g.fillRect(ex - 0.25, 13, 2.5, 1.75);
+        g.fillStyle = '#16120e';
+        g.fillRect(ex + 0.5, 13, 1.25, 1.75);
+        g.fillStyle = look.hair;
+        g.fillRect(ex - 0.25, 11.75, 2.5, 0.5); // brow
+      }
+      g.fillStyle = SHADE;
+      g.fillRect(hcx - 0.5, 14.75, 1.25, 2); // nose shadow
       g.fillStyle = '#7a3a2a';
-      g.fillRect(hx + 3, 18, 4, 1);
+      g.fillRect(hx + 3, 18, 4, 0.75);
     }
   };
 }
@@ -1441,29 +1505,39 @@ export function buildSprites(jobs = false): void {
     key: 'idle',
     draw: (p: PaintCtx) => {
       const { g } = p;
-      // Brushed metal planter pot
-      g.fillStyle = '#6c7482';
-      g.fillRect(15, 42, 18, 18);
-      g.fillStyle = '#8c96a6';
-      g.fillRect(14, 40, 20, 4);
-      g.fillStyle = '#484e58';
-      g.fillRect(29, 42, 4, 18);
-      // Soil + trunk
-      g.fillStyle = '#3b2818';
-      g.fillRect(16, 40, 16, 2);
-      g.fillStyle = '#5a3a20';
-      g.fillRect(23, 24, 3, 17);
-      // Layered foliage fronds
-      const leaves: [number, number, number, number, string][] = [
-        [10, 18, 14, 8, '#1e6e36'], [24, 16, 15, 8, '#1e6e36'],
-        [14, 10, 20, 10, '#2a8c44'], [8, 24, 13, 7, '#247c3c'],
-        [26, 23, 14, 7, '#247c3c'], [17, 6, 14, 8, '#3aa854'],
-        [12, 14, 10, 6, '#3aa854'], [26, 12, 10, 6, '#48bc62'],
-      ];
-      for (const [x, y, w, h, c] of leaves) {
-        g.fillStyle = c;
-        g.fillRect(x, y, w, h);
+      // Brushed metal planter: tapered sides, lit left face, shaded right face, rolled rim
+      for (let i = 0; i < 18; i++) {
+        const inset = Math.round(i * 0.1 * 4) / 4;
+        g.fillStyle = '#6c7482';
+        g.fillRect(15 + inset, 42 + i, 18 - inset * 2, 1);
+        g.fillStyle = '#8c96a6';
+        g.fillRect(16.5 + inset, 42 + i, 2, 1);
+        g.fillStyle = '#484e58';
+        g.fillRect(29.5 - inset, 42 + i, 3.5, 1);
       }
+      ellFill(g, 24, 41.75, 10.5, 2, '#8c96a6');
+      ellFill(g, 24, 41.5, 8.75, 1.25, '#3b2818');
+      // Trunk with a lit edge
+      g.fillStyle = '#5a3a20';
+      g.fillRect(23, 25, 2.5, 16.5);
+      g.fillStyle = '#7a5230';
+      g.fillRect(23, 25, 0.75, 16.5);
+      // Foliage: rounded leaf clusters, darkest at the back and underside, lightest on top
+      const leaves: [number, number, number, number, string][] = [
+        [16, 23.5, 8, 5, '#17592b'], [32, 22.5, 8.5, 5, '#17592b'], [24, 27.5, 7, 3.75, '#17592b'],
+        [13.5, 27, 5.5, 3.25, '#1e6e36'], [34.5, 26.5, 5.5, 3.25, '#1e6e36'], [24, 16.5, 11, 7, '#1e6e36'],
+        [17, 19.5, 7, 4.5, '#247c3c'], [31, 18.5, 7.5, 4.5, '#247c3c'],
+        [24, 11.5, 8, 5.5, '#2a8c44'], [14, 14.5, 5, 3.5, '#2a8c44'], [34, 14, 5, 3.5, '#2a8c44'],
+        [21, 14.5, 5, 3, '#3aa854'], [28, 10, 5, 3, '#3aa854'], [30.5, 21, 4, 2.25, '#3aa854'], [17.5, 22.5, 3.5, 2, '#3aa854'],
+        [23, 8.5, 3, 1.5, '#48bc62'], [31, 15, 2.75, 1.25, '#48bc62'], [16, 17, 2.5, 1.25, '#48bc62'],
+      ];
+      for (const [x, y, rx, ry, c] of leaves) ellFill(g, x, y, rx, ry, c);
+      // Midribs: thin dark seams split the clusters into separate fronds
+      g.fillStyle = '#17592b';
+      const ribs: [number, number, number, number][] = [
+        [23.75, 12, 0.5, 7], [17, 17.5, 0.5, 4.5], [31, 16.5, 0.5, 4.5], [27.75, 8.5, 0.5, 3.5], [20.75, 12.5, 0.5, 3.5],
+      ];
+      for (const [x, y, w, h] of ribs) g.fillRect(x, y, w, h);
     },
   }]);
 
