@@ -13,7 +13,7 @@ export const CALL_PROMPT = 'WHAT DO YOU DO?';
 
 /** The four standard calls, always in the same slot order (keys 1-4). */
 export const CALL_OPTIONS: CallOption[] = [
-  { action: 'quarantine', text: 'Quarantine + clean it' },
+  { action: 'quarantine', text: 'Quarantine it' },
   { action: 'release', text: 'Leave it - false positive' },
   { action: 'escalate', text: 'Escalate to an IR lead' },
   { action: 'patch', text: 'Patch / remediate it' },

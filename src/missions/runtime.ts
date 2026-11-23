@@ -98,6 +98,7 @@ export class MissionRuntime {
   private radioSent = new Set<'start' | 'midpoint' | 'ready'>();
   private hasToken = false;
   private outbreakElapsed = 0;
+  private outbreakTicks = 0;
   private lastExitMessage = -Infinity;
   private currentPlayer: UpdateWorld['player'] | null = null;
   private tallied = false;
@@ -1165,11 +1166,15 @@ export class MissionRuntime {
     this.outbreakElapsed += dt;
     if (this.outbreakElapsed < outbreak.every) return;
     this.outbreakElapsed -= outbreak.every;
-    const e = this.entities.find(
+    const candidates = this.entities.filter(
       (candidate) => this.cleaned.has(candidate.def.id) &&
         candidate.def.tags?.includes(outbreak.tag),
     );
-    if (!e) return;
+    if (!candidates.length) return;
+    // Round-robin the outbreak so the worm hops host to host like lateral
+    // movement instead of hammering the same machine every tick.
+    const e = candidates[this.outbreakTicks % candidates.length];
+    this.outbreakTicks += 1;
     e.alive = true;
     e.infected = this.initialInfected.get(e.def.id) ?? true;
     e.hp = this.initialHp.get(e.def.id) ?? 1;
