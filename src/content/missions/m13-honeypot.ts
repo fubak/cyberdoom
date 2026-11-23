@@ -59,6 +59,8 @@ export const m13: Mission = {
       [15, 2, 17, 3, 0.9],
       [19, 1, 20, 3, 0.7],
       [1, 5, 20, 7, 0.55],
+      // keep the spawn lane bright and legible inside the lab corridor
+      [8, 5, 14, 7, 0.8],
       [11, 7, 11, 7, 1.0],
     ]),
     spawn: { x: 11.5, y: 6.5, angle: -Math.PI / 2 },

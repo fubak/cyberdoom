@@ -471,4 +471,8 @@ mixedThreatEncounter(m09, 'ring-mix', [['wiper', 1], ['botnet', 2]],
   { id: 'ring-ambush', area: [40, 14, 41, 20], kind: 'bad',
     message: 'A wiper anchors the vault ring — botnet drones flank it.' },
   [40, 6, 46, 24]);
+// keep the spawn lane bright and legible in the war room
+m09.map.lights = { ...m09.map.lights, ...lightRects([[18, 24, 24, 28, 1]]) };
+// the stair/balcony set-piece on the y=18-19 sightline stands a touch brighter than the hall around it
+m09.map.lights = { ...m09.map.lights, ...lightRects([[17, 18, 25, 19, 0.62]]) };
 m09.map.lights = { ...m09.map.lights, ...lightRects([[40, 6, 46, 24, 0.55], [42, 26, 44, 28, 0.85], [43, 24, 43, 24, 0.35]]) };
