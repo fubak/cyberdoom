@@ -19,7 +19,7 @@ function el(tag: string, cls = '', html = ''): HTMLElement {
   return e;
 }
 
-export function titleScreen(onStart: () => void, onMissions?: () => void): HTMLElement {
+export function titleScreen(onStart: () => void, onMissions?: () => void, onContinue?: () => void): HTMLElement {
   const s = el('div', 'screen title');
   mountTitle(s, onStart, [
     'MERIDIAN FREIGHT IS UNDER ATTACK BY GHOSTLEDGER.',
@@ -31,7 +31,7 @@ export function titleScreen(onStart: () => void, onMissions?: () => void): HTMLE
     'LMB USE TOOL - E/SPACE INTERACT - 1-9 / WHEEL / Q SELECT TOOL',
     '',
     'PRESS ANY KEY OR CLICK TO GO BACK',
-  ], onMissions);
+  ], onMissions, onContinue);
   return s;
 }
 

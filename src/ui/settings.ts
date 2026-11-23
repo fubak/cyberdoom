@@ -42,7 +42,7 @@ function readNumber(value: unknown, fallback: number, min: number, max: number):
   return typeof value === 'number' && Number.isFinite(value) ? clamp(value, min, max) : fallback;
 }
 
-function isSkillId(value: unknown): value is SkillId {
+export function isSkillId(value: unknown): value is SkillId {
   return typeof value === 'string' && SKILLS.some((skill) => skill.id === value);
 }
 

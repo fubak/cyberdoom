@@ -254,6 +254,7 @@ export function mountTitle(
   onStart: () => void,
   about: string[],
   onMissions?: () => void,
+  onContinue?: () => void,
 ): void {
   const c = document.createElement('canvas');
   c.width = VIEW_W;
@@ -298,6 +299,7 @@ export function mountTitle(
   let sel = 0;
   let showAbout = false;
   const items = [
+    ...(onContinue ? [{ id: 'continue', label: 'Continue', action: onContinue }] : []),
     { id: 'new-game', label: 'New Game', action: onStart },
     ...(onMissions ? [{ id: 'mission-select', label: 'Missions', action: onMissions }] : []),
     { id: 'read-this', label: 'Read This!', action: () => (showAbout = true) },
@@ -305,7 +307,7 @@ export function mountTitle(
   let t = 0;
   let last = performance.now();
   const menuX = 30;
-  const menuY = onMissions ? 142 : 156;
+  const menuY = 156 - (items.length - 2) * 14;
   const rowH = 14;
 
   const choose = () => {

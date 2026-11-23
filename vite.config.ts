@@ -3,10 +3,21 @@ import { defineConfig } from 'vite';
 export default defineConfig({
   base: process.env.BASE_PATH ?? '/',
   build: {
-    // The game is one entry point whose code is all needed for the first
-    // playable frame; splitting it would only add round-trips before deploy.
-    // The sprite/texture generation workers split out separately and load
-    // lazily, so warn only if the main chunk keeps growing past ~1.1 MB.
-    chunkSizeWarningLimit: 1100,
+    // Everything is needed for the first playable frame, so chunks are split
+    // for caching, not lazy loading: three.js and the mission/curriculum
+    // content change on different cadences from the engine, and the browser
+    // fetches the parallel chunks over one connection.
+    chunkSizeWarningLimit: 700,
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          groups: [
+            { name: 'vendor-three', test: /node_modules[\\/]three[\\/]/, priority: 20 },
+            { name: 'content', test: /[\\/]src[\\/](content|curriculum)[\\/]/, priority: 10 },
+            { name: 'render', test: /[\\/]src[\\/]render[\\/]/, priority: 5 },
+          ],
+        },
+      },
+    },
   },
 });

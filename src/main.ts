@@ -10,7 +10,7 @@ import type { SealTarget } from './engine/ai';
 import { enemyInTheWay, exitEdge } from './engine/interact';
 import { doorUseHint, resolveUse, type UseTargetContext } from './engine/useTarget';
 import { Audio, musicTierForMission } from './engine/audio';
-import { loadSettings, saveSettings, type Settings } from './ui/settings';
+import { isSkillId, loadSettings, saveSettings, type Settings } from './ui/settings';
 import { Feel, FlashRateLimiter } from './engine/feel';
 import { CueGate, spawnCueText } from './engine/spawnCue';
 import { ParticleSystem } from './engine/fx';
@@ -30,6 +30,13 @@ import { Dossier } from './ui/dossier';
 import * as screens from './ui/screens';
 import { MissionRuntime, scaledPickupGrant } from './missions/runtime';
 import { latestRetryCheckpoint, objectiveCheckpointLabel, type Checkpoint } from './missions/checkpoint';
+import { PadMenuNav, dispatchPadKey } from './engine/padmenu';
+import {
+  clearSavedCheckpoints,
+  loadSavedCheckpoints,
+  persistCheckpoints,
+  resumeCheckpoint,
+} from './missions/checkpoint-store';
 import { mfaPending } from './tools/badge';
 import { Arsenal, ammoUnit } from './tools/arsenal';
 import { bindAudio } from './tools/sfx';
@@ -155,6 +162,7 @@ class Game {
   private automaticCheckpoint: Checkpoint | null = null;
   private quickCheckpoint: Checkpoint | null = null;
   private checkpointClock = 0;
+  private padMenu = new PadMenuNav();
   private arsenal = new Arsenal(this.bus);
   private useCd = 0;
   private debugFire = false;
@@ -258,6 +266,7 @@ class Game {
         event.preventDefault();
         if (!this.paused && this.runtime && !this.runtime.finished) {
           this.quickCheckpoint = this.captureCheckpoint('QUICKSAVE');
+          this.saveCheckpoints();
           this.hud.pushMessage('QUICKSAVED', 'good');
         }
         return;
@@ -541,7 +550,9 @@ class Game {
 
   private showTitle(): void {
     this.audio.startMusic('title');
-    this.setScreen('title', screens.titleScreen(() => this.showCharSelect(), () => this.showMissionSelect()));
+    const saved = loadSavedCheckpoints();
+    const onContinue = saved && missionById(saved.missionId) ? () => this.continueSaved() : undefined;
+    this.setScreen('title', screens.titleScreen(() => this.showCharSelect(), () => this.showMissionSelect(), onContinue));
   }
 
   private showCharSelect(): void {
@@ -904,9 +915,10 @@ class Game {
 
   // ---------- mission lifecycle ----------
 
-  private startMission(id: string): void {
+  private startMission(id: string, opts: { keepSave?: boolean } = {}): void {
     const mission = requireMission(id);
     this.clearCheckpoints();
+    if (!opts.keepSave) clearSavedCheckpoints();
     registerThreatSprites();
     const prep = this.prepared && this.prepared.id === id ? this.prepared : null;
     this.prepared = null; // prep is consumed; a retry re-runs the synchronous path
@@ -1009,6 +1021,39 @@ class Game {
     this.quickCheckpoint = null;
   }
 
+  private saveCheckpoints(): void {
+    if (!this.runtime) return;
+    persistCheckpoints({
+      missionId: this.runtime.mission.id,
+      skill: this.settings.skill,
+      gender: this.gender,
+      automatic: this.automaticCheckpoint,
+      quick: this.quickCheckpoint,
+    });
+  }
+
+  /** Resume the checkpoint persisted before the last reload. */
+  private continueSaved(): void {
+    const saved = loadSavedCheckpoints();
+    const checkpoint = saved ? resumeCheckpoint(saved) : null;
+    if (!saved || !checkpoint || !missionById(saved.missionId)) {
+      clearSavedCheckpoints();
+      this.showTitle();
+      return;
+    }
+    this.gender = saved.gender === 'female' ? 'female' : 'male';
+    if (isSkillId(saved.skill)) this.settings.skill = saved.skill;
+    this.startMission(saved.missionId, { keepSave: true });
+    this.automaticCheckpoint = saved.automatic;
+    this.quickCheckpoint = saved.quick;
+    this.checkpointClock = Math.max(
+      this.checkpointClock,
+      saved.automatic?.elapsedAt ?? 0,
+      saved.quick?.elapsedAt ?? 0,
+    );
+    this.restoreCheckpoint(checkpoint);
+  }
+
   private restoreCheckpoint(checkpoint: Checkpoint): void {
     const alreadyPlaying = this.screen === 'play';
     this.runtime!.restore(checkpoint.runtime);
@@ -1072,6 +1117,7 @@ class Game {
           const label = objectiveCheckpointLabel(completedBefore, runtime.objectives, runtime.finished !== null);
           if (label) {
             this.automaticCheckpoint = this.captureCheckpoint(label);
+            this.saveCheckpoints();
             this.hud.pushMessage('CHECKPOINT SAVED', 'good');
           }
         }
@@ -1079,6 +1125,7 @@ class Game {
       this.acc -= FIXED_DT;
     }
     this.syncChrome();
+    this.pollPadMenu(dt);
     if (this.screen === 'play' && this.map && this.player && this.runtime) {
       const mouseDX = this.input.consumeMouseDX();
       if (!this.paused && !this.dossier.isOpen && this.runtime.finished === null) {
@@ -1182,6 +1229,18 @@ class Game {
       );
       this.dossier.draw();
       this.composeFrame();
+    }
+  }
+
+  private pollPadMenu(dt: number): void {
+    const inMenu = this.screen !== 'play' || this.paused;
+    const pad = this.input.standardGamepad();
+    if (!inMenu || !pad) {
+      this.padMenu.prime(pad);
+      return;
+    }
+    for (const key of this.padMenu.step(pad, dt, { startConfirms: this.screen !== 'play' })) {
+      dispatchPadKey(key);
     }
   }
 
@@ -1506,6 +1565,7 @@ class Game {
 
     if (runtime.finished && this.endTimer === null) {
       this.endTimer = runtime.finished === 'lost' ? 1.6 : 0.5;
+      if (runtime.finished === 'won') clearSavedCheckpoints();
       // EGGS: a cheated run wins but never records completion/progress.
       if (runtime.finished === 'won' && !runtime.unscored) markCompleted(runtime.mission.id);
     }
