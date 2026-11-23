@@ -301,9 +301,11 @@ button.mission-row:disabled {
   margin: 0;
   padding-left: 16px;
   color: #9fd8b0;
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: 13px;
+  line-height: 1.45;
 }
+/* the generic `.screen li` size made these bullets larger than the tagline above them */
+.mission-detail .detail-objs li { font-size: 13px; line-height: 1.45; }
 .mission-select { overflow-y: auto; justify-content: flex-start; padding-top: 3vh; }
 
 .brief-box {
@@ -361,4 +363,16 @@ button.mission-row:disabled {
 button.menu-hit:focus-visible {
   outline: 3px solid #ffd040;
   outline-offset: -3px;
+}
+
+/* DOM screens share one display face: the same Impact heading as PAUSED and the debrief titles, over the
+   Courier body. (Canvas screens - title, analyst select, briefing, HUD - stay in the pixel fonts.) */
+.cd-mission-select .menu-bar h2 {
+  font-family: Impact, 'Arial Black', sans-serif;
+  font-weight: 400;
+  font-size: clamp(28px, 3.4vw, 46px);
+  line-height: 1;
+  letter-spacing: 0.06em;
+  color: #f0c020;
+  text-shadow: 3px 3px 0 #6a3800, 5px 5px 0 #000;
 }

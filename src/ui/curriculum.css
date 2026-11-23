@@ -216,13 +216,13 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 4px 18px;
-  width: min(760px, 92vw);
+  width: min(900px, 94vw);
   text-align: left;
   background: #0d0806e8;
   border: 3px solid;
   border-color: #7a5a40 #2a1a10 #2a1a10 #7a5a40;
   color: #f4e6c8;
-  font: 700 clamp(11px, 1.15vw, 14px)/1.35 'Courier New', monospace;
+  font: 700 clamp(13px, 1.4vw, 18px)/1.4 'Courier New', monospace;
 }
 .cd-pause-help li { margin: 0; }
 @media (max-width: 720px) {

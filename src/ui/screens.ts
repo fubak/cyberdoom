@@ -185,7 +185,14 @@ export function missionSelect(onPick: (id: string) => void, onBack: () => void):
     body.appendChild(head);
     body.appendChild(el('div', 'mtagline', card.tagline));
     row.appendChild(body);
-    row.addEventListener('mouseenter', () => renderDetail(m));
+    // one selection for mouse and keyboard: moving the pointer over an unlocked row focuses it (so the
+    // detail panel, the highlight and what ENTER deploys always agree); a pointer that is merely parked
+    // over a row when the screen opens does not steal the selection. Locked rows cannot take focus, so
+    // they still preview on hover.
+    row.addEventListener('mousemove', () => {
+      if (!unlocked) renderDetail(m);
+      else if (document.activeElement !== row) row.focus({ preventScroll: true });
+    });
     row.addEventListener('focus', () => renderDetail(m));
     if (unlocked) row.addEventListener('click', () => onPick(m.id));
     if (state === 'next') {

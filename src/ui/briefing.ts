@@ -3,7 +3,7 @@ import { ARC, arcIndex } from '../content/curriculum';
 import { define } from '../content/glossary';
 import { teachingRegistry } from '../content/missions';
 import { objectiveById } from '../content/objectives';
-import { drawChunky, drawText, measureChunky } from '../render/font';
+import { drawChunky, drawText, measureChunky, wrapText } from '../render/font';
 import { RES } from '../render/res';
 import {
   bevel,
@@ -25,6 +25,8 @@ import {
   type PLine,
 } from './debrief-layout';
 import { SKILLS, skillById, type SkillId } from '../missions/difficulty';
+import { toolRegistry } from '../tools';
+import { defaultLoadout } from '../tools/arsenal';
 import './curriculum.css';
 
 /**
@@ -123,7 +125,35 @@ export function briefing(
       }
       if (y < 160) y += 4;
     }
+    drawKit(g, Math.max(y + 6, 136));
     return canvas;
+  };
+
+  /**
+   * Lower half of the overview: the tools issued for this mission and the exam objectives it practises,
+   * so the panel carries the two things a player wants before deploying instead of standing two-thirds
+   * empty. Rows that would pass the frame are dropped (the DETAILS page has the full objective list).
+   */
+  const drawKit = (g: CanvasRenderingContext2D, top: number) => {
+    const bottom = DB_H - 24, colB = 196, rowH = 9;
+    g.fillStyle = 'rgba(240,192,32,0.35)';
+    g.fillRect(22, top, DB_W - 44, 1);
+    let y = top + 7;
+    drawText(g, 'TOOLS ISSUED', 22, y, C.gold);
+    drawText(g, 'SY0-701 OBJECTIVES', colB, y, C.gold);
+    y += 11;
+    const tools = defaultLoadout(mission).map((id) => pixelSafe(toolRegistry.get(id)?.name ?? id.toUpperCase()));
+    tools.forEach((name, i) => { if (y + (i + 1) * rowH <= bottom) drawText(g, name, 22, y + i * rowH, C.text); });
+    let oy = y;
+    const cols = Math.floor((DB_W - 22 - colB) / 6);
+    for (const id of mission.objectives) {
+      const objective = objectiveById(id);
+      if (!objective) continue;
+      const lines = wrapText(pixelSafe(`${id} ${objective.title}`), cols, 2);
+      if (oy + lines.length * rowH > bottom) break;
+      for (const line of lines) { drawText(g, line, colB, oy, DOMAIN_COLOR[objective.domain] ?? C.text); oy += rowH; }
+      oy += 2;
+    }
   };
 
   const wrapChunky = (text: string, maxW: number): string[] => {
