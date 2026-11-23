@@ -114,8 +114,12 @@ export function riseBase(
 
 /** Clearance kept between the top of an enemy's opaque art and the ceiling (world units). */
 export const CEIL_MARGIN = 0.04;
-/** The ceiling clamp never shrinks a sprite below this share of its own scale. */
-export const CEIL_MIN_SCALE_FRAC = 0.5;
+/**
+ * The ceiling clamp never shrinks a sprite below this share of its own scale.
+ * Low enough that the tallest art (2.08 high at per-entity scale 1.35, needing
+ * about 0.43 of its own scale under a 1.25 ceiling) still ends below the ceiling.
+ */
+export const CEIL_MIN_SCALE_FRAC = 0.3;
 
 /**
  * Largest scale factor (relative to `spriteH`) that keeps the opaque top of a

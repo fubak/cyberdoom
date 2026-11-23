@@ -757,7 +757,7 @@ const bossGhostledgerModel: Model = (pose) => {
     out.push(box([sx * 12, 2, stride + 2.5], [5.5, 2.5, 7], '#120d1c'));
   }
   // obsidian server-monolith torso + ribbed armor + violet/crimson reactor core
-  out.push(box([0, 38 + bob, 0], [19, 15, 13], '#1c1230'));
+  out.push(box([0, 38 + bob, 0], [19, 15, 13], '#321f56'));
   out.push(box([0, 38 + bob, 9], [13.5, 11.5, 4], '#381e5c'));
   for (let r = -1; r <= 1; r++) {
     out.push(box([0, 38 + r * 4.5 + bob, 10.8], [12, 1.1, 1.4], '#140c22'));
