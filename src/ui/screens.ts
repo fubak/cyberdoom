@@ -4,7 +4,8 @@ import { episodeForMission, realCaseForMission } from '../content/story';
 import { objectiveById } from '../content/objectives';
 import { missionRowStates } from '../missions/progress';
 import { mountTitle } from '../render/title';
-import { bigButton, onKeysWhileMounted } from './briefing';
+import { bigButton, onKeysWhileMounted, pixelTitle } from './briefing';
+import { RAMP } from './debrief';
 
 /**
  * ARSENAL/LOOK: HTML overlay screens — title, character select, mission
@@ -123,7 +124,7 @@ export function missionSelect(onPick: (id: string) => void, onBack: () => void):
   const orderedIds = missions.map((m) => m.id);
   const states = missionRowStates(orderedIds);
   const clearedCount = orderedIds.filter((id) => states.get(id) === 'cleared').length;
-  bar.appendChild(el('h2', '', 'SELECT MISSION'));
+  bar.appendChild(pixelTitle('h2', '', 'SELECT MISSION', RAMP.gold, 3));
   bar.appendChild(el('div', 'playable-coverage', `MERIDIAN FREIGHT CAMPAIGN · ${clearedCount}/${orderedIds.length} SECTORS CLEARED`));
   s.appendChild(bar);
 
