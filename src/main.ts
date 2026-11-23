@@ -1309,6 +1309,7 @@ class Game {
   }
 
   private consumeDossierInput(): void {
+    this.input.bankFire();
     this.input.firePressed = false;
     this.input.usePressed = false;
     this.input.slotPressed = null;
@@ -1983,22 +1984,29 @@ class Game {
       aimEntity: (maxDist: number, maxAngle: number, interactablesOnly = false) => {
         let best: Entity | null = null;
         let bestD = maxDist;
+        let bestDa = maxAngle;
         for (const e of rt.entities) {
           if (!e.alive) continue;
           // E/Space presses aim past live malware to the console/host/item
-          // under it; combat tools keep aiming at everything.
-          if (interactablesOnly && e.def.kind === 'enemy') continue;
+          // under it; combat tools keep aiming at everything. Walk-over
+          // pickups are never interact targets either — a charge parked on a
+          // console's cell shouldn't shadow it.
+          if (interactablesOnly && (e.def.kind === 'enemy' || e.def.kind === 'item')) continue;
           const dx = e.x - p.x;
           const dy = e.y - p.y;
           const d = Math.hypot(dx, dy);
-          if (d > bestD) continue;
+          if (d > maxDist || d > bestD + 0.25) continue;
           let da = Math.atan2(dy, dx) - p.angle;
           da = Math.atan2(Math.sin(da), Math.cos(da));
           if (Math.abs(da) > maxAngle) continue;
           // line of sight
           if (map.raycast(p.x, p.y, p.angle, d).dist < d - 0.3) continue;
+          // Nearest wins; stacked candidates within 0.25 fall to the one
+          // closest to the crosshair.
+          if (best && d > bestD - 0.25 && Math.abs(da) >= bestDa) continue;
           best = e;
           bestD = d;
+          bestDa = Math.abs(da);
         }
         return best;
       },
