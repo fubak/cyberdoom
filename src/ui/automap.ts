@@ -102,7 +102,7 @@ export class Automap {
 
   draw(
     map: MapDef,
-    visited: Set<string>,
+    visited: Set<number>,
     player: { x: number; y: number; angle: number },
     secretDoorRevealed: (doorId: string) => boolean,
     label?: string,
@@ -142,7 +142,7 @@ export class Automap {
     const exits: [number, number][] = [];
     for (let y = 0; y < mapHeight; y++) {
       for (let x = 0; x < mapWidth; x++) {
-        if (!visited.has(`${x},${y}`)) continue;
+        if (!visited.has(y * mapWidth + x)) continue;
         const cell = cellAt(x, y);
         if (!cell) continue;
         const [px, py] = point(x, y);

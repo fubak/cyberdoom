@@ -1239,7 +1239,9 @@ export class Renderer {
       st.mat.uniforms.uWound.value =
         enemy && e.hp < maxHp * 0.5 ? Math.min(0.55, (0.5 - e.hp / maxHp) * 1.4) : 0;
     }
-    for (const [id, st] of [...this.sprites]) {
+    // Direct Map iteration — deleting mid-iteration is safe and avoids
+    // materialising a copy of every sprite entry each frame.
+    for (const [id, st] of this.sprites) {
       if (!seen.has(id) && st.entity && st.entity.alive === false) continue;
       if (!seen.has(id)) {
         this.spriteGroup.remove(st.mesh);
