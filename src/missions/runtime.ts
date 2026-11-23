@@ -46,7 +46,7 @@ export function scaledPickupGrant(
   return resource === 'integrity' || ammoResources.has(resource) ? scale(amount) : amount;
 }
 
-type UpdateWorld = {
+export type UpdateWorld = {
   player: { x: number; y: number; angle: number; integrity: number };
   map: WorldMap;
   use: boolean;
@@ -68,7 +68,9 @@ export class MissionRuntime {
   score = 0;
   roles: string[];
   inventory = new Set<string>();
-  visited = new Set<string>();
+  /** Fog-of-war cells as `ty * mapWidth + tx` keys — integer keys avoid the
+   * ~1,900 string allocations per 0.1 s sweep that `"x,y"` pairs cost. */
+  visited = new Set<number>();
   elapsed = 0;
   lossReason: string | null = null;
   lossCause: LossCause | null = null;
@@ -167,6 +169,15 @@ export class MissionRuntime {
     this.finished = null;
     this.lossReason = null;
     this.lossCause = null;
+    // Saves written before the integer-key switch still carry "x,y" strings.
+    const width = this.mission.map.grid[0]?.length ?? 0;
+    this.visited = new Set(
+      [...(this.visited as Set<unknown>)].map((k) => {
+        if (typeof k !== 'string') return k as number;
+        const [tx, ty] = k.split(',').map(Number);
+        return ty * width + tx;
+      }),
+    );
   }
 
   private log(text: string, points: number, objectives: string[] = [], tag?: string): void {
@@ -1017,16 +1028,18 @@ export class MissionRuntime {
         const tx = Math.floor(w.player.x + Math.cos(angle) * d);
         const ty = Math.floor(w.player.y + Math.sin(angle) * d);
         if (tx < 0 || ty < 0 || tx >= w.map.w || ty >= w.map.h) break;
-        this.visited.add(`${tx},${ty}`);
+        this.visited.add(ty * w.map.w + tx);
       }
-      if (hit.tx >= 0 && hit.ty >= 0) this.visited.add(`${hit.tx},${hit.ty}`);
+      if (hit.tx >= 0 && hit.ty >= 0) this.visited.add(hit.ty * w.map.w + hit.tx);
     }
   }
 
   /** Debug/QA: mark every map tile visited so the automap shows the full level. */
   revealAll(): void {
     for (let y = 0; y < this.mission.map.grid.length; y++) {
-      for (let x = 0; x < this.mission.map.grid[y].length; x++) this.visited.add(`${x},${y}`);
+      for (let x = 0; x < this.mission.map.grid[y].length; x++) {
+        this.visited.add(y * this.mission.map.grid[y].length + x);
+      }
     }
   }
 

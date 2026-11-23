@@ -22,7 +22,7 @@ describe('mission checkpoints', () => {
     internals.inspected.add(target.def.id);
     internals.callAttempts.set(target.def.id, 2);
     runtime.inventory.add('usb-stick');
-    runtime.visited.add('7,8');
+    runtime.visited.add(8 * m01.map.grid[0].length + 7);
     runtime.score = 45;
     runtime.scoreLog.push({ text: 'test', points: 45, good: true, objectives: ['2.1'] });
     runtime.roles.push('itops');
@@ -34,7 +34,7 @@ describe('mission checkpoints', () => {
       inspected: Set<string>;
       callAttempts: Map<string, number>;
       inventory: Set<string>;
-      visited: Set<string>;
+      visited: Set<number>;
       score: number;
       scoreLog: unknown[];
       roles: string[];

@@ -28,7 +28,7 @@ import { setupPresentation } from './ui/present';
 import { RES } from './render/res';
 import { Dossier } from './ui/dossier';
 import * as screens from './ui/screens';
-import { MissionRuntime, scaledPickupGrant } from './missions/runtime';
+import { MissionRuntime, scaledPickupGrant, type UpdateWorld } from './missions/runtime';
 import { latestRetryCheckpoint, objectiveCheckpointLabel, type Checkpoint } from './missions/checkpoint';
 import { PadMenuNav, dispatchPadKey } from './engine/padmenu';
 import {
@@ -173,6 +173,18 @@ class Game {
   private objectivesDone = -1;
   /** Sim-time when the next "stuck?" hint may fire (45 s after each reset). */
   private nudgeAt = 0;
+  /** Sim-time of the next objective-progress scan (2 Hz cadence). */
+  private nudgeScanT = 0;
+  /** Objective ids already checkpointed — replaces a per-tick Set rebuild. */
+  private checkpointDone = new Set<string>();
+  /** Reused UpdateWorld for the 240 Hz runtime tick (no per-tick allocation). */
+  private updateWorld: UpdateWorld = {
+    player: { x: 0, y: 0, angle: 0, integrity: 0 },
+    map: undefined as unknown as WorldMap,
+    use: false,
+    openDoor: (doorId) => this.openDoor(doorId),
+    flashTool: (toolId) => this.arsenal.flash(toolId),
+  };
   /** Debug: freeze sim ticks while look probes capture frames (?debug=1 only). */
   probeLock = false;
   /** Viewmodel sway/lag state: lags mouse yaw + strafe, springs back to rest. */
@@ -960,6 +972,8 @@ class Game {
     this.bannerUntil = 0;
     this.objectivesDone = -1;
     this.nudgeAt = 45;
+    this.nudgeScanT = 0;
+    this.checkpointDone.clear();
     this.lastToolId = this.arsenal.current.id;
     this.switchedTool = false;
     this.toolFxUntil.clear();
@@ -1130,14 +1144,14 @@ class Game {
       // game tick can't drift the camera or the staged enemy between shots.
       if (!this.probeLock) {
         const runtime = this.runtime;
-        const completedBefore = runtime
-          ? new Set(runtime.objectives.filter((objective) => objective.done).map((objective) => objective.def.id))
-          : null;
         this.input.poll();
         this.tick(FIXED_DT);
-        if (runtime && this.runtime === runtime && completedBefore) {
-          const label = objectiveCheckpointLabel(completedBefore, runtime.objectives, runtime.finished !== null);
+        if (runtime && this.runtime === runtime) {
+          // checkpointDone persists between ticks so the completion diff is a
+          // scan, not a 240 Hz Set allocation.
+          const label = objectiveCheckpointLabel(this.checkpointDone, runtime.objectives, runtime.finished !== null);
           if (label) {
+            for (const objective of runtime.objectives) if (objective.done) this.checkpointDone.add(objective.def.id);
             this.automaticCheckpoint = this.captureCheckpoint(label);
             this.saveCheckpoints();
             this.hud.pushMessage('CHECKPOINT SAVED', 'good');
@@ -1279,15 +1293,13 @@ class Game {
     const r = resolveUse(this.useCtx());
     if (r.kind === 'door') {
       if (!worldTicked) {
-        runtime.update(0, {
-          player: p,
-          map,
-          use: true,
-          openDoor: (doorId) => this.openDoor(doorId),
-          hasBadge: this.arsenal.owns('badge'),
-          hasToken: this.arsenal.owns('mfa'),
-          flashTool: (toolId) => this.arsenal.flash(toolId),
-        });
+        const uw = this.updateWorld;
+        uw.player = p;
+        uw.map = map;
+        uw.use = true;
+        uw.hasBadge = this.arsenal.owns('badge');
+        uw.hasToken = this.arsenal.owns('mfa');
+        runtime.update(0, uw);
       }
       this.useCd = 0.3;
       if (r.door.accessRole !== undefined && !runtime.roles.includes(r.door.accessRole)) {
@@ -1403,15 +1415,14 @@ class Game {
     this.useCd = Math.max(0, this.useCd - dt);
     this.hud.tick(dt);
     this.guidanceNudge(runtime);
-    this.runtime.update(dt, {
-      player: p,
-      map: this.map,
-      use: this.input.usePressed,
-      openDoor: (doorId) => this.openDoor(doorId),
-      hasBadge: this.arsenal.owns('badge'),
-      hasToken: this.arsenal.owns('mfa'),
-      flashTool: (toolId) => this.arsenal.flash(toolId),
-    });
+    // updateWorld is reused every 240 Hz tick — only the per-tick fields move.
+    const uw = this.updateWorld;
+    uw.player = p;
+    uw.map = this.map!;
+    uw.use = this.input.usePressed;
+    uw.hasBadge = this.arsenal.owns('badge');
+    uw.hasToken = this.arsenal.owns('mfa');
+    this.runtime.update(dt, uw);
     if (this.dossier.isOpen) {
       this.consumeDossierInput();
       return;
@@ -1823,8 +1834,8 @@ class Game {
   }
 
   /** E/Space target context: shared by the E action and the HUD prompt. */
-  private useCtx(): UseTargetContext {
-    const tool = this.toolCtx();
+  private useCtx(tool?: ReturnType<typeof this.toolCtx>): UseTargetContext {
+    tool ??= this.toolCtx();
     const map = this.map!;
     const rt = this.runtime!;
     return {
@@ -1893,8 +1904,9 @@ class Game {
     // trigger badge can't be misread as a file size ('1 MB')
     const cost = lmb?.ready && tool.ammo ? `-1 ${ammoUnit(tool.ammo.resource)}` : null;
     this.prompt.lmb = lmb ? { ...lmb, cost } : lmb;
-    const r = resolveUse(this.useCtx());
-    if (r.kind === 'door') this.prompt.use = doorUseHint(this.useCtx(), r.door);
+    const uctx = this.useCtx(ctx);
+    const r = resolveUse(uctx);
+    if (r.kind === 'door') this.prompt.use = doorUseHint(uctx, r.door);
     else if (r.kind === 'entity') this.prompt.use = this.runtime!.interactHint(r.entity);
     else this.prompt.use = null;
   }
@@ -1908,6 +1920,9 @@ class Game {
    * the nudge only fires when the player is actually drifting.
    */
   private guidanceNudge(runtime: MissionRuntime): void {
+    // Progress polling at 2 Hz — the 45 s timer doesn't need per-frame scans.
+    if (this.simT < this.nudgeScanT) return;
+    this.nudgeScanT = this.simT + 0.5;
     // Partial progress counts too: cleaning 2 of 5 hosts resets the clock.
     const done = runtime.objectiveSummary().reduce(
       (sum, o) => sum + o.progress + (o.done ? 1 : 0),
@@ -1982,9 +1997,9 @@ class Game {
         this.projectiles.push({ ...proj, alive: true, traveled: 0 });
       },
       aimEntity: (maxDist: number, maxAngle: number, interactablesOnly = false) => {
-        let best: Entity | null = null;
-        let bestD = maxDist;
-        let bestDa = maxAngle;
+        // Cheap cone/range cull first; the LOS raycast only runs on distance-
+        // sorted survivors, and stops once the 0.25 crosshair-tie window closes.
+        let candidates: { e: Entity; d: number; da: number }[] | null = null;
         for (const e of rt.entities) {
           if (!e.alive) continue;
           // E/Space presses aim past live malware to the console/host/item
@@ -1995,18 +2010,27 @@ class Game {
           const dx = e.x - p.x;
           const dy = e.y - p.y;
           const d = Math.hypot(dx, dy);
-          if (d > maxDist || d > bestD + 0.25) continue;
+          if (d > maxDist) continue;
           let da = Math.atan2(dy, dx) - p.angle;
           da = Math.atan2(Math.sin(da), Math.cos(da));
           if (Math.abs(da) > maxAngle) continue;
-          // line of sight
-          if (map.raycast(p.x, p.y, p.angle, d).dist < d - 0.3) continue;
+          (candidates ??= []).push({ e, d, da });
+        }
+        if (!candidates) return null;
+        candidates.sort((a, b) => a.d - b.d);
+        let best: Entity | null = null;
+        let bestD = 0;
+        let bestDa = 0;
+        for (const c of candidates) {
           // Nearest wins; stacked candidates within 0.25 fall to the one
-          // closest to the crosshair.
-          if (best && d > bestD - 0.25 && Math.abs(da) >= bestDa) continue;
-          best = e;
-          bestD = d;
-          bestDa = Math.abs(da);
+          // closest to the crosshair. Past that window no later entry can win.
+          if (best && c.d > bestD + 0.25) break;
+          // line of sight
+          if (map.raycast(p.x, p.y, p.angle, c.d).dist < c.d - 0.3) continue;
+          if (best && c.d > bestD - 0.25 && Math.abs(c.da) >= bestDa) continue;
+          best = c.e;
+          bestD = c.d;
+          bestDa = Math.abs(c.da);
         }
         return best;
       },
