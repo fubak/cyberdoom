@@ -147,10 +147,10 @@ export const m11: Mission = {
     },
     // --- War room: the three data-subject requests ---
     {
-      id: 'dsr1-case', kind: 'console', x: 4.5, y: 13.5, sprite: 'console',
+      id: 'dsr-queue', kind: 'console', x: 11.5, y: 13.5, sprite: 'console',
       inspect: {
-        label: 'DSR-4421: erasure request',
-        detail: 'EU customer: "erase all personal data you hold on me." On file: account profile, marketing history, support tickets — and 7 years of invoices that tax law requires you to keep.',
+        label: 'DSR queue (4421–4423)',
+        detail: 'DSR-4421 (EU erasure): customer asks to erase all personal data; 7 years of tax invoices are legally required. DSR-4422: former employee K. Marsh asks to delete mailbox — litigation hold LIT-88 is ACTIVE. DSR-4423: partner requires formal compliance proof, not assurances.',
         category: 'legit', objectives: ['5.4'],
       },
     },
@@ -158,7 +158,7 @@ export const m11: Mission = {
       id: 'dsr1-wipe', kind: 'console', x: 3.5, y: 14.5, sprite: 'console', group: 'dsr1',
       tags: ['wrong'],
       inspect: {
-        label: 'Erase EVERYTHING, invoices included',
+        label: 'DSR-4421: Erase EVERYTHING, invoices included',
         detail: 'Deletes the account, the PII and the financial records in one pass.',
         category: 'legit', objectives: ['5.4'],
       },
@@ -168,25 +168,17 @@ export const m11: Mission = {
       id: 'dsr1-right', kind: 'console', x: 5.5, y: 14.5, sprite: 'console', group: 'dsr1',
       tags: ['dsr'],
       inspect: {
-        label: 'Erase PII; retain legal minimums',
+        label: 'DSR-4421: Erase PII; retain legal minimums',
         detail: 'Erases personal data but keeps what the retention schedule legally requires.',
         category: 'legit', objectives: ['5.4'],
       },
       log: 'Profile, marketing history and support tickets erased. Invoices retained under the tax retention schedule with the legal basis recorded. Erasure certificate sent to the data subject.',
     },
     {
-      id: 'dsr2-case', kind: 'console', x: 11.5, y: 13.5, sprite: 'console',
-      inspect: {
-        label: 'DSR-4422: deletion request',
-        detail: 'Former employee K. Marsh asks for their mailbox and files to be deleted. Litigation hold LIT-88 is active on that mailbox for the contract suit — counsel must approve any deletion.',
-        category: 'legit', objectives: ['5.4'],
-      },
-    },
-    {
       id: 'dsr2-delete', kind: 'console', x: 10.5, y: 14.5, sprite: 'console', group: 'dsr2',
       tags: ['spoliation'],
       inspect: {
-        label: 'Delete mailbox and files now',
+        label: 'DSR-4422: Delete mailbox and files now',
         detail: 'Honors the request immediately, hold or no hold.',
         category: 'legit', objectives: ['5.4'],
       },
@@ -196,25 +188,17 @@ export const m11: Mission = {
       id: 'dsr2-hold', kind: 'console', x: 12.5, y: 14.5, sprite: 'console', group: 'dsr2',
       tags: ['dsr'],
       inspect: {
-        label: 'Suspend DSR under legal hold',
+        label: 'DSR-4422: Suspend DSR under legal hold',
         detail: 'Routes the request to counsel and preserves the mailbox until the hold lifts.',
         category: 'legit', objectives: ['5.4'],
       },
       log: 'Deletion suspended: legal hold LIT-88 overrides the erasure request until counsel releases it. Response documented, and the data subject was informed of the delay and its legal basis.',
     },
     {
-      id: 'dsr3-case', kind: 'console', x: 15.5, y: 13.5, sprite: 'console',
-      inspect: {
-        label: 'DSR-4423: attestation request',
-        detail: 'A business partner requires formal proof their data was handled compliantly this quarter — their vendor-management clause demands evidence, not assurances.',
-        category: 'legit', objectives: ['5.4'],
-      },
-    },
-    {
       id: 'dsr3-email', kind: 'console', x: 14.5, y: 14.5, sprite: 'console', group: 'dsr3',
       tags: ['wrong'],
       inspect: {
-        label: 'Reply: "it\u2019s handled, trust us"',
+        label: 'DSR-4423: Reply "it\u2019s handled, trust us"',
         detail: 'A quick note back so the queue clears faster.',
         category: 'legit', objectives: ['5.4'],
       },
@@ -224,7 +208,7 @@ export const m11: Mission = {
       id: 'dsr3-attest', kind: 'console', x: 16.5, y: 14.5, sprite: 'console', group: 'dsr3',
       tags: ['dsr'],
       inspect: {
-        label: 'Issue signed attestation + evidence',
+        label: 'DSR-4423: Issue signed attestation + evidence',
         detail: 'Formal attestation signed by the control owner, backed by the processing logs.',
         category: 'legit', objectives: ['5.4'],
       },
@@ -248,17 +232,7 @@ export const m11: Mission = {
         detail: 'Full disclosure so the test finishes deep and fast.',
         category: 'legit', objectives: ['5.5'],
       },
-      log: 'Full access granted — a known-environment (white-box) test. It measures a well-informed insider\u2019s reach, not the outside attacker the committee asked about.',
-    },
-    {
-      id: 'scope-partial', kind: 'console', x: 26.5, y: 14.5, sprite: 'console', group: 'scope-pick',
-      tags: ['wrong'],
-      inspect: {
-        label: 'Give network diagrams only',
-        detail: 'Some inside knowledge, as a compromise.',
-        category: 'legit', objectives: ['5.5'],
-      },
-      log: 'Partial disclosure — a partially known (gray-box) test simulates a semi-informed attacker. Useful depth on a budget, still not the outsider view the committee asked for.',
+      log: 'Full access granted — a known-environment (white-box) test. Even partially known (gray-box) diagrams simulate an insider, not the outside attacker the committee asked about.',
     },
     {
       id: 'scope-unknown', kind: 'console', x: 28.5, y: 14.5, sprite: 'console', group: 'scope-pick',
@@ -300,95 +274,51 @@ export const m11: Mission = {
     },
     // --- War room east: the governance shelf (5.1 — policy/standard/procedure/guideline) ---
     {
-      id: 'gov-doc-aup', kind: 'console', x: 29.5, y: 14.5, sprite: 'console', tags: ['gov-doc'],
+      id: 'gov-binder', kind: 'console', x: 29.5, y: 15.5, sprite: 'console', tags: ['gov-doc'],
       inspect: {
-        label: 'Acceptable Use Policy, v3',
-        detail: 'Signed by the CISO, applies to every employee: "personal devices may not join the corporate WLAN." Violations are an HR matter. High-level management intent — no how-to steps.',
+        label: 'Governance binder (4 docs)',
+        detail: '(1) AUP v3: CISO-signed rule binding all staff, HR violations, no how-to steps. (2) Password baseline: mandatory 20+ chars in PAM, quarterly rotation. (3) Offboarding runbook: ordered checklist (badge, disable, archive, revoke). (4) Clean-desk tips: optional "consider locking screen" advice.',
         category: 'legit', objectives: ['5.1'],
       },
     },
     {
       id: 'gov-pick-aup-policy', kind: 'console', x: 31.5, y: 14.5, sprite: 'console', group: 'gov-aup', tags: ['gov-file'],
-      inspect: { label: 'File as: POLICY', detail: 'A mandatory, high-level statement of management intent that applies organization-wide.', category: 'legit', objectives: ['5.1'] },
+      inspect: { label: 'AUP v3 -> POLICY', detail: 'A mandatory, high-level statement of management intent that applies organization-wide.', category: 'legit', objectives: ['5.1'] },
       log: 'Filed as POLICY — correct: it is management\u2019s binding statement of intent for all staff.',
     },
     {
-      id: 'gov-pick-aup-standard', kind: 'console', x: 33.5, y: 14.5, sprite: 'console', group: 'gov-aup', tags: ['wrong'],
-      inspect: { label: 'File as: STANDARD', detail: 'A mandatory technical baseline — specific settings or values.', category: 'legit', objectives: ['5.1'] },
-      log: 'Wrong element: a standard mandates specific technical parameters (lengths, versions, algorithms). A rules-of-conduct statement signed for all staff is a policy.',
-    },
-    {
       id: 'gov-pick-aup-guideline', kind: 'console', x: 35.5, y: 14.5, sprite: 'console', group: 'gov-aup', tags: ['wrong'],
-      inspect: { label: 'File as: GUIDELINE', detail: 'A non-mandatory recommendation.', category: 'legit', objectives: ['5.1'] },
+      inspect: { label: 'AUP v3 -> GUIDELINE', detail: 'A non-mandatory recommendation.', category: 'legit', objectives: ['5.1'] },
       log: 'Wrong element: guidelines suggest; this document binds. "Violations are an HR matter" is enforcement language — it is policy, not advice.',
     },
     {
-      id: 'gov-doc-pw', kind: 'console', x: 29.5, y: 15.5, sprite: 'console', tags: ['gov-doc'],
-      inspect: {
-        label: 'Password configuration baseline',
-        detail: 'Mandatory for all service accounts: 20+ characters, individual credentials in the PAM vault, rotated quarterly. A specific, required technical setting — not negotiable.',
-        category: 'legit', objectives: ['5.1'],
-      },
-    },
-    {
       id: 'gov-pick-pw-policy', kind: 'console', x: 31.5, y: 15.5, sprite: 'console', group: 'gov-pw', tags: ['wrong'],
-      inspect: { label: 'File as: POLICY', detail: 'A mandatory, high-level statement of management intent.', category: 'legit', objectives: ['5.1'] },
+      inspect: { label: 'Password baseline -> POLICY', detail: 'A mandatory, high-level statement of management intent.', category: 'legit', objectives: ['5.1'] },
       log: 'Wrong element: "20+ characters, rotated quarterly" is a required technical parameter, not a broad statement of intent — this is a standard.',
     },
     {
       id: 'gov-pick-pw-standard', kind: 'console', x: 33.5, y: 15.5, sprite: 'console', group: 'gov-pw', tags: ['gov-file'],
-      inspect: { label: 'File as: STANDARD', detail: 'A mandatory technical baseline — specific settings or values.', category: 'legit', objectives: ['5.1'] },
+      inspect: { label: 'Password baseline -> STANDARD', detail: 'A mandatory technical baseline — specific settings or values.', category: 'legit', objectives: ['5.1'] },
       log: 'Filed as STANDARD — correct: it mandates concrete technical parameters for a specific system class.',
     },
     {
-      id: 'gov-pick-pw-procedure', kind: 'console', x: 35.5, y: 15.5, sprite: 'console', group: 'gov-pw', tags: ['wrong'],
-      inspect: { label: 'File as: PROCEDURE', detail: 'Step-by-step instructions for completing a task.', category: 'legit', objectives: ['5.1'] },
-      log: 'Wrong element: a procedure is an ordered how-to. This document specifies required parameter values, not steps to follow — it is a standard.',
-    },
-    {
-      id: 'gov-doc-offb', kind: 'console', x: 29.5, y: 16.5, sprite: 'console', tags: ['gov-doc'],
-      inspect: {
-        label: 'Offboarding runbook',
-        detail: 'Steps executed on every departure: collect badge, disable accounts within 4 hours, archive the mailbox, revoke tokens, manager sign-off. An ordered checklist to perform.',
-        category: 'legit', objectives: ['5.1'],
-      },
-    },
-    {
-      id: 'gov-pick-offb-policy', kind: 'console', x: 31.5, y: 16.5, sprite: 'console', group: 'gov-offb', tags: ['wrong'],
-      inspect: { label: 'File as: POLICY', detail: 'A mandatory, high-level statement of management intent.', category: 'legit', objectives: ['5.1'] },
-      log: 'Wrong element: this is an ordered set of steps to execute, not a statement of intent — it is a procedure.',
-    },
-    {
       id: 'gov-pick-offb-standard', kind: 'console', x: 33.5, y: 16.5, sprite: 'console', group: 'gov-offb', tags: ['wrong'],
-      inspect: { label: 'File as: STANDARD', detail: 'A mandatory technical baseline — specific settings or values.', category: 'legit', objectives: ['5.1'] },
+      inspect: { label: 'Offboarding runbook -> STANDARD', detail: 'A mandatory technical baseline — specific settings or values.', category: 'legit', objectives: ['5.1'] },
       log: 'Wrong element: standards fix required values, not sequences of actions. A departure checklist is a procedure.',
     },
     {
       id: 'gov-pick-offb-procedure', kind: 'console', x: 35.5, y: 16.5, sprite: 'console', group: 'gov-offb', tags: ['gov-file'],
-      inspect: { label: 'File as: PROCEDURE', detail: 'Step-by-step instructions for completing a task.', category: 'legit', objectives: ['5.1'] },
+      inspect: { label: 'Offboarding runbook -> PROCEDURE', detail: 'Step-by-step instructions for completing a task.', category: 'legit', objectives: ['5.1'] },
       log: 'Filed as PROCEDURE — correct: it is the ordered, repeatable checklist staff actually execute.',
     },
     {
-      id: 'gov-doc-desk', kind: 'console', x: 29.5, y: 17.5, sprite: 'console', tags: ['gov-doc'],
-      inspect: {
-        label: 'Clean-desk awareness tips',
-        detail: 'From the awareness team: "consider locking your screen when away and stowing papers in a drawer." Suggestions only — nothing here is required or enforced.',
-        category: 'legit', objectives: ['5.1'],
-      },
-    },
-    {
-      id: 'gov-pick-desk-policy', kind: 'console', x: 31.5, y: 17.5, sprite: 'console', group: 'gov-desk', tags: ['wrong'],
-      inspect: { label: 'File as: POLICY', detail: 'A mandatory, high-level statement of management intent.', category: 'legit', objectives: ['5.1'] },
-      log: 'Wrong element: "consider" is recommendation language, and nothing is enforced — a guideline, not a binding policy.',
-    },
-    {
       id: 'gov-pick-desk-procedure', kind: 'console', x: 33.5, y: 17.5, sprite: 'console', group: 'gov-desk', tags: ['wrong'],
-      inspect: { label: 'File as: PROCEDURE', detail: 'Step-by-step instructions for completing a task.', category: 'legit', objectives: ['5.1'] },
+      inspect: { label: 'Clean-desk tips -> PROCEDURE', detail: 'Step-by-step instructions for completing a task.', category: 'legit', objectives: ['5.1'] },
       log: 'Wrong element: these are optional tips, not mandatory steps — a guideline.',
     },
     {
       id: 'gov-pick-desk-guideline', kind: 'console', x: 35.5, y: 17.5, sprite: 'console', group: 'gov-desk', tags: ['gov-file'],
-      inspect: { label: 'File as: GUIDELINE', detail: 'A non-mandatory recommendation.', category: 'legit', objectives: ['5.1'] },
+      inspect: { label: 'Clean-desk tips -> GUIDELINE', detail: 'A non-mandatory recommendation.', category: 'legit', objectives: ['5.1'] },
       log: 'Filed as GUIDELINE — correct: it recommends good practice without requiring it.',
     },
     // --- Server floor: the physical sweep (tag 'asset') ---
@@ -407,24 +337,6 @@ export const m11: Mission = {
       inspect: {
         label: 'FIN-01 workstation',
         detail: 'Register match: FINANCE, owner K. Marsh — but Marsh was offboarded in 2025-11. The tag matches; the ownership record is stale.',
-        category: 'legit', objectives: ['4.2'],
-      },
-    },
-    {
-      id: 'mail-02', kind: 'workstation', x: 32.5, y: 3.5, sprite: 'workstation',
-      tags: ['asset'],
-      inspect: {
-        label: 'MAIL-02 relay',
-        detail: 'Register match: SRV-FLOOR, owner IT ops. Present, tagged, and correctly assigned.',
-        category: 'legit', objectives: ['4.2'],
-      },
-    },
-    {
-      id: 'prt-07', kind: 'workstation', x: 36.5, y: 3.5, sprite: 'workstation',
-      tags: ['asset'],
-      inspect: {
-        label: 'PRN-07 label printer',
-        detail: 'Register match: SRV-FLOOR, owner shipping. Present and tagged.',
         category: 'legit', objectives: ['4.2'],
       },
     },
@@ -481,22 +393,13 @@ export const m11: Mission = {
     },
     // --- Media vault: the retired-drive bays ---
     {
-      id: 'shelf-ssd', kind: 'workstation', x: 7.5, y: 3.5, sprite: 'workstation',
+      id: 'vault-manifest', kind: 'console', x: 8.5, y: 9.5, sprite: 'console',
       inspect: {
-        label: 'SSD-228 (from FIN-01 refresh)',
-        detail: 'Solid-state drive that held customer PII — cardholder names and emails. Flash cells: degaussing does nothing to them.',
-        category: 'legit', objectives: ['4.2'],
+        label: 'Media vault manifest & certificate ledger',
+        detail: 'SSD-228: flash drive with customer PII (degaussing fails on flash). HDD-114: K. Marsh mailbox archive under ACTIVE litigation hold LIT-88. LTO-9: expired magnetic backup tape. Unlabeled drive + USB: unknown provenance. Every disposition issues a certificate of destruction.',
+        category: 'legit', objectives: ['4.2', '5.4'],
       },
-    },
-    {
-      id: 'ssd-format', kind: 'console', x: 6.5, y: 4.5, sprite: 'console', group: 'ssd',
-      tags: ['wrong'],
-      inspect: {
-        label: 'Quick format SSD-228',
-        detail: 'Fastest option — rebuilds the filesystem and calls it clean.',
-        category: 'legit', objectives: ['4.2'],
-      },
-      log: 'Quick format done in 4 seconds. The PII is still recoverable — a format rewrites pointers, not cells. Auditors with forensic tools will find every record.',
+      log: 'CERTIFICATE LEDGER — serial, method, date and witness are recorded as each drive is dispositioned.',
     },
     {
       id: 'ssd-degauss', kind: 'console', x: 7.5, y: 4.5, sprite: 'console', group: 'ssd',
@@ -506,7 +409,7 @@ export const m11: Mission = {
         detail: 'Run it through the magnetic eraser like the tapes.',
         category: 'legit', objectives: ['4.2'],
       },
-      log: 'The degaussing wand passes over the SSD — nothing happens. Degaussing only erases magnetic media; flash has no magnetic domains. The PII is intact.',
+      log: 'The degaussing wand passes over the SSD — nothing happens. Degaussing only erases magnetic media; flash has no magnetic domains, and a quick format only rewrites pointers. The PII is intact.',
     },
     {
       id: 'ssd-erase', kind: 'console', x: 8.5, y: 4.5, sprite: 'console', group: 'ssd',
@@ -517,14 +420,6 @@ export const m11: Mission = {
         category: 'legit', objectives: ['4.2'],
       },
       log: 'SSD-228 sanitized: cryptographic erase (media key destroyed), then a verified secure-erase pass. Certificate of destruction #8841 issued and filed.',
-    },
-    {
-      id: 'shelf-hdd', kind: 'workstation', x: 11.5, y: 3.5, sprite: 'workstation',
-      inspect: {
-        label: 'HDD-114 (Marsh mailbox archive)',
-        detail: 'Magnetic drive holding the K. Marsh mailbox archive — litigation hold LIT-88 is ACTIVE on this data for the contract suit.',
-        category: 'legit', objectives: ['4.2', '5.4'],
-      },
     },
     {
       id: 'hdd-shred', kind: 'console', x: 10.5, y: 4.5, sprite: 'console', group: 'hdd',
@@ -547,24 +442,6 @@ export const m11: Mission = {
       log: 'HDD-114 retained: moved to the evidence safe under litigation hold LIT-88 and logged in the chain of custody. Disposition deferred until counsel releases the hold.',
     },
     {
-      id: 'hdd-wipe', kind: 'console', x: 12.5, y: 4.5, sprite: 'console', group: 'hdd',
-      tags: ['spoliation'],
-      inspect: {
-        label: 'Wipe and redeploy HDD-114',
-        detail: 'Sanitize it so it can go back into service tonight.',
-        category: 'legit', objectives: ['5.4'],
-      },
-      log: 'Drive wiped.',
-    },
-    {
-      id: 'shelf-tape', kind: 'workstation', x: 15.5, y: 3.5, sprite: 'workstation',
-      inspect: {
-        label: 'LTO-9 tape (quarterly financials)',
-        detail: 'Backup tape whose retention schedule expired in January. Magnetic media — a degausser will erase it cleanly.',
-        category: 'legit', objectives: ['4.2'],
-      },
-    },
-    {
       id: 'tape-dump', kind: 'console', x: 14.5, y: 4.5, sprite: 'console', group: 'tape',
       tags: ['wrong'],
       inspect: {
@@ -585,38 +462,10 @@ export const m11: Mission = {
       log: 'LTO-9 degaussed: magnetic domains randomized, data unrecoverable. Certificate of destruction #8842 issued and filed.',
     },
     {
-      id: 'tape-relabel', kind: 'console', x: 16.5, y: 4.5, sprite: 'console', group: 'tape',
-      tags: ['wrong'],
-      inspect: {
-        label: 'Relabel and reuse LTO-9',
-        detail: 'Peel the sticker — free scratch tape for the next backup.',
-        category: 'legit', objectives: ['4.2'],
-      },
-      log: 'Relabeled as a scratch tape — but the quarterly financials stay recoverable until something overwrites them. Reusing media without sanitizing it first leaks last year\u2019s data to whoever mounts it next.',
-    },
-    {
-      id: 'shelf-shadow', kind: 'workstation', x: 15.5, y: 6.5, sprite: 'workstation',
-      inspect: {
-        label: 'Unlabeled drive + USB stick',
-        detail: 'No asset tag, no register entry, contents unverified — found loose on the vault shelf. Unknown provenance means unknown contents.',
-        category: 'suspicious', objectives: ['4.2'],
-      },
-    },
-    {
-      id: 'shadow-donate', kind: 'console', x: 14.5, y: 7.5, sprite: 'console', group: 'shadow',
-      tags: ['wrong'],
-      inspect: {
-        label: 'Donate to the school drive',
-        detail: 'Free hardware for the district\u2019s computer lab.',
-        category: 'legit', objectives: ['4.2'],
-      },
-      log: 'The unknown media goes in the donation box — with whatever is on it. If that drive held PII, we just shipped a breach to a middle school. Unknown provenance means unknown contents.',
-    },
-    {
       id: 'shadow-plug', kind: 'console', x: 15.5, y: 7.5, sprite: 'console', group: 'shadow',
       tags: ['wrong'],
       inspect: {
-        label: 'Plug it in to check contents',
+        label: 'Plug unlabeled USB in to check contents',
         detail: 'Fastest way to see what is on it.',
         category: 'legit', objectives: ['4.2', '2.2'],
       },
@@ -626,20 +475,11 @@ export const m11: Mission = {
       id: 'shadow-destroy', kind: 'console', x: 16.5, y: 7.5, sprite: 'console', group: 'shadow',
       tags: ['dispose'],
       inspect: {
-        label: 'Physically destroy + log serials',
+        label: 'Physically destroy unlabeled media + log serials',
         detail: 'Shred it — unverifiable media cannot be trusted for erasure.',
         category: 'legit', objectives: ['4.2'],
       },
       log: 'Unknown drive and USB physically destroyed; serials photographed and logged. Media you cannot verify cannot be trusted for sanitization — destruction removes the doubt. Certificate #8843 filed.',
-    },
-    {
-      id: 'cert-ledger', kind: 'console', x: 8.5, y: 9.5, sprite: 'console',
-      inspect: {
-        label: 'Certificate ledger',
-        detail: 'One certificate of destruction per dispositioned item: serial, method, date, witness. This is the book the auditors will sample first.',
-        category: 'legit', objectives: ['4.2'],
-      },
-      log: 'CERTIFICATE LEDGER — entries appear as each drive is dispositioned.',
     },
     // --- Ambient + pickups ---
     {
@@ -705,13 +545,13 @@ export const m11: Mission = {
   missionObjectives: [
     { id: 'inv-load', text: 'Pull up the stale asset inventory', kind: 'interact', tag: 'inv-load' },
     { id: 'signin', text: 'Sign in for AUDIT role (media vault)', kind: 'interact', tag: 'signin' },
-    { id: 'sweep', text: 'Physically sweep the floor: inspect all 8 assets', kind: 'inspect', tag: 'asset', count: 8 },
+    { id: 'sweep', text: 'Physically sweep the floor: inspect all 6 assets', kind: 'inspect', tag: 'asset', count: 6 },
     { id: 'reconcile', text: 'Reconcile the register against the sweep', kind: 'interact', tag: 'reconcile', requires: ['inv-load', 'sweep'] },
     { id: 'dispose', text: 'Dispose of each retired drive correctly', kind: 'interact', tag: 'dispose', count: 4, requires: ['reconcile'] },
     { id: 'dsr', text: 'Answer the three data-subject requests', kind: 'interact', tag: 'dsr', count: 3 },
     { id: 'audit-map', text: 'Identify the audit cast: brief, internal audit, external auditor, red team', kind: 'inspect', tag: 'audit-cast', count: 4 },
     { id: 'scope', text: 'Issue the pen-test rules of engagement', kind: 'interact', tag: 'scope', requires: ['audit-map'] },
-    { id: 'gov-read', text: 'Read all four governance documents', kind: 'inspect', tag: 'gov-doc', count: 4 },
+    { id: 'gov-read', text: 'Read the governance binder (4 documents)', kind: 'inspect', tag: 'gov-doc' },
     { id: 'governance', text: 'File each governance document under the right element', kind: 'interact', tag: 'gov-file', count: 4, requires: ['gov-read'] },
     { id: 'attest', text: 'Sign the attestation package', kind: 'interact', tag: 'attest', requires: ['reconcile', 'dispose', 'dsr', 'scope', 'governance'] },
     { id: 'legal-hold', text: 'Never destroy data under legal hold', kind: 'avoid', tag: 'spoliation' },
@@ -840,14 +680,13 @@ export const m11Walkthrough: WalkStep[] = [
   { interact: 'inv-console' },
   { goto: [10, 19] },
   { interact: 'audit-signin' },
-  { goto: [4, 15] },
-  { inspect: 'dsr1-case' },
+  { goto: [11, 14] },
+  { inspect: 'dsr-queue' },
+  { goto: [5, 15] },
   { interact: 'dsr1-right' },
-  { goto: [11, 15] },
-  { inspect: 'dsr2-case' },
+  { goto: [12, 15] },
   { interact: 'dsr2-hold' },
   { goto: [16, 15] },
-  { inspect: 'dsr3-case' },
   { interact: 'dsr3-attest' },
   { goto: [27, 15] },
   { inspect: 'scope-brief' },
@@ -861,10 +700,6 @@ export const m11Walkthrough: WalkStep[] = [
   { inspect: 'srv-db' },
   { goto: [28, 4] },
   { inspect: 'ws-fin' },
-  { goto: [32, 4] },
-  { inspect: 'mail-02' },
-  { goto: [36, 4] },
-  { inspect: 'prt-07' },
   { goto: [24, 7] },
   { inspect: 'rogue-ap' },
   { goto: [28, 7] },
@@ -878,24 +713,20 @@ export const m11Walkthrough: WalkStep[] = [
   { goto: [30, 13] },
   { badge: [8, 12] },
   { goto: [8, 13] },
-  { goto: [7, 5] },
-  { inspect: 'shelf-ssd' },
+  { goto: [8, 9] },
+  { inspect: 'vault-manifest' },
+  { goto: [8, 5] },
   { interact: 'ssd-erase' },
   { goto: [11, 5] },
-  { inspect: 'shelf-hdd' },
   { interact: 'hdd-retain' },
   { goto: [15, 5] },
-  { inspect: 'shelf-tape' },
   { interact: 'tape-degauss' },
-  { goto: [15, 8] },
-  { inspect: 'shelf-shadow' },
+  { goto: [16, 8] },
   { interact: 'shadow-destroy' },
   { goto: [8, 13] },
+  { goto: [30, 16] },
+  { inspect: 'gov-binder' },
   { goto: [31, 15] },
-  { inspect: 'gov-doc-aup' },
-  { inspect: 'gov-doc-pw' },
-  { inspect: 'gov-doc-offb' },
-  { inspect: 'gov-doc-desk' },
   { interact: 'gov-pick-aup-policy' },
   { goto: [33, 15] },
   { interact: 'gov-pick-pw-standard' },
