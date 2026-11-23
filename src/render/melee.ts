@@ -111,3 +111,36 @@ export function riseBase(
   // small margin so the smoothed lift still clears `aboveFrac` between frames
   return eyeH - (lineFrac - 0.5) * span - (1 - aboveFrac - 0.02) * spriteH;
 }
+
+/** Clearance kept between the top of an enemy's opaque art and the ceiling (world units). */
+export const CEIL_MARGIN = 0.04;
+/** The ceiling clamp never shrinks a sprite below this share of its own scale. */
+export const CEIL_MIN_SCALE_FRAC = 0.5;
+
+/**
+ * Largest scale factor (relative to `spriteH`) that keeps the opaque top of a
+ * bottom-anchored sprite under the ceiling. `topFrac` is the share of the
+ * canvas height from base to the top opaque row. May exceed any wanted scale;
+ * callers take the min.
+ */
+export function ceilingScaleCap(
+  baseY: number,
+  ceilY: number,
+  spriteH: number,
+  topFrac: number,
+  margin: number = CEIL_MARGIN,
+): number {
+  const art = spriteH * topFrac;
+  if (!(art > 0)) return Number.POSITIVE_INFINITY;
+  return Math.max(0, ceilY - margin - baseY) / art;
+}
+
+/** Non-negative lift still available before the drawn art top reaches the ceiling. */
+export function ceilingRiseCap(
+  baseY: number,
+  ceilY: number,
+  drawnTop: number,
+  margin: number = CEIL_MARGIN,
+): number {
+  return Math.max(0, ceilY - margin - baseY - drawnTop);
+}

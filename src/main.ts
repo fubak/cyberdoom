@@ -2072,6 +2072,9 @@ class Game {
       hurtUniform() {
         return g.renderer.debugHurtUniform();
       },
+      spriteTops() {
+        return g.renderer.debugSpriteTops();
+      },
       state() {
         return {
           screen: g.screen,

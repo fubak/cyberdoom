@@ -29,6 +29,8 @@ export interface SpriteSet {
   walkN?: number;
   /** Data-gib debris tint thrown on death (threat colour). */
   gib?: [number, number, number];
+  /** Share of the canvas height (from base) up to the top opaque row; measured lazily by the renderer. */
+  topFrac?: number;
 }
 
 export const spriteRegistry = new Registry<THREE.Texture>();
