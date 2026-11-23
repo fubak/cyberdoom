@@ -92,7 +92,10 @@ export const mouseTool: ToolDef = {
     impactBurst(g, w / 2, tipY(_h), anim.sinceConfirm, anim.confirmGood, 0.6, 'select');
   },
   use(ctx: ToolUseContext) {
-    const e = ctx.aimEntity(8, 0.26);
+    // Prefer the interactable under the crosshair — malware parked on a
+    // workstation must not body-block its inspect/flag — enemies are the
+    // fallback so flagging a roaming threat still works.
+    const e = ctx.aimEntity(8, 0.26, true) ?? ctx.aimEntity(8, 0.26);
     ctx.bus.emit('tool-used', { toolId: 'mouse' });
     if (!e) {
       ctx.bus.emit('message', { text: 'Nothing in reach — aim at it and get closer.', kind: 'info' });
@@ -137,7 +140,7 @@ export const mouseTool: ToolDef = {
       : { text: `FALSE POSITIVE: ${e.def.inspect?.label ?? 'target'} shows no malicious indicators. Re-read the evidence.`, kind: 'bad' });
   },
   hint(ctx) {
-    const e = ctx.aimEntity(8, 0.26);
+    const e = ctx.aimEntity(8, 0.26, true) ?? ctx.aimEntity(8, 0.26);
     if (!e) return null;
     if (!e.state.inspected) return { text: `INSPECT ${targetNoun(e)}`, ready: true };
     if (e.state.flagged) return { text: 'ALREADY FLAGGED', ready: false };
