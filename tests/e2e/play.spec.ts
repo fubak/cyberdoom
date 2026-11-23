@@ -74,7 +74,11 @@ test('perf: deploy→play has no gross frame stall (SwiftShader numbers logged)'
   console.log(
     `[frame-gaps] n=${gaps.length} median=${median.toFixed(1)}ms p95=${p95.toFixed(1)}ms max=${max.toFixed(1)}ms`,
   );
-  // Gross-regression tripwire only: SwiftShader pacing on CI is slow and noisy.
-  expect(max).toBeLessThan(1000);
+  // Two limits, because SwiftShader pacing on CI is slow and noisy. A single worst frame is
+  // unreliable (unchanged main and unrelated PRs hit maxima of 1167, 1250, 1333, 2050, 2167 and
+  // 2317 ms), so that limit only catches a real multi-second freeze. Sustained stalls are
+  // caught by the 95th-percentile gap, which a lone slow frame cannot move.
+  expect(max).toBeLessThan(4000);
+  expect(p95).toBeLessThan(250);
   expect(probs.errors).toEqual([]);
 });
