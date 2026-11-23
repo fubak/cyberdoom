@@ -299,7 +299,7 @@ export const m04: Mission = {
   script: {
     par: 240,
     outbreak: {
-      tag: 'spoofed', every: 14, until: 'gateway',
+      tag: 'mail-malicious', every: 14, until: 'gateway',
       message: 'A spoofed-domain message reappeared while the gateway policy is incomplete.',
     },
     triggers: [
