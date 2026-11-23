@@ -379,6 +379,33 @@ describe('MissionRuntime', () => {
     expect(state.messages.at(-1)?.text).toBe('First: Collect evidence');
   });
 
+  it('counts an early inspection once its requires objective completes', () => {
+    const state = setup(mission({
+      entities: [
+        {
+          id: 'rule-svc', kind: 'console', x: 2, y: 2, sprite: 'console',
+          tags: ['rule-evidence'],
+          inspect: { label: 'Rule console', detail: 'svc evidence', category: 'legit' },
+        },
+        {
+          id: 'gate', kind: 'console', x: 4, y: 4, sprite: 'console',
+          tags: ['gate'], log: 'gate console',
+        },
+      ],
+      missionObjectives: [
+        { id: 'queue', text: 'Work the queue', kind: 'interact', tag: 'gate' },
+        { id: 'inspect-rules', text: 'Review rule evidence', kind: 'inspect', tag: 'rule-evidence', requires: ['queue'] },
+      ],
+    }));
+    // E-reading the console before the gate completes warns, but does not count
+    state.bus.emit('interact', { entityId: 'rule-svc' });
+    expect(state.rt.objectives.find((objective) => objective.def.id === 'inspect-rules')?.progress).toBe(0);
+    // after the gate completes, re-reading the same console earns the credit
+    state.bus.emit('interact', { entityId: 'gate' });
+    state.bus.emit('interact', { entityId: 'rule-svc' });
+    expect(state.rt.objectives.find((objective) => objective.def.id === 'inspect-rules')?.done).toBe(true);
+  });
+
   it('fails an early interaction through its configured avoid objective', () => {
     const state = setup(mission({
       entities: [{
@@ -798,9 +825,9 @@ describe('MissionRuntime', () => {
       { entityId: 'bad-hash', source: 'log', label: 'Base64 option', detail: 'Base64 is not hashing.' },
     ]);
     expect(state.rt.scoreLog.filter((event) => event.tag === 'bad-choice')).toMatchObject([
-      { text: 'Wrong call: Base64 option', points: -15, objectives: ['1.4'], tag: 'bad-choice' },
+      { text: 'Wrong call: Base64 option — read why in the case file (L)', points: -15, objectives: ['1.4'], tag: 'bad-choice' },
     ]);
-    expect(state.messages.filter((message) => message.text === 'Wrong call: Base64 option. Read why in the case file (L).')).toHaveLength(2);
+    expect(state.messages.filter((message) => message.text === 'Already logged as a wrong call: Base64 option.')).toHaveLength(1);
     expect(state.rt.objectives[0]).toMatchObject({ progress: 0, done: false });
   });
 

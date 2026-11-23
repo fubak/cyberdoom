@@ -459,8 +459,10 @@ export class MissionRuntime {
       const info = e.def.inspect;
       this.message(`CASE FILE: ${info.label.slice(0, 29)}`);
       this.record(e, 'inspect', info.label, info.detail);
-      if (this.inspected.has(entityId)) return;
       this.inspected.add(entityId);
+      // countEntity dedups via `counted`, so re-reading a console once its
+      // objective is active still earns credit — an early read used to be
+      // deduped forever and soft-lock inspect objectives (M12 rule consoles).
       for (const objective of this.objectivesFor('inspect', e)) {
         if (!this.rejectRequirements(objective, e)) this.countEntity(objective, entityId);
       }
@@ -639,9 +641,10 @@ export class MissionRuntime {
           if (text.trim()) this.message(`READ: ${label}`, 'info');
           if (!this.wrongChoicesScored.has(e.def.id)) {
             this.wrongChoicesScored.add(e.def.id);
-            this.log(`Wrong call: ${label}`, -15, e.def.inspect?.objectives ?? [], 'bad-choice');
+            this.log(`Wrong call: ${label} — read why in the case file (L)`, -15, e.def.inspect?.objectives ?? [], 'bad-choice');
+          } else {
+            this.message(`Already logged as a wrong call: ${label}.`, 'warn');
           }
-          this.message(`Wrong call: ${label}. Read why in the case file (L).`, 'warn');
           return;
         }
         if (this.pendingAccusation && e.def.tags?.includes('report-console')) {
@@ -1078,6 +1081,7 @@ export class MissionRuntime {
       for (const id of trigger.spawn ?? []) {
         const e = this.byId(id);
         if (e && e.def.dormant) {
+          this.moveOffPlayer(e, w);
           e.alive = true;
           e.state.spawnGrace = 0.75;
           this.bus.emit('ambush-spawn', { entityId: id });
@@ -1086,6 +1090,29 @@ export class MissionRuntime {
       for (const doorId of trigger.openDoors ?? []) w.openDoor(doorId);
       for (const role of trigger.grantRoles ?? []) this.grantRole(role);
       for (const role of trigger.revokeRoles ?? []) this.revokeRole(role);
+    }
+  }
+
+  /** Ambushes authored near an exit pad can land at the player's feet — nudge
+   *  a spawn inside ~1.8 tiles to the closest open cell that gives breathing
+   *  room. */
+  private moveOffPlayer(e: Entity, w: UpdateWorld): void {
+    if (Math.hypot(e.x - w.player.x, e.y - w.player.y) >= 1.8) return;
+    let best: { x: number; y: number; score: number } | null = null;
+    for (let dy = -4; dy <= 4; dy++) {
+      for (let dx = -4; dx <= 4; dx++) {
+        const cx = Math.floor(e.x) + dx + 0.5;
+        const cy = Math.floor(e.y) + dy + 0.5;
+        if (w.map.blockedF(cx, cy)) continue;
+        if (Math.hypot(cx - w.player.x, cy - w.player.y) < 1.8) continue;
+        if (this.entities.some((o) => o.alive && o !== e && Math.hypot(o.x - cx, o.y - cy) < 1.0)) continue;
+        const score = Math.hypot(cx - e.x, cy - e.y);
+        if (!best || score < best.score) best = { x: cx, y: cy, score };
+      }
+    }
+    if (best) {
+      e.x = best.x;
+      e.y = best.y;
     }
   }
 
