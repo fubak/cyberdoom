@@ -484,4 +484,4 @@ mixedThreatEncounter(m03, 'gallery-mix', [['worm', 3], ['trojan', 1]],
 m03.script!.triggers!.push({ id: 'gallery-back-open', after: ['report'], kind: 'good',
   message: 'Report filed — the gallery return door unlocks for a fast exit.',
   openDoors: ['rf4-gallery-back'] });
-m03.map.lights = { ...m03.map.lights, ...lightRects([[6, 32, 34, 33, 0.5], [14, 35, 16, 35, 0.85], [24, 35, 26, 35, 0.85], [15, 33, 15, 33, 0.35], [25, 33, 25, 33, 0.35]]) };
+m03.map.lights = { ...m03.map.lights, ...lightRects([[6, 32, 34, 33, 0.45], [14, 35, 16, 35, 0.85], [24, 35, 26, 35, 0.85], [15, 33, 15, 33, 0.35], [25, 33, 25, 33, 0.35]]) };
