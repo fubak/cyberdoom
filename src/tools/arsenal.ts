@@ -57,6 +57,36 @@ const PICKUP_NAME: Record<string, [string, string]> = {
 const TICKER_COLS = 52;
 const RES_LABEL: Record<string, string> = { 'usb-charge': 'SCAN', pcap: 'PCAP', 'edr-cell': 'CELL', 'patch-disk': 'DISK' };
 
+/** Ticker rows an explanation page aims for, and the most one whole sentence may take (the ticker shows a 3-line message in full). */
+const PAGE_LINES = 2;
+const SENTENCE_LINES = 3;
+
+/**
+ * Split a long tool explanation into ticker pages that end on a full stop instead of mid-phrase: sentences
+ * are packed together up to PAGE_LINES wrapped lines, and one sentence of up to SENTENCE_LINES gets a page
+ * to itself. Only a sentence longer than that is split by lines (as every page used to be).
+ */
+export function explanationPages(text: string, cols = TICKER_COLS): string[] {
+  const linesOf = (s: string) => wrapText(s, cols, Infinity);
+  const sentences = text.toUpperCase().trim().split(/(?<=[.!?])\s+/).filter(Boolean);
+  const pages: string[] = [];
+  let cur = '';
+  for (const sentence of sentences) {
+    const joined = cur ? `${cur} ${sentence}` : sentence;
+    if (linesOf(joined).length <= PAGE_LINES) {
+      cur = joined;
+      continue;
+    }
+    if (cur) pages.push(cur);
+    const lines = linesOf(sentence);
+    // an over-long sentence: full pages by line, its tail starts the next page
+    while (lines.length > SENTENCE_LINES) pages.push(lines.splice(0, PAGE_LINES).join(' '));
+    cur = lines.join(' ');
+  }
+  if (cur) pages.push(cur);
+  return pages;
+}
+
 export interface ArsenalSnapshot {
   owned: string[];
   ammo: [string, number][];
@@ -190,9 +220,7 @@ export class Arsenal {
   }
 
   private queuePages(texts: string[]): void {
-    const lines = texts.flatMap((text) => wrapText(text.toUpperCase(), TICKER_COLS, Infinity));
-    this.pages = [];
-    for (let i = 0; i < lines.length; i += 2) this.pages.push(lines.slice(i, i + 2).join(' '));
+    this.pages = texts.flatMap((text) => explanationPages(text));
     // let "YOU GOT THE ...!" read first
     this.pageT = 1.2;
   }

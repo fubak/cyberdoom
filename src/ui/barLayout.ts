@@ -177,12 +177,13 @@ export function statusBarText(o: BarLayoutInput, pulse: boolean): BarText[] {
   const total = o.progress?.total ?? o.objectives.length;
   const failed = o.progress?.failed ?? o.objectives.some((x) => x.failed);
   const objectiveCount = `${done}/${total}`;
-  if (measureBig(objectiveCount) <= P_OBJ[1] - 6) {
-    centered(objectiveCount, P_OBJ, by + 5, 'big', failed ? RED : done === total ? GREEN : GREEN.slice(1));
-  } else {
-    label(objectiveCount, P_OBJ, by + 6, failed ? RED[0] : done === total ? GREEN[0] : GREEN[1]);
-  }
-  label(failed ? 'FAIL' : 'OBJ', P_OBJ, by + 20, failed ? '#ff5a3a' : undefined!);
+  const objRamp = failed ? RED : done === total ? GREEN : GREEN.slice(1);
+  // "n/m" in the big numerals when it fits the panel (totals up to 9). Longer counts keep the SAME big
+  // numeral for the done count and move the total into the caption ("OF 11") instead of shrinking the
+  // whole readout to label text, so the panel looks alike in every mission.
+  const fits = measureBig(objectiveCount) <= P_OBJ[1] - 6;
+  centered(fits ? objectiveCount : String(done), P_OBJ, by + 5, 'big', objRamp);
+  label(failed ? 'FAIL' : fits ? 'OBJ' : `OF ${total}`, P_OBJ, by + 20, failed ? '#ff5a3a' : undefined!);
   return out;
 }
 
