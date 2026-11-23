@@ -1,6 +1,9 @@
 import { ellipsizeWords, measureBig, measureText, wrapText } from '../render/font';
 import { BASE_H, BASE_STATUS, BASE_W } from '../render/res';
 
+/** Text colour for resource rows the player does not own yet. */
+const RES_UNOWNED = '#6a7080';
+
 /**
  * LOOK/ARSENAL: pure status-bar text layout in 320x200 base units.
  * `statusBarText` returns every text run the bar draws, positioned and
@@ -161,8 +164,9 @@ export function statusBarText(o: BarLayoutInput, pulse: boolean): BarText[] {
   // row is highlighted in gold on a plate.
   o.resources.slice(0, 4).forEach((r, i) => {
     const ry = resRowY(i) + 1; // tiny glyphs (5px) centred in the 6px row
-    const col = !r.owned ? '#4a4e58' : r.cur === 0 ? '#ff4a2a' : r.active ? '#fff0a0' : '#ffa818';
-    const lab = r.active ? '#ffd040' : r.owned ? '#c8c0b0' : '#4a4e58';
+    // not-yet-owned rows stay visibly dimmer than owned ones but must still be readable on the dark plate
+    const col = !r.owned ? RES_UNOWNED : r.cur === 0 ? '#ff4a2a' : r.active ? '#fff0a0' : '#ffa818';
+    const lab = r.active ? '#ffd040' : r.owned ? '#c8c0b0' : RES_UNOWNED;
     push(r.label, 'tiny', P_RES[0] + 4, ry, lab);
     const v = `${r.cur}/${r.max}`;
     push(v, 'tiny', P_RES[0] + P_RES[1] - 4 - measureText(v, 'tiny'), ry, col);
