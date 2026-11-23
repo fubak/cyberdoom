@@ -328,6 +328,22 @@ function flatUv(rot: number, mirror: boolean): number[][] {
 
 const DIRS: [number, number][] = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 
+/** Sprite set an entity should draw right now, driven by live state.
+ *  Workstation defs authored 'workstation-infected' for the pre-inspection
+ *  look; once patched or flagged clean it must swap back to the clean set or
+ *  the sprite lies about state. */
+export function spriteSetIdFor(e: Entity): string {
+  const threatKind = e.def.threat ?? e.def.sprite;
+  if (e.def.kind === 'enemy' && threatKind === 'trojan' && !e.state.revealedTrojan) {
+    return 'usb'; // disguised: reads as a harmless found-USB pickup
+  }
+  if (e.def.kind === 'workstation') {
+    if (!e.state.revealed) return 'workstation';
+    return e.infected ? 'workstation-infected' : 'workstation';
+  }
+  return e.def.sprite;
+}
+
 /**
  * Minimum light on world geometry (walls, flats, doors). Band-quantised to
  * ~2-3/24 in the shader and dithered: dark sectors read as speckled gloom —
@@ -952,6 +968,15 @@ export class Renderer {
     }
   }
 
+  /** Remove a door slab instantly — checkpoint restore where the door is already open. */
+  clearDoor(doorId: string): void {
+    const mesh = this.doorMeshes.get(doorId);
+    if (mesh) {
+      this.levelGroup.remove(mesh);
+      this.doorMeshes.delete(doorId);
+    }
+  }
+
   viewLight(x: number, y: number): number {
     return this.lightAt(x, y);
   }
@@ -1147,17 +1172,7 @@ export class Renderer {
       }
       seen.add(id);
       const threatKind = e.def.threat ?? e.def.sprite;
-      const setId = this.debugSprite.get(id) ?? (
-        e.def.kind === 'enemy' && threatKind === 'trojan' && !e.state.revealedTrojan
-          ? 'usb' // disguised: reads as a harmless found-USB pickup
-          : e.def.kind === 'workstation'
-            ? !e.state.revealed
-              ? 'workstation'
-              : e.infected
-                ? 'workstation-infected'
-                : (e.def.sprite ?? 'workstation')
-            : e.def.sprite
-      );
+      const setId = this.debugSprite.get(id) ?? spriteSetIdFor(e);
       const set = spriteSets.get(setId) ?? spriteSets.require('npc-m');
       if (!st) {
         const { mesh, mat } = this.makeSpriteMesh(set, this.lightAt(e.x, e.y));
@@ -1516,7 +1531,7 @@ export class Renderer {
           st.scale * far * (1 + swell),
           attacking ? Math.min(loomTargetH(d, this.camera.fov) / st.set.h, LOOM_MAX_SCALE) : 0,
         );
-        const sc = Math.min(want, maxH / st.set.h);
+        const sc = Math.min(want, Math.max(st.scale, maxH / st.set.h));
         st.mesh.scale.set(st.set.w * sc, st.set.h * sc, 1);
         // a floor-height attacker at contact range projects entirely behind
         // the tool viewmodel; lift its anchor so ~60% of the silhouette clears

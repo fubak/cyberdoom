@@ -1067,6 +1067,22 @@ class Game {
     this.arsenal.restore(checkpoint.arsenal as ReturnType<Arsenal['snapshot']>);
     this.arsenal.face.god = this.god;
     this.map!.restore(checkpoint.doors as ReturnType<WorldMap['snapshot']>);
+    // The renderer must mirror every open door in the restored snapshot: slabs
+    // built as closed would otherwise stay drawn while collision is open —
+    // you could walk through a door that looks shut. Seals live in runtime
+    // state (the snapshot covers them), but sealedDoors and the padlock
+    // overlays live here, so rebuild both.
+    for (const cellDef of Object.values(this.map!.def.legend)) {
+      if (cellDef.kind === 'door' && cellDef.doorId && this.map!.isDoorOpen(cellDef.doorId)) {
+        this.renderer.clearDoor(cellDef.doorId);
+      }
+    }
+    this.sealedDoors.clear();
+    for (const e of this.runtime!.entities) {
+      const seal = e.alive ? (e.state.seal as SealTarget | undefined) : undefined;
+      if (seal?.kind === 'door') this.sealedDoors.add(seal.id);
+      if (seal) this.renderer.sealMark(seal.id, seal.x, seal.y, seal.kind);
+    }
     this.projectiles = [];
     this.particles.clear();
     this.endTimer = null;
