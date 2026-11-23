@@ -1335,7 +1335,9 @@ class Game {
     }
     if (this.dossier.isOpen) {
       // The world stays paused for reading, but E still resolves the
-      // crosshair target — fresh evidence swaps the dossier to it.
+      // crosshair target — fresh evidence swaps the dossier to it. useCd must
+      // tick here: its normal decrement sits below this early-return.
+      this.useCd = Math.max(0, this.useCd - dt);
       if (this.input.usePressed && this.useCd <= 0) this.resolveUsePress(false);
       this.consumeDossierInput();
       return;

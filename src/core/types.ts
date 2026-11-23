@@ -352,8 +352,9 @@ export interface ToolUseContext {
   openDoor: (doorId: string) => void;
   bus: import('./events').EventBus;
   fireProjectile: (p: Omit<Projectile, 'alive' | 'traveled'>) => void;
-  /** Nearest entity within `maxDist` tiles and `maxAngle` rad of the aim. */
-  aimEntity: (maxDist: number, maxAngle: number) => Entity | null;
+  /** Nearest entity within `maxDist` tiles and `maxAngle` rad of the aim.
+   *  `interactablesOnly` aims past live enemies to consoles/hosts/items. */
+  aimEntity: (maxDist: number, maxAngle: number, interactablesOnly?: boolean) => Entity | null;
   authorizedRoles: string[];
   /** Current player role. */
   role: string;

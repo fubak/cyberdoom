@@ -57,7 +57,7 @@ export const patchTool: ToolDef = {
   },
   use(ctx: ToolUseContext) {
     ctx.bus.emit('tool-used', { toolId: 'patch' });
-    const e = ctx.aimEntity(1.8, 0.45);
+    const e = ctx.aimEntity(1.8, 0.45, true) ?? ctx.aimEntity(1.8, 0.45);
     if (!e || e.def.kind !== 'workstation') {
       ctx.bus.emit('message', { text: 'No workstation within reach. The disk stays in your pocket.', kind: 'info' });
       return false;
@@ -97,7 +97,7 @@ export const patchTool: ToolDef = {
     return true;
   },
   hint(ctx) {
-    const e = ctx.aimEntity(1.8, 0.45);
+    const e = ctx.aimEntity(1.8, 0.45, true) ?? ctx.aimEntity(1.8, 0.45);
     if (!e || e.def.kind !== 'workstation') return null;
     if (e.def.tags?.includes('triage') && ctx.isInspected && !ctx.isInspected(e.def.id)) {
       return { text: `INSPECT FIRST (MOUSE ${mouseTool.slot})`, ready: false };
