@@ -365,17 +365,7 @@ button.menu-hit:focus-visible {
   outline-offset: -3px;
 }
 
-/* DOM screens share one display face: the same Impact heading as PAUSED and the debrief titles, over the
-   Courier body. (Canvas screens - title, analyst select, briefing, HUD - stay in the pixel fonts.) */
-.cd-mission-select .menu-bar h2 {
-  font-family: Impact, 'Arial Black', sans-serif;
-  font-weight: 400;
-  font-size: clamp(28px, 3.4vw, 46px);
-  line-height: 1;
-  letter-spacing: 0.06em;
-  color: #f0c020;
-  text-shadow: 3px 3px 0 #6a3800, 5px 5px 0 #000;
-}
+/* The SELECT MISSION title is a pixel-font canvas (pixelTitle); see .cd-pixel-title in curriculum.css. */
 
 /* Mission select used fixed pixel sizes; scale it up on large windows to match the canvas. */
 @media (min-width: 1800px) and (min-height: 1000px) {

@@ -5,7 +5,8 @@ import {
   resolveBindings,
   type Action,
 } from '../engine/bindings';
-import { h, bigButton } from './briefing';
+import { h, bigButton, pixelTitle } from './briefing';
+import { RAMP } from './debrief';
 
 const ACTIONS = Object.keys(ACTION_LABELS) as Action[];
 
@@ -20,7 +21,7 @@ export function controlsPanel(
   screen.setAttribute('aria-label', 'Controls');
   screen.dataset.controlsPanel = 'true';
   screen.appendChild(h('div', 'cd-kicker', 'INPUT CONFIGURATION'));
-  screen.appendChild(h('h1', 'cd-title', 'CONTROLS'));
+  screen.appendChild(pixelTitle('h1', 'cd-title', 'CONTROLS', RAMP.red, 4));
   screen.appendChild(h('p', 'cd-controls-instruction', 'SELECT AN ACTION TO CHANGE ITS KEY'));
 
   let bindings = resolveBindings(initial);

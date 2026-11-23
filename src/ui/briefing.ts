@@ -3,7 +3,7 @@ import { ARC, arcIndex } from '../content/curriculum';
 import { define } from '../content/glossary';
 import { teachingRegistry } from '../content/missions';
 import { objectiveById } from '../content/objectives';
-import { drawChunky, drawText, measureChunky, wrapText } from '../render/font';
+import { drawBigText, drawChunky, drawText, measureBig, measureChunky, wrapText } from '../render/font';
 import { RES } from '../render/res';
 import {
   bevel,
@@ -40,6 +40,32 @@ export function h(tag: string, cls = '', text = ''): HTMLElement {
   const e = document.createElement(tag);
   if (cls) e.className = cls;
   if (text) e.textContent = text;
+  return e;
+}
+
+/**
+ * A screen title in the game's pixel face (same font and gradient ramps as the canvas screens), as a real
+ * heading: the canvas is aria-hidden and the text sits in a visually-hidden span for readers and lookups.
+ * Drawn at native pixel size and scaled up by an integer in CSS, so it stays crisp.
+ */
+export function pixelTitle(tag: 'h1' | 'h2', cls: string, text: string, ramp: string[], scale: number): HTMLElement {
+  const e = h(tag, cls);
+  const cw = measureBig(text) + 2;
+  const ch = 16;
+  const c = document.createElement('canvas');
+  c.width = cw * RES;
+  c.height = ch * RES;
+  const g = c.getContext('2d');
+  if (g) {
+    g.setTransform(RES, 0, 0, RES, 0, 0);
+    drawBigText(g, text, 0, 0, ramp);
+  }
+  c.setAttribute('aria-hidden', 'true');
+  c.className = 'cd-pixel-title';
+  c.style.width = `${cw * scale}px`;
+  c.style.height = `${ch * scale}px`;
+  const sr = h('span', 'cd-sr-only', text);
+  e.append(c, sr);
   return e;
 }
 

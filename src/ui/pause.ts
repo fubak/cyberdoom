@@ -1,4 +1,5 @@
-import { h, bigButton } from './briefing';
+import { h, bigButton, pixelTitle } from './briefing';
+import { RAMP } from './debrief';
 import { nextStep, SENS_STEPS, type Settings } from './settings';
 import { skillById } from '../missions/difficulty';
 import { keyLabel, resolveBindings, type Action } from '../engine/bindings';
@@ -37,7 +38,7 @@ export function pauseMenu(actions: {
 
     if (view === 'options') {
       s.appendChild(h('div', 'cd-kicker', 'SECTOR HOLD'));
-      s.appendChild(h('h1', 'cd-title', 'OPTIONS'));
+      s.appendChild(pixelTitle('h1', 'cd-title', 'OPTIONS', RAMP.red, 4));
       const row = h('div', 'cd-brief-actions');
       const settingButtons: { button: HTMLButtonElement; label: () => string }[] = [];
       const addSetting = (
@@ -92,7 +93,7 @@ export function pauseMenu(actions: {
     }
 
     s.appendChild(h('div', 'cd-kicker', 'SECTOR HOLD'));
-    s.appendChild(h('h1', 'cd-title', 'PAUSED'));
+    s.appendChild(pixelTitle('h1', 'cd-title', 'PAUSED', RAMP.red, 4));
 
     const items: { id: string; label: string; go: () => void; alt: boolean }[] = [
       { id: 'resume', label: 'RESUME  [ESC]', go: actions.onResume, alt: false },
