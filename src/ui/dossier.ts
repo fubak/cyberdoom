@@ -319,11 +319,21 @@ export class Dossier {
       return;
     }
     if (!this.isOpen || event.key === 'Tab') return;
+    const key = event.key.toLowerCase();
+    const handled =
+      event.key === 'Escape' ||
+      key === 'arrowleft' || key === 'a' ||
+      key === 'arrowright' || key === 'd' ||
+      (this.mode === 'log' && (key === 'arrowup' || key === 'w' ||
+        key === 'arrowdown' || key === 's' || event.key === 'Enter')) ||
+      (this.mode === 'file' && /^[1-4]$/.test(event.key));
+    // Keys the dossier does not use (E use, tool digits, M…) still reach the
+    // game — swallowing them made the panel feel like it ate the interact key.
+    if (!handled) return;
     event.preventDefault();
     event.stopImmediatePropagation();
     if (event.repeat) return;
 
-    const key = event.key.toLowerCase();
     if (event.key === 'Escape') {
       this.close();
     } else if (key === 'arrowleft' || key === 'a') {
