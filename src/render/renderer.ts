@@ -1531,7 +1531,7 @@ export class Renderer {
           st.scale * far * (1 + swell),
           attacking ? Math.min(loomTargetH(d, this.camera.fov) / st.set.h, LOOM_MAX_SCALE) : 0,
         );
-        const sc = Math.min(want, maxH / st.set.h);
+        const sc = Math.min(want, Math.max(st.scale, maxH / st.set.h));
         st.mesh.scale.set(st.set.w * sc, st.set.h * sc, 1);
         // a floor-height attacker at contact range projects entirely behind
         // the tool viewmodel; lift its anchor so ~60% of the silhouette clears
