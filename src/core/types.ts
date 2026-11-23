@@ -362,6 +362,9 @@ export interface ToolUseContext {
   isInspected?: (entityId: string) => boolean;
   /** Whether the entity still needs its "WHAT DO YOU DO?" call before actions count. */
   needsCall?: (entityId: string) => boolean;
+  /** Resolve a scanner hit on an entity directly — the arm's-length plug-in
+   *  path, which worms hovering near the host cannot intercept. */
+  scanHit?: (entity: Entity) => void;
   /** Unobstructed line of sight between two points (tile coords). Optional. */
   lineOfSight?: (x0: number, y0: number, x1: number, y1: number) => boolean;
 }
