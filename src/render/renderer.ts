@@ -7,7 +7,14 @@ import type { ViewPose } from '../engine/feel';
 import { buildPaletteLut } from './palette';
 import { genWorkerCount } from './genpool';
 import { buildSprites, prewarmLazySpriteFrames, spriteSets, type SpriteSet } from './sprites';
-import { LOOM_CAP_FRAC, LOOM_MAX_SCALE, farScale, loomK, loomTargetH, loomT, riseBase } from './melee';
+import {
+  CEIL_MIN_SCALE_FRAC,
+  LOOM_CAP_FRAC,
+  LOOM_MAX_SCALE,
+  ceilingRiseCap,
+  ceilingScaleCap,
+  farScale, loomK, loomTargetH, loomT, riseBase,
+} from './melee';
 import { ENEMY_PROFILES } from '../engine/ai';
 import { WALL_H, buildTextures, decalTexture, doorTextureFor, hashStr, lookTheme, textureOr, textureRegistry, variantCount } from './textures';
 import { buildSkyTexture, skyEpisodeForMission } from './sky';
@@ -1317,6 +1324,61 @@ export class Renderer {
     this.particleGeometry.setDrawRange(0, count);
   }
 
+  /** Ceiling world-Y over an enemy's tile, or null when no clamp applies (no map, sky). */
+  private enemyCeilY(st: SpriteState): number | null {
+    const m = this.map;
+    if (!m) return null;
+    // the entity's own tile, not the mesh's: at point-blank the mesh is pulled toward the camera
+    const tx = Math.floor(st.entity?.x ?? st.mesh.position.x);
+    const ty = Math.floor(st.entity?.y ?? st.mesh.position.z);
+    if (m.isSky(tx, ty)) return null;
+    const c = m.ceilHeightAt(tx, ty);
+    return Number.isFinite(c) ? c : null;
+  }
+
+  /**
+   * Share of the canvas height (from the base) up to the highest opaque row of
+   * the set's first walk frame. Textures store rows bottom-up (row 0 = base).
+   * Only a real measurement is cached; frames still pending return 1.
+   */
+  private spriteTopFrac(set: SpriteSet): number {
+    if (set.topFrac !== undefined) return set.topFrac;
+    const tex = set.frames['walk0_0'] ?? set.frames['walk0'] ?? set.frames['walk0_1'];
+    const im = tex?.image as { data?: ArrayLike<number>; width: number; height: number } | undefined;
+    if (!im?.data || !(im.width > 0) || !(im.height > 0) || im.data.length < im.width * im.height * 4) return 1;
+    for (let row = im.height - 1; row >= 0; row--) {
+      const o = row * im.width * 4;
+      for (let x = 0; x < im.width; x++) {
+        if (im.data[o + x * 4 + 3] > 0) {
+          set.topFrac = (row + 1) / im.height;
+          return set.topFrac;
+        }
+      }
+    }
+    return 1;
+  }
+
+  /** Debug: world-Y of each live enemy's opaque top vs the ceiling over its tile. */
+  debugSpriteTops(): { id: string; kind: string; top: number; ceil: number; sky: boolean; scale: number }[] {
+    const out: { id: string; kind: string; top: number; ceil: number; sky: boolean; scale: number }[] = [];
+    const m = this.map;
+    for (const [id, st] of this.sprites) {
+      if (st.entity?.def.kind !== 'enemy' || !m) continue;
+      const tx = Math.floor(st.entity.x);
+      const ty = Math.floor(st.entity.y);
+      const scale = st.mesh.scale.y / st.set.h;
+      out.push({
+        id: String(id),
+        kind: st.entity.def.threat ?? st.entity.def.sprite ?? 'enemy',
+        top: st.mesh.position.y + st.mesh.scale.y * this.spriteTopFrac(st.set),
+        ceil: m.ceilHeightAt(tx, ty),
+        sky: m.isSky(tx, ty),
+        scale,
+      });
+    }
+    return out;
+  }
+
   debugHurtUniform(): number {
     return this.postMat.uniforms.uHurt.value as number;
   }
@@ -1542,7 +1604,16 @@ export class Renderer {
           st.scale * far * (1 + swell),
           attacking ? Math.min(loomTargetH(d, this.camera.fov) / st.set.h, LOOM_MAX_SCALE) : 0,
         );
-        const sc = Math.min(want, Math.max(st.scale, maxH / st.set.h));
+        let sc = Math.min(want, Math.max(st.scale, maxH / st.set.h));
+        // ceiling clamp: an enemy's opaque art never pokes through the ceiling
+        // of its tile (sky tiles exempt); floor at CEIL_MIN_SCALE_FRAC of its own scale
+        const ceilY = enemy ? this.enemyCeilY(st) : null;
+        // topFrac is measured on the walk pose; attack/recover poses can stand taller, so they use the full canvas
+        const topFrac = ceilY !== null && !attacking ? this.spriteTopFrac(st.set) : 1;
+        if (ceilY !== null) {
+          const cap = ceilingScaleCap(st.mesh.position.y, ceilY, st.set.h, topFrac);
+          sc = Math.min(sc, Math.max(cap, st.scale * CEIL_MIN_SCALE_FRAC));
+        }
         st.mesh.scale.set(st.set.w * sc, st.set.h * sc, 1);
         // a floor-height attacker at contact range projects entirely behind
         // the tool viewmodel; lift its anchor so ~60% of the silhouette clears
@@ -1552,6 +1623,9 @@ export class Renderer {
           ? Math.max(0, riseBase(st.set.h * sc, d, EYE_H, this.camera.fov) - baseY) * Math.min(1, loom * 4)
           : 0;
         st.rise = (st.rise ?? 0) + (lunge - (st.rise ?? 0)) * Math.min(1, dt * 14);
+        if (ceilY !== null) {
+          st.rise = Math.min(st.rise, ceilingRiseCap(baseY, ceilY, st.set.h * sc * topFrac));
+        }
         st.mesh.position.y = baseY + st.rise;
       }
       // monsters get an unmistakable ~150 ms white-hot full-sprite flash
