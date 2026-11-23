@@ -388,6 +388,7 @@ export class Renderer {
   private lastPX = 0;
   private lastPY = 0;
   private doorMeshes = new Map<string, THREE.Mesh>();
+  private liftMeshes: { mesh: THREE.Mesh; tx: number; ty: number }[] = [];
   private openingDoors: { mesh: THREE.Mesh; t: number }[] = [];
   private skyMesh: THREE.Mesh | null = null;
   private smoothFloorY = 0;
@@ -558,6 +559,7 @@ export class Renderer {
     this.projSprites.clear();
     this.fx = [];
     this.doorMeshes.clear();
+    this.liftMeshes = [];
     this.openingDoors = [];
     this.smoothFloorY = map.floorHeightAtF(map.def.spawn.x, map.def.spawn.y);
     this.lastIntegrity = 100;
@@ -754,20 +756,49 @@ export class Renderer {
         const fshade = s.map((v) => v * faceShade(fh));
         const floorH = map.floorHeightAt(tx, ty);
         const ceilH = map.ceilHeightAt(tx, ty);
-        builder(`f:${fTex}`, textureOr(fTex, 'floor')).quad(
-          [[tx, floorH, ty], [tx + 1, floorH, ty], [tx + 1, floorH, ty + 1], [tx, floorH, ty + 1]],
-          flatUv((fh >>> 3) % 4, ((fh >>> 5) & 1) === 1),
-          fshade,
-          st,
-          faceTint(fh),
-        );
+        if (cell.lift) {
+          // Recessed pit floor at lift.low plus a dynamic moving platform mesh
+          const pitY = cell.lift.low;
+          builder(`f:${fTex}`, textureOr(fTex, 'floor')).quad(
+            [[tx, pitY, ty], [tx + 1, pitY, ty], [tx + 1, pitY, ty + 1], [tx, pitY, ty + 1]],
+            flatUv((fh >>> 3) % 4, ((fh >>> 5) & 1) === 1),
+            fshade.map((v) => v * 0.7),
+            st,
+            faceTint(fh),
+          );
+          const lb = new GeoBuilder();
+          const liftTopTex = textureOr('exit', 'floor');
+          const skirtDepth = Math.max(0.6, cell.lift.high - cell.lift.low + 0.12);
+          lb.quad(
+            [[tx, 0, ty], [tx + 1, 0, ty], [tx + 1, 0, ty + 1], [tx, 0, ty + 1]],
+            [[0, 0], [1, 0], [1, 1], [0, 1]],
+            [L * 1.05, L * 1.05, L * 1.05, L * 1.05],
+            0,
+          );
+          for (const [dx, dz] of DIRS) {
+            wallFace(lb, tx, ty, dx, dz, L * 0.85, 0, undefined, -skirtDepth, 0);
+          }
+          const liftMesh = new THREE.Mesh(lb.build(), worldMaterial(liftTopTex, 1, WORLD_FLOOR, tintV, 0.055));
+          liftMesh.position.y = floorH;
+          this.levelGroup.add(liftMesh);
+          this.liftMeshes.push({ mesh: liftMesh, tx, ty });
+        } else {
+          builder(`f:${fTex}`, textureOr(fTex, 'floor')).quad(
+            [[tx, floorH, ty], [tx + 1, floorH, ty], [tx + 1, floorH, ty + 1], [tx, floorH, ty + 1]],
+            flatUv((fh >>> 3) % 4, ((fh >>> 5) & 1) === 1),
+            fshade,
+            st,
+            faceTint(fh),
+          );
+        }
         // Step risers (lower-sidedef) and ceiling beams (upper-sidedef) between different heights
         for (const [dx, dz] of DIRS) {
           const n = map.cellAt(tx + dx, ty + dz);
           if (!n || n.kind === 'wall') continue;
-          const nFloorH = map.floorHeightAt(tx + dx, ty + dz);
-          if (nFloorH < floorH - 0.001) {
-            wallFace(builder(`w:${fTex}`, textureOr(fTex, 'floor')), tx, ty, dx, dz, L * 0.9, st, faceTint(fh), nFloorH, floorH);
+          const nFloorH = n.lift ? n.lift.low : map.floorHeightAt(tx + dx, ty + dz);
+          const myStaticFloorH = cell.lift ? cell.lift.low : floorH;
+          if (nFloorH < myStaticFloorH - 0.001) {
+            wallFace(builder(`w:${fTex}`, textureOr(fTex, 'floor')), tx, ty, dx, dz, L * 0.9, st, faceTint(fh), nFloorH, myStaticFloorH);
           }
           const nCeilH = map.ceilHeightAt(tx + dx, ty + dz);
           if (nCeilH > ceilH + 0.001) {
@@ -1411,6 +1442,11 @@ export class Renderer {
     const cameraAngle = pose?.angle ?? player.angle;
     this.lastPX = player.x;
     this.lastPY = player.y;
+    if (this.map && this.liftMeshes.length > 0) {
+      for (const lm of this.liftMeshes) {
+        lm.mesh.position.y = this.map.floorHeightAt(lm.tx, lm.ty);
+      }
+    }
     const targetFloorY = this.map?.floorHeightAtF(cameraX, cameraY) ?? 0;
     this.smoothFloorY += (targetFloorY - this.smoothFloorY) * Math.min(1, dt * 12);
     const camY = this.smoothFloorY + (pose ? EYE_H + pose.dz : EYE_H + bobY);

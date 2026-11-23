@@ -165,7 +165,8 @@ export class Player {
       this.vy = 0;
     }
 
-    let res = map.resolve(this.x + this.vx * dt, this.y + this.vy * dt, this.radius);
+    const curFloor = map.floorHeightAtF(this.x, this.y);
+    let res = map.resolve(this.x + this.vx * dt, this.y + this.vy * dt, this.radius, curFloor);
     if (res.nx !== 0 || res.ny !== 0) this.projectVelocity(res.nx, res.ny);
     let px = res.x;
     let py = res.y;

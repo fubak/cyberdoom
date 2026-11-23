@@ -1317,8 +1317,14 @@ class Game {
         this.audio.sfx('oof');
       } else {
         this.useCd = 0.3;
+        const aheadLift =
+          map.cellAt(Math.floor(p.x + Math.cos(p.angle) * 1.1), Math.floor(p.y + Math.sin(p.angle) * 1.1))?.lift ??
+          map.cellAt(Math.floor(p.x), Math.floor(p.y))?.lift;
         if (r.kind === 'entity') this.bus.emit('interact', { entityId: r.entity.def.id });
-        else this.hud.pushMessage('Nothing in reach — aim at it and get closer.', 'info');
+        else if (aheadLift && map.activateLift(aheadLift.id)) {
+          this.audio.sfx('door', { x: p.x, y: p.y });
+          this.hud.pushMessage('LIFT ENGAGED', 'info');
+        } else this.hud.pushMessage('Nothing in reach — aim at it and get closer.', 'info');
       }
     }
 
@@ -1471,6 +1477,10 @@ class Game {
     this.wasOnExit = onExit;
 
     map.updateDoors(dt);
+    map.updateLifts(dt);
+    if (map.stepOnLift(Math.floor(p.x), Math.floor(p.y))) {
+      this.audio.sfx('door', { x: p.x, y: p.y });
+    }
 
     const combat = runtime.entities.some((e) =>
       e.alive &&

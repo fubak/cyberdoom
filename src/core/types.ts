@@ -53,6 +53,8 @@ export interface CellDef {
   lockText?: string;
   /** Optional floor elevation in world units (default 0; e.g. 0.16 for a raised dais). */
   floorHeight?: number;
+  /** Optional Doom-style vertical lift platform cycling between low and high elevations. */
+  lift?: { id: string; low: number; high: number; speed?: number; hold?: number };
   /** Optional ceiling elevation in world units (defaults to automatic room height). */
   ceilHeight?: number;
   /** Open-air / skylight cell: omits ceiling quad to reveal the episode skybox. */
