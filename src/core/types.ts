@@ -207,6 +207,7 @@ export interface MissionObjective {
   text: string;
   kind:
     | 'clean' // clean N entities with tag
+    | 'kill' // purge N entities with tag — counted on 'cleaned' (boss credit)
     | 'patch' // patch N entities with tag (tool-hit {toolId:'patch', good:true})
     | 'reach-exit'
     | 'avoid' // do NOT trigger tag (e.g. plug found usb)

@@ -13,6 +13,7 @@ import { RADIO_LINES, formatRadioLine } from '../content/radio';
 import { applySeededPools } from './seed';
 import { objectiveById } from '../content/objectives';
 import type { WorldMap } from '../engine/map';
+import { ENEMY_PROFILES } from '../engine/ai';
 import { completeMfa, refuseMfaPrompt } from '../tools/mfa';
 import { swipeBadge } from '../tools/badge';
 import { mouseTool } from '../tools/mouse';
@@ -247,7 +248,13 @@ export class MissionRuntime {
 
   private objectivesFor(kind: MissionObjective['kind'], e: Entity): ObjectiveStatus[] {
     return this.objectives.filter(
-      (o) => o.def.kind === kind && !!o.def.tag && e.def.tags?.includes(o.def.tag),
+      (o) =>
+        o.def.kind === kind &&
+        !!o.def.tag &&
+        // 'kill' objectives also match a boss's sprite name — spawn-wave
+        // bosses (ep1-boss, prime) carry no authored tag.
+        (e.def.tags?.includes(o.def.tag) ||
+          (kind === 'kill' && e.def.sprite === o.def.tag)),
     );
   }
 
@@ -387,7 +394,16 @@ export class MissionRuntime {
 
   private violate(obj: ObjectiveStatus, points = -50): void {
     obj.violations++;
-    this.log(`Violation: ${obj.def.text}`, points, [obj.def.id]);
+    const remaining = (obj.def.strikes ?? 1) - obj.violations;
+    // One line per strike: the strike counter folds into the violation log
+    // instead of a second ticker line.
+    this.log(
+      remaining > 0 && !obj.def.penaltyOnly
+        ? `Violation: ${obj.def.text} — ${remaining} more and the mission is failed`
+        : `Violation: ${obj.def.text}`,
+      points,
+      [obj.def.id],
+    );
     if (obj.def.penaltyOnly) {
       obj.failed = true;
       return;
@@ -403,11 +419,6 @@ export class MissionRuntime {
         good: false,
         objectives: [obj.def.id],
       });
-    } else {
-      this.message(
-        `Warning: ${(obj.def.strikes ?? 1) - obj.violations} more and the mission is failed`,
-        'warn',
-      );
     }
   }
 
@@ -514,9 +525,15 @@ export class MissionRuntime {
       e.alive = false;
       e.state.cleaned = true;
       this.cleaned.add(entityId);
-      this.log(`Cleaned ${e.def.inspect?.label ?? 'host'}`, 25,
-        e.def.cleanObjectives ?? e.def.inspect?.objectives ?? []);
+      const boss = ENEMY_PROFILES[e.def.threat ?? e.def.sprite]?.boss === true;
+      this.log(
+        boss ? `PURGED: ${e.def.inspect?.label ?? e.def.id}` : `Cleaned ${e.def.inspect?.label ?? 'host'}`,
+        boss ? 150 : 25,
+        e.def.cleanObjectives ?? e.def.inspect?.objectives ?? [],
+      );
+      if (boss) this.message('THREAT PURGED — arena control restored', 'good');
       for (const objective of this.objectivesFor('clean', e)) this.countEntity(objective, entityId);
+      for (const objective of this.objectivesFor('kill', e)) this.countEntity(objective, entityId);
       this.checkWin();
     });
 
@@ -652,6 +669,11 @@ export class MissionRuntime {
         if (text.trim()) {
           this.message(`READ: ${label}`, 'info');
           this.record(e, 'log', label, text);
+        }
+        // A console feeding an 'inspect' objective counts as reviewed on an
+        // E read too (M12 rule-evidence): E and MOUSE earn the same credit.
+        if (e.def.inspect?.detail && this.objectivesFor('inspect', e).length) {
+          this.bus.emit('inspect', { entityId: e.def.id });
         }
         if (e.def.tags?.includes('decoy')) {
           this.falsePositive(e, -25, 'patch');

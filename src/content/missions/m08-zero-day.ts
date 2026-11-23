@@ -415,6 +415,7 @@ export const m08: Mission = {
     { id: 'harden', text: 'Harden to the secure baseline', kind: 'interact', tag: 'baseline', count: 2, requires: ['scan'] },
     { id: 'no-unsigned', text: 'Never deploy unsigned code', kind: 'avoid', tag: 'unsigned' },
     { id: 'rescan', text: 'Rescan to validate', kind: 'interact', tag: 'rescan', requires: ['remediate', 'harden'] },
+    { id: 'purge-zeroday', text: 'Purge the weaponized exploit in the central hall', kind: 'kill', tag: 'boss-zeroday', requires: ['rescan'] },
     { id: 'exit', text: 'Reach the exit', kind: 'reach-exit' },
   ],
   debriefQuestions: [
@@ -523,6 +524,7 @@ export const m08Walkthrough: WalkStep[] = [
   { goto: [9, 24] },
   { interact: 'rescan' },
   { wait: 0.2 },
+  { clean: 'ep2-boss-1' },
   { goto: [23, 24] },
 ];
 
@@ -548,6 +550,7 @@ export const m08Teach: MissionTeaching = {
     'hardening',
   ],
   lessons: {
+    'purge-zeroday': { objective: '4.4', done: 'The weaponized CVE-0DAY exploit was purged before it could pivot past the lab.', missed: 'The zero-day exploit is still resident — rescan proved the patch applied but the exploit itself was never removed.' },
     scan: {
       objective: '4.3',
       done: 'The scanner found four candidates and opened the CHANGE window. A scan starts vulnerability management; it does not prove every match is exploitable.',

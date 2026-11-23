@@ -446,12 +446,13 @@ export const m12: Mission = {
   ],
   missionObjectives: [
     { id: 'queue', text: 'Read the SIEM queue (earns SOC badge access)', kind: 'interact', tag: 'queue-read' },
-    { id: 'inspect-rules', text: 'Review the raw evidence behind each SIEM rule', kind: 'inspect', tag: 'rule-evidence', count: 3, requires: ['queue'] },
+    { id: 'inspect-rules', text: 'Read the evidence card on each SIEM rule console (E or MOUSE)', kind: 'inspect', tag: 'rule-evidence', count: 3, requires: ['queue'] },
     { id: 'tune', text: 'Tune the SIEM: cut the noise, keep every live detection', kind: 'interact', tag: 'tune', count: 3, requires: ['inspect-rules'] },
     { id: 'playbook', text: 'Assemble the SOAR playbook in order', kind: 'interact', tag: 'soar-step', count: 3, ordered: true, requires: ['queue'] },
     { id: 'failmode', text: 'Set a failure mode for each automated control', kind: 'interact', tag: 'failmode', count: 3, requires: ['queue'] },
     { id: 'kiosk-evidence', text: 'Verify MDM enforcement and allow lists on the kiosks', kind: 'inspect', tag: 'kiosk', count: 3 },
     { id: 'signoff', text: 'Sign off on the automation program at the war-room console', kind: 'interact', tag: 'signoff', requires: ['tune', 'playbook', 'failmode', 'kiosk-evidence'] },
+    { id: 'purge-prime', text: 'Purge the GHOSTLEDGER core in the war room', kind: 'kill', tag: 'boss-ghostledger' },
     { id: 'no-silence', text: 'Never silence a live detection', kind: 'avoid', tag: 'silence' },
     { id: 'no-admin-lockout', text: 'Privileged accounts need human approval to contain', kind: 'avoid', tag: 'admin-lockout' },
     { id: 'exit', text: 'Reach the exit', kind: 'reach-exit' },
@@ -462,6 +463,10 @@ export const m12: Mission = {
       { id: 'pay-ambush', area: [1, 1, 9, 6], spawn: ['pay-bomb'], kind: 'bad', message: 'A logic bomb ticks over the payment segment.' },
       { id: 'vault-ambush', area: [29, 1, 38, 6], spawn: ['vault-rootkit'], kind: 'bad', message: 'A rootkit wakes inside the crypto vault.' },
       { id: 'prime-rise', area: [11, 12, 27, 18], spawn: ['prime', 'prime-escort-a', 'prime-escort-b'], kind: 'bad',
+        message: 'BOSS-GHOSTLEDGER CORE online in the war room with botnet escorts. Clear the arena.' },
+      // Required boss: guarantee the spawn even if the player signs off
+      // without crossing the arena pad.
+      { id: 'prime-rise-signoff', after: ['signoff'], spawn: ['prime', 'prime-escort-a', 'prime-escort-b'], kind: 'bad',
         message: 'BOSS-GHOSTLEDGER CORE online in the war room with botnet escorts. Clear the arena.' },
     ],
     secrets: [
@@ -539,6 +544,7 @@ export const m12Teach: MissionTeaching = {
   ],
   keyTerms: ['SIEM', 'SOAR', 'playbook', 'password spraying', 'alert fatigue', 'fail closed', 'fail open', 'application allow list', 'single point of failure'],
   lessons: {
+    'purge-prime': { objective: '4.4', done: 'The GHOSTLEDGER core — the adversary process coordinating the automated attack — was purged.', missed: 'The GHOSTLEDGER core is still online; the automated attack infrastructure survives the audit.' },
     'queue': {
       objective: '4.4',
       done: 'You read the queue before touching it: 412 of 1,183 alerts were one misconfigured service account — and a live spray was hiding in the noise.',
@@ -711,6 +717,7 @@ export const m12Walkthrough: WalkStep[] = [
   { goto: [4, 24] }, { interact: 'egress-open' },
   { goto: [5, 21] }, { goto: [5, 19] }, { goto: [8, 14] }, { goto: [12, 14] },
   { goto: [19, 10] }, { interact: 'signoff' }, { wait: 0.5 },
+  { clean: 'prime' },
   { goto: [19, 6] }, { goto: [19, 3] },
 ];
 

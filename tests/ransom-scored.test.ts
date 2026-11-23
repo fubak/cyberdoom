@@ -34,6 +34,7 @@ describe('M09 ransom outcome', () => {
     }
     bus.emit('interact', { entityId: 'restore' });
     bus.emit('interact', { entityId: 'lessons' });
+    bus.emit('cleaned', { entityId: 'rw-a' });
     bus.emit('reach-exit', {});
 
     expect(runtime.finished).toBe('won');

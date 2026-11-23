@@ -291,6 +291,7 @@ export const m04: Mission = {
     { id: 'gateway', text: 'Enforce SPF, DKIM and DMARC p=reject', kind: 'interact', tag: 'gateway-control', count: 3 },
     { id: 'signin', text: 'Read the raw sign-in records', kind: 'interact', tag: 'signin-log' },
     { id: 'report', text: 'Lock the mailbox with impossible travel and concurrent sessions', kind: 'report', requires: ['signin'] },
+    { id: 'purge-broker', text: 'Purge the Vishing Broker from the mail floor', kind: 'kill', tag: 'boss-phish', requires: ['gateway'] },
     { id: 'false-report', text: 'Do not lock a mailbox without matching evidence', kind: 'avoid', tag: 'false-accuse' },
     { id: 'wrong-call', text: 'Avoid incorrect quarantine or release calls', kind: 'avoid', tag: 'wrong-call', strikes: 3 },
     { id: 'exit', text: 'Reach the exit', kind: 'reach-exit' },
@@ -354,6 +355,7 @@ export const m04Teach: MissionTeaching = {
   ],
   keyTerms: ['phishing', 'social engineering', 'security awareness reporting', 'indicators of malicious activity'],
   lessons: {
+    'purge-broker': { objective: '4.4', done: 'The Vishing Broker — the phishing process running the campaign — was purged from the mail floor.', missed: 'The vishing process behind the campaign is still running and can restart spoofed-domain mail.' },
     quarantine: { objective: '5.6', done: 'Malicious messages were quarantined after inspection.', missed: 'Inspect each message before choosing quarantine or release.' },
     release: { objective: '5.6', done: 'Legitimate messages were released.', missed: 'The queue is not clear until legitimate mail is released.' },
     gateway: { objective: '4.5', done: 'SPF and DKIM are enabled and DMARC is set to p=reject.', missed: 'Spoofed-domain mail keeps spawning until the gateway policy is enforced.' },
@@ -421,6 +423,7 @@ export const m04Walkthrough: WalkStep[] = [
   { goto: [25, 5] },
   { interact: 'report-console' },
   { wait: 0.1 },
+  { clean: 'ep1-boss-1' },
   { goto: [20, 1] },
 ];
 

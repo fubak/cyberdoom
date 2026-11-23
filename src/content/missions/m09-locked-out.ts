@@ -247,6 +247,7 @@ briefing: 'Ransomware is encrypting the finance VLAN right now. The CFO wants pa
     { id: 'eradicate', text: 'Eradicate: clean all 4 encrypted hosts', kind: 'clean', tag: 'enc-host', count: 4 },
     { id: 'recover', text: 'Recover: restore from offline backup', kind: 'interact', tag: 'recover', requires: ['eradicate'] },
     { id: 'lessons', text: 'File lessons learned', kind: 'interact', tag: 'lessons', requires: ['recover'] },
+    { id: 'purge-locker', text: 'Purge the Locker Overlord holding the war room', kind: 'kill', tag: 'boss-locker' },
     { id: 'no-pay', text: 'Do not pay the ransom', kind: 'avoid', tag: 'pay-ransom', penaltyOnly: true },
     { id: 'wrong-call', text: 'Make the right call on each case file', kind: 'avoid', tag: 'wrong-call', strikes: 3 },
     { id: 'exit', text: 'Reach the exit', kind: 'reach-exit' },
@@ -335,6 +336,7 @@ export const m09Walkthrough: WalkStep[] = [
   { wait: 0.2 },
   { goto: [16, 2] },
   { interact: 'lessons' },
+  { clean: 'rw-a' },
   { goto: [19, 1] },
 ];
 
@@ -349,6 +351,7 @@ export const m09Teach: MissionTeaching = {
   ],
   keyTerms: ['ransomware', 'backups', 'replication', 'correlation', 'chain of custody'],
   lessons: {
+    'purge-locker': { objective: '4.4', done: 'The Locker Overlord ransomware process was purged, freeing every host it had sealed.', missed: 'The ransomware overlord is still running — it keeps re-encrypting hosts no matter how often they are cleaned.' },
     'wrong-call': { objective: '4.8', done: 'Every encrypted host got the right triage call during eradication.', missed: 'A wrong call was logged on a finance host. Eradication needs confirmed targets.' },
     'read-netflow': {
       objective: '4.9',
