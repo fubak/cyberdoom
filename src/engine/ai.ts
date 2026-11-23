@@ -422,13 +422,29 @@ export function pickSealTarget(
 }
 
 /** A free spot near `e` to materialise a worm copy, or null if boxed in. */
-export function findSpawnSpot(e: Entity, map: WorldMap, player: Player): { x: number; y: number } | null {
+/** Copies and summons spawn clear of the player and of interactables: a
+ *  replica on top of a console eats E presses and mouse scans meant for the
+ *  learning objective behind it. */
+export function findSpawnSpot(
+  e: Entity,
+  map: WorldMap,
+  player: Player,
+  entities?: Entity[],
+): { x: number; y: number } | null {
   const dirs = [...DIRECTIONS].sort(() => Math.random() - 0.5);
   for (const r of [0.8, 1.2]) {
     for (const [vx, vy] of dirs) {
       const nx = e.x + vx * r;
       const ny = e.y + vy * r;
       if (Math.hypot(nx - player.x, ny - player.y) < 0.9) continue;
+      if (
+        entities?.some(
+          (other) =>
+            other.def.kind !== 'enemy' &&
+            other.def.kind !== 'prop' &&
+            Math.hypot(nx - other.x, ny - other.y) < 1.4,
+        )
+      ) continue;
       const res = map.resolve(nx, ny, ENEMY_RADIUS);
       if (Math.hypot(res.x - nx, res.y - ny) < 0.01) return { x: res.x, y: res.y };
     }
@@ -471,7 +487,7 @@ function runMalwareMechanics(
     } else if (((e.state.propN as number | undefined) ?? 0) < WORM_PROPAGATE_MAX) {
       e.state.propT = (e.state.propT as number) - dt;
       if ((e.state.propT as number) <= 0) {
-        const spot = findSpawnSpot(e, map, player);
+        const spot = findSpawnSpot(e, map, player, entities);
         if (spot && (hooks.wormCopyBudget === undefined || hooks.wormCopyBudget.remaining > 0)) {
           const n = (e.state.propN as number | undefined) ?? 0;
           const copy: Entity = {
@@ -715,7 +731,7 @@ export function updateEntities(
               const spawned = (e.state.bossSummons as number | undefined) ?? 0;
               const budget = Math.min(activePhase.summonCount ?? 1, Math.max(0, BOSS_SUMMON_MAX - spawned));
               for (let s = 0; s < budget; s++) {
-                const spot = findSpawnSpot(e, map, player);
+                const spot = findSpawnSpot(e, map, player, entities);
                 if (!spot) break;
                 const threat = activePhase.summonThreat;
                 const copy: Entity = {
@@ -1022,7 +1038,7 @@ export function updateEntities(
                 const spawned = (e.state.bossSummons as number | undefined) ?? 0;
                 const budget = Math.min(activePhase.summonCount ?? 1, Math.max(0, BOSS_SUMMON_MAX - spawned));
                 for (let s = 0; s < budget; s++) {
-                  const spot = findSpawnSpot(e, map, player);
+                  const spot = findSpawnSpot(e, map, player, entities);
                   if (!spot) break;
                   const threat = activePhase.summonThreat;
                   const mHp = threat === 'wiper' ? 5 : threat === 'botnet' ? 3 : 2;

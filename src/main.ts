@@ -7,7 +7,7 @@ import { Input } from './engine/input';
 import { EYE_HEIGHT, Player } from './engine/player';
 import { alertNear, damageEntity, ENEMY_PROFILES, hurtEntity, traceShot, updateEntities, updateProjectiles, wormPropagateCap } from './engine/ai';
 import type { SealTarget } from './engine/ai';
-import { enemyInTheWay, exitEdge } from './engine/interact';
+import { enemyInTheWay } from './engine/interact';
 import { doorUseHint, resolveUse, type UseTargetContext } from './engine/useTarget';
 import { Audio, musicTierForMission } from './engine/audio';
 import { isSkillId, loadSettings, saveSettings, type Settings } from './ui/settings';
@@ -186,7 +186,6 @@ class Game {
   private endCalled = false;
   private deathDrop = 0;
   private deathRoll = 0;
-  private wasOnExit = false;
   private lastAimWarnT = -Infinity;
   private stepPan = 1;
   // HUD action prompt: computed at ~15 Hz; banner on tool switch.
@@ -219,6 +218,7 @@ class Game {
   private wormBudget = { remaining: 0 };
   /** Kill hit-stop: remaining sim-time freeze (seconds). */
   private hitStopT = 0;
+  private flagHintAt = -99;
   /** WCAG 2.3.1: shared budget for all full-screen flashes (muzzle flood,
    *  landed-hit bloom, pain wash) — at most 3 per second, always. */
   private flashLimit = new FlashRateLimiter(3);
@@ -952,7 +952,7 @@ class Game {
     this.endCalled = false;
     this.deathDrop = 0;
     this.deathRoll = 0;
-    this.wasOnExit = false;
+
     this.lastAimWarnT = -Infinity;
     this.prompt = { lmb: null, use: null, lmbHot: false, banner: null, footer: null };
     this.promptNextT = 0;
@@ -1090,7 +1090,7 @@ class Game {
     this.deathDrop = 0;
     this.deathRoll = 0;
     this.deathStung = false;
-    this.wasOnExit = false;
+
     this.useCd = 0;
     this.automap.close();
     this.dossier.close();
@@ -1522,6 +1522,13 @@ class Game {
       } else if (hit) {
         if (hit.infected) {
           const dmg = hit.state.flagCorrect ? 4 : 2;
+          if (hit.def.kind === 'enemy' && !hit.state.flagCorrect && this.simT - this.flagHintAt > 8) {
+            this.flagHintAt = this.simT;
+            this.hud.pushMessage(
+              'UNFLAGGED PROCESS: inspect + flag it with the MOUSE for double scan damage',
+              'info',
+            );
+          }
           const result = damageEntity(hit, dmg, projectile.dx, projectile.dy);
           this.bus.emit('tool-hit', { toolId: 'usb', entityId: hit.def.id, good: true });
           if (result === 'killed') {
@@ -1553,10 +1560,12 @@ class Game {
     }
     const cell = map.cellAtF(p.x, p.y);
     const onExit = cell?.kind === 'exit';
-    if (exitEdge(this.wasOnExit, onExit, runtime.finished !== null)) {
+    // Standing on the pad re-emits every tick so a locked exit keeps
+    // re-explaining itself (the handler throttles its own message) instead of
+    // going silent after the first touch.
+    if (onExit && runtime.finished === null) {
       this.bus.emit('reach-exit', { secretTo: cell?.secretExit });
     }
-    this.wasOnExit = onExit;
 
     map.updateDoors(dt);
     map.updateLifts(dt);
@@ -1875,8 +1884,8 @@ class Game {
     this.nudgeAt = this.simT + 45;
     const tip =
       overlay.objectivePoints.length > 0
-        ? 'targets are marked on the automap [M]'
-        : 'check the automap [M] for the next step';
+        ? 'targets are marked on the automap [M]; full list on [TAB]'
+        : 'check the automap [M] or the objective list [TAB] for the next step';
     this.hud.pushMessage(`OBJECTIVE: ${overlay.objectiveText} — ${tip}`, 'info');
   }
 
@@ -1932,11 +1941,14 @@ class Game {
         }
         this.projectiles.push({ ...proj, alive: true, traveled: 0 });
       },
-      aimEntity: (maxDist: number, maxAngle: number) => {
+      aimEntity: (maxDist: number, maxAngle: number, interactablesOnly = false) => {
         let best: Entity | null = null;
         let bestD = maxDist;
         for (const e of rt.entities) {
           if (!e.alive) continue;
+          // E/Space presses aim past live malware to the console/host/item
+          // under it; combat tools keep aiming at everything.
+          if (interactablesOnly && e.def.kind === 'enemy') continue;
           const dx = e.x - p.x;
           const dy = e.y - p.y;
           const d = Math.hypot(dx, dy);

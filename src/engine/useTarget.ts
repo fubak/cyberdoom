@@ -9,8 +9,10 @@ export interface UseTargetContext {
   /** Door cell on the aim ray within interact range (excludes locked doors). */
   isDoorAhead: () => { doorId: string; accessRole?: string; dist: number; mfa?: boolean } | null;
   isDoorOpen: (doorId: string) => boolean;
-  /** Nearest entity within `maxDist` tiles and `maxAngle` rad of the aim. */
-  aimEntity: (maxDist: number, maxAngle: number) => Entity | null;
+  /** Nearest entity within `maxDist` tiles and `maxAngle` rad of the aim.
+   *  `interactablesOnly` skips enemies so live malware can't eat an E press
+   *  meant for a console/workstation/item under it. */
+  aimEntity: (maxDist: number, maxAngle: number, interactablesOnly?: boolean) => Entity | null;
   /** Distance to the wall along the facing ray. */
   wallDistance: number;
   /** Player's authorized roles and whether they own the badge tool. */
@@ -34,10 +36,10 @@ export function resolveUse(ctx: UseTargetContext): UseTarget {
   if (door && !ctx.isDoorOpen(door.doorId)) {
     return { kind: 'door', door };
   }
-  if (!ctx.aimEntity(1.4, 0.5) && ctx.wallDistance < 1.2) {
+  if (!ctx.aimEntity(1.7, 0.5, true) && ctx.wallDistance < 1.2) {
     return { kind: 'bump' };
   }
-  const target = ctx.aimEntity(1.5, 0.5);
+  const target = ctx.aimEntity(1.8, 0.6, true);
   if (target) return { kind: 'entity', entity: target };
   return { kind: 'none' };
 }
