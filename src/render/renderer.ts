@@ -157,7 +157,16 @@ void main() {
   // point for ~100 ms (a muzzle-bloom at the impact, not at the camera)
   float iboost = uImpact.z * smoothstep(3.0, 0.6, distance(vWorld, uImpact.xy));
   L = min(L * (1.0 + iboost), 1.5);
-  vec3 c = mix(min(t.rgb * uTint * vTint * L * uGain, vec3(1.0)), vec3(1.0), uFlash);
+  vec3 lit = t.rgb * uTint * vTint * L * uGain;
+  if (uGain > 1.01) {
+    // gained sprites (threats): clamp by the brightest channel, not per channel. A per-channel clamp
+    // drives every over-range colour to white, so a purple trojan, an orange worm and a green rat all
+    // washed out to the same pale body up close; this keeps each threat's hue at full brightness and
+    // only eases the overflow toward white, so they still read as lit against a dark sector.
+    float peak = max(lit.r, max(lit.g, lit.b));
+    if (peak > 1.0) lit = mix(lit / peak, vec3(1.0), clamp((peak - 1.0) * 0.16, 0.0, 0.4));
+  }
+  vec3 c = mix(min(lit, vec3(1.0)), vec3(1.0), uFlash);
   c = min(c + uFire.rgb * reach * 0.4 + uImpactCol * iboost * 0.45, vec3(1.0));
   c *= sfl;
   if (uWound > 0.0) {

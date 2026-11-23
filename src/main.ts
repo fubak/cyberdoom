@@ -80,6 +80,19 @@ const TOOL_FIRE_RGB: Record<string, [number, number, number]> = Object.fromEntri
  *  weapons. Inspect/utility tools (mouse, badge, mfa) don't flash. */
 const ATTACK_TOOLS = new Set(['keyboard', 'usb', 'edr', 'firewall', 'patch', 'tap']);
 
+/** World light-flood strength per tool. The flood used to run at 1.5 for everything (2.0 for the EDR),
+ *  which bleached the whole view on every use: mean view luma roughly doubled, and the patch disk and
+ *  network tap - utility tools, not weapons - turned the screen solid green / pink. Weapons keep a
+ *  clear muzzle flash; utility tools get a tint, not a wash. */
+const TOOL_FIRE_STRENGTH: Record<string, number> = {
+  keyboard: 0.95,
+  usb: 0.95,
+  firewall: 1.05,
+  edr: 1.25,
+  patch: 0.45,
+  tap: 0.45,
+};
+
 /** Data-blood spray tint per threat (matches each enemy's palette). */
 const THREAT_BLOOD: Record<string, [number, number, number]> = {
   worm: [1, 0.18, 0.05],
@@ -393,7 +406,7 @@ class Game {
       // just the small kick.
       const rgb = TOOL_FIRE_RGB[toolId];
       if (rgb && ATTACK_TOOLS.has(toolId) && this.flashLimit.allow(this.simT))
-        this.renderer.fireLight(rgb[0], rgb[1], rgb[2], toolId === 'edr' ? 2.0 : 1.5);
+        this.renderer.fireLight(rgb[0], rgb[1], rgb[2], TOOL_FIRE_STRENGTH[toolId] ?? 1);
       this.feel.kick(TOOL_KICK[toolId] ?? 1);
     });
     this.bus.on('cleaned', ({ entityId }) => {
