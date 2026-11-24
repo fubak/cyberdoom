@@ -82,7 +82,7 @@ export const badgeTool: ToolDef = {
     category: 'physical',
     types: ['preventive'],
     objectives: ['1.2', '4.6'],
-    use: 'Press E at a reader door and your badge swipes itself. Doors open only for roles you hold; trying a door outside your role is logged as a violation.',
+    use: 'Press E at a reader door: the badge swipes itself. Doors open only for roles you hold.',
     lesson: 'Least privilege: hold only the access your job requires. Every badge swipe is logged, so attempts outside your role are visible to auditors.',
   },
   drawViewmodel(g, w, _h, _bob, gender, _cd, anim) {

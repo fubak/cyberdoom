@@ -28,7 +28,7 @@ export const firewallTool: ToolDef = {
     category: 'technical',
     types: ['preventive', 'corrective'],
     objectives: ['3.2', '4.5'],
-    use: 'Fires a 5-rule packet-filter spread that shreds close-range malware and botnet swarms. Shares SCAN SESSIONS; does not clean workstations.',
+    use: 'Packet-filter spread that shreds close-range malware. Uses SCAN sessions.',
     lesson: 'Ingress filtering stops network floods at the perimeter, but already-infected hosts still need endpoint cleanup.',
   },
   hint(ctx) {

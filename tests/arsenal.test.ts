@@ -101,7 +101,7 @@ describe('arsenal runtime', () => {
     expect(a.owns('mfa')).toBe(true);
     expect(a.current.id).toBe('keyboard');
     expect(messages.some((text) => text.toUpperCase().startsWith('BADGE: PRESS E AT A READER DOOR'))).toBe(true);
-    expect(messages.some((text) => text.toUpperCase().startsWith('MFA TOKEN: MFA DOORS: PRESS E'))).toBe(true);
+    expect(messages.some((text) => text.toUpperCase().startsWith('MFA TOKEN: PRESS E AT AN MFA READER'))).toBe(true);
     expect(messages.some((text) => text.toUpperCase().startsWith('[4] BADGE:'))).toBe(false);
     expect(messages.some((text) => text.toUpperCase().startsWith('[7] MFA TOKEN:'))).toBe(false);
 

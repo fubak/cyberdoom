@@ -2,7 +2,7 @@ import type { Mission } from '../core/types';
 import { ARC, arcIndex } from '../content/curriculum';
 import { teachingRegistry } from '../content/missions';
 import { objectiveById } from '../content/objectives';
-import { drawBigText, drawChunky, drawText, measureBig, measureChunky, wrapText } from '../render/font';
+import { drawBigText, drawChunky, drawText, measureBig, measureChunky } from '../render/font';
 import { RES } from '../render/res';
 import {
   bevel,
@@ -27,6 +27,8 @@ import { toolRegistry } from '../tools';
 import { defaultLoadout } from '../tools/arsenal';
 import { briefingDetailBlocks } from './briefingDetails';
 import { pageLabel, pageStep, stepPage } from './pageKeys';
+import { briefingControlsBlocks, layoutKitObjectives, skillHelp, THREAT_HELP, threatMarks } from './briefingHelp';
+import { resolveBindings } from '../engine/bindings';
 import './curriculum.css';
 
 /**
@@ -115,6 +117,7 @@ export function briefing(
   onBack: () => void,
   onSkill?: (next: SkillId) => void,
   skill: SkillId = 'analyst',
+  bindings?: unknown,
 ): HTMLElement {
   const teach = teachingRegistry.get(mission.id);
   const idx = arcIndex(mission.id);
@@ -122,7 +125,8 @@ export function briefing(
   const s = h('div', 'screen cd-inter cd-pixel cd-briefing');
   let selectedSkill = skillById(skill).id;
   let skillButton: HTMLButtonElement | null = null;
-  const kicker = `MISSION ${idx + 1}/${ARC.length} - THREAT LEVEL ${'!'.repeat(Math.max(1, Math.ceil(mission.difficulty / 3)))}`;
+  const keys = resolveBindings(bindings);
+  const kicker = `MISSION ${idx + 1}/${ARC.length} - THREAT LEVEL ${threatMarks(mission.difficulty)}`;
   let mode: 'overview' | 'details' = 'overview';
   let page = 0;
   const backdrop = brickBackdrop();
@@ -144,6 +148,9 @@ export function briefing(
 
   const overview = () => {
     const { canvas, g } = makeCanvas();
+    // the kicker's THREAT LEVEL is explained on hover / to screen readers
+    canvas.title = THREAT_HELP;
+    canvas.setAttribute('aria-label', `${pixelSafe(mission.title)}. ${kicker}. ${THREAT_HELP}`);
     frame(g);
     drawText(g, kicker, 22, 22, C.dim);
     const title = pixelSafe(mission.title);
@@ -180,15 +187,15 @@ export function briefing(
     y += 11;
     const tools = defaultLoadout(mission).map((id) => pixelSafe(toolRegistry.get(id)?.name ?? id.toUpperCase()));
     tools.forEach((name, i) => { if (y + (i + 1) * rowH <= bottom) drawText(g, name, 22, y + i * rowH, C.text); });
-    let oy = y;
     const cols = Math.floor((DB_W - 22 - colB) / 6);
-    for (const id of mission.objectives) {
+    const objectives = mission.objectives.flatMap((id) => {
       const objective = objectiveById(id);
-      if (!objective) continue;
-      const lines = wrapText(pixelSafe(`${id} ${objective.title}`), cols, 2);
-      if (oy + lines.length * rowH > bottom) break;
-      for (const line of lines) { drawText(g, line, colB, oy, DOMAIN_COLOR[objective.domain] ?? C.text); oy += rowH; }
-      oy += 2;
+      return objective ? [{ text: pixelSafe(`${id} ${objective.title}`), color: DOMAIN_COLOR[objective.domain] ?? C.text }] : [];
+    });
+    // whole objectives only, never cut with '…': the rest are counted and live on DETAILS
+    const kit = layoutKitObjectives(objectives.map((o) => o.text), cols, y, bottom, rowH);
+    for (const line of kit.lines) {
+      drawText(g, line.text, colB, line.y, line.index < 0 ? C.orange : objectives[line.index].color);
     }
   };
 
@@ -205,7 +212,13 @@ export function briefing(
     return out;
   };
 
-  const detailPages = () => paginate(briefingDetailBlocks(mission, C, (domain) => DOMAIN_COLOR[domain] ?? C.text));
+  // mission text first, then a CONTROLS page of its own (live bindings, threat and skill explained)
+  const detailPages = () => [
+    ...paginate(briefingDetailBlocks(mission, C, (domain) => DOMAIN_COLOR[domain] ?? C.text)),
+    ...paginate(briefingControlsBlocks(keys, {
+      skill: selectedSkill, difficulty: mission.difficulty, gold: C.gold, text: C.text, dim: C.dim,
+    })),
+  ];
 
   const details = (pages: PLine[][]) => {
     const { canvas, g } = makeCanvas();
@@ -229,8 +242,13 @@ export function briefing(
   const cycleSkill = () => {
     const index = SKILLS.findIndex((entry) => entry.id === selectedSkill);
     selectedSkill = SKILLS[(index + 1) % SKILLS.length]!.id;
-    if (skillButton) skillButton.textContent = skillLabel();
+    if (skillButton) {
+      skillButton.textContent = skillLabel();
+      skillButton.title = skillHelp(selectedSkill);
+    }
     onSkill?.(selectedSkill);
+    // the CONTROLS page states the skill's effect: keep it current
+    if (mode === 'details') render();
   };
 
   const render = () => {
@@ -260,6 +278,7 @@ export function briefing(
     skillButton = bigButton(skillLabel(), cycleSkill, 'cd-btn alt');
     skillButton.type = 'button';
     skillButton.dataset.menuItem = 'skill';
+    skillButton.title = skillHelp(selectedSkill);
     buttons.appendChild(skillButton);
     buttons.appendChild(bigButton('DEPLOY  [ENTER]', onGo));
     pg.appendChild(buttons);

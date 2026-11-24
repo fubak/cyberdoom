@@ -35,7 +35,7 @@ export const usbTool: ToolDef = {
     category: 'technical',
     types: ['detective', 'corrective'],
     objectives: ['2.5', '2.4'],
-    use: 'Plug it into an infected workstation at arm\'s length (2 tiles) to boot a scan and quarantine the malware (eradication); fire it at roaming malware processes from range. One SCAN session stops a worm; MOUSE-flagged threats take double. Each session is one boot of the issued media, so do not waste them on clean hosts.',
+    use: 'Plug into an infected workstation to quarantine it, or fire it at malware.',
     lesson: 'Eradication (scan, clean or reimage) follows containment. Removable media must be IT-issued and write-protected; a found stick is baiting.',
   },
   drawViewmodel(g, w, _h, _bob, gender, _cd, anim) {

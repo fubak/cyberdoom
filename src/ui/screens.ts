@@ -6,6 +6,9 @@ import { missionRowStates } from '../missions/progress';
 import { mountTitle } from '../render/title';
 import { bigButton, onKeysWhileMounted, pixelTitle } from './briefing';
 import { RAMP } from './debrief';
+import { resolveBindings } from '../engine/bindings';
+import { sortedTools } from '../tools';
+import { titleHelpLines } from './titleHelp';
 
 /**
  * ARSENAL/LOOK: HTML overlay screens — title, character select, mission
@@ -20,19 +23,15 @@ function el(tag: string, cls = '', html = ''): HTMLElement {
   return e;
 }
 
-export function titleScreen(onStart: () => void, onMissions?: () => void, onContinue?: () => void): HTMLElement {
+/** Title menu. READ THIS! text comes from the tool registry and the live key bindings (rebinds show). */
+export function titleScreen(
+  onStart: () => void,
+  onMissions?: () => void,
+  onContinue?: () => void,
+  bindings?: unknown,
+): HTMLElement {
   const s = el('div', 'screen title');
-  mountTitle(s, onStart, [
-    'MERIDIAN FREIGHT IS UNDER ATTACK BY GHOSTLEDGER.',
-    'YOUR WEAPONS ARE IR TOOLS: KEYBOARD, MOUSE, USB SCANNER, TAP,',
-    'EDR, PATCH DISK, FIREWALL BLASTER. BADGE & MFA SWIPE AT DOORS.',
-    'CONTAIN MALWARE. ENFORCE LEAST PRIVILEGE. STOP THE BREACH.',
-    '',
-    'WASD MOVE - MOUSE LOOK - ARROWS TURN - SHIFT RUN',
-    'LMB USE TOOL - E/SPACE INTERACT - 1-9 / WHEEL / Q SELECT TOOL',
-    '',
-    'PRESS ANY KEY OR CLICK TO GO BACK',
-  ], onMissions, onContinue);
+  mountTitle(s, onStart, titleHelpLines(resolveBindings(bindings), sortedTools()), onMissions, onContinue);
   return s;
 }
 

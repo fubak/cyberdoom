@@ -47,10 +47,13 @@ import { toolForSlot, toolRegistry } from './tools';
 
 import { USB_PLUG_RANGE } from './tools/usb';
 import { characterSelect } from './ui/characterSelect';
-import { applyBack, LOOK_HINT, MENU_HINT } from './ui/nav';
+import { applyBack } from './ui/nav';
+import { promptGate } from './ui/promptGate';
+import { bindingLabel, onboardingTips } from './ui/controlsHelp';
+import { markOnboardingSeen, shouldOnboard } from './ui/onboarding';
 import { pauseMenu } from './ui/pause';
 import { controlsPanel } from './ui/controls';
-import { markCompleted, unlockEverything } from './missions/progress';
+import { completedIds, markCompleted, unlockEverything } from './missions/progress';
 import { registerThreatSprites } from './missions/threatSprites';
 import { genDebugCompare } from './render/genpool';
 
@@ -220,6 +223,7 @@ class Game {
     lmbHot: false,
     banner: null as { title: string; blurb: string } | null,
     footer: null as string | null,
+    lmbKey: 'LMB',
   };
   private promptNextT = 0;
   private lastFireT = -Infinity;
@@ -581,7 +585,12 @@ class Game {
     this.audio.startMusic('title');
     const saved = loadSavedCheckpoints();
     const onContinue = saved && missionById(saved.missionId) ? () => this.continueSaved() : undefined;
-    this.setScreen('title', screens.titleScreen(() => this.showCharSelect(), () => this.showMissionSelect(), onContinue));
+    this.setScreen('title', screens.titleScreen(
+      () => this.showCharSelect(),
+      () => this.showMissionSelect(),
+      onContinue,
+      this.settings.bindings,
+    ));
   }
 
   private showCharSelect(): void {
@@ -619,6 +628,7 @@ class Game {
         saveSettings(this.settings);
       },
       this.settings.skill,
+      this.settings.bindings,
     ));
     // warm the WebGL hand-bake path during briefing only when the legacy 3D rig is enabled
     if (SHOW_HANDS) {
@@ -964,7 +974,12 @@ class Game {
     this.particles.clear();
     this.feel = new Feel();
     this.arsenal.reset(mission, this.gender);
-    this.arsenal.introduce(newToolsFor(mission.id).map((toolId) => toolRegistry.require(toolId)));
+    const firstRun = shouldOnboard(mission.id, completedIds());
+    this.arsenal.introduce(
+      newToolsFor(mission.id).map((toolId) => toolRegistry.require(toolId)),
+      firstRun ? onboardingTips(resolveBindings(this.settings.bindings)) : [],
+    );
+    if (firstRun) markOnboardingSeen();
     this.god = false;
     this.arsenal.face.god = false;
     this.cheatBuf = new CheatBuffer();
@@ -979,7 +994,7 @@ class Game {
     this.deathRoll = 0;
 
     this.lastAimWarnT = -Infinity;
-    this.prompt = { lmb: null, use: null, lmbHot: false, banner: null, footer: null };
+    this.prompt = { lmb: null, use: null, lmbHot: false, banner: null, footer: null, lmbKey: 'LMB' };
     this.promptNextT = 0;
     this.lastFireT = -Infinity;
     this.bannerUntil = 0;
@@ -1875,29 +1890,28 @@ class Game {
    * Action prompt (~15 Hz): what LMB does (current tool's hint(), with the
    * ammo-0 override) and what E does (resolveUse -> interactHint/doorUseHint).
    * Hidden while switching tools, in dossier/automap, or at mission end.
-   * With the pointer free, a click-to-look line replaces the action prompt.
+   * With the pointer free the prompts stay up (the keyboard still plays):
+   * the tool line shows the fire key, since a click only captures the mouse,
+   * and the footer says so (promptGate).
    */
   private updatePrompt(ending: boolean): void {
     this.prompt.lmbHot = this.simT - this.lastFireT < 0.25;
-    const unlockedLook = !this.input.pointerLocked && !DEBUG;
-    if (unlockedLook && !ending && !this.dossier.isOpen && !this.automap.isOpen) {
-      this.prompt.lmb = null;
-      this.prompt.use = null;
-      this.prompt.banner = null;
-      this.prompt.footer = LOOK_HINT;
-      return;
-    }
+    const gate = promptGate({
+      pointerLocked: this.input.pointerLocked,
+      debug: DEBUG,
+      ending,
+      switching: this.arsenal.switching,
+      overlayOpen: this.dossier.isOpen || this.automap.isOpen,
+      switchedTool: this.switchedTool,
+      simT: this.simT,
+      fireKey: bindingLabel(resolveBindings(this.settings.bindings), 'fire'),
+    });
     this.prompt.banner = this.simT < this.bannerUntil
       ? { title: `${this.arsenal.current.slot} ${this.arsenal.current.name}`, blurb: this.arsenal.current.blurb ?? '' }
       : null;
-    // nav hint strip: first ~9 s of a mission only (pause menu lists keys too)
-    this.prompt.footer = !ending && !this.switchedTool && this.simT < 9 ? MENU_HINT : null;
-    const hidden =
-      ending ||
-      this.arsenal.switching ||
-      this.dossier.isOpen ||
-      this.automap.isOpen ||
-      (!this.input.pointerLocked && !DEBUG);
+    this.prompt.footer = gate.footer;
+    this.prompt.lmbKey = gate.toolKey;
+    const hidden = !gate.showActions;
     if (this.simT < this.promptNextT || hidden) {
       if (hidden) {
         this.prompt.lmb = null;

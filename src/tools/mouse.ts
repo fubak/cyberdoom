@@ -33,7 +33,7 @@ export const mouseTool: ToolDef = {
     category: 'operational',
     types: ['detective'],
     objectives: ['2.4', '4.9'],
-    use: 'Click a target to inspect its indicators. Click the same target again to flag it as malicious. Flagged threats take double damage from the scanner; flagging a benign target is a false positive.',
+    use: 'Click to inspect a target, click again to flag it. A benign flag is a false positive.',
     lesson: 'Detection is a decision: weigh the indicators, then commit. False positives waste response effort and erode trust.',
   },
   drawViewmodel(g, w, _h, _bob, gender, _cd, anim) {

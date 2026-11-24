@@ -32,9 +32,13 @@ export interface NavState {
   overlay: MenuOverlay;
 }
 
-/** HUD / map strings. Kept short enough for the 320px status width. */
-export const LOOK_HINT = 'CLICK TO LOOK - ESC MENU';
-export const MENU_HINT = 'ESC MENU - M MAP - L LOG';
+/**
+ * HUD / map strings. Kept short enough for the 320px status width.
+ * LOOK_HINT shows while the mouse is not captured: the first click only
+ * captures the mouse (it never fires a tool), and WASD/E/F play without it.
+ */
+export const LOOK_HINT = 'CLICK TO CAPTURE MOUSE - WASD WORKS - ESC MENU';
+export const MENU_HINT = 'ESC MENU - M MAP - L LOG - TAB OBJECTIVES';
 export const MAP_HINT = 'WHEEL/+- ZOOM - WASD PAN - G FOLLOW - M/ESC CLOSE';
 
 export function applyBack(state: NavState): NavState {

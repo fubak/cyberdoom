@@ -29,7 +29,7 @@ export const tapTool: ToolDef = {
     category: 'technical',
     types: ['detective'],
     objectives: ['3.2', '4.9'],
-    use: 'Sweeps a cone and copies the traffic of every host in view, then shows you the raw flows. It decides nothing: read the flows and make the call yourself (MOUSE flags a captured host in one click). It cannot block or clean.',
+    use: 'Copies the traffic of every host in view. It decides nothing: you make the call.',
     lesson: 'A tap or SPAN port only copies traffic. An IDS or analyst detects; only inline devices like an IPS can block. Captures are key evidence.',
   },
   drawViewmodel(g, w, _h, _bob, _gender, _cd, anim) {
