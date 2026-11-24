@@ -4,6 +4,8 @@ import { visibleFrameworkLine } from '../content/frameworks';
 import { drawText, measureText } from '../render/font';
 import { VIEW_H, VIEW_W } from '../render/renderer';
 import { BASE_H, BASE_W, RES } from '../render/res';
+import { DEFAULT_BINDINGS } from '../engine/bindings';
+import { evidenceEmptyLines } from './evidenceHints';
 
 export const DOSSIER_TEXT_W = 276;
 export const DOSSIER_ROWS = 10;
@@ -94,6 +96,8 @@ export class Dossier {
     private getEntries: () => EvidenceEntry[],
     private onCall?: (entityId: string, action: CallAction) => void,
     private isLogBinding: (code: string) => boolean = (code) => code === 'KeyL',
+    /** Empty-state copy (built from the live key bindings by the caller). */
+    private emptyLines: () => readonly string[] = () => evidenceEmptyLines(DEFAULT_BINDINGS),
   ) {
     this.canvas = document.createElement('canvas');
     this.canvas.width = VIEW_W;
@@ -211,7 +215,7 @@ export class Dossier {
     const g = this.g;
     const entry = entries[this.fileIndex];
     if (!entry) {
-      drawText(g, 'NO EVIDENCE LOGGED', DOSSIER_X + 9, DOSSIER_Y + 28, '#e8d8b0');
+      this.drawEmpty();
       return;
     }
     const layout = layoutForEntry(entry);
@@ -288,7 +292,7 @@ export class Dossier {
     const start = Math.max(0, Math.min(this.selectedIndex - visibleRows + 1, entries.length - visibleRows));
     const visible = entries.slice(start, start + visibleRows);
     if (!visible.length) {
-      drawText(this.g, 'NO EVIDENCE LOGGED', DOSSIER_X + 9, DOSSIER_Y + 28, '#e8d8b0');
+      this.drawEmpty();
       return;
     }
     visible.forEach((entry, index) => {
@@ -301,6 +305,14 @@ export class Dossier {
         this.g.fillRect(DOSSIER_X + 6, y - 2, DOSSIER_W - 12, 9);
       }
       drawText(this.g, `${selected ? '>' : ' '} ${label}`, DOSSIER_X + 9, y, selected ? '#ffd040' : '#e8e0d0');
+    });
+  }
+
+  /** Empty log: the headline, then how to produce an entry with the live keys. */
+  private drawEmpty(): void {
+    this.emptyLines().forEach((line, index) => {
+      if (!line) return;
+      drawText(this.g, line, DOSSIER_X + 9, DOSSIER_Y + 28 + index * 9, index === 0 ? '#e8d8b0' : '#c8b8a0');
     });
   }
 

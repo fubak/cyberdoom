@@ -7,6 +7,7 @@ import { sortedTools } from '../tools';
 import { BASE_H, BASE_STATUS, BASE_W, RES } from '../render/res';
 import { keyPlateRect, PROMPT_ROW_PLATE } from './keyPlate';
 import { pinnedObjectiveLine, stripObjectiveLine } from './objectiveLine';
+import { layoutObjectivesOverlay, overlayPageAt } from './objectivesOverlay';
 import {
   P_AMMO,
   P_CRED,
@@ -106,6 +107,8 @@ export class Hud {
   private grinT = 0;
   private cooldown = 0;
   private tabHeld = false;
+  /** Seconds TAB has been held (pages the objectives overlay). */
+  private tabHeldT = 0;
   private objShowT = 0;
   private lastObjKey = '';
   private objIdx = 0;
@@ -134,6 +137,8 @@ export class Hud {
     const onKey = (down: boolean) => (e: KeyboardEvent) => {
       if (e.code !== 'Tab') return;
       e.preventDefault();
+      // a fresh press starts the overlay on page 1
+      if (down && !this.tabHeld) this.tabHeldT = 0;
       this.tabHeld = down;
     };
     window.addEventListener('keydown', onKey(true));
@@ -183,6 +188,7 @@ export class Hud {
     this.grinT = Math.max(0, this.grinT - dt);
     this.objShowT = Math.max(0, this.objShowT - dt);
     this.time += dt;
+    if (this.tabHeld) this.tabHeldT += dt;
     this.ouchT = Math.max(0, this.ouchT - dt);
     this.lookT -= dt;
     if (this.lookT <= 0) {
@@ -766,40 +772,49 @@ export class Hud {
   }
 
   /** TAB: full objectives list — every objective with its status lamp, like the
-   *  pause-menu 'TAB OBJECTIVES' line promises. Held only while Tab is down. */
+   *  pause-menu 'TAB OBJECTIVES' line promises. Held only while Tab is down.
+   *  Every objective is wrapped in full; a list taller than the panel pages
+   *  (PAGE n/m, cycling while Tab stays down) instead of being cut. */
   private drawObjectivesOverlay(objs: { text: string; done: boolean; failed: boolean }[]): void {
     const g = this.g;
     const done = objs.filter((o) => o.done).length;
-    const rows = objs.map((o) => ({
-      lamp: o.failed ? '#e01e10' : o.done ? '#2ad83a' : '#ffd040',
-      col: o.failed ? '#ff5a3a' : o.done ? '#5aff6a' : '#f0ece4',
-      settled: o.done || o.failed,
-      lines: wrapText(o.text.toUpperCase(), 52, 2),
-    }));
-    const rowH = 9;
-    const h = Math.min(BASE_H - BASE_STATUS - 4, 14 + rows.reduce((n, r) => n + r.lines.length, 0) * rowH + 4);
+    const lineH = 8;
+    const top = 13;
+    const maxH = BASE_H - BASE_STATUS - 4;
+    // each objective block also costs a 1px gap: budget rows conservatively
+    const maxRows = Math.floor((maxH - top - 4) / (lineH + 1));
+    const pages = layoutObjectivesOverlay(objs, maxRows);
+    const pageIndex = overlayPageAt(this.tabHeldT, pages.length);
+    const rows = pages[pageIndex] ?? [];
+    const textRows = rows.reduce((n, r) => n + r.lines.length, 0);
+    const h = Math.min(maxH, top + textRows * lineH + rows.length + 4);
     g.fillStyle = getTickerPattern(g) ?? 'rgba(0,0,0,0.85)';
     g.fillRect(0, 0, BASE_W, h);
     g.fillStyle = '#a87a10';
     g.fillRect(0, h - 1, BASE_W, 1);
     drawChunky(g, `OBJECTIVES ${done}/${objs.length}`, 4, 3, MSG_RAMP.warn);
-    let y = 13;
+    if (pages.length > 1) {
+      const tag = `PAGE ${pageIndex + 1}/${pages.length}`;
+      drawText(g, tag, BASE_W - measureText(tag, 'small') - 4, 3, '#ffc080', 'small', '#000');
+    }
+    let y = top;
     for (const row of rows) {
-      g.fillStyle = '#000';
-      g.fillRect(4, y + 1, 5, 5);
-      g.fillStyle = row.lamp;
-      g.fillRect(5, y + 2, 3, 3);
+      const col = row.status === 'failed' ? '#ff5a3a' : row.status === 'done' ? '#5aff6a' : '#f0ece4';
+      if (!row.continued) {
+        g.fillStyle = '#000';
+        g.fillRect(4, y + 1, 5, 5);
+        g.fillStyle = row.status === 'failed' ? '#e01e10' : row.status === 'done' ? '#2ad83a' : '#ffd040';
+        g.fillRect(5, y + 2, 3, 3);
+      }
       row.lines.forEach((line, i) => {
-        const w = drawText(g, line, 13, y, row.col, 'small', '#000');
-        if (row.settled && i === 0) {
-          g.fillStyle = row.col;
+        const w = drawText(g, line, 13, y, col, 'small', '#000');
+        if (row.settled && i === 0 && !row.continued) {
+          g.fillStyle = col;
           g.fillRect(13, y + 3, w - 1, 1);
         }
-        y += rowH - 1;
-        if (y > h - 8) return;
+        y += lineH;
       });
       y += 1;
-      if (y > h - 8) break;
     }
   }
 

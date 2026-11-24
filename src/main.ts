@@ -49,7 +49,15 @@ import { USB_PLUG_RANGE } from './tools/usb';
 import { characterSelect } from './ui/characterSelect';
 import { applyBack } from './ui/nav';
 import { promptGate } from './ui/promptGate';
-import { bindingLabel, onboardingTips } from './ui/controlsHelp';
+import { bindingLabel, onboardingTips, primaryKey } from './ui/controlsHelp';
+import {
+  EMPTY_EVIDENCE_UNREAD,
+  evidenceEmptyLines,
+  evidenceLogBadge,
+  markEvidenceRead,
+  noteEvidence,
+  type EvidenceUnread,
+} from './ui/evidenceHints';
 import { markOnboardingSeen, shouldOnboard } from './ui/onboarding';
 import { relativeBearing, tileDistance } from './ui/damageAlert';
 import { claimRoleHint, roleDenialExplainer } from './ui/roleBadge';
@@ -242,6 +250,8 @@ class Game {
   private sealedDoors = new Set<string>();
   /** Entities whose evidence already auto-opened the dossier this mission. */
   private dossierOpened = new Set<string>();
+  /** Evidence ids seen this mission and how many arrived unopened (LOG +N badge). */
+  private evidenceUnread: EvidenceUnread = EMPTY_EVIDENCE_UNREAD;
   /** threat types whose mechanic explainer was already tickered this mission. */
   private noticedThreats = new Set<string>();
   /** attacker id -> {label, simT until it counts as actively draining}. */
@@ -381,6 +391,7 @@ class Game {
       () => this.runtime?.evidence ?? [],
       (entityId, action) => this.bus.emit('call-pick', { entityId, action }),
       (code) => this.input.matchesAction('log', code),
+      () => evidenceEmptyLines(resolveBindings(this.settings.bindings)),
     );
     viewport.appendChild(this.dossier.canvas);
 
@@ -400,18 +411,31 @@ class Game {
       // already open (e.g. the player is mid triage-call) refresh it so the
       // picked answer renders.
       if (this.dossier.isOpen) {
+        this.evidenceUnread = noteEvidence(this.evidenceUnread, evidence.id, true).state;
         this.dossier.show(evidence.id);
         return;
       }
       const hostileNear = !!this.player && !!this.runtime?.entities.some(
         (e) => e.alive && e.def.kind === 'enemy' && Math.hypot(e.x - this.player!.x, e.y - this.player!.y) <= 6,
       );
-      if (!hostileNear && !this.dossierOpened.has(evidence.entityId)) {
+      const autoOpen = !hostileNear && !this.dossierOpened.has(evidence.entityId);
+      const noted = noteEvidence(this.evidenceUnread, evidence.id, autoOpen);
+      this.evidenceUnread = noted.state;
+      if (autoOpen) {
         this.dossierOpened.add(evidence.entityId);
         this.dossier.show(evidence.id);
         return;
       }
-      this.hud.pushMessage(`${evidence.label} — logged. L for the case file.`, 'info');
+      // New, unopened evidence gets the LOG +N [L] badge at alert rank: it
+      // answers the player's own action, so queued onboarding tips must not
+      // bury it, yet as an equal it never bumps a damage alert off screen. A
+      // re-read is only a reminder of where the file lives (tip).
+      const bindings = resolveBindings(this.settings.bindings);
+      if (noted.isNew) {
+        this.hud.pushMessage(`${evidenceLogBadge(this.evidenceUnread.unread, bindings)} ${evidence.label}`, 'info', 'alert');
+      } else {
+        this.hud.pushMessage(`${evidence.label} — in the case file [${primaryKey(bindings, 'log')}]`, 'info', 'tip');
+      }
     });
     this.bus.on('objective-done', () => this.audio.sfx('objective'));
     // tool sfx are the arsenal's (per-tool, per-phase); using a tool still wakes nearby enemies
@@ -1069,6 +1093,8 @@ class Game {
     this.edrPulseCount = 0;
     this.sealedDoors.clear();
     this.dossierOpened.clear();
+    this.evidenceUnread = EMPTY_EVIDENCE_UNREAD;
+    this.automap.reset();
     this.noticedThreats.clear();
     this.drainers.clear();
     this.wormBudget.remaining = wormPropagateCap(mission.difficulty);
@@ -1435,6 +1461,8 @@ class Game {
       return;
     }
     if (this.dossier.isOpen) {
+      // the log is open: the LOG +N badge count starts over
+      this.evidenceUnread = markEvidenceRead(this.evidenceUnread);
       // The world stays paused for reading, but E still resolves the
       // crosshair target — fresh evidence swaps the dossier to it. useCd must
       // tick here: its normal decrement sits below this early-return.
