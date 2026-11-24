@@ -196,11 +196,42 @@ function lit(p: PaintCtx, color: string, x: number, y: number, w: number, h: num
 
 // ---------------------------------------------------------------- malware (3D-modelled)
 
-type Pose =
+/**
+ * Whole-body squash/stretch and lean laid over an authored pose: the cheap
+ * in-between. Anticipation crouches and pulls back before a strike, the
+ * settle overshoots after it, and two breathing frames make an idle.
+ */
+interface Warp {
+  id: string;
+  /** Height scale about the feet; width shrinks to keep the volume. */
+  sy: number;
+  /** Lean toward the viewer per unit of height (negative pulls back). */
+  lean: number;
+}
+
+type Pose = (
   | { kind: 'walk'; k: number; n?: number }
   | { kind: 'attack'; k: 0 | 1 }
   | { kind: 'pain'; k?: 0 | 1 }
-  | { kind: 'dead' };
+  | { kind: 'dead' }
+) & { warp?: Warp };
+
+const WINDUP_WARP: Warp = { id: 'windup', sy: 0.93, lean: -0.09 };
+const SETTLE_WARP: Warp = { id: 'settle', sy: 1.05, lean: 0.1 };
+const IDLE_WARPS: Warp[] = [{ id: 'idle1', sy: 1.025, lean: 0 }, { id: 'idle2', sy: 0.975, lean: 0 }];
+/** Walk frames per cycle unless a set overrides it. */
+const DEFAULT_WALK_N = 8;
+
+function warpPrims(prims: Prim[], w: Warp | undefined): Prim[] {
+  if (!w) return prims;
+  const sx = 1 / Math.sqrt(w.sy);
+  return prims.map((p) => ({
+    ...p,
+    c: [p.c[0] * sx, p.c[1] * w.sy, p.c[2] + p.c[1] * w.lean] as V3,
+    r: [p.r[0] * sx, p.r[1] * w.sy, p.r[2]] as V3,
+    ...(p.decal ? { decal: (l: V3, n: V3) => p.decal!([l[0] / sx, l[1] / w.sy, l[2]], n) } : {}),
+  }));
+}
 type Model = (pose: Pose) => Prim[];
 
 const ell = (c: V3, r: V3, col: string, extra: Partial<Prim> = {}): Prim => ({ shape: 'ell', c, r, col, ...extra });
@@ -974,7 +1005,7 @@ function tipOver(p: Prim, a: number, lift = 0): Prim {
 
 function makeMonster(id: string, worldH: number, model: Model, opts: { floor?: number; gain?: number; grow?: number; walkN?: number; gib?: [number, number, number] } = {}): void {
   const grow = opts.grow ?? 1;
-  const walkN = opts.walkN ?? 4;
+  const walkN = opts.walkN ?? DEFAULT_WALK_N;
   lazyOwner = id;
   const W = TEX.monster;
   const H = TEX.monster;
@@ -991,12 +1022,17 @@ function makeMonster(id: string, worldH: number, model: Model, opts: { floor?: n
     ['attack1', { kind: 'attack', k: 1 }],
     ['pain', { kind: 'pain', k: 0 }],
     ['pain2', { kind: 'pain', k: 1 }],
+    // ANIMATION: anticipation before the strike, a settle after it, and a
+    // two-frame breathing idle — each an authored pose with a body warp
+    ['windup', { kind: 'attack', k: 0, warp: WINDUP_WARP }],
+    ['settle', { kind: 'attack', k: 1, warp: SETTLE_WARP }],
+    ...IDLE_WARPS.map((warp): [string, Pose] => [warp.id, { kind: 'walk', k: 0, n: walkN, warp }]),
   ];
   // grain + pack, shared by every thread: seeded -> byte-identical output
   const finishPixels = (raw: { rgba: Uint8ClampedArray; glow: Uint8ClampedArray }, pose: Pose, rotation: number, mirror: boolean): GenResult => {
     const grain = raw.rgba;
     let seed = 2166136261;
-    for (const ch of `${id}:${pose.kind}:${'k' in pose ? pose.k : 0}:${rotation}:${mirror ? 1 : 0}`) seed = Math.imul(seed ^ ch.charCodeAt(0), 16777619);
+    for (const ch of `${id}:${pose.kind}:${'k' in pose ? pose.k : 0}:${rotation}:${mirror ? 1 : 0}${pose.warp ? `:${pose.warp.id}` : ''}`) seed = Math.imul(seed ^ ch.charCodeAt(0), 16777619);
     const random = () => {
       seed ^= seed << 13;
       seed ^= seed >>> 17;
@@ -1013,7 +1049,7 @@ function makeMonster(id: string, worldH: number, model: Model, opts: { floor?: n
     return packPixels(W, H, raw, { ...PACK, mirror });
   };
   const startPose = (pose: Pose, rotation: number, mirror: boolean) => {
-    const prims = scaleModel(growModel(model(pose), grow));
+    const prims = scaleModel(growModel(warpPrims(model(pose), pose.warp), grow));
     const job = createRasterJob(W, H, prims, { view: (rotation * Math.PI) / 4, lit, ...(pose.kind === 'pain' ? { tint: [255, 120, 80] as V3, tintT: 0.2 } : {}) });
     return { job, finish: () => finishPixels(job, pose, rotation, mirror) };
   };
@@ -1027,7 +1063,6 @@ function makeMonster(id: string, worldH: number, model: Model, opts: { floor?: n
   for (const [key, pose] of poses) {
     for (let r = 0; r <= 4; r++) {
       poseFrames.push({ key: `${key}_${r}`, pose, r, mirror: false });
-      if (r >= 1 && r <= 3) poseFrames.push({ key: `${key}_${8 - r}`, pose, r, mirror: true });
     }
   }
   for (const f of poseFrames) {
@@ -1088,7 +1123,7 @@ function makeMonster(id: string, worldH: number, model: Model, opts: { floor?: n
     alias('walk0', 'walk0_0');
     for (const [key] of poses.slice(1)) alias(key, `${key}_0`);
     alias('attack', 'attack1');
-    spriteSets.register(id, { w: worldH, h: worldH, frames, anim: 'monster', ...opts });
+    spriteSets.register(id, { w: worldH, h: worldH, frames, anim: 'monster', ...opts, walkN });
     whenGenJobs([`sprite:${id}:walk0_0`], () => spriteRegistry.register(id, frames.walk0));
     return;
   }
@@ -1146,13 +1181,11 @@ function makeMonster(id: string, worldH: number, model: Model, opts: { floor?: n
   // Keep all eight walk0 views ready so newly encountered threats face correctly immediately.
   for (let r = 0; r <= 4; r++) {
     frames[`walk0_${r}`] = renderPose(poses[0][1], r);
-    if (r >= 1 && r <= 3) frames[`walk0_${8 - r}`] = renderPose(poses[0][1], r, true);
   }
   frames.walk0 = frames.walk0_0;
   for (const [key, pose] of poses.slice(1)) {
     for (let r = 0; r <= 4; r++) {
       defineLazy(`${key}_${r}`, poseBegin(pose, r, false));
-      if (r >= 1 && r <= 3) defineLazy(`${key}_${8 - r}`, poseBegin(pose, r, true));
     }
     defineAlias(key, () => frames[`${key}_0`]);
   }
@@ -1180,7 +1213,7 @@ function makeMonster(id: string, worldH: number, model: Model, opts: { floor?: n
       },
     };
   });
-  spriteSets.register(id, { w: worldH, h: worldH, frames, anim: 'monster', ...opts });
+  spriteSets.register(id, { w: worldH, h: worldH, frames, anim: 'monster', ...opts, walkN });
   spriteRegistry.register(id, frames.walk0);
 }
 
