@@ -57,7 +57,7 @@ describe('gen jobs are byte-identical to the main-thread pipeline', () => {
       ['worm', 'attack1_2'],
       ['trojan', 'walk1_1'],
       ['trojan', 'die3'],
-      ['ransomware', 'pain_5'],
+      ['ransomware', 'pain_3'],
     ] as const) {
       const key = `sprite:${set}:${frame}`;
       expect(hasGenJob(key)).toBe(true);
