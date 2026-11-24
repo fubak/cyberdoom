@@ -41,6 +41,13 @@ export interface RasterOpts {
    */
   persp?: number;
   /**
+   * Tilt the camera down by this many radians so top faces show (props and
+   * pickups seen from standing height). `lift` then raises the model by that
+   * many pixels so its near edge is not cut off. Unset keeps the level camera.
+   */
+  tilt?: number;
+  lift?: number;
+  /**
    * Opt-in lit shading (see modelLit.ts): occlusion between parts, a
    * hue-shifted banded ramp, an accent rim and emissive bloom, resolved once
    * the last row is rasterized. Unset keeps the classic inline shading —
@@ -157,13 +164,29 @@ export interface RasterJob {
 
 export function createRasterJob(w: number, h: number, prims: Prim[], opts: RasterOpts): RasterJob {
   const rows: number[][] = Array.from({ length: h }, () => []);
+  const tilt = opts.tilt ?? 0;
+  const lift = opts.lift ?? 0;
+  const tc = Math.cos(tilt);
+  const ts = Math.sin(tilt);
   const preps: Prep[] = prims.map((p) => {
     const yaw = (p.yaw ?? 0) - opts.view;
     const pitch = p.pitch ?? 0;
     const roll = p.roll ?? 0;
-    const c = toView(p.c, -opts.view, 0, 0);
-    const m = localMatrix(yaw, pitch, roll);
-    const d = toLocal([0, 0, -1], yaw, pitch, roll);
+    let c = toView(p.c, -opts.view, 0, 0);
+    let m = localMatrix(yaw, pitch, roll);
+    let d = toLocal([0, 0, -1], yaw, pitch, roll);
+    if (tilt !== 0) {
+      // view = Rx(tilt) · (model view): rotate the centre, and fold Rx(-tilt)
+      // into the view→local matrix so rays and normals follow
+      c = [c[0], c[1] * tc - c[2] * ts, c[1] * ts + c[2] * tc];
+      m = [
+        m[0], m[1] * tc - m[2] * ts, m[1] * ts + m[2] * tc,
+        m[3], m[4] * tc - m[5] * ts, m[4] * ts + m[5] * tc,
+        m[6], m[7] * tc - m[8] * ts, m[7] * ts + m[8] * tc,
+      ];
+      d = [-m[2], -m[5], -m[8]];
+    }
+    if (lift !== 0) c = [c[0], c[1] + lift, c[2]];
     const bound = p.shape === 'box' ? Math.hypot(p.r[0], p.r[1], p.r[2]) : Math.max(p.r[0], p.r[1], p.r[2]);
     // perspective: a prim at view-depth (500-cz) projects with scale f/depth,
     // so its projected centre and culling radius move off the ortho values
