@@ -45,8 +45,10 @@ export interface EventMap {
   'tool-hit': { toolId: string; entityId?: string; good: boolean };
   /** A tool weakened an entity without cleaning it (`applied`: pain/knockback already done via damageEntity). */
   'entity-hurt': { entityId: string; fromX: number; fromY: number; applied?: boolean };
-  /** HUD ticker message. */
-  message: { text: string; kind?: 'info' | 'warn' | 'good' | 'bad' };
+  /** HUD ticker message; `priority` overrides the kind's default (objective > alert > tip). */
+  message: { text: string; kind?: 'info' | 'warn' | 'good' | 'bad'; priority?: 'objective' | 'alert' | 'tip' };
+  /** A badge reader refused the player because their roles lack the door's role. */
+  'role-denied': { doorId: string; accessRole: string; roles: string[] };
   /** A progress objective flipped to done (clean/inspect/etc.). */
   'objective-done': { id: string };
 }

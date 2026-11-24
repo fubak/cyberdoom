@@ -971,6 +971,7 @@ export class MissionRuntime {
               );
             } else {
               this.warnedOutOfRoleDoorAt.set(doorId, this.elapsed);
+              this.bus.emit('role-denied', { doorId, accessRole: door.accessRole, roles: [...this.roles] });
               const roles = this.roles.map((r) => r.toUpperCase()).join(', ') || 'none';
               this.message(
                 `Badge reader: ${door.accessRole.toUpperCase()} only. Your roles: ${roles}. Press E again to swipe anyway (logged as a violation).`,

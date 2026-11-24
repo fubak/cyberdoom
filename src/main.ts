@@ -51,6 +51,8 @@ import { applyBack } from './ui/nav';
 import { promptGate } from './ui/promptGate';
 import { bindingLabel, onboardingTips } from './ui/controlsHelp';
 import { markOnboardingSeen, shouldOnboard } from './ui/onboarding';
+import { relativeBearing, tileDistance } from './ui/damageAlert';
+import { claimRoleHint, roleDenialExplainer } from './ui/roleBadge';
 import { pauseMenu } from './ui/pause';
 import { controlsPanel } from './ui/controls';
 import { completedIds, markCompleted, unlockEverything } from './missions/progress';
@@ -208,7 +210,6 @@ class Game {
   private vmLight = 1;
   private swayX = { x: 0, v: 0, acc: 0 };
   private swayY = { x: 0, v: 0, acc: 0 };
-  private lastHurtMessageT = -Infinity;
   private lastHurtT = -Infinity;
   private endTimer: number | null = null;
   private endCalled = false;
@@ -376,7 +377,11 @@ class Game {
     viewport.appendChild(this.dossier.canvas);
 
     bindAudio(this.audio);
-    this.bus.on('message', ({ text, kind }) => this.hud.pushMessage(text, kind ?? 'info'));
+    this.bus.on('message', ({ text, kind, priority }) => this.hud.pushMessage(text, kind ?? 'info', priority));
+    // first role-based badge denial ever: explain what the BADGE cell's role means
+    this.bus.on('role-denied', ({ accessRole, roles }) => {
+      if (claimRoleHint()) this.hud.pushMessage(roleDenialExplainer(accessRole, roles), 'info', 'alert');
+    });
     this.bus.on('evidence', (evidence) => {
       if (this.screen !== 'play') return;
       this.audio.sfx('evidence', { gain: 0.6 });
@@ -986,7 +991,6 @@ class Game {
     this.useCd = 0;
     this.simT = 0;
     this.replicaGate.reset();
-    this.lastHurtMessageT = -Infinity;
     this.lastHurtT = -Infinity;
     this.endTimer = null;
     this.endCalled = false;
@@ -1779,21 +1783,17 @@ class Game {
     this.arsenal.hurt(Math.abs(da) < 0.35 ? 0 : Math.sign(da));
     p.knockback(awayX, awayY, Math.min(0.35, 0.1 + dmg * 0.01));
     const by = source?.def.inspect?.label ?? runtime.entities.find((e) => e.x === sourceX && e.y === sourceY)?.def.inspect?.label;
-    this.drainers.set(source?.def.id ?? `?${sourceX},${sourceY}`, { label: (by ?? 'Malware').toUpperCase(), until: this.simT + 3 });
-    if (this.simT - this.lastHurtMessageT >= 1.5) {
-      this.lastHurtMessageT = this.simT;
-      for (const [id, d] of this.drainers) if (d.until <= this.simT) this.drainers.delete(id);
-      const counts = new Map<string, number>();
-      for (const d of this.drainers.values()) counts.set(d.label, (counts.get(d.label) ?? 0) + 1);
-      const total = [...counts.values()].reduce((a, b) => a + b, 0);
-      if (total <= 1) {
-        this.hud.pushMessage(`${by ?? 'Malware'} is draining your integrity!`, 'bad');
-      } else {
-        // one merged line when several attackers stack (e.g. '2 WORMS DRAINING INTEGRITY')
-        const parts = [...counts.entries()].map(([name, n]) => `${n} ${name}${n > 1 ? 'S' : ''}`).join(' + ');
-        this.hud.pushMessage(`${parts} DRAINING INTEGRITY`, 'bad');
-      }
-    }
+    const label = (by ?? 'Malware').toUpperCase();
+    this.drainers.set(source?.def.id ?? `?${sourceX},${sourceY}`, { label, until: this.simT + 3 });
+    for (const [id, d] of this.drainers) if (d.until <= this.simT) this.drainers.delete(id);
+    // timed, named alert ('WORM - 3 TILES BEHIND') + edge tint toward the attacker;
+    // it fades ~2 s after the damage stops instead of a persistent ticker line
+    this.hud.noteDamage({
+      label,
+      bearing: relativeBearing(sourceDx, sourceDy, p.angle),
+      tiles: tileDistance(distance),
+      others: Math.max(0, this.drainers.size - 1),
+    });
     if (!p.alive) {
       this.audio.sfx('death');
       this.deathStung = true;
@@ -1968,7 +1968,7 @@ class Game {
       overlay.objectivePoints.length > 0
         ? 'targets you have explored are marked on the automap [M]; full list on [TAB]'
         : 'check the automap [M] or the objective list [TAB] for the next step';
-    this.hud.pushMessage(`OBJECTIVE: ${overlay.objectiveText} — ${tip}`, 'info');
+    this.hud.pushMessage(`OBJECTIVE: ${overlay.objectiveText} — ${tip}`, 'info', 'objective');
   }
 
   private toolCtx() {
