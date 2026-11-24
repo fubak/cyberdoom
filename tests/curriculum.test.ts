@@ -394,4 +394,14 @@ describe('mission grading', () => {
     expect(gradeMission({ fieldPct: 100, quizPct: 100, won: false, falsePositives: 0 }))
       .toEqual({ field: 100, total: 59, grade: 'F', capped: 'fail' });
   });
+
+  it('grades on the field alone when the whole knowledge check is skipped', () => {
+    expect(gradeMission({ fieldPct: 100, quizPct: null, won: true, falsePositives: 0 }))
+      .toEqual({ field: 100, total: 100, grade: 'A', capped: null });
+    expect(gradeMission({ fieldPct: 76, quizPct: null, won: true, falsePositives: 0 }).grade).toBe('C');
+  });
+
+  it('still caps a lost mission at F when the quiz is skipped', () => {
+    expect(gradeMission({ fieldPct: 100, quizPct: null, won: false, falsePositives: 0 }).grade).toBe('F');
+  });
 });

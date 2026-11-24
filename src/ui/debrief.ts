@@ -784,7 +784,15 @@ export function debrief(opts: {
   const summary = (retried: CheckItem[] | null) => {
     const total = mission.debriefQuestions.length;
     const correct = [...firstTry.values()].filter(Boolean).length;
-    const quizPct = total ? (correct / total) * 100 : 100;
+    // Skipped questions are neither right nor wrong: they are left out of the
+    // knowledge score, and a fully skipped check grades on the field alone.
+    const answered = firstTry.size;
+    const skipped = Math.max(0, total - answered);
+    const allSkipped = total > 0 && answered === 0;
+    const quizPct = total === 0 ? 100 : allSkipped ? null : (correct / answered) * 100;
+    const knowledgeText = allSkipped
+      ? 'KNOWLEDGE SKIPPED'
+      : `KNOWLEDGE ${correct}/${answered}${skipped ? ` (${skipped} SKIPPED)` : ''}`;
     const result = gradeMission({ fieldPct, quizPct, won: opts.won, falsePositives });
     const r = readiness(mastery);
     const gradeRamp = result.grade === 'A' || result.grade === 'B' ? RAMP.gold : result.grade === 'F' ? RAMP.red : RAMP.gold;
@@ -795,15 +803,16 @@ export function debrief(opts: {
       ? 'FALSE POSITIVE: FIELD AND GRADE CAPPED AT B'
       : result.capped === 'fail' ? 'MISSION FAILED: GRADE CAPPED AT F. REDEPLOY TO PASS.' : '';
     const gradePage: Page = {
-      label: `GRADE ${result.grade}, FIELD ${Math.round(result.field)}%, KNOWLEDGE ${correct}/${total}, TOTAL ${result.total}%. ${note} READINESS ${r.overall}%: ` +
+      label: `GRADE ${result.grade}, FIELD ${Math.round(result.field)}%, ${knowledgeText}, TOTAL ${result.total}%. ${allSkipped ? 'GRADE IS FIELD ONLY. ' : ''}${note} READINESS ${r.overall}%: ` +
         r.byDomain.map((d) => `D${d.domain} ${d.demonstrated}/${d.total}`).join(', '),
       draw: (gg) => {
         bevel(gg, 20, 50, 64, 72, '#1a0a06');
         bigScaled(gg, result.grade, 28, 54, gradeRamp, 4);
         drawBigText(gg, `FIELD ${Math.round(result.field)}%`, 100, 54, RAMP.gold);
-        drawBigText(gg, `KNOWLEDGE ${correct}/${total}`, 100, 76, RAMP.gold);
+        drawBigText(gg, knowledgeText, 100, 76, allSkipped ? ['#d8d8d8', '#a8a8a8', '#808080', '#585858', '#303030'] : RAMP.gold);
         drawBigText(gg, `TOTAL ${result.total}%`, 100, 98, result.capped ? RAMP.red : RAMP.green);
         if (note) drawText(gg, note, 100, 116, C.red);
+        else if (allSkipped) drawText(gg, 'QUIZ SKIPPED: GRADE IS FIELD ONLY', 100, 116, C.dim);
         drawText(gg, `SY0-701 READINESS (EXAM-WEIGHTED)  ${r.overall}%`, DB_X, 132, C.gold);
         r.byDomain.forEach((d, k) => {
           const y = 145 + k * 14;
