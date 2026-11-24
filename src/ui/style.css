@@ -83,6 +83,77 @@ canvas.stage {
   border: 4px solid var(--green);
   border-radius: 50%;
   pointer-events: none;
+  /* dark keyline inside and out: the ring reads over a point-blank sprite
+     of any colour (a looming worm fills the view at <1.5 tiles) */
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.85), inset 0 0 0 2px rgba(0, 0, 0, 0.85);
+  transition: transform 60ms linear;
+}
+
+/* reticle states (src/ui/reticle.ts): shape + colour, never colour alone */
+#crosshair.ret-idle {
+  border-color: var(--green);
+}
+
+#crosshair.ret-target {
+  border-color: #ffc030;
+  transform: scale(0.78);
+}
+
+#crosshair.ret-target::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  margin: -3px;
+  background: #ffc030;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.85);
+}
+
+#crosshair.ret-blocked {
+  border-color: #9aa0aa;
+  border-style: dashed;
+}
+
+#crosshair.ret-blocked::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: -4px;
+  width: 4px;
+  height: 32px;
+  margin-left: -2px;
+  background: #9aa0aa;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.85);
+  transform: rotate(45deg);
+}
+
+#crosshair.ret-hit {
+  border-color: transparent;
+  box-shadow: none;
+}
+
+#crosshair.ret-hit::before,
+#crosshair.ret-hit::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: -10px;
+  width: 4px;
+  height: 44px;
+  margin-left: -2px;
+  background: #ffffff;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.85);
+  transform: rotate(45deg);
+}
+
+#crosshair.ret-hit::after {
+  transform: rotate(-45deg);
+}
+
+#crosshair.ret-flash {
+  background: rgba(255, 255, 255, 0.7);
 }
 
 .screen {

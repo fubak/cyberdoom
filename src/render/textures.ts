@@ -5,6 +5,7 @@ import { registerGenJob } from './gen';
 import { deferGenJob, genPoolActive, installGenNow } from './genpool';
 import { bevel, grime, noiseFill, packPixels, packTexture, paintRaw, type PaintCtx, type Painter } from './pixel';
 import { RES, TEX } from './res';
+import { OFFICE_DECALS, officeTextures } from './texturesOffice';
 
 /**
  * Procedural pixel-art texture atlas (no binary assets).
@@ -891,6 +892,10 @@ export function buildTextures(jobs = false): void {
     vShade(g, 0, 6, '18,22,26', 0.25, 0);
     grime(p, 'rgba(20,16,12,0.25)', 65);
   });
+  // office-run alternates (notice board, hose cabinet, service column) —
+  // same transom/rails/wainscot as wall-office so a corridor stays continuous
+  const office = officeTextures({ kickPlate, vShade, seam, bolt, drip });
+  for (const [id, painter] of Object.entries(office.walls)) wallV(id, painter);
 
   // Episode 2: Cold-aisle datacenter wall — slate steel panels, airflow louvres, cyan status strip.
   wallV('wall-datacenter', (p) => {
@@ -1372,6 +1377,8 @@ export function buildTextures(jobs = false): void {
     bevel(g, 10, 38, 44, 14, 'rgba(0,0,0,0)', '#fff0a0', '#201404');
     for (const [x, y] of [[11, 39], [51, 39], [11, 51], [51, 51]]) rivet(g, x, y);
   });
+  // office decals: ceiling cable drop, LOCK YOUR SCREEN plaque, water stain
+  for (const [id, painter] of Object.entries(office.decals)) decal(id, painter);
   jobsOnly = false;
 }
 
@@ -1598,9 +1605,9 @@ export interface WallTheme {
 const THEMES: Record<string, WallTheme> = {
   // warm office (early tier): beige wainscot walls, PHISH posters, OPS placards,
   // green status lamps — healthy-corporate early-tier accent
-  office: { alts: ['wall-tech', 'wall-panel2'], decals: ['decal-vent', 'decal-cable', 'decal-poster:PHISH', 'decal-sign:OPS', 'decal-status:office'], tint: [1.14, 1.0, 0.84], floor: 'floor', accent: [0.62, 1.12, 0.7] },
+  office: { alts: ['wall-tech', 'wall-panel2'], decals: ['decal-vent', 'decal-cable', 'decal-poster:PHISH', 'decal-sign:OPS', 'decal-status:office', ...OFFICE_DECALS], tint: [1.14, 1.0, 0.84], floor: 'floor', accent: [0.62, 1.12, 0.7] },
   // green bullpen (early tier): olive utility brick, SEC placards, 2FA posters
-  bullpen: { alts: ['wall-tech', 'wall-panel2', 'wall-brick2'], decals: ['decal-cable', 'decal-vent', 'decal-sign:SEC', 'decal-poster:2FA', 'decal-status:bullpen'], tint: [0.94, 1.08, 0.85], floor: 'floor', accent: [0.6, 1.14, 0.62] },
+  bullpen: { alts: ['wall-tech', 'wall-panel2', 'wall-brick2'], decals: ['decal-cable', 'decal-vent', 'decal-sign:SEC', 'decal-poster:2FA', 'decal-status:bullpen', 'decal-cable-drop', 'decal-stain'], tint: [0.94, 1.08, 0.85], floor: 'floor', accent: [0.6, 1.14, 0.62] },
   // cold machine room (mid tier): ribbed walls, IDC placards, raised deck floor,
   // steel-blue fixture glow
   datacenter: { alts: ['wall-ribs'], decals: ['decal-cable', 'decal-vent', 'decal-sign:IDC', 'decal-poster:SIEM', 'decal-status:datacenter'], tint: [0.82, 0.97, 1.18], floor: 'floor-grid', accent: [0.62, 0.86, 1.22] },

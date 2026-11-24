@@ -66,7 +66,11 @@ describe('gen jobs are byte-identical to the main-thread pipeline', () => {
   });
 
   it('wall and flat textures', () => {
-    for (const id of ['wall-panel', 'wall-server', 'floor', 'ceil-light', 'exit', 'door']) {
+    for (const id of [
+      'wall-panel', 'wall-server', 'floor', 'ceil-light', 'exit', 'door',
+      // P1-11 office-run alternates + decals
+      'wall-office2', 'wall-office3:v2', 'wall-office4', 'decal-cable-drop', 'decal-sign-lock', 'decal-stain',
+    ]) {
       expect(hasGenJob(`tex:${id}`)).toBe(true);
       expectSamePixels(`tex:${id}`, textureRegistry.require(id));
     }

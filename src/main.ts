@@ -14,7 +14,8 @@ import { isSkillId, loadSettings, saveSettings, type Settings } from './ui/setti
 import { Feel, FlashRateLimiter } from './engine/feel';
 import { CueGate, spawnCueText } from './engine/spawnCue';
 import { ParticleSystem } from './engine/fx';
-import { lightProbe, lookProbe, placeThreat } from './render/probe';
+import { lightProbe, lookProbe, openerProbe, placeThreat } from './render/probe';
+import { HitConfirm, reticleClass, reticleState, type ReticleHint } from './ui/reticle';
 import { Renderer } from './render/renderer';
 import { prewarmLazySpriteFrames, prioritizeLazySprites, spriteSets } from './render/sprites';
 import { textureRegistry } from './render/textures';
@@ -263,6 +264,10 @@ class Game {
   private flagHintAt = -99;
   /** WCAG 2.3.1: shared budget for all full-screen flashes (muzzle flood,
    *  landed-hit bloom, pain wash) — at most 3 per second, always. */
+  /** Reticle feedback: hit marker + its own budgeted flash (src/ui/reticle.ts). */
+  private hitConfirm = new HitConfirm();
+  private reticleHint: ReticleHint | null = null;
+  private reticleCls = '';
   private settings: Settings = loadSettings();
   private flashLimit = new FlashRateLimiter(flashBudget(this.settings.reducedFlash));
   /** Title-menu Options/Controls panel on screen (keeps the Konami listener off). */
@@ -483,6 +488,7 @@ class Game {
       }
       // threat-coloured light burst at the impact point, so a connected hit reads instantly
       this.particles.flash(e.x, e.y, 0.45, bloodOf(e));
+      this.hitConfirm.hit(this.simT, !this.settings.reducedFlash);
       this.impactBloom(e.x, e.y, bloodOf(e));
       this.audio.sfx(`pain-${e.def.threat ?? e.def.sprite}`, { x: e.x, y: e.y });
     });
@@ -492,6 +498,7 @@ class Game {
         this.edrPulseCount = 0;
         return;
       }
+      if (entityId && good) this.hitConfirm.hit(this.simT, !this.settings.reducedFlash);
       if (!entityId || !good || toolId === 'usb') return;
       const e = this.runtime?.entities.find((entity) => entity.def.id === entityId);
       if (!e?.alive) return;
@@ -799,6 +806,16 @@ class Game {
     document.exitPointerLock?.();
   }
 
+  /** Reticle state class (idle / target / blocked / hit + budgeted flash). */
+  private syncReticle(): void {
+    const now = this.simT;
+    const state = reticleState(this.reticleHint, this.hitConfirm.marked(now));
+    const cls = reticleClass(state, this.hitConfirm.flashing(now));
+    if (cls === this.reticleCls) return;
+    this.reticleCls = cls;
+    this.cross.className = cls;
+  }
+
   /** Crosshair only while actively looking around a mission. */
   private syncChrome(): void {
     const live = this.screen === 'play' && !this.paused && !this.automap.isOpen && !this.dossier.isOpen;
@@ -1081,6 +1098,8 @@ class Game {
     this.prompt = { lmb: null, use: null, lmbHot: false, banner: null, footer: null, lmbKey: 'LMB' };
     this.promptNextT = 0;
     this.lastFireT = -Infinity;
+    this.hitConfirm.reset();
+    this.reticleHint = null;
     this.bannerUntil = 0;
     this.objectivesDone = -1;
     this.nudgeAt = 45;
@@ -1499,6 +1518,7 @@ class Game {
       this.switchedTool = true;
     }
     this.updatePrompt(ending);
+    this.syncReticle();
 
     const solids = runtime.entities
       .filter((e) => e.alive && ['enemy', 'npc', 'workstation', 'console'].includes(e.def.kind))
@@ -2002,6 +2022,7 @@ class Game {
       if (hidden) {
         this.prompt.lmb = null;
         this.prompt.use = null;
+        this.reticleHint = null;
       }
       return;
     }
@@ -2009,9 +2030,12 @@ class Game {
     const tool = this.arsenal.current;
     const ctx = this.toolCtx();
     let lmb = tool.hint?.(ctx) ?? null;
+    const ammo = tool.ammo ? this.arsenal.ammoFor(tool) : null;
+    // the reticle shows range failure whenever aimed (the text prompt only
+    // flashes it after a failed action, below)
+    this.reticleHint = ammo === 0 && lmb ? { ready: false } : lmb;
     // range-failure hints only show for ~1.5 s after the failed action
     if (lmb?.fleeting && this.simT - this.lastFireT > 1.5) lmb = null;
-    const ammo = tool.ammo ? this.arsenal.ammoFor(tool) : null;
     if (ammo === 0) lmb = { text: `OUT OF ${tool.ammo!.resource.toUpperCase()}`, ready: false };
     // ammo cost in tool-native units (-1 SCAN / -1 PCAP / ...) so the
     // trigger badge can't be misread as a file size ('1 MB')
@@ -2304,6 +2328,18 @@ class Game {
         if (!g.map || !g.runtime || !g.player) throw new Error('no mission running');
         g.probeLock = true;
         return lightProbe(g.renderer, g.map, g.runtime.entities, g.player, dist, withImages).finally(
+          () => (g.probeLock = false),
+        );
+      },
+      /** FEEL: current reticle class (ret-idle / ret-target / ret-blocked / ret-hit [+ ret-flash]). */
+      reticle() {
+        return g.cross.className;
+      },
+      /** LOOK: spawn-view legibility — mean luma, black share, ceiling/floor bands (opener rows). */
+      openerProbe(withImages = false) {
+        if (!g.map || !g.runtime || !g.player) throw new Error('no mission running');
+        g.probeLock = true;
+        return openerProbe(g.renderer, g.map, g.runtime.entities, g.player, withImages).finally(
           () => (g.probeLock = false),
         );
       },

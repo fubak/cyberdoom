@@ -75,9 +75,11 @@ export interface MapDef {
   /**
    * Optional look override. `theme` names a wall/texture identity
    * (see render/textures.ts THEMES); when absent the renderer picks one from
-   * the mission id, so mission files need no edits.
+   * the mission id, so mission files need no edits. `ambient` raises the
+   * world light floor (default 0.038) so a dark-textured map's ceilings and
+   * floors never void to pure black.
    */
-  look?: { theme?: string };
+  look?: { theme?: string; ambient?: number };
 }
 
 export type EntityKind =
