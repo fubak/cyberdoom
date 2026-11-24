@@ -1055,10 +1055,12 @@ export function buildSprites(jobs = false): void {
   makeMonster('botnet', 1.38, botnetModel, { floor: 1.45, gain: 2.7, gib: [0.25, 0.85, 1.0] });
   // wiper and the four bosses were raised to meet the 3:1 threat-contrast target on dark corridors.
   makeMonster('wiper', 1.62, wiperModel, { floor: 1.4, gain: 3.45, gib: [1.0, 0.32, 0.15] });
-  makeMonster('boss-locker', 1.92, bossLockerModel, { floor: 1.45, gain: 3.0, gib: [1.0, 0.65, 0.12], canvas: BOSS_CANVAS });
-  makeMonster('boss-ghostledger', 2.08, bossGhostledgerModel, { floor: 1.9, gain: 3.8, gib: [0.85, 0.2, 1.0], canvas: BOSS_CANVAS });
-  makeMonster('boss-phish', 1.78, bossPhishModel, { floor: 1.45, gain: 2.95, gib: [0.2, 0.95, 0.55], canvas: BOSS_CANVAS });
-  makeMonster('boss-zeroday', 1.86, bossZerodayModel, { floor: 1.9, gain: 3.8, gib: [1.0, 0.35, 0.15], canvas: BOSS_CANVAS });
+  // Boss gains sit lower than regular threats': at two tiles tall they read by size, and the
+  // full lift flattened them to one pale tone in their own dark arenas.
+  makeMonster('boss-locker', 1.92, bossLockerModel, { floor: 1.45, gain: 1.9, gib: [1.0, 0.65, 0.12], canvas: BOSS_CANVAS });
+  makeMonster('boss-ghostledger', 2.08, bossGhostledgerModel, { floor: 1.9, gain: 3.0, gib: [0.85, 0.2, 1.0], canvas: BOSS_CANVAS });
+  makeMonster('boss-phish', 1.78, bossPhishModel, { floor: 1.45, gain: 2.6, gib: [0.2, 0.95, 0.55], canvas: BOSS_CANVAS });
+  makeMonster('boss-zeroday', 1.86, bossZerodayModel, { floor: 1.9, gain: 3.0, gib: [1.0, 0.35, 0.15], canvas: BOSS_CANVAS });
 
   // LOOK: modelled, seen three-quarter from standing height
   const DESK = { accent: PROP_ACCENT, tilt: 0.3, lift: 6 };

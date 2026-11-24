@@ -25,8 +25,9 @@ export const MAX_POINT_LIGHTS = 4;
 export const PAYLOAD_LIGHT = { radius: 2.8, intensity: 0.9, col: [1, 0.45, 0.15] as LightColour };
 /** The player's scan charge: cyan. */
 export const SCAN_LIGHT = { radius: 2.3, intensity: 0.7, col: [0.3, 0.85, 1] as LightColour };
-/** A threat materialising: a wide cyan-white flash that dies with the column. */
-export const SPAWN_LIGHT = { radius: 4.6, intensity: 1.3, col: [0.55, 0.9, 1] as LightColour };
+/** A threat materialising: a cyan-white glow around the column that dies with it. Kept well
+ *  short of a room-wide flash: several spawns can fire at once and their light adds up. */
+export const SPAWN_LIGHT = { radius: 3.4, intensity: 0.55, col: [0.55, 0.9, 1] as LightColour };
 
 /** Light of an effect that fades over its life: full at birth, zero at `dur`. */
 export function fadingLight(base: { radius: number; intensity: number; col: LightColour }, x: number, y: number, t: number, dur: number): PointLight {

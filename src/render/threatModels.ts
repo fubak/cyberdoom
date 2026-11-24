@@ -193,6 +193,14 @@ export const bossLockerModel: ThreatModel = (pose) => {
   // bronze, not black: at 15 tiles the body is most of what you see
   o.push(box([0, by, 0], [20, 16, 12], '#6a5230', { roll: hit * 0.08 }));
   for (const sx of [-1, 1]) o.push(box([sx * 18.5, by, 9], [1.6, 15, 3.6], '#8c6a34'));
+  // the back is a vault wall too: a recessed plate, ribs, hinge rails, bolts and a status lamp
+  o.push(box([0, by, -12.4], [16, 13, 0.6], '#4a3a22'));
+  for (const dy of [-8, 0, 8]) o.push(box([0, by + dy, -13.2], [15, 1.1, 0.5], '#8c6a34'));
+  for (const sx of [-1, 1]) {
+    o.push(box([sx * 13, by, -13.3], [1.2, 12, 0.6], '#b8821e'));
+    for (const dy of [-10, 10]) o.push(ell([sx * 13, by + dy, -14], [1.3, 1.3, 0.8], '#e6c060'));
+  }
+  o.push(ell([0, by + 4, -13.8], [1.8, 1.4, 0.6], atk === 1 ? '#ffffff' : '#ff4020', { glow: true }));
   // the door swings aside on the strike and shows what is inside
   const swing = atk === 1 ? 1 : 0;
   const door: V3 = [-11 * swing, by, 12 + 4 * swing];
