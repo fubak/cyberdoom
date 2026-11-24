@@ -396,7 +396,7 @@ describe('MissionRuntime.interactHint', () => {
       const hc = tool.hint!(ctx({ entities: [clean] }).ctx);
       expect(hi).toEqual(hc);
     }
-    expect(keyboardTool.hint!(ctx({ entities: [infected] }).ctx)?.text).toBe('RUN COMMAND: WORKSTATION');
+    expect(keyboardTool.hint!(ctx({ entities: [infected] }).ctx)).toBeNull(); // E owns hosts
     expect(patchTool.hint!(ctx({ entities: [infected] }).ctx)?.text).toBe('APPLY PATCH: WORKSTATION');
     const rt = new MissionRuntime(hintMission([
       { id: 'i', kind: 'workstation', x: 1, y: 1, sprite: 's', infected: true },
