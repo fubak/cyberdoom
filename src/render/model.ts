@@ -5,6 +5,8 @@
  * shading ramps per hue and consistent lighting, all procedurally, with no
  * external art. Output matches paintRaw() so packTexture() can outline it.
  */
+import { createLitBuffers, litNoise, resolveLit, LIT_BOX, LIT_EDGE, LIT_GLOW, LIT_HIT, type LitBuffers, type LitOpts } from './modelLit';
+
 export type V3 = [number, number, number];
 
 export interface Prim {
@@ -38,6 +40,13 @@ export interface RasterOpts {
    * byte-identical output.
    */
   persp?: number;
+  /**
+   * Opt-in lit shading (see modelLit.ts): occlusion between parts, a
+   * hue-shifted banded ramp, an accent rim and emissive bloom, resolved once
+   * the last row is rasterized. Unset keeps the classic inline shading —
+   * byte-identical output.
+   */
+  lit?: LitOpts;
 }
 
 const LX = -0.45 / Math.hypot(-0.45, 0.68, 0.6);
@@ -142,6 +151,8 @@ export interface RasterJob {
   tt: number;
   /** perspective focal length (0 = orthographic) */
   persp: number;
+  /** G-buffer for the lit resolve; rgba/glow stay empty until the last row is in. */
+  lit?: LitBuffers;
 }
 
 export function createRasterJob(w: number, h: number, prims: Prim[], opts: RasterOpts): RasterJob {
@@ -194,6 +205,7 @@ export function createRasterJob(w: number, h: number, prims: Prim[], opts: Raste
     tint: opts.tint,
     tt: opts.tintT ?? 0,
     persp: opts.persp ?? 0,
+    ...(opts.lit ? { lit: createLitBuffers(w, h, opts.lit) } : {}),
   };
 }
 
@@ -203,6 +215,7 @@ export function rasterizeRows(job: RasterJob, y0: number, y1: number): void {
   const tint = job.tint;
   const tt = job.tt;
   const persp = job.persp;
+  const lit = job.lit;
   const yEnd = Math.min(y1, h);
   for (let py = Math.max(y0, job.next); py < yEnd; py++) {
     const Y = h - 1 - py + 0.5;
@@ -211,6 +224,7 @@ export function rasterizeRows(job: RasterJob, y0: number, y1: number): void {
       const X = px - w / 2 + 0.5;
       let best = Infinity;
       let hit: Prep | null = null;
+      let hitIndex = 0;
       // hit point in local coords + local-space normal (scalars: no per-pixel allocs)
       let hnx = 0, hny = 0, hnz = 1;
       let hlx = 0, hly = 0, hlz = 0;
@@ -290,6 +304,7 @@ export function rasterizeRows(job: RasterJob, y0: number, y1: number): void {
         if (t < best) {
           best = t;
           hit = q;
+          hitIndex = rowPrims[qi];
           hnx = nx; hny = ny; hnz = nz;
           hlx = ox + t * dx; hly = oy + t * dy; hlz = oz + t * dz;
           hitz = persp > 0 ? 500 - t * persp : 500 - t;
@@ -304,6 +319,23 @@ export function rasterizeRows(job: RasterJob, y0: number, y1: number): void {
       const dec = hit.decal?.([hlx, hly, hlz], [hnx, hny, hnz]) ?? null;
       const base = dec !== null ? hex(dec) : hit.base;
       const isGlow = hit.glow || (dec !== null && hit.decalGlow);
+      if (lit) {
+        const li = py * w + px;
+        let flags = LIT_HIT | (isGlow ? LIT_GLOW : 0);
+        if (hit.shape === 'box') {
+          // bevel: texels within ~2.6 px of a box edge catch or lose the light
+          const ex = hnx !== 0 ? Infinity : hit.rx - Math.abs(hlx);
+          const ey = hny !== 0 ? Infinity : hit.ry - Math.abs(hly);
+          const ez = hnz !== 0 ? Infinity : hit.rz - Math.abs(hlz);
+          flags |= LIT_BOX | (Math.min(ex, ey, ez) < 2.6 ? LIT_EDGE : 0);
+        }
+        lit.flags[li] = flags;
+        lit.alb[li * 3] = base[0]; lit.alb[li * 3 + 1] = base[1]; lit.alb[li * 3 + 2] = base[2];
+        lit.nrm[li * 3] = nvx; lit.nrm[li * 3 + 1] = nvy; lit.nrm[li * 3 + 2] = nvz;
+        lit.z[li] = hitz;
+        lit.noise[li] = litNoise(hitIndex, hlx, hly, hlz);
+        continue;
+      }
       let r: number, gc: number, b: number;
       if (isGlow) {
         const k = 0.78 + 0.22 * Math.max(0, nvz);
@@ -331,6 +363,7 @@ export function rasterizeRows(job: RasterJob, y0: number, y1: number): void {
     }
     job.next = py + 1;
   }
+  if (lit && job.next >= h) resolveLit(job, lit);
 }
 
 export function rasterize(w: number, h: number, prims: Prim[], opts: RasterOpts): { rgba: Uint8ClampedArray; glow: Uint8ClampedArray } {
