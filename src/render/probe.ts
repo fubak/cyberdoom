@@ -421,6 +421,8 @@ async function probeOnLine(
   r.debugSuppressFx = true;
   r.debugHidden.clear();
   for (const e of entities) if (e.def.id !== id) r.debugHidden.add(e.def.id);
+  // the target's floor quad stays in both captures: only the sprite differs
+  r.debugKeepGround = id;
   // freeze the probed enemy's AI motion: when the sim catches up several
   // fixed steps after a slow generation frame, a chasing enemy can slide
   // across the view between the with/without captures and blow up the mask
@@ -490,6 +492,7 @@ async function probeOnLine(
     target.state.revealedTrojan = savedRevealedTrojan;
     target.state.revealedRootkit = savedRevealedRootkit;
     r.debugHidden.clear();
+    r.debugKeepGround = null;
     r.debugSprite.delete(id);
     r.debugSuppressFx = false;
     r.debugNoFlash = false;

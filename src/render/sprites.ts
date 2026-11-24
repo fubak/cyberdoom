@@ -31,6 +31,8 @@ export interface SpriteSet {
   gib?: [number, number, number];
   /** Share of the canvas height (from base) up to the top opaque row; measured lazily by the renderer. */
   topFrac?: number;
+  /** Median peak channel (0..1) of the display frame's body texels; measured lazily by the renderer. */
+  midPeak?: number;
 }
 
 export const spriteRegistry = new Registry<THREE.Texture>();
