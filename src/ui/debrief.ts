@@ -25,6 +25,7 @@ import {
   STATS_Y,
   avoidViolated,
   block,
+  heading,
   paginate,
   statsLine,
   statsSegments,
@@ -540,7 +541,7 @@ export function debrief(opts: {
         });
       },
     };
-    const blocks: PLine[][] = [block('OBJECTIVES', C.gold)];
+    const blocks: PLine[][] = [heading('OBJECTIVES', C.gold)];
     for (const o of objRows) {
       const ok = o.done && !o.failed;
       const lesson = o.def ? teach?.lessons[o.def.id] : undefined;
@@ -556,7 +557,7 @@ export function debrief(opts: {
         ...block(`[${lesson.objective}] ${ok ? lesson.done : lesson.missed}`, C.text, { indent: 14 }),
       ]);
     }
-    const logBlocks: PLine[][] = [block('FIELD LOG', C.gold)];
+    const logBlocks: PLine[][] = [heading('FIELD LOG', C.gold)];
     for (const e of opts.scoreLog) {
       logBlocks[logBlocks.length - 1].push(
         ...block(`${e.text}${e.objectives.length ? `  (${e.objectives.join(', ')})` : ''}`, e.good ? C.text : C.red, {
@@ -571,13 +572,13 @@ export function debrief(opts: {
     if (!opts.won) {
       const fx = failureExplanation(opts.loss ?? null, mission.id);
       const failBlocks: PLine[][] = [
-        block('CAUSE OF FAILURE', C.gold),
+        heading('CAUSE OF FAILURE', C.gold),
         block(fx.headline, C.red),
-        block('WHAT HAPPENED', C.gold),
+        heading('WHAT HAPPENED', C.gold),
         block(fx.what, C.text),
       ];
-      if (fx.why) failBlocks.push(block('WHY IT MATTERS', C.gold), block(fx.why, C.white));
-      failBlocks.push(block('NEXT TIME', C.gold));
+      if (fx.why) failBlocks.push(heading('WHY IT MATTERS', C.gold), block(fx.why, C.white));
+      failBlocks.push(heading('NEXT TIME', C.gold));
       for (const line of fx.next) failBlocks.push(block(line, C.text, { prefix: '>', prefixColor: C.gold }));
       failBlocks.push(block('ENTER REDEPLOY  -  -> FULL REPORT  -  K OPTIONAL KNOWLEDGE CHECK (QUIZ)  -  ESC MISSION SELECT', C.orange));
       failPages.push(...paginate(failBlocks).map((lines) => ({ lines })));

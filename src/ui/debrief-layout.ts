@@ -27,6 +27,8 @@ export interface PLine {
   prefixColor?: string;
   /** Clickable row: index handed to the view's hit handler. */
   hit?: number;
+  /** A heading row: never the last row of a page; it moves to the next page with its content. */
+  keepWithNext?: boolean;
 }
 
 const SUBST: Record<string, string> = { '✓': '+', '✗': 'X', '▸': '>', '☣': '!', '→': '->', '←': '<-', '≥': '>=', '≤': '<=' };
@@ -72,7 +74,15 @@ export function wrapPixel(text: string, maxW: number = DB_TEXT_W, font: 'small' 
 export function block(
   text: string,
   color: string,
-  opts: { indent?: number; prefix?: string; prefixColor?: string; hit?: number; maxW?: number; font?: 'small' | 'chunky' } = {},
+  opts: {
+    indent?: number;
+    prefix?: string;
+    prefixColor?: string;
+    hit?: number;
+    maxW?: number;
+    font?: 'small' | 'chunky';
+    keepWithNext?: boolean;
+  } = {},
 ): PLine[] {
   const indent = opts.prefix !== undefined ? DB_HANG + (opts.indent ?? 0) : (opts.indent ?? 0);
   const maxW = (opts.maxW ?? DB_TEXT_W) - indent;
@@ -84,12 +94,20 @@ export function block(
     prefix: i === 0 ? opts.prefix : undefined,
     prefixColor: opts.prefixColor,
     hit: opts.hit,
+    ...(opts.keepWithNext ? { keepWithNext: true } : {}),
   }));
+}
+
+/** A section heading: a block that paginate keeps on the same page as the block after it. */
+export function heading(text: string, color: string, opts: { font?: 'small' | 'chunky' } = {}): PLine[] {
+  return block(text, color, { ...opts, keepWithNext: true });
 }
 
 /**
  * Pack blocks into pages of `rows` lines, with one blank row between blocks.
  * A block that fits on a page is never split; a longer one continues on the next.
+ * A heading block (keepWithNext) is packed together with the block after it, and
+ * a heading row never ends a page: it moves on with at least one row of its content.
  */
 export function paginate(blocks: PLine[][], rows: number = DB_BODY_ROWS): PLine[][] {
   const pages: PLine[][] = [];
@@ -98,18 +116,48 @@ export function paginate(blocks: PLine[][], rows: number = DB_BODY_ROWS): PLine[
     if (cur.length) pages.push(cur);
     cur = [];
   };
-  for (const b of blocks) {
-    if (!b.length) continue;
+  for (const unit of joinHeadings(blocks.filter((b) => b.length))) {
     const gap = cur.length ? 1 : 0;
-    if (cur.length + gap + b.length > rows && b.length <= rows) flush();
-    if (cur.length) cur.push({ text: '', color: '#000' });
-    for (const line of b) {
-      if (cur.length >= rows) flush();
+    if (cur.length + gap + unit.length > rows && unit.length <= rows) flush();
+    if (cur.length >= rows) flush();
+    if (cur.length) cur.push(spacer());
+    unit.forEach((line, i) => {
+      if (line === SPACER) {
+        if (cur.length && cur.length < rows) cur.push(spacer());
+        return;
+      }
+      const need = line.keepWithNext ? rowsToContent(unit, i) : 1;
+      if (cur.length + need > rows || cur.length >= rows) flush();
       cur.push(line);
-    }
+    });
   }
   flush();
   return pages.length ? pages : [[]];
+}
+
+/** Sentinel for the blank row joining a heading to its block (dropped at a page top). */
+const SPACER: PLine = Object.freeze({ text: '', color: '#000' }) as PLine;
+const spacer = (): PLine => ({ text: '', color: '#000' });
+
+/** Merge each heading block with the block that follows it (chains of headings too). */
+function joinHeadings(blocks: PLine[][]): PLine[][] {
+  const units: PLine[][] = [];
+  let pending: PLine[] | null = null;
+  for (const b of blocks) {
+    const unit: PLine[] = pending ? [...pending, SPACER, ...b] : b;
+    pending = b[b.length - 1]?.keepWithNext ? unit : null;
+    if (!pending) units.push(unit);
+  }
+  if (pending) units.push(pending);
+  return units;
+}
+
+/** Rows from unit[i] through the first content row after its heading run (spacers included). */
+function rowsToContent(unit: PLine[], i: number): number {
+  for (let j = i + 1; j < unit.length; j++) {
+    if (unit[j] !== SPACER && !unit[j].keepWithNext) return j - i + 1;
+  }
+  return 1;
 }
 
 export function drawable(text: string): boolean {

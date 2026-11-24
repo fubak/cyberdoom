@@ -5,6 +5,7 @@ import { roleColor } from '../render/textures';
 import { drawToolViewmodel } from '../render/viewmodels';
 import { sortedTools } from '../tools';
 import { BASE_H, BASE_STATUS, BASE_W, RES } from '../render/res';
+import { keyPlateRect, PROMPT_ROW_PLATE } from './keyPlate';
 import {
   P_AMMO,
   P_CRED,
@@ -741,13 +742,14 @@ export class Hud {
       const w = keyW + (keyW ? 4 : 0) + textW + costW;
       const x = 4;
       g.fillStyle = 'rgba(6,8,12,0.72)';
-      g.fillRect(x - 3, y - 1, w + 6, 9);
+      g.fillRect(x - 3, y + PROMPT_ROW_PLATE.dy, w + 6, PROMPT_ROW_PLATE.h);
       let tx = x;
       if (line.key) {
         const kw = measureText(line.key, 'small');
+        const plate = keyPlateRect(tx, y, kw);
         g.fillStyle = line.ready ? '#ffb428' : '#4a4e58';
-        g.fillRect(tx, y, kw + 4, 7);
-        drawText(g, line.key, tx + 2, y + 1, line.ready ? '#1a1408' : '#9aa0ac', 'small');
+        g.fillRect(plate.x, plate.y, plate.w, plate.h);
+        drawText(g, line.key, plate.glyphX, plate.glyphY, line.ready ? '#1a1408' : '#9aa0ac', 'small');
         tx += kw + 8;
       }
       const col = line.hot ? '#ffffff' : line.ready ? '#e8ecf2' : '#9aa0ac';

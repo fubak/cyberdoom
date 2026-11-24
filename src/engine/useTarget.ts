@@ -1,4 +1,5 @@
 import type { Entity } from '../core/types';
+import { roleLabel } from '../core/roleLabel';
 
 /**
  * The single source of truth for what E/Space does: both the actual E action
@@ -51,7 +52,7 @@ export function doorUseHint(ctx: UseTargetContext, door: { doorId: string; acces
   if (door.accessRole === undefined) return 'OPEN DOOR';
   if (!ctx.roles.includes(door.accessRole)) {
     const source = ctx.roleSource?.(door.accessRole);
-    return `READER: ${door.accessRole.toUpperCase()} ONLY${source ? ` — ${source.toUpperCase()} CAN BADGE YOU IN` : ''}`;
+    return `READER: ${roleLabel(door.accessRole)} ONLY${source ? ` — ${source.toUpperCase()} CAN BADGE YOU IN` : ''}`;
   }
   if (!ctx.hasBadge) return 'READER: NO BADGE';
   if (door.mfa) return ctx.hasToken ? 'BADGE + TOKEN AT READER' : 'MFA READER: NO TOKEN';

@@ -33,7 +33,7 @@ Data-driven, thin typed coupling between areas via `src/core/` contracts
 | `src/core/`     | Contracts only: Mission/MapDef/EntityDef/ToolDef types, event bus, registry. The API between areas.                                                                                                                                                                                                                                                                                                                                                                                    |
 | `src/engine/`   | Fixed-timestep loop helpers, input (pointer lock, WASD, wheel, slots, Q cycle), Doom-like momentum/friction movement with wall sliding (`map.ts` circle-vs-grid resolve), door state, raycast, NPC/enemy AI, particle system (`fx.ts`), procedural WebAudio SFX (`audio.ts`). Pure logic, no Three.js.                                                                                                                                                                                 |
 | `src/render/`   | 4× internal frame: 320×200 base ×4 = 1280×800 render target with a 128 px status bar, integer-scaled to the display. Level geometry from the grid (per-texture merged meshes, per-door removable meshes), procedural textures (64×4 px tiles in `textures.ts`) and billboard sprites generated in module Web Workers (`genpool.ts`, `genworker.ts`) with a synchronous fallback, resumable software rasterizer for monster sprites (`model.ts`), sector light via vertex colors + fog. |
-| `src/tools/`    | Tool registry + tool modules (`ToolDef`: id/name/slot/blurb/viewmodel draw/`use(ctx)`/`hint(ctx)`/ammo). All 8 slots below.                                                                                                                                                                                                                                                                                                                                                            |
+| `src/tools/`    | Tool registry + tool modules (`ToolDef`: id/name/slot/blurb/viewmodel draw/`use(ctx)`/`hint(ctx)`/ammo). All 9 slots below.                                                                                                                                                                                                                                                                                                                                                            |
 | `src/content/`  | SY0-701 objective catalog (`objectives.ts`), curriculum arc (`curriculum.ts`), glossary, mission data files (`missions/m0X-*.ts`). Facts must stay accurate to the published objectives.                                                                                                                                                                                                                                                                                               |
 | `src/missions/` | `MissionRuntime`: spawns entities, tracks mission objectives, scoring/events for the debrief, win/lose. `prepareMission`-style idle-time setup happens in `main.ts`.                                                                                                                                                                                                                                                                                                                   |
 | `src/ui/`       | Canvas HUD status bar (integrity, ammo, gendered face, creds, ticker, objectives, LMB/E action prompt) + HTML/CSS overlay screens (title, char select, mission select, briefing, debrief quiz, pause, automap, evidence log).                                                                                                                                                                                                                                                          |
@@ -51,11 +51,14 @@ Data-driven, thin typed coupling between areas via `src/core/` contracts
 | 6    | EDR CONSOLE | EDR/XDR (automated detection and containment)               | Charge, then release a containment pulse that isolates infected endpoints and malware processes nearby — no line of sight needed. Scarce charges. |
 | 7    | MFA TOKEN   | Multifactor authentication (FIDO2 security key + biometric) | After a badge swipe on an MFA reader, touch the token as the second factor; refuses phishing/shared-account prompts.                              |
 | 8    | PATCH DISK  | Patch management (vendor security update)                   | Install the security update on a clean workstation at arm's length to close its vulnerability (clean infected hosts first). Limited disks.        |
+| 9    | FIREWALL BLASTER | Network firewall / ingress packet filtering            | Fires a 5-rule packet-filter spread that shreds close-range malware and botnet swarms. Shares scan sessions with the USB scanner; does not clean workstations. |
 
 ## Missions
 
 Twelve-mission campaign arc (`src/content/curriculum.ts`); all twelve are
-built and playable.
+built and playable, plus a hidden bonus mission, M13 HONEYPOT, reached through
+the secret exit in M04 (or the `/?mission=m13` deep link). It sits outside the
+campaign arc and the mission-select list.
 
 | #   | Title               | Difficulty | Objectives              | Status |
 | --- | ------------------- | ---------- | ----------------------- | ------ |
@@ -74,10 +77,16 @@ built and playable.
 
 ## Controls
 
-- **WASD** move · **mouse** look · **←→** turn · **Shift** run
-- **LMB** (or **F**) use the current tool · **E/Space** interact
+- **WASD** move · **mouse** look (click to capture) · **←→** turn · **Shift** run
+- **LMB** (or **F**) use the current tool · **E/Space** interact (inspect a
+  flagged workstation, open doors, turn items in at a desk)
 - **1–9 / Numpad / mouse wheel / Q** select tool
-- **L** evidence log (case files) · **M** automap · **Esc** pause menu / back
+- **Tab** (hold) objective list · **M** automap (**+/−** or wheel zoom,
+  **G** follow / free pan) · **L** evidence log (case files)
+- **F5** quicksave · **F9** quickload · **Esc** pause menu / back
+- Briefing: **D** details, **←/→** or **A/D** page, **K** skill level,
+  **Enter** deploy
+- Movement, use, tool and map/log keys can be rebound under Pause → Controls.
 - The HUD shows **[LMB]** and **[E]** action prompts for whatever you're
   aiming at, so you always know what a click or keypress will do.
 

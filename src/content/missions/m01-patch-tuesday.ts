@@ -370,7 +370,7 @@ export const m01Teach: MissionTeaching = {
   situation:
     'Patch Tuesday went wrong. Workstations across the 4th floor are throwing alerts, not all for the same reason, and someone left a USB stick by the lifts. You are first on scene.',
   orders: [
-    { text: 'Read every flagged host before you act.', objective: '2.4' },
+    { text: 'Read every flagged workstation (press E) before you act.', objective: '2.4' },
     { text: 'Clean only what is actually infected.', objective: '2.5' },
     { text: 'Decide what to do with the unclaimed USB stick.', objective: '5.6' },
   ],

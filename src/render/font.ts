@@ -31,7 +31,7 @@ const SMALL: Record<string, number[]> = {
   '*': [0, 4, 21, 14, 21, 4, 0], '&': [12, 18, 20, 8, 21, 18, 13], '@': [14, 17, 1, 13, 21, 21, 14],
   '\\': [16, 16, 8, 4, 2, 1, 1], '~': [0, 0, 9, 22, 0, 0, 0],
   $: [4, 15, 20, 14, 5, 30, 4], '✓': [0, 1, 2, 2, 20, 8, 0], '✗': [0, 17, 10, 4, 10, 17, 0],
-  '·': [0, 0, 0, 12, 12, 0, 0], '→': [0, 4, 2, 31, 2, 4, 0], '∞': [0, 0, 10, 21, 10, 0, 0],
+  '·': [0, 0, 0, 12, 12, 0, 0], '→': [0, 4, 2, 31, 2, 4, 0], '←': [0, 4, 8, 31, 8, 4, 0], '∞': [0, 0, 10, 21, 10, 0, 0],
   // Lowercase forms; g, j, p, q and y extend below the baseline.
   a: [0, 0, 14, 1, 15, 17, 15], b: [16, 16, 30, 17, 17, 17, 30], c: [0, 0, 14, 17, 16, 17, 14],
   d: [1, 1, 15, 17, 17, 17, 15], e: [0, 0, 14, 17, 31, 16, 14], f: [6, 9, 8, 30, 8, 8, 8],
@@ -63,6 +63,21 @@ const TINY: Record<string, number[]> = {
 };
 
 export type FontId = 'small' | 'tiny';
+
+/**
+ * Glyphs whose left stem keeps square corners through the EPX smoothing. At 3x5
+ * the rounding chamfers D's left corners until it reads as O ("EOR", "OISK"); a
+ * square stem with the rounded bowl kept on the right reads as D while O stays
+ * round. Metrics are unchanged.
+ */
+const SQUARE_STEM: Partial<Record<FontId, ReadonlySet<string>>> = { tiny: new Set(['D']) };
+
+function hasSquareStem(font: FontId, ch: string): boolean {
+  const set = SQUARE_STEM[font];
+  if (!set) return false;
+  // a lowercase char with no glyph of its own draws its uppercase form (TINY stays caps)
+  return set.has(ch in FONTS[font].glyphs ? ch : ch.toUpperCase());
+}
 
 interface FontSpec {
   glyphs: Record<string, number[]>;
@@ -107,7 +122,7 @@ function epx(src: Mask): Mask {
   return { bits, w, h };
 }
 
-function maskFromRows(rows: number[], width: number, baseScale: number): Mask {
+function maskFromRows(rows: number[], width: number, baseScale: number, squareStem = false): Mask {
   const src: Mask = { w: width * baseScale, h: rows.length * baseScale, bits: new Uint8Array(width * baseScale * rows.length * baseScale) };
   for (let y = 0; y < rows.length; y++) for (let x = 0; x < width; x++) {
     if (!(rows[y] & (1 << (width - 1 - x)))) continue;
@@ -115,7 +130,19 @@ function maskFromRows(rows: number[], width: number, baseScale: number): Mask {
       src.bits[(y * baseScale + sy) * src.w + x * baseScale + sx] = 1;
     }
   }
-  return epx(epx(src));
+  const smooth = epx(epx(src));
+  return squareStem ? withSquareStem(smooth, src) : smooth;
+}
+
+/** Re-square the leftmost source column (two EPX passes scale by 4): a crisp stem, rounded elsewhere. */
+function withSquareStem(smooth: Mask, src: Mask): Mask {
+  const k = smooth.w / src.w;
+  const bits = smooth.bits.slice();
+  for (let y = 0; y < smooth.h; y++) {
+    if (!src.bits[Math.floor(y / k) * src.w]) continue;
+    for (let x = 0; x < k; x++) bits[y * smooth.w + x] = 1;
+  }
+  return { bits, w: smooth.w, h: smooth.h };
 }
 
 type Color = [number, number, number, number];
@@ -168,11 +195,12 @@ function nativeGlyph(
   baseScale: number,
   ramp: string[],
   bevel = true,
+  squareStem = false,
 ): HTMLCanvasElement {
-  const cacheKey = `${key}|${rows.join(',')}|${ramp.join(',')}|${bevel}`;
+  const cacheKey = `${key}|${rows.join(',')}|${ramp.join(',')}|${bevel}|${squareStem}`;
   const cached = cache.get(cacheKey);
   if (cached) return cached;
-  const mask = maskFromRows(rows, width, baseScale);
+  const mask = maskFromRows(rows, width, baseScale, squareStem);
   const c = document.createElement('canvas');
   c.width = mask.w;
   c.height = mask.h;
@@ -196,7 +224,16 @@ function glyphCanvas(font: FontId, ch: string, color: string): HTMLCanvasElement
   const spec = FONTS[font];
   const rows = glyphRowsFor(font, ch);
   if (!rows) return null;
-  return nativeGlyph(`${font}|${ch}`, rows, spec.w, 1, [color]);
+  return nativeGlyph(`${font}|${ch}`, rows, spec.w, 1, [color], true, hasSquareStem(font, ch));
+}
+
+/** The rendered (pre-colour) pixel mask of a glyph, as drawText rasterises it; for legibility tests. */
+export function glyphMask(font: FontId, raw: string): { bits: Uint8Array; w: number; h: number } | undefined {
+  const ch = norm(raw);
+  const rows = glyphRowsFor(font, ch);
+  if (!rows) return undefined;
+  const mask = maskFromRows(rows, FONTS[font].w, 1, hasSquareStem(font, ch));
+  return { bits: mask.bits.slice(), w: mask.w, h: mask.h };
 }
 
 export function fontHeight(font: FontId): number {
