@@ -288,6 +288,8 @@ const pointColUniform = { value: Array.from({ length: MAX_POINT_LIGHTS }, () => 
 /** Glow effects that add their light to the scene instead of covering it. */
 const ADDITIVE_FX = new Set(['fx-scan', 'fx-scan-trail', 'fx-payload', 'fx-puff', 'fx-spawn']);
 const PUFF_FRAMES = ['f0', 'f1', 'f2', 'f3', 'f4'];
+/** How much of the spawn column's own colour is added to the scene. */
+const SPAWN_COLUMN_STRENGTH = 0.55;
 const SPAWN_FRAMES = ['f0', 'f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7'];
 
 function worldMaterial(map: THREE.Texture, light = 1, floor = 0.16, tint?: THREE.Vector3, wallLift = 0): THREE.ShaderMaterial {
@@ -1037,7 +1039,11 @@ export class Renderer {
    *  monster) and burns ~1 s so an ambush can't be missed (ENEMIES). */
   spawnTeleport(x: number, y: number): void {
     const fx = this.spawnFx('fx-spawn', SPAWN_FRAMES, x, y, 0, 1.05);
-    if (fx) fx.light = SPAWN_LIGHT;
+    if (fx) {
+      fx.light = SPAWN_LIGHT;
+      // additive at full strength burns to solid white over a bright sprite
+      (fx.mat.uniforms.uTint.value as THREE.Vector3).setScalar(SPAWN_COLUMN_STRENGTH);
+    }
   }
 
   /** Red padlock overlay on a door or console a ransomware has sealed. */
