@@ -9,6 +9,9 @@ import { RAMP } from './debrief';
 import { resolveBindings } from '../engine/bindings';
 import { sortedTools } from '../tools';
 import { titleHelpLines } from './titleHelp';
+import { pixelLabel } from './pixelLabel';
+import { applyLockedRowTokens, LOCKED_TITLE_RAMP } from './menuTheme';
+import { threatLegend, threatLevelFor, threatMarker } from './threatLegend';
 
 /**
  * ARSENAL/LOOK: HTML overlay screens — title, character select, mission
@@ -23,15 +26,21 @@ function el(tag: string, cls = '', html = ''): HTMLElement {
   return e;
 }
 
+export interface TitleScreenActions {
+  onStart: () => void;
+  onMissions?: () => void;
+  onContinue?: () => void;
+  onOptions?: () => void;
+  onControls?: () => void;
+  initialItem?: string;
+  bindings?: unknown;
+}
+
 /** Title menu. READ THIS! text comes from the tool registry and the live key bindings (rebinds show). */
-export function titleScreen(
-  onStart: () => void,
-  onMissions?: () => void,
-  onContinue?: () => void,
-  bindings?: unknown,
-): HTMLElement {
+export function titleScreen(actions: TitleScreenActions): HTMLElement {
   const s = el('div', 'screen title');
-  mountTitle(s, onStart, titleHelpLines(resolveBindings(bindings), sortedTools()), onMissions, onContinue);
+  const { bindings, ...menu } = actions;
+  mountTitle(s, { ...menu, about: titleHelpLines(resolveBindings(bindings), sortedTools()) });
   return s;
 }
 
@@ -95,8 +104,7 @@ export interface MissionSelectCard {
 }
 
 export function missionSelectCard(m: Mission): MissionSelectCard {
-  const threatLevel = Math.max(1, Math.min(3, Math.ceil(m.difficulty / 3)));
-  const threatLabel = threatLevel === 1 ? 'LOW' : threatLevel === 2 ? 'MED' : 'HIGH';
+  const { level: threatLevel, label: threatLabel } = threatLevelFor(m.difficulty);
   const tagline = teachingRegistry.get(m.id)?.tagline ?? m.briefing.split('\n')[0];
   return {
     id: m.id,
@@ -111,6 +119,7 @@ export function missionSelectCard(m: Mission): MissionSelectCard {
 
 export function missionSelect(onPick: (id: string) => void, onBack: () => void): HTMLElement {
   const s = el('div', 'screen mission-select cd-mission-select');
+  applyLockedRowTokens(s);
   const bar = el('div', 'menu-bar');
   const back = document.createElement('button');
   back.type = 'button';
@@ -125,6 +134,10 @@ export function missionSelect(onPick: (id: string) => void, onBack: () => void):
   const clearedCount = orderedIds.filter((id) => states.get(id) === 'cleared').length;
   bar.appendChild(pixelTitle('h2', '', 'SELECT MISSION', RAMP.gold, 3));
   bar.appendChild(el('div', 'playable-coverage', `MERIDIAN FREIGHT CAMPAIGN · ${clearedCount}/${orderedIds.length} SECTORS CLEARED`));
+  const legend = el('div', 'threat-legend');
+  legend.dataset.threatLegend = 'true';
+  legend.appendChild(pixelLabel(threatLegend(), ['#ffe080', '#f0c020', '#c08a10'], 2));
+  bar.appendChild(legend);
   s.appendChild(bar);
 
   const layout = el('div', 'mission-layout');
@@ -142,7 +155,9 @@ export function missionSelect(onPick: (id: string) => void, onBack: () => void):
     detail.innerHTML = '';
     if (ep) detail.appendChild(el('div', 'detail-kicker', ep.title));
     detail.appendChild(el('div', 'detail-kicker', `SECTOR INTEL // ${card.code} // THREAT ${card.threatLabel}`));
-    detail.appendChild(el('div', 'detail-title', card.title));
+    const title = el('div', 'detail-title');
+    title.appendChild(pixelLabel(card.title, ['#ffffff', '#f0ece4', '#c8c0b0'], 2));
+    detail.appendChild(title);
     detail.appendChild(el('div', 'detail-tagline', card.tagline));
     detail.appendChild(el('div', 'detail-state', `STATUS: ${state.toUpperCase()}`));
     if (realCase) {
@@ -170,12 +185,14 @@ export function missionSelect(onPick: (id: string) => void, onBack: () => void):
     row.disabled = !unlocked;
     row.dataset.missionId = m.id;
     const threat = el('span', `diff threat-${card.threatLevel}`);
-    threat.textContent = '!'.repeat(card.threatLevel);
+    threat.textContent = threatMarker(card.threatLevel);
     threat.title = `Threat: ${card.threatLabel}`;
     row.appendChild(threat);
     const body = el('div', 'mrow-body');
     const head = el('div', 'mhead');
-    head.appendChild(el('span', 'mtitle', `${card.code} — ${card.title}`));
+    const mtitle = el('span', 'mtitle');
+    mtitle.appendChild(pixelLabel(`${card.code} — ${card.title}`, unlocked ? ['#ffffff', '#f6eedc', '#d8ccb8'] : [...LOCKED_TITLE_RAMP], 2));
+    head.appendChild(mtitle);
     const badgeText =
       state === 'cleared' ? 'CLEARED'
       : state === 'next' ? 'NEXT'

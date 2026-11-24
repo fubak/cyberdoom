@@ -52,6 +52,12 @@ export class Feel {
   private hurtPitchAmt = 0;
   private hurtRollAmt = 0;
   private hurtRollSide = 0;
+  /** Reduced-flashing multiplier for the pain wash and pickup glow (1 = full). */
+  private washScale = 1;
+
+  setWashScale(scale: number): void {
+    this.washScale = Math.max(0, Math.min(1, scale));
+  }
 
   hurt(dmg: number, side = 0, wash = true): void {
     this.trauma = Math.min(1, this.trauma + dmg / 40);
@@ -64,7 +70,7 @@ export class Feel {
     if (!wash) return; // photosafety limiter spent: keep kick/shake, skip the red wash
     // Doom pain wash: any hit floods the view red, holds ~0.1s, then eases out
     // over ~0.3-0.4s; bigger hits flood deeper and linger a little longer.
-    const peak = Math.min(0.9, 0.62 + dmg * 0.011);
+    const peak = Math.min(0.9, 0.62 + dmg * 0.011) * this.washScale;
     const duration = 0.1 + Math.min(0.4, 0.3 + dmg * 0.004);
     const remaining = Math.max(0, this.hurtDuration - this.hurtElapsed);
     this.hurtPeak = Math.max(this.red, peak);
@@ -133,7 +139,7 @@ export class Feel {
   }
 
   get bonusAmt(): number {
-    return this.bonusAmount;
+    return this.bonusAmount * this.washScale;
   }
 
   shake(t: number): { yaw: number; x: number; y: number } {

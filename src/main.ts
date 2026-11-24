@@ -55,6 +55,8 @@ import { relativeBearing, tileDistance } from './ui/damageAlert';
 import { claimRoleHint, roleDenialExplainer } from './ui/roleBadge';
 import { pauseMenu } from './ui/pause';
 import { controlsPanel } from './ui/controls';
+import { optionsPanel } from './ui/options';
+import { flashBudget, flashStrength } from './engine/flashPolicy';
 import { completedIds, markCompleted, unlockEverything } from './missions/progress';
 import { registerThreatSprites } from './missions/threatSprites';
 import { genDebugCompare } from './render/genpool';
@@ -251,8 +253,10 @@ class Game {
   private flagHintAt = -99;
   /** WCAG 2.3.1: shared budget for all full-screen flashes (muzzle flood,
    *  landed-hit bloom, pain wash) — at most 3 per second, always. */
-  private flashLimit = new FlashRateLimiter(3);
   private settings: Settings = loadSettings();
+  private flashLimit = new FlashRateLimiter(flashBudget(this.settings.reducedFlash));
+  /** Title-menu Options/Controls panel on screen (keeps the Konami listener off). */
+  private titlePanel = false;
 
   constructor(app: HTMLElement) {
     const viewport = document.createElement('div');
@@ -270,6 +274,9 @@ class Game {
     this.input.setBindings(resolveBindings(this.settings.bindings));
     this.hud = new Hud(viewport);
     this.hud.setColorBlind(this.settings.colorBlind);
+    this.hud.setReducedFlash(this.settings.reducedFlash);
+    this.renderer.setFov(this.settings.fov);
+    this.feel.setWashScale(flashStrength(this.settings.reducedFlash));
     this.automap = new Automap(this.hud.canvas);
     // EGGS: Doom-style typed cheats during play; the Konami code on title.
     // Capture phase: this listener is registered before the dossier's capture
@@ -278,6 +285,7 @@ class Game {
     window.addEventListener('keydown', (event) => {
       if (event.repeat) return;
       if (this.screen === 'title') {
+        if (this.titlePanel) return;
         if (this.konamiBuf.push(event.key)) this.applyKonami();
         return;
       }
@@ -415,7 +423,7 @@ class Game {
       // just the small kick.
       const rgb = TOOL_FIRE_RGB[toolId];
       if (rgb && ATTACK_TOOLS.has(toolId) && this.flashLimit.allow(this.simT))
-        this.renderer.fireLight(rgb[0], rgb[1], rgb[2], TOOL_FIRE_STRENGTH[toolId] ?? 1);
+        this.renderer.fireLight(rgb[0], rgb[1], rgb[2], (TOOL_FIRE_STRENGTH[toolId] ?? 1) * flashStrength(this.settings.reducedFlash));
       this.feel.kick(TOOL_KICK[toolId] ?? 1);
     });
     this.bus.on('cleaned', ({ entityId }) => {
@@ -586,16 +594,43 @@ class Game {
     this.syncChrome();
   }
 
-  private showTitle(): void {
+  private showTitle(initialItem?: string): void {
     this.audio.startMusic('title');
     const saved = loadSavedCheckpoints();
     const onContinue = saved && missionById(saved.missionId) ? () => this.continueSaved() : undefined;
-    this.setScreen('title', screens.titleScreen(
-      () => this.showCharSelect(),
-      () => this.showMissionSelect(),
+    this.titlePanel = false;
+    this.setScreen('title', screens.titleScreen({
+      onStart: () => this.showCharSelect(),
+      onMissions: () => this.showMissionSelect(),
       onContinue,
-      this.settings.bindings,
-    ));
+      onOptions: () => this.showTitlePanel('options'),
+      onControls: () => this.showTitlePanel('controls'),
+      initialItem,
+      bindings: this.settings.bindings,
+    }));
+  }
+
+  /** Title menu OPTIONS / CONTROLS: the pause menu's panels; Esc or BACK returns to the title. */
+  private showTitlePanel(kind: 'options' | 'controls'): void {
+    this.audio.sfx('click');
+    const back = () => {
+      const next = applyBack({ screen: 'title', overlay: kind });
+      if (next.screen === 'title') this.showTitle(kind);
+    };
+    const node = kind === 'options'
+      ? optionsPanel({
+        settings: this.settings,
+        onSettings: (next) => this.applySettings(next),
+        onBack: back,
+        kicker: 'SYSTEM SETUP',
+      })
+      : controlsPanel(
+        this.settings.bindings,
+        (bindings) => this.applySettings({ ...this.settings, bindings }),
+        back,
+      );
+    this.setScreen('title', node);
+    this.titlePanel = true;
   }
 
   private showCharSelect(): void {
@@ -653,13 +688,17 @@ class Game {
     this.audio.setMusicVolume(next.musicVol);
     this.audio.setSfxVolume(next.sfxVol);
     this.hud.setColorBlind(next.colorBlind);
+    this.hud.setReducedFlash(next.reducedFlash);
+    this.renderer.setFov(next.fov);
+    this.feel.setWashScale(flashStrength(next.reducedFlash));
+    this.flashLimit = new FlashRateLimiter(flashBudget(next.reducedFlash));
     if (this.player) this.player.bobScale = next.viewBob ? 1 : 0;
   }
 
   private makePauseMenu(): HTMLElement {
     return pauseMenu({
       settings: this.settings,
-      onSettings: (next) => this.applySettings(next),
+      onOptions: () => this.showPauseOptions(),
       onControls: () => this.showControls(),
       onResume: () => this.hidePause(true),
       onRestart: () => {
@@ -669,6 +708,22 @@ class Game {
       },
       onQuit: () => this.showMissionSelect(),
     });
+  }
+
+  private showPauseOptions(): void {
+    if (!this.paused || !this.pauseNode) return;
+    const node = optionsPanel({
+      settings: this.settings,
+      onSettings: (next) => this.applySettings(next),
+      onBack: () => {
+        const menu = this.makePauseMenu();
+        this.pauseNode?.replaceWith(menu);
+        this.pauseNode = menu;
+      },
+      kicker: 'SECTOR HOLD',
+    });
+    this.pauseNode.replaceWith(node);
+    this.pauseNode = node;
   }
 
   private showControls(): void {
@@ -978,6 +1033,7 @@ class Game {
     this.projectiles = [];
     this.particles.clear();
     this.feel = new Feel();
+    this.feel.setWashScale(flashStrength(this.settings.reducedFlash));
     this.arsenal.reset(mission, this.gender);
     const firstRun = shouldOnboard(mission.id, completedIds());
     this.arsenal.introduce(
@@ -1686,7 +1742,9 @@ class Game {
   /** Landed-hit world bloom at the hit point — the WCAG 2.3.1 flash budget
    *  caps the full-screen component; the sprite flash stays ungated. */
   private impactBloom(x: number, y: number, blood: [number, number, number]): void {
-    if (this.flashLimit.allow(this.simT)) this.renderer.impactLight(x, y, blood[0], blood[1], blood[2], 0.9);
+    if (this.flashLimit.allow(this.simT)) {
+      this.renderer.impactLight(x, y, blood[0], blood[1], blood[2], 0.9 * flashStrength(this.settings.reducedFlash));
+    }
   }
 
   // ---------- EGGS: cheat codes ----------

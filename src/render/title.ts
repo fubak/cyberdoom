@@ -6,6 +6,7 @@ import { genPoolActive, whenGenJobs } from './genpool';
 import { spriteSets } from './sprites';
 import { drawToolViewmodel } from './viewmodels';
 import { BASE_H, BASE_W, RES, VIEW_H, VIEW_W } from './res';
+import { titleMenuLayout } from './titleMenu';
 
 /**
  * LOOK: Doom-style title + main menu, drawn in 320x200 base units on a 4×
@@ -16,7 +17,8 @@ import { BASE_H, BASE_W, RES, VIEW_H, VIEW_W } from './res';
  * bitmap-font menu with a blinking malware-skull cursor.
  *
  * Automation: every menu entry also has a transparent <button data-menu-item>
- * laid exactly over it (new-game, read-this). Keyboard: Up/Down + Enter.
+ * laid exactly over it (continue, new-game, mission-select, options, controls,
+ * read-this). Keyboard: Up/Down + Enter.
  */
 const W = BASE_W;
 const H = BASE_H;
@@ -249,13 +251,19 @@ function paintTitlePic(): HTMLCanvasElement {
   return c;
 }
 
-export function mountTitle(
-  host: HTMLElement,
-  onStart: () => void,
-  about: string[],
-  onMissions?: () => void,
-  onContinue?: () => void,
-): void {
+export interface TitleActions {
+  onStart: () => void;
+  about: string[];
+  onMissions?: () => void;
+  onContinue?: () => void;
+  onOptions?: () => void;
+  onControls?: () => void;
+  /** Menu entry id to start on (returning from Options/Controls keeps the cursor there). */
+  initialItem?: string;
+}
+
+export function mountTitle(host: HTMLElement, actions: TitleActions): void {
+  const { onStart, about, onMissions, onContinue, onOptions, onControls, initialItem } = actions;
   const c = document.createElement('canvas');
   c.width = VIEW_W;
   c.height = VIEW_H;
@@ -302,13 +310,15 @@ export function mountTitle(
     ...(onContinue ? [{ id: 'continue', label: 'Continue', action: onContinue }] : []),
     { id: 'new-game', label: 'New Game', action: onStart },
     ...(onMissions ? [{ id: 'mission-select', label: 'Missions', action: onMissions }] : []),
+    ...(onOptions ? [{ id: 'options', label: 'Options', action: onOptions }] : []),
+    ...(onControls ? [{ id: 'controls', label: 'Controls', action: onControls }] : []),
     { id: 'read-this', label: 'Read This!', action: () => (showAbout = true) },
   ];
+  sel = Math.max(0, items.findIndex((it) => it.id === initialItem));
   let t = 0;
   let last = performance.now();
   const menuX = 30;
-  const menuY = 156 - (items.length - 2) * 14;
-  const rowH = 14;
+  const { menuY, rowH } = titleMenuLayout(items.length);
 
   const choose = () => {
     if (showAbout) {

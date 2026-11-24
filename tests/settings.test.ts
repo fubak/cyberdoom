@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_SETTINGS,
+  FOV_MAX,
+  FOV_MIN,
+  FOV_STEPS,
   loadSettings,
   nextStep,
   saveSettings,
@@ -31,6 +34,8 @@ describe('settings persistence', () => {
       musicVol: 1,
       viewBob: false,
       colorBlind: false,
+      fov: 58,
+      reducedFlash: false,
       skill: 'analyst',
       bindings: {},
     });
@@ -71,6 +76,8 @@ describe('settings persistence', () => {
       musicVol: 0.15,
       viewBob: false,
       colorBlind: true,
+      fov: 66,
+      reducedFlash: true,
       skill: 'commander' as const,
       bindings: { forward: ['KeyI'], use: [] },
     };
@@ -114,5 +121,51 @@ describe('settings step ladders', () => {
     expect(nextStep([1, 0.7, 0.4, 0.15, 0], 0.7)).toBe(0.4);
     expect(nextStep([1, 0.7, 0.4, 0.15, 0], 0.7005)).toBe(0.4);
     expect(nextStep([1, 0.7, 0.4, 0.15, 0], 0)).toBe(1);
+  });
+});
+
+describe('phase D settings: fov and reduced flashing', () => {
+  it('defaults to the original 58 degree camera and full flashes', () => {
+    expect(DEFAULT_SETTINGS.fov).toBe(58);
+    expect(DEFAULT_SETTINGS.reducedFlash).toBe(false);
+    expect(FOV_STEPS).toContain(DEFAULT_SETTINGS.fov);
+  });
+
+  it('clamps a saved fov into the supported range and rejects bad types', () => {
+    const load = (value: unknown) => loadSettings(reader({
+      'cyberdoom-settings': JSON.stringify({ ...DEFAULT_SETTINGS, fov: value }),
+    })).fov;
+    expect(load(10)).toBe(FOV_MIN);
+    expect(load(170)).toBe(FOV_MAX);
+    expect(load(62)).toBe(62);
+    expect(load('90')).toBe(58);
+    expect(load(Number.NaN)).toBe(58);
+  });
+
+  it('only accepts a boolean reducedFlash', () => {
+    const load = (value: unknown) => loadSettings(reader({
+      'cyberdoom-settings': JSON.stringify({ ...DEFAULT_SETTINGS, reducedFlash: value }),
+    })).reducedFlash;
+    expect(load(true)).toBe(true);
+    expect(load('yes')).toBe(false);
+  });
+
+  it('keeps every fov step inside the clamp range, ascending', () => {
+    expect([...FOV_STEPS]).toEqual([...FOV_STEPS].sort((a, b) => a - b));
+    for (const step of FOV_STEPS) {
+      expect(step).toBeGreaterThanOrEqual(FOV_MIN);
+      expect(step).toBeLessThanOrEqual(FOV_MAX);
+    }
+    expect(nextStep(FOV_STEPS, FOV_STEPS[FOV_STEPS.length - 1]!)).toBe(FOV_STEPS[0]);
+  });
+
+  it('loads settings saved before phase D with the new defaults', () => {
+    const legacy = {
+      sensitivity: 1.25, sfxVol: 0.4, musicVol: 0.7, viewBob: true, colorBlind: false, skill: 'analyst', bindings: {},
+    };
+    const loaded = loadSettings(reader({ 'cyberdoom-settings': JSON.stringify(legacy) }));
+    expect(loaded.fov).toBe(58);
+    expect(loaded.reducedFlash).toBe(false);
+    expect(loaded.sensitivity).toBe(1.25);
   });
 });
