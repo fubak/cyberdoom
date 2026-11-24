@@ -66,10 +66,10 @@ describe('tool behavior', () => {
     expect(toolForSlot(4)).toMatchObject({ id: 'badge', passive: true });
     expect(toolForSlot(7)).toMatchObject({ id: 'mfa', passive: true });
     expect(toolForSlot(4)?.control?.use).toBe(
-      'Press E at a reader door and your badge swipes itself. Doors open only for roles you hold; trying a door outside your role is logged as a violation.',
+      'Press E at a reader door: the badge swipes itself. Doors open only for roles you hold.',
     );
     expect(toolForSlot(7)?.control?.use).toBe(
-      'MFA doors: press E and the reader takes your badge (something you have), then your fingerprint on the token (something you are). The key refuses look-alike sign-in prompts on its own.',
+      'Press E at an MFA reader: badge (have), then fingerprint (are). Refuses fake prompts.',
     );
   });
 });

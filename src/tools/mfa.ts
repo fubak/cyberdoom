@@ -58,7 +58,7 @@ export const mfaTool: ToolDef = {
     category: 'technical',
     types: ['preventive'],
     objectives: ['4.6', '2.2'],
-    use: 'MFA doors: press E and the reader takes your badge (something you have), then your fingerprint on the token (something you are). The key refuses look-alike sign-in prompts on its own.',
+    use: 'Press E at an MFA reader: badge (have), then fingerprint (are). Refuses fake prompts.',
     lesson: 'Real MFA mixes factor types: know, have, are. Two of one type is not MFA. FIDO2 keys check the origin, so they resist phishing.',
   },
   drawViewmodel(g, w, h, _bob, _gender, _cd, anim) {

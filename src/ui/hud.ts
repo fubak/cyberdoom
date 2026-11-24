@@ -6,6 +6,7 @@ import { drawToolViewmodel } from '../render/viewmodels';
 import { sortedTools } from '../tools';
 import { BASE_H, BASE_STATUS, BASE_W, RES } from '../render/res';
 import { keyPlateRect, PROMPT_ROW_PLATE } from './keyPlate';
+import { pinnedObjectiveLine, stripObjectiveLine } from './objectiveLine';
 import {
   P_AMMO,
   P_CRED,
@@ -44,10 +45,14 @@ const MSG_RAMP_CB: Record<string, string[]> = {
   info: ['#ffffff', '#d8e0f0', '#9aa8c0'],
 };
 
-/** Non-color semantic prefix so good/warn/bad messages never rely on color alone. */
+/**
+ * Non-color semantic prefix so good/warn/bad messages never rely on color alone.
+ * Every glyph must exist in the TINY ticker font: the old warn mark '~' had no
+ * tiny glyph and drew as an empty '[ ]' box (read as a '( )' placeholder).
+ */
 export function tickerPrefix(kind: string): string {
   if (kind === 'bad') return '[!] ';
-  if (kind === 'warn') return '[~] ';
+  if (kind === 'warn') return '[-] ';
   if (kind === 'good') return '[+] ';
   return '';
 }
@@ -289,6 +294,8 @@ export class Hud {
       lmbHot?: boolean;
       banner?: { title: string; blurb: string } | null;
       footer?: string | null;
+      /** Key plate for the tool line: 'LMB', or the fire key while the mouse is not captured. */
+      lmbKey?: string;
     };
   }): void {
     const g = this.g;
@@ -647,12 +654,12 @@ export class Hud {
     objs: { text: string; done: boolean; failed: boolean }[],
     progress?: { done: number; total: number },
   ): number {
-    if (objs.length === 0) return 0;
-    const g = this.g;
-    const open = objs.find((o) => !o.done && !o.failed);
     // same count as the status bar's OBJ panel when the runtime supplies it
-    const head = `OBJ ${progress?.done ?? objs.filter((o) => o.done).length}/${progress?.total ?? objs.length}`;
-    const body = wrapText(open ? open.text.toUpperCase() : 'ALL OBJECTIVES SETTLED', Math.max(8, 52 - head.length - 2), 1)[0] ?? '';
+    const line = pinnedObjectiveLine(objs, progress);
+    if (!line) return 0;
+    const g = this.g;
+    const open = objs.some((o) => !o.done && !o.failed);
+    const { head, body } = line;
     const headW = measureText(head, 'tiny');
     const w = 4 + headW + 5 + measureText(body, 'tiny');
     g.fillStyle = TICKER_PLATE;
@@ -710,6 +717,7 @@ export class Hud {
     lmbHot?: boolean;
     banner?: { title: string; blurb: string } | null;
     footer?: string | null;
+    lmbKey?: string;
   }): void {
     const g = this.g;
     const lines: { key: string; text: string; ready: boolean; hot: boolean; cost?: string | null }[] = [];
@@ -717,7 +725,7 @@ export class Hud {
       lines.push({ key: 'TOOL', text: p.banner.title, ready: true, hot: false });
       lines.push({ key: '', text: p.banner.blurb, ready: true, hot: false });
     } else {
-      if (p.lmb) lines.push({ key: 'LMB', text: p.lmb.text, ready: p.lmb.ready, hot: !!p.lmbHot, cost: p.lmb.cost });
+      if (p.lmb) lines.push({ key: p.lmbKey ?? 'LMB', text: p.lmb.text, ready: p.lmb.ready, hot: !!p.lmbHot, cost: p.lmb.cost });
       if (p.use) lines.push({ key: 'E', text: p.use, ready: true, hot: false });
     }
     const viewH = BASE_H - BASE_STATUS;
@@ -773,12 +781,12 @@ export class Hud {
     const head = idx >= 0 ? (o.failed ? 'FAILED' : o.done ? 'DONE' : 'OBJECTIVE') : `OBJ ${done}/${objs.length}`;
     const headRamp = o.failed ? MSG_RAMP.bad : o.done ? MSG_RAMP.good : MSG_RAMP.warn;
     const col = o.failed ? '#ff5a3a' : o.done ? '#5aff6a' : '#f0ece4';
-    const text = o.text.toUpperCase();
     const tx = 13 + measureChunky(head) + 6;
-    const avail = BASE_W - tx - 3;
-    const chunky = measureChunky(text) <= avail;
-    const lines = chunky ? [text] : wrapText(text, Math.floor((avail + 1) / 6), 2);
-    const h = Math.min(OBJ_STRIP_MAX, chunky ? 11 : 4 + lines.length * 8);
+    // one line, always: a long objective is cut by design here (full text on TAB / pause / log)
+    const fitted = stripObjectiveLine(o.text, BASE_W - tx - 3);
+    const chunky = fitted.font === 'chunky';
+    const lines = [fitted.text];
+    const h = Math.min(OBJ_STRIP_MAX, 11);
     g.fillStyle = getTickerPattern(g) ?? '#000';
     g.fillRect(0, 0, BASE_W, h);
     g.fillStyle = o.failed ? '#a80c06' : o.done ? '#14a024' : '#a87a10';

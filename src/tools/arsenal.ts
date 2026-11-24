@@ -58,8 +58,14 @@ const TICKER_COLS = 52;
 const RES_LABEL: Record<string, string> = { 'usb-charge': 'SCAN', pcap: 'PCAP', 'edr-cell': 'CELL', 'patch-disk': 'DISK' };
 
 /** Ticker rows an explanation page aims for, and the most one whole sentence may take (the ticker shows a 3-line message in full). */
-const PAGE_LINES = 2;
+export const PAGE_LINES = 2;
 const SENTENCE_LINES = 3;
+/**
+ * Seconds between queued explanation pages. Just over the ticker's 5 s message
+ * life, so one page has left before the next lands and an older page is never
+ * squeezed into the last ticker row and cut with an ellipsis.
+ */
+export const PAGE_GAP = 5.1;
 
 /**
  * Split a long tool explanation into ticker pages that end on a full stop instead of mid-phrase: sentences
@@ -93,7 +99,8 @@ export interface ArsenalSnapshot {
   currentId: string;
 }
 
-function toolIntroduction(t: ToolDef): string {
+/** Ticker text that introduces a tool: '[3] USB SCANNER: ...' (passive tools have no slot key). */
+export function toolIntroduction(t: ToolDef): string {
   return `${t.passive ? '' : `[${t.slot}] `}${t.name}: ${t.control?.use ?? ''}`;
 }
 
@@ -231,10 +238,14 @@ export class Arsenal {
     this.queuePages([text]);
   }
 
-  introduce(tools: ToolDef[]): void {
-    if (!tools.length) return;
+  /**
+   * Mission-start ticker pages: optional first-run control tips (move/look,
+   * E to read a workstation, number keys, map/log), then each new tool.
+   */
+  introduce(tools: readonly ToolDef[], tips: readonly string[] = []): void {
+    if (!tools.length && !tips.length) return;
     this.face.talk();
-    this.queuePages(tools.map(toolIntroduction));
+    this.queuePages([...tips, ...tools.map(toolIntroduction)]);
   }
 
   owns(id: string): boolean {
@@ -384,7 +395,7 @@ export class Arsenal {
     this.pageT -= dt;
     if (this.pages.length && this.pageT <= 0) {
       this.bus.emit('message', { text: this.pages.shift()!, kind: 'info' });
-      this.pageT = 3;
+      this.pageT = PAGE_GAP;
     }
     this.face.tick(dt);
     this.cooldown = Math.max(0, this.cooldown - dt);
