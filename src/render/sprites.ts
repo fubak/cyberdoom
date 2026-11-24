@@ -710,6 +710,15 @@ function tipOver(p: Prim, a: number, lift = 0): Prim {
  */
 const BOSS_CANVAS = 384;
 
+/**
+ * ENEMIES: one scale over every threat's authored world height. At the
+ * authored sizes a regular threat stood 1.35-1.62 tiles tall in rooms with a
+ * 1.25-tile ceiling, against 0.98 for a person and a 0.6-tile eye height, so
+ * everything towered. At 0.72 a regular threat is about a head taller than a
+ * person (1.0-1.17 tiles) and the bosses are 1.3-1.5.
+ */
+export const THREAT_SCALE = 0.72;
+
 function makeMonster(id: string, worldH: number, model: Model, opts: { floor?: number; gain?: number; grow?: number; walkN?: number; gib?: [number, number, number]; canvas?: number } = {}): void {
   // a larger canvas keeps texel density on threats that stand taller in the world
   const canvas = opts.canvas ?? TEX.monster;
@@ -832,7 +841,7 @@ function makeMonster(id: string, worldH: number, model: Model, opts: { floor?: n
     alias('walk0', 'walk0_0');
     for (const [key] of poses.slice(1)) alias(key, `${key}_0`);
     alias('attack', 'attack1');
-    spriteSets.register(id, { w: worldH, h: worldH, frames, anim: 'monster', ...opts, walkN });
+    spriteSets.register(id, { w: worldH * THREAT_SCALE, h: worldH * THREAT_SCALE, frames, anim: 'monster', ...opts, walkN });
     whenGenJobs([`sprite:${id}:walk0_0`], () => spriteRegistry.register(id, frames.walk0));
     return;
   }
@@ -922,7 +931,7 @@ function makeMonster(id: string, worldH: number, model: Model, opts: { floor?: n
       },
     };
   });
-  spriteSets.register(id, { w: worldH, h: worldH, frames, anim: 'monster', ...opts, walkN });
+  spriteSets.register(id, { w: worldH * THREAT_SCALE, h: worldH * THREAT_SCALE, frames, anim: 'monster', ...opts, walkN });
   spriteRegistry.register(id, frames.walk0);
 }
 

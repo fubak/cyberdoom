@@ -1311,6 +1311,9 @@ export class Renderer {
     (this.particleGeometry.getAttribute('size') as THREE.BufferAttribute).needsUpdate = true;
     (this.particleGeometry.getAttribute('minPx') as THREE.BufferAttribute).needsUpdate = true;
     this.particleGeometry.setDrawRange(0, count);
+    // LOOK probes: a kill or pickup burst still in the air behind the staged
+    // sprite would be measured as its backdrop
+    this.particlePoints.visible = !this.debugSuppressFx;
   }
 
   /** Ceiling world-Y over an enemy's tile, or null when no clamp applies (no map, sky). */
