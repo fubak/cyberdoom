@@ -69,6 +69,9 @@ uniform sampler2D map;
 uniform float uLight;
 uniform float uFloor;
 uniform float uGain;
+const float LIT_ROOM_GAIN = 1.3;
+// threats: sector light at the sprite's own tile (uLight is pinned to 1 for them)
+uniform float uRoom;
 uniform float uFlash;
 uniform vec4 uFire;
 uniform vec4 uImpact;
@@ -167,7 +170,12 @@ void main() {
   // point for ~100 ms (a muzzle-bloom at the impact, not at the camera)
   float iboost = uImpact.z * smoothstep(3.0, 0.6, distance(vWorld, uImpact.xy));
   L = min(L * (1.0 + iboost), 1.5);
-  vec3 lit = t.rgb * uTint * vTint * L * uGain;
+  // LOOK: the threat gain is a dark-sector readability lift. In a lit room it
+  // only flattened the sprite's own shading to one saturated tone, so it eases
+  // off as the sprite's own sector brightens; dark sectors keep it all.
+  float lightRoom = smoothstep(0.55, 0.9, uRoom);
+  float gain = uGain > 1.01 ? mix(uGain, min(uGain, LIT_ROOM_GAIN), lightRoom) : uGain;
+  vec3 lit = t.rgb * uTint * vTint * L * gain;
   if (uGain > 1.01) {
     // gained sprites (threats): clamp by the brightest channel, not per channel. A per-channel clamp
     // drives every over-range colour to white, so a purple trojan, an orange worm and a green rat all
@@ -259,6 +267,7 @@ function worldMaterial(map: THREE.Texture, light = 1, floor = 0.16, tint?: THREE
       uLight: { value: light },
       uFloor: { value: floor },
       uGain: { value: 1 },
+      uRoom: { value: 1 },
       uFlash: { value: 0 },
       uFire: fireUniform,
       uImpact: impactUniform,
@@ -1131,6 +1140,7 @@ export class Renderer {
       // they read against dark sectors at any range, like Doom's
       st.mat.uniforms.uFloor.value = disguised ? 0.45 : enemy ? (set.floor ?? 0.85) : e.def.kind === 'item' ? 0.45 : 0.2;
       st.mat.uniforms.uGain.value = disguised ? 1 : enemy ? (set.gain ?? 1.9) : 1;
+      st.mat.uniforms.uRoom.value = lit;
       // engine emits state.tint (red during pain/flash) — apply it to the sprite
       const tint = (e.state.tint as number | undefined) ?? 0xffffff;
       (st.mat.uniforms.uTint.value as THREE.Vector3).set(

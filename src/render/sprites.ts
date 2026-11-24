@@ -930,6 +930,10 @@ function makeMonster(id: string, worldH: number, model: Model, opts: { floor?: n
   const W = TEX.monster;
   const H = TEX.monster;
   const frames: Record<string, THREE.Texture> = {};
+  // LOOK: lit shading — parts occlude each other, the rim takes the threat's
+  // own colour, and the outline is a dark tone of the body instead of flat black
+  const lit = { accent: opts.gib ?? ([0.6, 0.8, 1] as V3) };
+  const PACK = { sprite: true, outline: 'auto', glowOutline: false } as const;
   // ENEMIES: two authored flinch poses (pain/pain2) flicker while the hit
   // flash is up; stiffest types register 8 walk frames instead of 4.
   const poses: [string, Pose][] = [
@@ -957,11 +961,11 @@ function makeMonster(id: string, worldH: number, model: Model, opts: { floor?: n
       grain[i + 1] = Math.min(255, grain[i + 1] * m);
       grain[i + 2] = Math.min(255, grain[i + 2] * m);
     }
-    return packPixels(W, H, raw, { sprite: true, mirror });
+    return packPixels(W, H, raw, { ...PACK, mirror });
   };
   const startPose = (pose: Pose, rotation: number, mirror: boolean) => {
     const prims = scaleModel(growModel(model(pose), grow));
-    const job = createRasterJob(W, H, prims, { view: (rotation * Math.PI) / 4, ...(pose.kind === 'pain' ? { tint: [255, 120, 80] as V3, tintT: 0.2 } : {}) });
+    const job = createRasterJob(W, H, prims, { view: (rotation * Math.PI) / 4, lit, ...(pose.kind === 'pain' ? { tint: [255, 120, 80] as V3, tintT: 0.2 } : {}) });
     return { job, finish: () => finishPixels(job, pose, rotation, mirror) };
   };
   const poseJob = (pose: Pose, rotation: number, mirror: boolean) => () => {
@@ -1002,10 +1006,10 @@ function makeMonster(id: string, worldH: number, model: Model, opts: { floor?: n
     })));
     const prims = diePrims[k];
     registerGenJob(`sprite:${id}:die${k}`, { setId: id, first: false }, () => {
-      const job = createRasterJob(W, H, prims, { view: 0, tint: [44, 255, 90], tintT: k < 3 ? 0.04 + k * 0.05 : 0.2 + k * 0.1 });
+      const job = createRasterJob(W, H, prims, { view: 0, lit, tint: [44, 255, 90], tintT: k < 3 ? 0.04 + k * 0.05 : 0.2 + k * 0.1 });
       rasterizeRows(job, 0, H);
       const raw = { rgba: job.rgba, glow: job.glow };
-      return k < 3 ? packPixels(W, H, raw, { sprite: true }) : dissolvePixels(W, H, raw, k - 3, id);
+      return k < 3 ? packPixels(W, H, raw, PACK) : dissolvePixels(W, H, raw, k - 3, id);
     });
   }
   // persistent corpse (ENEMIES F5): an authored dead pose per type —
@@ -1018,10 +1022,10 @@ function makeMonster(id: string, worldH: number, model: Model, opts: { floor?: n
   ]);
   const deadRaster = (job: RasterJob) => {
     rasterizeRows(job, 0, job.h);
-    return packPixels(W, H, { rgba: job.rgba, glow: job.glow }, { sprite: true });
+    return packPixels(W, H, { rgba: job.rgba, glow: job.glow }, PACK);
   };
   registerGenJob(`sprite:${id}:dead`, { setId: id, first: false }, () =>
-    deadRaster(createRasterJob(W, H, deadPrims, { view: 0, tint: [120, 130, 120], tintT: 0.22 })));
+    deadRaster(createRasterJob(W, H, deadPrims, { view: 0, lit, tint: [120, 130, 120], tintT: 0.22 })));
   if (jobsOnly) return;
 
   if (genPoolActive()) {
@@ -1107,23 +1111,23 @@ function makeMonster(id: string, worldH: number, model: Model, opts: { floor?: n
   for (let k = 0; k < 5; k++) {
     const prims = diePrims[k];
     defineLazy(`die${k}`, () => {
-      const job = createRasterJob(W, H, prims, { view: 0, tint: [44, 255, 90], tintT: k < 3 ? 0.04 + k * 0.05 : 0.2 + k * 0.1 });
+      const job = createRasterJob(W, H, prims, { view: 0, lit, tint: [44, 255, 90], tintT: k < 3 ? 0.04 + k * 0.05 : 0.2 + k * 0.1 });
       return {
         job,
         finish: () => {
           const raw = { rgba: job.rgba, glow: job.glow };
-          return k < 3 ? packTexture(W, H, raw, { sprite: true }) : dissolveFrame(W, H, raw, k - 3, id);
+          return k < 3 ? packTexture(W, H, raw, PACK) : dissolveFrame(W, H, raw, k - 3, id);
         },
       };
     });
   }
   defineLazy('dead', () => {
-    const job = createRasterJob(W, H, deadPrims, { view: 0, tint: [120, 130, 120], tintT: 0.22 });
+    const job = createRasterJob(W, H, deadPrims, { view: 0, lit, tint: [120, 130, 120], tintT: 0.22 });
     return {
       job,
       finish: () => {
         const raw = { rgba: job.rgba, glow: job.glow };
-        return packTexture(W, H, raw, { sprite: true });
+        return packTexture(W, H, raw, PACK);
       },
     };
   });

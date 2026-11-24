@@ -37,8 +37,11 @@ export function rng(seed: string | number): Rng {
 export interface PackOpts {
   /** Treat as a sprite: alpha cutout, optional outline + auto-shading. */
   sprite?: boolean;
-  /** Dark 1px silhouette outline (sprites). */
+  /** Dark silhouette outline (sprites): a colour, null for none, or 'auto' for a
+   *  dark tone of the body pixel each outline texel borders (lit sprites). */
   outline?: string | null;
+  /** false: glow texels do not grow an outline (bloom halos stay clean). Default true. */
+  glowOutline?: boolean;
   outlineW?: number;
   /** Auto rim-light top-left / shadow bottom-right edges (sprites). */
   shade?: boolean;
@@ -140,32 +143,47 @@ export function packPixels(
     x >= 0 && y >= 0 && x < w && y < h && src[(y * w + x) * 4 + 3] >= 128;
   const distToSolid = new Uint16Array(w * h);
   distToSolid.fill(outlineW + 1);
-  for (let i = 0; i < distToSolid.length; i++) if (src[i * 4 + 3] >= 128) distToSolid[i] = 0;
+  const glowOutline = opts.glowOutline ?? true;
+  const autoOutline = opts.outline === 'auto';
+  // nearest outline-casting texel per pixel (only tracked for 'auto')
+  const near = autoOutline ? new Int32Array(w * h).fill(-1) : null;
+  for (let i = 0; i < distToSolid.length; i++) {
+    if (src[i * 4 + 3] >= 128 && (glowOutline || glow[i * 4 + 3] === 0)) {
+      distToSolid[i] = 0;
+      if (near) near[i] = i;
+    }
+  }
+  const relax = (i: number, j: number) => {
+    if (distToSolid[j] + 1 < distToSolid[i]) {
+      distToSolid[i] = distToSolid[j] + 1;
+      if (near) near[i] = near[j];
+    }
+  };
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       const i = y * w + x;
-      if (x > 0) distToSolid[i] = Math.min(distToSolid[i], distToSolid[i - 1] + 1);
+      if (x > 0) relax(i, i - 1);
       if (y > 0) {
-        if (x > 0) distToSolid[i] = Math.min(distToSolid[i], distToSolid[i - w - 1] + 1);
-        distToSolid[i] = Math.min(distToSolid[i], distToSolid[i - w] + 1);
-        if (x + 1 < w) distToSolid[i] = Math.min(distToSolid[i], distToSolid[i - w + 1] + 1);
+        if (x > 0) relax(i, i - w - 1);
+        relax(i, i - w);
+        if (x + 1 < w) relax(i, i - w + 1);
       }
     }
   }
   for (let y = h - 1; y >= 0; y--) {
     for (let x = w - 1; x >= 0; x--) {
       const i = y * w + x;
-      if (x + 1 < w) distToSolid[i] = Math.min(distToSolid[i], distToSolid[i + 1] + 1);
+      if (x + 1 < w) relax(i, i + 1);
       if (y + 1 < h) {
-        if (x > 0) distToSolid[i] = Math.min(distToSolid[i], distToSolid[i + w - 1] + 1);
-        distToSolid[i] = Math.min(distToSolid[i], distToSolid[i + w] + 1);
-        if (x + 1 < w) distToSolid[i] = Math.min(distToSolid[i], distToSolid[i + w + 1] + 1);
+        if (x > 0) relax(i, i + w - 1);
+        relax(i, i + w);
+        if (x + 1 < w) relax(i, i + w + 1);
       }
     }
   }
   const out = new Uint8Array(w * h * 4);
   const ol = opts.outline === undefined ? '#07070b' : opts.outline;
-  const olc = ol ? hexToRgb(ol) : null;
+  const olc = ol && !autoOutline ? hexToRgb(ol) : null;
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       const sx = opts.mirror ? w - 1 - x : x;
@@ -181,6 +199,15 @@ export function packPixels(
         a = 0;
         if (olc && distToSolid[y * w + sx] <= outlineW) {
           [r, gg, b] = olc;
+          a = 255;
+        } else if (near && distToSolid[y * w + sx] <= outlineW) {
+          // dark tone of the bordered body texel, a touch lighter on the lit (upper-left) side
+          const n = near[y * w + sx];
+          const lit = n % w > sx || Math.floor(n / w) > y;
+          const k = Math.min(lit ? 0.3 : 0.16, 70 / Math.max(1, src[n * 4], src[n * 4 + 1], src[n * 4 + 2]));
+          r = src[n * 4] * k + 6;
+          gg = src[n * 4 + 1] * k * 0.8 + 3;
+          b = src[n * 4 + 2] * k + 14;
           a = 255;
         }
       } else {

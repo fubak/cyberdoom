@@ -35,10 +35,17 @@ test('gamepad A/B/D-pad navigate the title and character select menus', async ({
     Object.defineProperty(navigator, 'getGamepads', { value: () => [pad()], configurable: true });
   });
   const problems = watchProblems(page);
+  // The game polls the pad once per rendered frame. On a slow runner a frame
+  // can take longer than a fixed 120 ms hold, so the press (or the release)
+  // could fall wholly between two polls and never register. Hold each state
+  // across two animation frames as well, so at least one poll sees it.
+  const twoFrames = () => page.evaluate(() => new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done()))));
   const tap = async (index: number) => {
     await page.evaluate((i) => { (window as unknown as { __pad: { buttons: boolean[] } }).__pad.buttons[i] = true; }, index);
+    await twoFrames();
     await page.waitForTimeout(120);
     await page.evaluate((i) => { (window as unknown as { __pad: { buttons: boolean[] } }).__pad.buttons[i] = false; }, index);
+    await twoFrames();
     await page.waitForTimeout(120);
   };
   await page.goto('/?debug=1');
