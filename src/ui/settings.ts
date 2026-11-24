@@ -7,6 +7,10 @@ export interface Settings {
   musicVol: number;
   viewBob: boolean;
   colorBlind: boolean;
+  /** Vertical camera field of view in degrees (58 = the original ~93 degree horizontal view). */
+  fov: number;
+  /** Photosensitivity: fewer and dimmer full-screen flashes (fire flood, hit bloom, pain wash). */
+  reducedFlash: boolean;
   skill: SkillId;
   bindings: Partial<Record<Action, string[]>>;
 }
@@ -17,11 +21,17 @@ export const DEFAULT_SETTINGS: Settings = {
   musicVol: 0.7,
   viewBob: true,
   colorBlind: false,
+  fov: 58,
+  reducedFlash: false,
   skill: 'analyst',
   bindings: {},
 };
 
 export const SENS_STEPS = [0.5, 0.75, 1, 1.25, 1.5, 2, 3] as const;
+export const FOV_MIN = 50;
+export const FOV_MAX = 72;
+/** Vertical fov ladder for the Options menu; 58 is the original camera. */
+export const FOV_STEPS = [50, 54, 58, 62, 66, 70] as const;
 
 const SETTINGS_KEY = 'cyberdoom-settings';
 const LEGACY_MUSIC_KEY = 'cyberdoom-music-vol';
@@ -102,6 +112,8 @@ export function loadSettings(
     musicVol: readNumber(values.musicVol, defaults.musicVol, 0, 1),
     viewBob: typeof values.viewBob === 'boolean' ? values.viewBob : defaults.viewBob,
     colorBlind: typeof values.colorBlind === 'boolean' ? values.colorBlind : defaults.colorBlind,
+    fov: readNumber(values.fov, defaults.fov, FOV_MIN, FOV_MAX),
+    reducedFlash: typeof values.reducedFlash === 'boolean' ? values.reducedFlash : defaults.reducedFlash,
     skill: isSkillId(values.skill) ? values.skill : defaults.skill,
     bindings: readBindings(values.bindings),
   };

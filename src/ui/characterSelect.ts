@@ -29,6 +29,11 @@ export const CHAR_HINT = 'ARROWS CHOOSE - 1-5 SKIN - ENTER GO - ESC BACK';
 const BACK: [number, number, number, number] = [12, 174, 78, 15];
 const DEPLOY: [number, number, number, number] = [188, 174, 88, 15];
 const AMBER = ['#fff0a0', '#ffd040', '#ffa818', '#d07808', '#8a4804'];
+/** Selection skull: right edge of the card, under the name and beside the callsign (clear of the hands). */
+const SKULL_INSET_X = 15;
+const SKULL_Y = 17;
+/** Hand preview: the viewmodel is drawn into a 160x110 buffer; this crop holds the USB stick and hand. */
+const PREVIEW_SRC: [number, number, number, number] = [0, 50, 138, 60];
 
 function paintBackdrop(): HTMLCanvasElement {
   const c = document.createElement('canvas');
@@ -149,15 +154,17 @@ export function characterSelect(onPick: (g: Gender) => void, onBack: () => void,
       hg.save();
       hg.setTransform(RES, 0, 0, RES, 0, 0);
       hg.imageSmoothingEnabled = false;
-      hg.translate(-100, -60);
+      hg.translate(-100, -68);
       drawToolViewmodel(hg, usbTool, W, 168, 0, gd, 0, t, {
         sinceUse: 9, sinceConfirm: 9, confirmGood: true, time: t, ammo: 8, skin: skinTriple(),
       });
       hg.restore();
       g.fillStyle = '#05060a';
       g.fillRect(x + 4, y + 60, CARD_W - 8, CARD_H - 64);
-      g.drawImage(hands[gd], 0, 0, 160 * RES, 110 * RES, x + 4, y + 60, CARD_W - 8, CARD_H - 64);
-      if (gd === sel) drawSkull(g, x + CARD_W - 16, y + 62, pulse);
+      // 1:1 crop (no squash): the hands read at the same scale as in play
+      const [sx, sy, sw, sh] = PREVIEW_SRC;
+      g.drawImage(hands[gd], sx * RES, sy * RES, sw * RES, sh * RES, x + 4, y + 60, CARD_W - 8, CARD_H - 64);
+      if (gd === sel) drawSkull(g, x + CARD_W - SKULL_INSET_X, y + SKULL_Y, pulse);
     }
     // skin tones
     drawChunky(g, 'SKIN TONE', SKIN_X - 6 - measureChunky('SKIN TONE'), SKIN_Y + 2, '#c8c0b0');

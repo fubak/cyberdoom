@@ -6,6 +6,8 @@
  * debrief leaves through its Continue control after the knowledge check.
  * Play opens the pause menu, which itself backs out to play; the pause menu
  * also offers restart and mission select so play is never a dead end.
+ * Options and Controls open from both the title and the pause menu and back
+ * out to whichever opened them.
  */
 
 export type MenuScreen =
@@ -25,7 +27,9 @@ export type MenuOverlay =
   | 'dossier'
   | 'pause'
   | 'evidence'
-  | 'evidence-detail';
+  | 'evidence-detail'
+  | 'options'
+  | 'controls';
 
 export interface NavState {
   screen: MenuScreen;
@@ -51,6 +55,10 @@ export function applyBack(state: NavState): NavState {
       return { screen: 'debrief', overlay: 'evidence' };
     case 'evidence':
       return { screen: 'debrief', overlay: 'none' };
+    case 'options':
+    case 'controls':
+      // the same panels open from the title menu and from the pause menu
+      return state.screen === 'play' ? { screen: 'play', overlay: 'pause' } : { screen: 'title', overlay: 'none' };
     case 'automap':
     case 'dossier':
     case 'pause':

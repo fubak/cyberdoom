@@ -5,6 +5,13 @@
   --bg: #0a0a10;
   --panel: #161822;
   --border: #3a3f55;
+  /* locked mission rows (--row-locked-*) are set from ui/menuTheme.ts */
+  /* page behind the 4:3 frame on wider viewports: the intermission brick, dimmed */
+  --letterbox:
+    radial-gradient(ellipse at center, rgba(0,0,0,0) 0%, rgba(0,0,0,.55) 100%),
+    repeating-linear-gradient(0deg, rgba(0,0,0,.35) 0 2px, transparent 2px 4px),
+    repeating-linear-gradient(90deg, #1e0e0b 0 31px, #120806 31px 32px),
+    repeating-linear-gradient(0deg, #1e0e0b 0 15px, #120806 15px 16px);
   font-family: 'Courier New', ui-monospace, monospace;
 }
 
@@ -13,7 +20,9 @@
 html, body {
   margin: 0;
   height: 100%;
-  background: var(--bg);
+  background-color: var(--bg);
+  background-image: var(--letterbox);
+  background-blend-mode: normal, multiply, normal, multiply;
   color: var(--amber);
   overflow: hidden;
 }
@@ -222,11 +231,19 @@ button.mission-row:focus-visible {
   outline-offset: 2px;
 }
 button.mission-row:disabled {
-  opacity: 0.45;
   cursor: not-allowed;
 }
 .mission-row:hover:not(:disabled) { border-color: var(--red); background: #291d1d; }
-.mission-row.locked { opacity: 0.45; cursor: not-allowed; }
+.mission-row.locked {
+  cursor: not-allowed;
+  background: var(--row-locked-bg);
+  border-style: dashed;
+  border-color: #4a3c38;
+  box-shadow: none;
+}
+.mission-row.locked .mtagline { color: var(--row-locked-text); }
+.mission-row.locked .mstate { color: var(--row-locked-text); border-color: #4a3c38; }
+.mission-row.locked .diff { filter: saturate(0.6); }
 .mission-row.next { border-color: var(--gold, #f0c020); }
 .mission-row.cleared { border-left: 4px solid #5ce88a; }
 .mission-row .diff {
@@ -306,6 +323,13 @@ button.mission-row:disabled {
 }
 /* the generic `.screen li` size made these bullets larger than the tagline above them */
 .mission-detail .detail-objs li { font-size: 13px; line-height: 1.45; }
+.cd-pixel-label { display: inline-block; line-height: 0; max-width: 100%; }
+.cd-pixel-label canvas { display: block; max-width: 100%; height: auto; image-rendering: pixelated; }
+.mission-row .mtitle .cd-pixel-label canvas { height: 16px; width: auto; }
+.mission-detail .detail-title { margin-top: 6px; }
+.mission-detail .detail-title .cd-pixel-label canvas { height: 16px; width: auto; }
+.threat-legend { margin-top: 6px; display: flex; justify-content: center; }
+.threat-legend .cd-pixel-label canvas { height: 16px; width: auto; }
 .mission-select { overflow-y: auto; justify-content: flex-start; padding-top: 3vh; }
 
 .brief-box {

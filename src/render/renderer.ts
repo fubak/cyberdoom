@@ -556,6 +556,13 @@ export class Renderer {
     this.renderer.compile(this.postScene, this.postCam);
   }
 
+  /** Options FIELD OF VIEW: vertical degrees (58 = the original camera). */
+  setFov(verticalDeg: number): void {
+    if (!Number.isFinite(verticalDeg) || Math.abs(this.camera.fov - verticalDeg) < 1e-6) return;
+    this.camera.fov = verticalDeg;
+    this.camera.updateProjectionMatrix();
+  }
+
   /**
    * One throwaway frame at a pose: uploads level VBOs and lazily-bound
    * textures and links programs so the first real frame doesn't pay for it.

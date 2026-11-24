@@ -25,6 +25,8 @@ const OVERLAYS: MenuOverlay[] = [
   'pause',
   'evidence',
   'evidence-detail',
+  'options',
+  'controls',
 ];
 
 describe('menu back stack', () => {
