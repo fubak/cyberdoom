@@ -809,10 +809,11 @@ export function debrief(opts: {
         bevel(gg, 20, 50, 64, 72, '#1a0a06');
         bigScaled(gg, result.grade, 28, 54, gradeRamp, 4);
         drawBigText(gg, `FIELD ${Math.round(result.field)}%`, 100, 54, RAMP.gold);
-        drawBigText(gg, knowledgeText, 100, 76, allSkipped ? ['#d8d8d8', '#a8a8a8', '#808080', '#585858', '#303030'] : RAMP.gold);
+        drawBigText(gg, allSkipped ? knowledgeText : `KNOWLEDGE ${correct}/${answered}`, 100, 76, allSkipped ? ['#d8d8d8', '#a8a8a8', '#808080', '#585858', '#303030'] : RAMP.gold);
         drawBigText(gg, `TOTAL ${result.total}%`, 100, 98, result.capped ? RAMP.red : RAMP.green);
         if (note) drawText(gg, note, 100, 116, C.red);
         else if (allSkipped) drawText(gg, 'QUIZ SKIPPED: GRADE IS FIELD ONLY', 100, 116, C.dim);
+        else if (skipped > 0) drawText(gg, `${skipped} SKIPPED: NOT COUNTED IN THE SCORE`, 100, 116, C.dim);
         drawText(gg, `SY0-701 READINESS (EXAM-WEIGHTED)  ${r.overall}%`, DB_X, 132, C.gold);
         r.byDomain.forEach((d, k) => {
           const y = 145 + k * 14;
