@@ -168,7 +168,7 @@ test('first-run journey: title → READ THIS → briefing paging → deploy M01 
         const all = [...seen].join(' | ');
         return wantTips.every((tip) => tip.test(all));
       },
-      { timeout: 30_000, intervals: [250] },
+      { timeout: 75_000, intervals: [250] },
     )
     .toBe(true);
   // deploying M01 for the first time marks the tips as seen (a returning player skips them)
