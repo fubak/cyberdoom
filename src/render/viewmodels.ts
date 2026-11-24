@@ -5,6 +5,9 @@ import { handLook } from '../tools/shared';
 import { shade } from '../tools/pixel';
 import { outlineNative, painter, type Painter } from './hires';
 import { RES } from './res';
+import { skinTones, type HandPen } from './vmHand';
+import { drawTypingHands, keyboardFidget, type KeyboardFidget } from './vmKeyboardHands';
+import { lightViewmodel, type RGB } from './vmLight';
 import { bakeRig } from './handrig';
 import { handCycleFrame, idleFrame, cycleVariants } from './handcycles';
 import { breath } from './vmotion';
@@ -118,6 +121,30 @@ function tintFlash(a: Art, rgb: string): Art {
   return { c, ox: a.ox, top: a.top, bot: a.bot };
 }
 
+const hexRgb = (hex: string): RGB => {
+  const h = hex.replace('#', '');
+  return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+};
+
+/**
+ * Baked viewmodel lighting (vmLight.ts): bottom falloff, a shadow from the
+ * hand onto the tool, a key-lit upper-left edge and spill from screens and
+ * LEDs. Run once per cached art, before any fire-frame tint.
+ */
+function litArt(a: Art, ramp: [string, string, string, string]): Art {
+  const c = document.createElement('canvas');
+  c.width = a.c.width;
+  c.height = a.c.height;
+  const g = c.getContext('2d')!;
+  g.drawImage(a.c, 0, 0);
+  const img = g.getImageData(0, 0, c.width, c.height);
+  const tones = skinTones(ramp);
+  const skin = [tones.deep, tones.shadow, tones.warm, tones.base, tones.highlight, tones.nail].map(hexRgb);
+  img.data.set(lightViewmodel(img.data, c.width, c.height, skin));
+  g.putImageData(img, 0, 0);
+  return { ...a, c };
+}
+
 function dimArt(a: Art, light: number): Art {
   let variants = dimmedCache.get(a);
   if (!variants) {
@@ -133,7 +160,7 @@ function dimArt(a: Art, light: number): Art {
   const g = c.getContext('2d')!;
   g.drawImage(a.c, 0, 0);
   g.globalCompositeOperation = 'source-atop';
-  g.fillStyle = `rgba(0,0,0,${1 - light})`;
+  g.fillStyle = `rgba(3,5,14,${1 - light})`;
   g.fillRect(0, 0, c.width, c.height);
   variants.set(light, { ...a, c });
   return variants.get(light)!;
@@ -159,15 +186,16 @@ export function mouseFrameForUse(sinceUse: number, windup: number): MouseFrame {
   return 'rest';
 }
 
-function keyboardArt(frame: KeyboardFrame, gender: Gender, skin: SkinTone): Art {
+function keyboardArt(frame: KeyboardFrame, gender: Gender, skin: SkinTone, fidget: KeyboardFidget = ''): Art {
   const look = vmHandArt(gender, skin);
-  const [deep, shadow, base, highlight] = look.ramp;
   const poses: Record<KeyboardFrame, [number, number, number, number]> = {
     rest: [1, 1, 0, 0],
-    raise: [1.05, 1.06, 0.025, 1.2],
-    swing: [0.88, 0.9, -0.012, -1.3],
-    contact: [0.88, 0.9, -0.012, -1.3],
-    recover: [0.95, 0.96, -0.005, -0.3],
+    // never above rest: the top of the case sits on the clearance line
+    raise: [1, 1, 0, 0],
+    // the strike kicks the whole viewmodel up the screen, so these two sit a touch smaller and lower
+    swing: [0.95, 0.95, 0, 1],
+    contact: [0.95, 0.95, 0, 1.4],
+    recover: [1, 1, 0, 0.4],
   };
   const [sx, sy, shear, offsetY] = poses[frame];
   const point = (x: number, y: number): [number, number] => [
@@ -183,33 +211,6 @@ function keyboardArt(frame: KeyboardFrame, gender: Gender, skin: SkinTone): Art 
       const [cx, cy] = point(x, y);
       P.ell(cx, cy, rx * sx, ry * sy, color);
     };
-
-    const sleeveDraw = (centerX: number, direction: -1 | 1): VmSleeveDraw => {
-      const sleevePoint = (x: number, y: number): [number, number] =>
-        point(centerX + (x - 73.5) * 0.95 * direction, 56 + (y - 65) * 0.9);
-      return {
-        shape: (color, points) => P.poly(points.map(([x, y]) => sleevePoint(x, y)), color),
-        seamLine: (points) => P.line(points.map(([x, y]) => sleevePoint(x, y)), look.seam),
-        ell: (color, x, y, rx, ry) => {
-          const [cx, cy] = sleevePoint(x, y);
-          P.ell(cx, cy, rx * 0.95 * sx, ry * 0.9 * sy, color);
-        },
-      };
-    };
-    paintVmJacketSleeve(look, sleeveDraw(28, -1));
-    paintVmJacketSleeve(look, sleeveDraw(132, 1));
-    if (gender === 'male') {
-      const sleeveEdge = (mirror: boolean, points: [number, number][]) =>
-        P.line(points.map(([x, y]) => point(mirror ? 160 - x : x, y)), shade(look.jacket, 1.55), 1.2);
-      const sleeveBandEdge = (mirror: boolean, points: [number, number][]) =>
-        P.line(points.map(([x, y]) => point(mirror ? 160 - x : x, y)), shade(look.accent, 0.55), 1);
-      const bandEdge: [number, number][] = [[126, 65], [142, 64]];
-      const edge: [number, number][] = [[141, 58], [141, 78]];
-      sleeveBandEdge(false, bandEdge);
-      sleeveBandEdge(true, bandEdge);
-      sleeveEdge(false, edge);
-      sleeveEdge(true, edge);
-    }
 
     const boardPoint = (u: number, v: number): [number, number] => {
       const y = 19 + v * 34;
@@ -259,57 +260,23 @@ function keyboardArt(frame: KeyboardFrame, gender: Gender, skin: SkinTone): Art 
     ellipse('#ffca55', 98, 23, 1.2, 0.8);
 
     if (frame === 'contact') {
+      // Enter lands: the amber key at the end of the home row flares
       const flash = `rgb(${TOOL_FLASH.keyboard})`;
-      line([[68, 19], [66, 14]], '#fff0c0', 0.8);
-      line([[91, 20], [94, 15]], '#fff0c0', 0.8);
-      shape('#242a35', [[62, 15], [68, 14], [70, 17], [64, 18]]);
-      shape(flash, [[62.5, 13], [68, 12], [69.5, 14], [63.5, 15]]);
-      shape('#fff0c0', [[63, 13.3], [67.6, 12.4], [68.2, 13], [63.2, 14]]);
-      shape('#242a35', [[91, 17], [97, 16], [99, 19], [93, 20]]);
-      shape(flash, [[91.5, 15], [97.3, 14], [98.8, 16], [92.5, 17]]);
-      shape('#fff0c0', [[92, 15.2], [96.8, 14.3], [97.4, 15], [92.2, 16]]);
+      const cell = 0.89 / 12;
+      const u0 = 0.055 + 11 * cell + 0.006, u1 = 0.055 + 12 * cell - 0.006;
+      boardShape(flash, [[u0 - 0.01, 0.4], [u1 + 0.01, 0.4], [u1 + 0.01, 0.545], [u0 - 0.01, 0.545]]);
+      boardShape('#fff0c0', [[u0, 0.42], [u1, 0.42], [u1, 0.5], [u0, 0.5]]);
+      line([[117, 31], [121, 28]], '#fff0c0', 0.8);
+      line([[118, 35], [123, 35]], '#fff0c0', 0.8);
+      line([[117, 39], [121, 42]], '#fff0c0', 0.8);
     }
 
-    const handPoint = (x: number, y: number, mirror: boolean): [number, number] =>
-      point(mirror ? 160 - x : x, y);
-    const handShape = (color: string, points: [number, number][], mirror: boolean) =>
-      P.poly(points.map(([x, y]) => handPoint(x, y, mirror)), color);
-    const handLine = (points: [number, number][], color: string, mirror: boolean, width = 1) =>
-      P.line(points.map(([x, y]) => handPoint(x, y, mirror)), color, width);
-    const handEllipse = (color: string, x: number, y: number, rx: number, ry: number, mirror: boolean) => {
-      const [cx, cy] = handPoint(x, y, mirror);
-      P.ell(cx, cy, rx * sx, ry * sy, color);
+    const pen: HandPen = {
+      poly: (color, pts) => shape(color, pts),
+      line: (pts, color, width) => line(pts, color, width),
+      ell: (color, x, y, rx, ry) => ellipse(color, x, y, rx, ry),
     };
-    const hand = (mirror: boolean) => {
-      handShape(deep, [[124, 55], [129, 55], [132, 58], [131, 61], [127, 60]], mirror);
-      handEllipse(base, 127, 57.5, 1.8, 1.1, mirror);
-
-      handShape(deep, [[131, 39], [134, 35], [141, 34], [146, 37], [149, 42], [148, 50], [145, 56], [140, 59], [134, 57], [131, 53], [129, 47]], mirror);
-      handShape(shadow, [[132, 40], [135, 37], [141, 36], [145, 39], [147, 43], [146, 50], [143, 54], [139, 57], [135, 55], [132, 51], [131, 47]], mirror);
-      handShape(base, [[133, 41], [136, 38], [141, 38], [144, 40], [146, 44], [145, 49], [142, 53], [139, 55], [136, 53], [133, 50], [132, 46]], mirror);
-      handShape(highlight, [[134, 40], [137, 38], [141, 38], [143, 40], [140, 41], [136, 42]], mirror);
-      handLine([[142, 42], [143, 46], [141, 50]], deep, mirror, 0.8);
-
-      for (let i = 0; i < 4; i++) {
-        const y = 40 + i * 4.1;
-        const boardEdge = 80 + 32 + ((y - 19) / 34) * 15;
-        const tipX = boardEdge - 2.2;
-        handShape(deep, [
-          [tipX + 1, y - 1.4], [tipX + 5, y - 1.7], [134, y - 1.8],
-          [138, y - 1.1], [139, y], [137, y + 1.2], [134, y + 1.6], [tipX + 1, y + 1.2],
-        ], mirror);
-        handShape(base, [
-          [tipX + 1, y - 0.9], [tipX + 5, y - 1.1], [134, y - 1.2],
-          [137, y - 0.6], [137, y + 0.5], [134, y + 1], [tipX + 1, y + 0.8],
-        ], mirror);
-        handEllipse(shadow, tipX, y, 2.5, 1.7, mirror);
-        handEllipse(base, tipX - 0.4, y - 0.25, 1.9, 1.2, mirror);
-        handLine([[tipX - 1.1, y - 0.8], [tipX, y - 1]], highlight, mirror, 0.7);
-      }
-      handLine([[132, 52], [135, 54], [138, 55]], shadow, mirror, 0.9);
-    };
-    hand(true);
-    hand(false);
+    drawTypingHands(pen, skinTones(look.ramp), look, frame, fidget);
   });
 }
 
@@ -1246,7 +1213,7 @@ function art(
   let a = cache.get(key);
   if (!a) {
     if (tool.id === 'usb') a = usbArt(usbFrame ?? (mode === 2 ? 'flash' : mode === 1 ? 'recoil' : 'rest'), gender, skin);
-    else if (tool.id === 'keyboard') a = keyboardArt(keyboardFrame ?? (mode > 0 ? 'swing' : 'rest'), gender, skin);
+    else if (tool.id === 'keyboard') a = keyboardArt(keyboardFrame ?? (mode > 0 ? 'swing' : 'rest'), gender, skin, detail as KeyboardFidget);
     else if (tool.id === 'mouse') a = mouseArt(mouseFrame ?? 'rest', gender, skin);
     else if (tool.id === 'badge') a = badgeArt(badgeFrame ?? 'rest', gender, skin);
     else if (tool.id === 'mfa') a = mfaArt(mfaFrame ?? 'rest', gender, skin);
@@ -1255,6 +1222,7 @@ function art(
     else if (tool.id === 'edr') a = edrArt(edrFrame ?? 'rest', gender, skin, detail || '0');
     else if (tool.id === 'firewall') a = firewallArt(mode, gender, skin);
     else return null;
+    a = litArt(a, vmHandArt(gender, skin).ramp);
     if (mode === 2 && tool.id !== 'keyboard') a = tintFlash(a, TOOL_FLASH[tool.id] ?? '255,255,255');
     cache.set(key, a);
   }
@@ -1312,7 +1280,9 @@ export function drawToolViewmodel(
       : 'rest';
   const detail = tool.id === 'tap' ? tapDetail(anim?.time ?? 0, anim?.ammo ?? null, !!ph && ph.phase !== 'idle')
     : tool.id === 'edr' ? String(Math.max(0, Math.min(4, anim?.ammo ?? 0)))
-      : '';
+      // idle keyboard: a finger taps now and then (not while the hands are held still)
+      : tool.id === 'keyboard' && keyboardFrame === 'rest' && !handMods.still ? keyboardFidget(anim?.time ?? 0)
+        : '';
   let a = art(tool, gender, lit ? 2 : fire ? 1 : 0, usbFrame, keyboardFrame, mouseFrame, badgeFrame, mfaFrame, patchFrame, tapFrame, detail, edrFrame);
   if (a && !lit && light < 1) a = dimArt(a, light);
   // shared bob/strike/switch offsets for the art AND the rig-hand overlay
