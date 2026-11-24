@@ -1,5 +1,6 @@
 import { ellipsizeWords, measureBig, measureText, wrapText } from '../render/font';
 import { BASE_H, BASE_STATUS, BASE_W } from '../render/res';
+import { roleLabel } from '../core/roleLabel';
 
 /** Text colour for resource rows the player does not own yet. */
 const RES_UNOWNED = '#6a7080';
@@ -156,7 +157,7 @@ export function statusBarText(o: BarLayoutInput, pulse: boolean): BarText[] {
   }
 
   // CRED: current role under the keycard art.
-  label(o.credentials.toUpperCase().slice(0, 7), P_CRED, by + 20, o.credTint);
+  label(roleLabel(o.credentials).slice(0, 7), P_CRED, by + 20, o.credTint);
 
   // RESOURCES: Doom's RES table — one LABEL cur/max row per ammo type.
   // The 3x5 font leaves real whitespace between the four rows (the 5x7

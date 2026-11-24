@@ -18,6 +18,7 @@ import { completeMfa, refuseMfaPrompt } from '../tools/mfa';
 import { swipeBadge } from '../tools/badge';
 import { mouseTool } from '../tools/mouse';
 import { difficultyScale, skillById, type Skill, type SkillId } from './difficulty';
+import { lookalikeTargets } from './objectivePoints';
 
 /**
  * LEVELS: mission runtime.
@@ -1345,17 +1346,16 @@ export class MissionRuntime {
           if (e.alive && e.def.kind === 'npc') points.push({ x: e.x, y: e.y });
         }
       } else {
-        const doneIds = this.counted.get(active.def.id);
-        for (const e of this.entities) {
-          if (!e.alive || doneIds?.has(e.def.id)) continue;
-          if (active.def.tag) {
-            if (e.def.tags?.includes(active.def.tag)) points.push({ x: e.x, y: e.y });
-          } else if (active.def.kind === 'clean' && e.infected) {
-            points.push({ x: e.x, y: e.y });
-          } else if (active.def.kind === 'patch' && e.def.kind === 'workstation' && !e.state.patched) {
-            points.push({ x: e.x, y: e.y });
-          }
-        }
+        const doneIds = this.counted.get(active.def.id) ?? new Set<string>();
+        const targets = this.entities.filter((e) => {
+          if (!e.alive || doneIds.has(e.def.id)) return false;
+          if (active.def.tag) return !!e.def.tags?.includes(active.def.tag);
+          if (active.def.kind === 'clean') return e.infected;
+          return active.def.kind === 'patch' && e.def.kind === 'workstation' && !e.state.patched;
+        });
+        // 'clean' must not reveal which lookalike hosts are infected
+        const marked = active.def.kind === 'clean' ? lookalikeTargets(targets, this.entities, doneIds) : targets;
+        for (const e of marked) points.push({ x: e.x, y: e.y });
       }
     }
     const objectiveText = active

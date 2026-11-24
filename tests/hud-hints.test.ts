@@ -308,8 +308,8 @@ describe('resolveUse + doorUseHint', () => {
   it('a gated reader names who can badge the player in', () => {
     const door = { doorId: 'd', accessRole: 'itops' };
     const c = uctx({ roles: ['analyst'], roleSource: (r) => (r === 'itops' ? 'Security Desk' : null) });
-    expect(doorUseHint(c, door)).toBe('READER: ITOPS ONLY — SECURITY DESK CAN BADGE YOU IN');
-    expect(doorUseHint(uctx({ roles: ['analyst'], roleSource: () => null }), door)).toBe('READER: ITOPS ONLY');
+    expect(doorUseHint(c, door)).toBe('READER: IT OPS ONLY — SECURITY DESK CAN BADGE YOU IN');
+    expect(doorUseHint(uctx({ roles: ['analyst'], roleSource: () => null }), door)).toBe('READER: IT OPS ONLY');
   });
 });
 

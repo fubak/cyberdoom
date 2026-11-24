@@ -4,6 +4,7 @@ import { roleColor } from '../render/textures';
 import { VIEW3D_H, VIEW_W } from '../render/renderer';
 import { RES } from '../render/res';
 import { MAP_HINT } from './nav';
+import { roleLabel } from '../core/roleLabel';
 
 export interface AutomapOverlay {
   objectiveText?: string;
@@ -43,9 +44,22 @@ export function automapLegendEntries(map: MapDef): AutomapLegendEntry[] {
   if (hasStandardDoor) entries.push({ label: 'DOOR', color: '#d9b83f', kind: 'door' });
   if (hasLockedDoor) entries.push({ label: 'LOCK', color: '#d63025', kind: 'locked' });
   for (const role of [...roles].sort()) {
-    entries.push({ label: role.toUpperCase().slice(0, 7), color: roleColor(role).light, kind: 'role' });
+    entries.push({ label: roleLabel(role).slice(0, 7), color: roleColor(role).light, kind: 'role' });
   }
   return entries;
+}
+
+/**
+ * Objective markers the player may see: only those on tiles they have explored.
+ * A diamond out in unexplored black space spoils the route (and, before the
+ * triage, the answer), so unexplored targets stay hidden until found.
+ */
+export function visibleObjectivePoints<T extends { x: number; y: number }>(
+  points: readonly T[],
+  visited: ReadonlySet<number>,
+  mapWidth: number,
+): T[] {
+  return points.filter((p) => visited.has(Math.floor(p.y) * mapWidth + Math.floor(p.x)));
 }
 
 export class Automap {
@@ -205,8 +219,8 @@ export class Automap {
       }
     }
 
-    // Mark current objective target(s) as cyan diamond beacons.
-    for (const pt of overlay?.objectivePoints ?? []) {
+    // Mark current objective target(s) as cyan diamond beacons, on explored tiles only.
+    for (const pt of visibleObjectivePoints(overlay?.objectivePoints ?? [], visited, mapWidth)) {
       const [ox, oy] = point(pt.x, pt.y);
       if (ox < -6 || ox > W + 6 || oy < -6 || oy > H + 6) continue;
       const r = Math.max(2.5, Math.min(4.5, cellSize * 0.36));

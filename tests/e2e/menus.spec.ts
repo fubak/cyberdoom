@@ -55,7 +55,25 @@ test('menu back-stack: title → read-this → char select → mission select �
   // D opens the details page; Escape → briefing; Escape → mission select.
   await settleMenus(page);
   await page.keyboard.press('d');
-  await expect(page.locator('.cd-briefing-details-page')).toBeVisible();
+  const details = page.locator('.cd-briefing-details-page');
+  await expect(details).toBeVisible();
+  await expect(details).toHaveAttribute('data-page', '1');
+  // Paging: D / Right = next, A / Left = previous, plus on-screen buttons.
+  if (Number(await details.getAttribute('data-pages')) > 1) {
+    await expect(page.locator('button[data-page="prev"]')).toBeDisabled();
+    await page.keyboard.press('d');
+    await expect(details).toHaveAttribute('data-page', '2');
+    await page.keyboard.press('a');
+    await expect(details).toHaveAttribute('data-page', '1');
+    await page.keyboard.press('ArrowRight');
+    await expect(details).toHaveAttribute('data-page', '2');
+    await page.keyboard.press('ArrowLeft');
+    await expect(details).toHaveAttribute('data-page', '1');
+    await page.locator('button[data-page="next"]').click();
+    await expect(details).toHaveAttribute('data-page', '2');
+    await page.locator('button[data-page="prev"]').click();
+    await expect(details).toHaveAttribute('data-page', '1');
+  }
   await page.keyboard.press('Escape');
   await expect(page.locator('.cd-briefing-details-page')).toHaveCount(0);
   await waitScreen(page, 'briefing');

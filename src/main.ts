@@ -1952,7 +1952,7 @@ class Game {
     this.nudgeAt = this.simT + 45;
     const tip =
       overlay.objectivePoints.length > 0
-        ? 'targets are marked on the automap [M]; full list on [TAB]'
+        ? 'targets you have explored are marked on the automap [M]; full list on [TAB]'
         : 'check the automap [M] or the objective list [TAB] for the next step';
     this.hud.pushMessage(`OBJECTIVE: ${overlay.objectiveText} — ${tip}`, 'info');
   }

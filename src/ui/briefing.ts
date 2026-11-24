@@ -1,6 +1,5 @@
 import type { Mission } from '../core/types';
 import { ARC, arcIndex } from '../content/curriculum';
-import { define } from '../content/glossary';
 import { teachingRegistry } from '../content/missions';
 import { objectiveById } from '../content/objectives';
 import { drawBigText, drawChunky, drawText, measureBig, measureChunky, wrapText } from '../render/font';
@@ -14,7 +13,6 @@ import {
   RAMP,
 } from './debrief';
 import {
-  block,
   DB_BODY_TOP,
   DB_H,
   DB_LINE,
@@ -27,6 +25,8 @@ import {
 import { SKILLS, skillById, type SkillId } from '../missions/difficulty';
 import { toolRegistry } from '../tools';
 import { defaultLoadout } from '../tools/arsenal';
+import { briefingDetailBlocks } from './briefingDetails';
+import { pageLabel, pageStep, stepPage } from './pageKeys';
 import './curriculum.css';
 
 /**
@@ -72,6 +72,16 @@ export function pixelTitle(tag: 'h1' | 'h2', cls: string, text: string, ramp: st
 export function bigButton(label: string, onClick: () => void, cls = 'cd-btn'): HTMLButtonElement {
   const b = h('button', cls, label) as HTMLButtonElement;
   b.addEventListener('click', onClick);
+  return b;
+}
+
+/** On-screen page turner for pointer users; disabled at either end. */
+function pageButton(label: string, dir: 'prev' | 'next', disabled: boolean, onClick: () => void): HTMLButtonElement {
+  const b = bigButton(label, onClick, 'cd-btn alt cd-page-btn');
+  b.type = 'button';
+  b.disabled = disabled;
+  b.dataset.page = dir;
+  b.setAttribute('aria-label', dir === 'prev' ? 'Previous page' : 'Next page');
   return b;
 }
 
@@ -195,52 +205,24 @@ export function briefing(
     return out;
   };
 
-  const detailBlocks = (): PLine[][] => {
-    const blocks: PLine[][] = [];
-    blocks.push(block('SITUATION', C.gold));
-    blocks.push(block(teach?.situation ?? mission.briefing, C.text, { font: 'chunky' }));
-    blocks.push(block('ALL ORDERS', C.gold));
-    for (const [i, order] of orders.entries()) {
-      blocks.push(block(order.text, C.text, { prefix: String(i + 1), prefixColor: C.gold, font: 'chunky' }));
-    }
-    const objRows: PLine[] = [];
-    for (const id of mission.objectives) {
-      const objective = objectiveById(id);
-      if (!objective) continue;
-      objRows.push(...block(`${id} ${objective.title}`, DOMAIN_COLOR[objective.domain] ?? C.text, { font: 'chunky' }));
-    }
-    if (objRows.length) {
-      blocks.push(block('SY0-701 OBJECTIVES', C.gold));
-      blocks.push(objRows);
-    }
-    if (teach?.keyTerms.length) {
-      const terms: PLine[] = [];
-      for (const term of teach.keyTerms) {
-        const definition = define(term);
-        if (!definition) continue;
-        terms.push(...block(term, C.orange, { font: 'chunky' }));
-        terms.push(...block(definition.replace(/\s*\[[\d., ]+\]\s*$/, ''), C.dim, { indent: 10 }));
-      }
-      if (terms.length) {
-        blocks.push(block('KEY TERMS', C.gold));
-        blocks.push(terms);
-      }
-    }
-    return blocks;
-  };
+  const detailPages = () => paginate(briefingDetailBlocks(mission, C, (domain) => DOMAIN_COLOR[domain] ?? C.text));
 
-  const details = () => {
+  const details = (pages: PLine[][]) => {
     const { canvas, g } = makeCanvas();
     frame(g);
     drawText(g, `${kicker} - DETAILS`, 22, 22, C.dim);
     drawText(g, 'DETAILS', 22, 32, C.gold);
-    const pages = paginate(detailBlocks());
     const lines = pages[Math.min(page, pages.length - 1)] ?? [];
     lines.forEach((l, i) => drawLine(g, l, DB_BODY_TOP + i * DB_LINE));
-    if (pages.length > 1) {
-      drawText(g, `A/D PAGE ${Math.min(page, pages.length - 1) + 1}/${pages.length}`, 22, DB_H - 28, C.orange);
-    }
+    if (pages.length > 1) drawText(g, pageLabel(page, pages.length), 22, DB_H - 28, C.orange);
     return canvas;
+  };
+
+  const turnPage = (step: number) => {
+    const next = stepPage(page, step, detailPages().length);
+    if (next === page) return;
+    page = next;
+    render();
   };
 
   const skillLabel = () => `SKILL: ${skillById(selectedSkill).label}  [K]`;
@@ -255,11 +237,23 @@ export function briefing(
     s.replaceChildren();
     skillButton = null;
     const pg = h('div', mode === 'details' ? 'cd-briefing-page cd-briefing-details-page' : 'cd-briefing-page');
-    pg.appendChild(mode === 'details' ? details() : overview());
+    const pages = mode === 'details' ? detailPages() : [];
+    page = stepPage(page, 0, pages.length);
+    if (mode === 'details') {
+      pg.dataset.page = String(page + 1);
+      pg.dataset.pages = String(pages.length);
+    }
+    pg.appendChild(mode === 'details' ? details(pages) : overview());
     const buttons = h('div', 'cd-brief-actions');
     buttons.appendChild(bigButton('BACK  [ESC]', () => {
       if (mode === 'details') { mode = 'overview'; render(); } else onBack();
     }, 'cd-btn alt'));
+    if (mode === 'details' && pages.length > 1) {
+      buttons.append(
+        pageButton('◀ PREV  [←]', 'prev', page === 0, () => turnPage(-1)),
+        pageButton('NEXT  [→] ▶', 'next', page >= pages.length - 1, () => turnPage(1)),
+      );
+    }
     if (mode === 'overview') {
       buttons.appendChild(bigButton('DETAILS  [D]', () => { mode = 'details'; page = 0; render(); }, 'cd-btn alt'));
     }
@@ -286,14 +280,10 @@ export function briefing(
     } else if (e.key.toLowerCase() === 'k') {
       e.preventDefault();
       cycleSkill();
-    } else if (mode === 'details' && (e.key === 'ArrowRight' || e.key.toLowerCase() === 'a')) {
+    } else if (mode === 'details' && pageStep(e.key) !== 0) {
+      // D only reaches here in details mode: on the overview it opens details (above)
       e.preventDefault();
-      page = Math.min(page + 1, paginate(detailBlocks()).length - 1);
-      render();
-    } else if (mode === 'details' && (e.key === 'ArrowLeft' || e.key.toLowerCase() === 'q')) {
-      e.preventDefault();
-      page = Math.max(0, page - 1);
-      render();
+      turnPage(pageStep(e.key));
     }
   });
   return s;
