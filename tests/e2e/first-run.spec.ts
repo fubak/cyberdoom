@@ -189,6 +189,17 @@ test('first-run journey: title → READ THIS → briefing paging → deploy M01 
   await expect
     .poll(async () => (await hudFrame(page)).prompt.rows.some((r) => r.key === 'E'), { timeout: 15_000 })
     .toBe(true);
+  // the KEYBOARD tool leaves hosts to E; the MOUSE tool still gives an LMB/fire line here
+  await page.evaluate(() => (window as unknown as { __cd: { setTool: (n: number) => void } }).__cd.setTool(2));
+  await expect
+    .poll(
+      async () => {
+        const rows = (await hudFrame(page)).prompt.rows;
+        return rows.some((r) => r.key === 'E') && rows.some((r) => r.key !== 'E' && r.plate);
+      },
+      { timeout: 15_000 },
+    )
+    .toBe(true);
   const frame = await hudFrame(page);
   expect(frame.prompt.footer).toBe(LOOK_HINT);
   const eRow = frame.prompt.rows.find((r) => r.key === 'E')!;
