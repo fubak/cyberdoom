@@ -23,7 +23,7 @@ export const RISE_MAX_DIST = 1.35;
  */
 export const LOOM_CAP_FRAC = 0.8;
 /** Share of view height the lunging silhouette should occupy. */
-export const LOOM_FILL_FRAC = 0.47;
+export const LOOM_FILL_FRAC = 0.36;
 /** Hard bound on the loom scale-up so tiny sprites don't explode at contact. */
 export const LOOM_MAX_SCALE = 2.2;
 
@@ -59,9 +59,16 @@ export const loomK = (dist: number, attacking: boolean, melee: boolean): number 
  * the near end, so the two boosts never stack.
  */
 export const FAR0 = 5.5;
-export const FAR_SCALE_CAP = 1.45;
+/**
+ * Threats are authored smaller in the world than they used to be (THREAT_SCALE
+ * in sprites.ts), so the far boost climbs faster and higher: a threat at 15
+ * tiles covers the same share of the view it did before, and one inside FAR0
+ * is the smaller size.
+ */
+export const FAR_SLOPE = 0.0895;
+export const FAR_SCALE_CAP = 2;
 export const farScale = (dist: number): number =>
-  Math.min(FAR_SCALE_CAP, 1 + 0.035 * Math.max(0, dist - FAR0));
+  Math.min(FAR_SCALE_CAP, 1 + FAR_SLOPE * Math.max(0, dist - FAR0));
 
 /**
  * Drawn world height a lunging attacker wants at `dist` so that, once the
