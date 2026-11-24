@@ -70,6 +70,8 @@ uniform float uLight;
 uniform float uFloor;
 uniform float uGain;
 const float LIT_ROOM_GAIN = 1.3;
+// threats: sector light at the sprite's own tile (uLight is pinned to 1 for them)
+uniform float uRoom;
 uniform float uFlash;
 uniform vec4 uFire;
 uniform vec4 uImpact;
@@ -101,8 +103,6 @@ void main() {
   vec4 t = texture2D(map, vUv * uUvScale + uUvOffset);
   if (t.a < 0.25) discard;
   float L = 1.0;
-  // room light at this texel before any readability floor (0 = dark sector)
-  float room = 0.0;
   // uGhost (ENEMIES rootkit shimmer): a stealth attacker in motion keeps only
   // a fast-dissolving shimmer of itself — mostly its silhouette's edge — so it
   // reads as a Spectre-style refraction trace, not a body.
@@ -150,7 +150,6 @@ void main() {
     // to black. Gameplay-critical sprites keep their own uFloor minimums.
     float fade = 0.1 + max(0.0, 0.62 - s) * 2.3 + max(0.0, vDist - 11.0) * 0.05;
     float dim = s * (1.3 - vDist * fade);
-    room = clamp(dim, 0.0, 1.0);
     L = max(dim, uFloor);
     L = clamp(L, 0.0, 1.0);
     // in the dark range walls keep a whisper more light than floors, so
@@ -173,8 +172,9 @@ void main() {
   L = min(L * (1.0 + iboost), 1.5);
   // LOOK: the threat gain is a dark-sector readability lift. In a lit room it
   // only flattened the sprite's own shading to one saturated tone, so it eases
-  // off as the room brightens; dark sectors and fullbright texels keep it all.
-  float gain = uGain > 1.01 ? mix(uGain, min(uGain, LIT_ROOM_GAIN), smoothstep(0.72, 1.0, room)) : uGain;
+  // off as the sprite's own sector brightens; dark sectors keep it all.
+  float lightRoom = smoothstep(0.55, 0.9, uRoom);
+  float gain = uGain > 1.01 ? mix(uGain, min(uGain, LIT_ROOM_GAIN), lightRoom) : uGain;
   vec3 lit = t.rgb * uTint * vTint * L * gain;
   if (uGain > 1.01) {
     // gained sprites (threats): clamp by the brightest channel, not per channel. A per-channel clamp
@@ -267,6 +267,7 @@ function worldMaterial(map: THREE.Texture, light = 1, floor = 0.16, tint?: THREE
       uLight: { value: light },
       uFloor: { value: floor },
       uGain: { value: 1 },
+      uRoom: { value: 1 },
       uFlash: { value: 0 },
       uFire: fireUniform,
       uImpact: impactUniform,
@@ -1139,6 +1140,7 @@ export class Renderer {
       // they read against dark sectors at any range, like Doom's
       st.mat.uniforms.uFloor.value = disguised ? 0.45 : enemy ? (set.floor ?? 0.85) : e.def.kind === 'item' ? 0.45 : 0.2;
       st.mat.uniforms.uGain.value = disguised ? 1 : enemy ? (set.gain ?? 1.9) : 1;
+      st.mat.uniforms.uRoom.value = lit;
       // engine emits state.tint (red during pain/flash) — apply it to the sprite
       const tint = (e.state.tint as number | undefined) ?? 0xffffff;
       (st.mat.uniforms.uTint.value as THREE.Vector3).set(
