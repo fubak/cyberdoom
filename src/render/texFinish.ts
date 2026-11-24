@@ -12,6 +12,8 @@
  * Pure typed-array math, seeded by position only: identical on every thread.
  */
 
+import { boxBlur, softGlow } from './boxBlur';
+
 export type FinishKind = 'wall' | 'flat';
 export type Grain = 'brushed' | 'blotch' | 'weave' | 'plaster';
 
@@ -68,35 +70,6 @@ function grainAt(grain: Grain, x: number, y: number): number {
   return valueNoise(x, y, 14) * 2 - 1;
 }
 
-/** Separable box blur over `ch` channels (running sums); x always wraps (walls tile), y wraps for flats. */
-function blur(src: Float32Array, w: number, h: number, ch: number, rad: number, wrapY: boolean): Float32Array {
-  const tmp = new Float32Array(src.length);
-  const dst = new Float32Array(src.length);
-  const k = 1 / (rad * 2 + 1);
-  const wx = (x: number): number => ((x % w) + w) % w;
-  const wy = (y: number): number => (wrapY ? ((y % h) + h) % h : y < 0 ? 0 : y >= h ? h - 1 : y);
-  for (let c = 0; c < ch; c++) {
-    for (let y = 0; y < h; y++) {
-      const row = y * w;
-      let s = 0;
-      for (let d = -rad; d <= rad; d++) s += src[(row + wx(d)) * ch + c];
-      for (let x = 0; x < w; x++) {
-        tmp[(row + x) * ch + c] = s * k;
-        s += src[(row + wx(x + 1 + rad)) * ch + c] - src[(row + wx(x - rad)) * ch + c];
-      }
-    }
-    for (let x = 0; x < w; x++) {
-      let s = 0;
-      for (let d = -rad; d <= rad; d++) s += tmp[(wy(d) * w + x) * ch + c];
-      for (let y = 0; y < h; y++) {
-        dst[(y * w + x) * ch + c] = s * k;
-        s += tmp[(wy(y + 1 + rad) * w + x) * ch + c] - tmp[(wy(y - rad) * w + x) * ch + c];
-      }
-    }
-  }
-  return dst;
-}
-
 /** Returns a finished copy of `raw`; the input is not modified. */
 export function finishTexture(raw: RawTexture, w: number, h: number, opts: FinishOpts): RawTexture {
   const n = w * h;
@@ -125,25 +98,46 @@ export function finishTexture(raw: RawTexture, w: number, h: number, opts: Finis
   }
   if (count === 0) return { rgba: out, glow: raw.glow };
 
-  const near = blur(lum, w, h, 1, 2, wrapY);
-  const wide = blur(lum, w, h, 1, 9, wrapY);
+  // Bevel and cavity are worked out once per painted texel (the painters draw
+  // on a grid 4 px to the texel), not per pixel: 16x less work, and a bevel
+  // that is exactly one texel wide. Sizes that do not divide by 4 run per pixel.
+  const S = w % 4 === 0 && h % 4 === 0 ? 4 : 1;
+  const tw = w / S, th = h / S;
+  const cell = new Float32Array(tw * th);
+  for (let y = 0; y < h; y++) {
+    const row = Math.floor(y / S) * tw;
+    for (let x = 0; x < w; x++) cell[row + Math.floor(x / S)] += lum[y * w + x];
+  }
+  if (S > 1) for (let i = 0; i < cell.length; i++) cell[i] /= S * S;
+  const near = S > 1 ? cell : boxBlur(cell, tw, th, 1, 2, true, wrapY);
+  const wide = boxBlur(cell, tw, th, 1, S > 1 ? 2 : 9, true, wrapY);
+  const step = S > 1 ? 1 : 2;
+  const bevelGain = S > 1 ? BEVEL * 0.75 : BEVEL;
+  const form = new Float32Array(tw * th);
+  for (let y = 0; y < th; y++) {
+    const yu = wrapY ? (y - step + th) % th : Math.max(0, y - step);
+    const yd = wrapY ? (y + step) % th : Math.min(th - 1, y + step);
+    for (let x = 0; x < tw; x++) {
+      const i = y * tw + x;
+      // brightness as height: slopes facing up-left catch the light
+      const gx = near[y * tw + ((x + step) % tw)] - near[y * tw + ((x - step + tw) % tw)];
+      const gy = near[yd * tw + x] - near[yu * tw + x];
+      const bevel = Math.max(BEVEL_MIN, Math.min(BEVEL_MAX, 1 + (gx + gy) * bevelGain));
+      form[i] = bevel * (1 - Math.max(0, wide[i] - cell[i]) * CAVITY);
+    }
+  }
   const shade = new Float32Array(n * 3);
+  const grainOf = opts.grain;
   let after = 0;
   for (let y = 0; y < h; y++) {
-    const t = y / h;
-    const edge = opts.kind === 'wall' ? 0.84 + 0.16 * clamp01(t / 0.14) - 0.12 * clamp01((t - 0.84) / 0.16) : 1;
-    const yu = wrapY ? (y - 2 + h) % h : Math.max(0, y - 2);
-    const yd = wrapY ? (y + 2) % h : Math.min(h - 1, y + 2);
+    const ty = y / h;
+    const edge = opts.kind === 'wall' ? 0.84 + 0.16 * clamp01(ty / 0.14) - 0.12 * clamp01((ty - 0.84) / 0.16) : 1;
+    const frow = Math.floor(y / S) * tw;
     for (let x = 0; x < w; x++) {
       const i = y * w + x;
       if (!body[i]) continue;
-      // brightness as height: slopes facing up-left catch the light
-      const gx = near[y * w + ((x + 2) % w)] - near[y * w + ((x - 2 + w) % w)];
-      const gy = near[yd * w + x] - near[yu * w + x];
-      const bevel = Math.max(BEVEL_MIN, Math.min(BEVEL_MAX, 1 + (gx + gy) * BEVEL));
-      const cavity = 1 - Math.max(0, wide[i] - lum[i]) * CAVITY;
-      const grain = opts.grain ? 1 + grainAt(opts.grain, x, y) * GRAIN : 1;
-      const k = Math.max(0.35, bevel * cavity * edge * grain);
+      const grain = grainOf ? 1 + grainAt(grainOf, x, y) * GRAIN : 1;
+      const k = Math.max(0.35, form[frow + Math.floor(x / S)] * edge * grain);
       const o = i * 4;
       const r = src[o] * k, g = src[o + 1] * k, b = src[o + 2] * k;
       shade[i * 3] = r; shade[i * 3 + 1] = g; shade[i * 3 + 2] = b;
@@ -152,7 +146,7 @@ export function finishTexture(raw: RawTexture, w: number, h: number, opts: Finis
   }
   // hold the texture's mean brightness where the painter put it
   const hold = after > 0 ? Math.max(0.8, Math.min(1.3, before / after)) : 1;
-  const spill = anyGlow ? blur(blur(emis, w, h, 3, SPILL_RADIUS, wrapY), w, h, 3, SPILL_RADIUS, wrapY) : null;
+  const spill = anyGlow ? softGlow(emis, w, h, SPILL_RADIUS, true, wrapY) : null;
   for (let i = 0; i < n; i++) {
     if (!body[i]) continue;
     let r = shade[i * 3] * hold, g = shade[i * 3 + 1] * hold, b = shade[i * 3 + 2] * hold;

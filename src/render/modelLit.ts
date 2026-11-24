@@ -12,6 +12,8 @@
  * main thread, in a generation worker and in tests.
  */
 
+import { boxBlur } from './boxBlur';
+
 type V3 = [number, number, number];
 
 export interface LitOpts {
@@ -82,60 +84,33 @@ const AO_SAMPLES = 16;
 const BLOOM_RADIUS = 8;
 const RIM_GAIN = 0.78;
 
-/** Golden-angle disc, 3..14 px: the occlusion kernel. */
-const AO_KERNEL: [number, number][] = Array.from({ length: AO_SAMPLES }, (_, k) => {
+/** Golden-angle disc, 3..14 px: the occlusion kernel, as flat [dx, dy] pairs. */
+const AO_KERNEL = new Int8Array(AO_SAMPLES * 2);
+for (let k = 0; k < AO_SAMPLES; k++) {
   const a = k * 2.399963;
   const r = 3 + 11 * Math.sqrt((k + 0.5) / AO_SAMPLES);
-  return [Math.round(Math.cos(a) * r), Math.round(Math.sin(a) * r)];
-});
+  AO_KERNEL[k * 2] = Math.round(Math.cos(a) * r);
+  AO_KERNEL[k * 2 + 1] = Math.round(Math.sin(a) * r);
+}
 
 const clamp01 = (v: number): number => (v < 0 ? 0 : v > 1 ? 1 : v);
 
-/** Separable box blur of an rgb float buffer. */
-function boxBlur(src: Float32Array, w: number, h: number, rad: number): Float32Array {
-  const tmp = new Float32Array(src.length);
-  const dst = new Float32Array(src.length);
-  const k = 1 / (rad * 2 + 1);
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      let r = 0, g = 0, b = 0;
-      for (let d = -rad; d <= rad; d++) {
-        const xx = x + d;
-        if (xx < 0 || xx >= w) continue;
-        const i = (y * w + xx) * 3;
-        r += src[i]; g += src[i + 1]; b += src[i + 2];
-      }
-      const o = (y * w + x) * 3;
-      tmp[o] = r * k; tmp[o + 1] = g * k; tmp[o + 2] = b * k;
-    }
-  }
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      let r = 0, g = 0, b = 0;
-      for (let d = -rad; d <= rad; d++) {
-        const yy = y + d;
-        if (yy < 0 || yy >= h) continue;
-        const i = (yy * w + x) * 3;
-        r += tmp[i]; g += tmp[i + 1]; b += tmp[i + 2];
-      }
-      const o = (y * w + x) * 3;
-      dst[o] = r * k; dst[o + 1] = g * k; dst[o + 2] = b * k;
-    }
-  }
-  return dst;
-}
-
 function occlusion(lit: LitBuffers, w: number, h: number, x: number, y: number): number {
   const i = y * w + x;
+  const zi = lit.z[i];
+  const flags = lit.flags;
+  const z = lit.z;
   let occ = 0;
   for (let k = 0; k < AO_SAMPLES; k++) {
-    const xx = x + AO_KERNEL[k][0];
-    const yy = y + AO_KERNEL[k][1];
+    const xx = x + AO_KERNEL[k * 2];
+    const yy = y + AO_KERNEL[k * 2 + 1];
     if (xx < 0 || yy < 0 || xx >= w || yy >= h) continue;
     const j = yy * w + xx;
-    if (!(lit.flags[j] & LIT_HIT)) continue;
-    const dz = lit.z[j] - lit.z[i];
-    if (dz > 1.5) occ += clamp01((dz - 1.5) / 10) * (1 - clamp01((dz - 30) / 40));
+    if (!(flags[j] & LIT_HIT)) continue;
+    const dz = z[j] - zi;
+    if (dz <= 1.5) continue;
+    const near = dz >= 11.5 ? 1 : (dz - 1.5) / 10;
+    occ += dz <= 30 ? near : dz >= 70 ? 0 : near * (1 - (dz - 30) / 40);
   }
   return Math.max(0.3, 1 - 1.75 * (occ / AO_SAMPLES));
 }
@@ -148,6 +123,10 @@ export function resolveLit(target: LitTarget, lit: LitBuffers): void {
   const { accent, alb, nrm, flags } = lit;
   const emis = new Float32Array(w * h * 3);
   let anyGlow = false;
+  // Occlusion is sampled once per 2x2 block — the same cell the ramp dithers
+  // on — from the first body texel met in it: a quarter of the samples.
+  const aw = (w + 1) >> 1;
+  const aoCell = new Float32Array(aw * ((h + 1) >> 1)).fill(-1);
   for (let y = 0; y < h; y++) {
     const worldY = h - 1 - y + 0.5;
     const ground = 0.62 + 0.38 * clamp01(worldY / (h * 0.2));
@@ -170,9 +149,14 @@ export function resolveLit(target: LitTarget, lit: LitBuffers): void {
         anyGlow = true;
         continue;
       }
-      const ao = occlusion(lit, w, h, x, y);
+      const ac = (y >> 1) * aw + (x >> 1);
+      if (aoCell[ac] < 0) aoCell[ac] = occlusion(lit, w, h, x, y);
+      const ao = aoCell[ac];
       const diff = Math.max(0, nx * KEY[0] + ny * KEY[1] + nz * KEY[2]);
-      const spec = Math.pow(Math.max(0, nx * HALF[0] + ny * HALF[1] + nz * HALF[2]), 30) * 0.5;
+      // x^30 by squaring: the same curve as Math.pow without the call
+      const sh1 = Math.max(0, nx * HALF[0] + ny * HALF[1] + nz * HALF[2]);
+      const sh2 = sh1 * sh1, sh4 = sh2 * sh2, sh8 = sh4 * sh4, sh16 = sh8 * sh8;
+      const spec = sh16 * sh8 * sh4 * sh2 * 0.5;
       let I = (0.2 + 0.82 * diff + 0.1 * Math.max(0, ny)) * ao * ground + spec;
       I *= 0.93 + 0.14 * (lit.noise[i] / 255);
       if (f & LIT_EDGE) I += ny > 0.5 || nx < -0.5 || nz > 0.5 ? 0.16 : -0.08;
@@ -191,7 +175,9 @@ export function resolveLit(target: LitTarget, lit: LitBuffers): void {
         r = a0 + (255 - a0) * 0.62 * t; g = a1 + (244 - a1) * 0.58 * t; b = a2 + (214 - a2) * 0.5 * t;
       }
       const facing = Math.max(0, nx * BACK[0] + ny * BACK[1] + 0.35);
-      const rimRaw = Math.pow(1 - Math.abs(nz), 2.2) * facing * ao;
+      // the rim only clears its lower step where the surface turns well away
+      // from the camera, so skip the pow everywhere else (same result)
+      const rimRaw = facing > 0 && Math.abs(nz) < 0.6 ? Math.pow(1 - Math.abs(nz), 2.2) * facing * ao : 0;
       const rim = (rimRaw > 0.42 ? 1 : rimRaw > 0.2 ? 0.5 : 0) * RIM_GAIN * 255;
       rgba[o] = r + accent[0] * rim;
       rgba[o + 1] = g + accent[1] * rim;
@@ -215,7 +201,7 @@ export function resolveLit(target: LitTarget, lit: LitBuffers): void {
 /** Emissive spill onto the body, plus a dithered fullbright halo just outside it. */
 function bloom(target: LitTarget, lit: LitBuffers, emis: Float32Array): void {
   const { w, h, rgba, glow } = target;
-  const bl = boxBlur(emis, w, h, BLOOM_RADIUS);
+  const bl = boxBlur(emis, w, h, 3, BLOOM_RADIUS);
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       const i = y * w + x;
