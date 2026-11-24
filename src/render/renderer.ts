@@ -5,6 +5,8 @@ import type { WorldMap } from '../engine/map';
 import type { Player } from '../engine/player';
 import type { ViewPose } from '../engine/feel';
 import { buildPaletteLut } from './palette';
+import { GROUND_LIFT, GROUND_SPREAD, groundGeometry, groundMaterial, poolStrength } from './groundFx';
+import { LIT_ROOM_GAIN, darkGain, midPeak } from './threatLight';
 import { genWorkerCount } from './genpool';
 import { buildSprites, prewarmLazySpriteFrames, spriteSets, type SpriteSet } from './sprites';
 import {
@@ -69,9 +71,11 @@ uniform sampler2D map;
 uniform float uLight;
 uniform float uFloor;
 uniform float uGain;
-const float LIT_ROOM_GAIN = 1.3;
+const float LIT_ROOM_GAIN = ${LIT_ROOM_GAIN.toFixed(2)};
 // threats: sector light at the sprite's own tile (uLight is pinned to 1 for them)
 uniform float uRoom;
+uniform float uRim;
+uniform vec3 uRimCol;
 uniform float uFlash;
 uniform vec4 uFire;
 uniform vec4 uImpact;
@@ -187,6 +191,15 @@ void main() {
   vec3 c = mix(min(lit, vec3(1.0)), vec3(1.0), uFlash);
   c = min(c + uFire.rgb * reach * 0.4 + uImpactCol * iboost * 0.45, vec3(1.0));
   c *= sfl;
+  if (uRim > 0.0 && t.a > 0.75) {
+    // dark-sector contour: texels on the silhouette edge (the baked outline
+    // and one body texel in) take the threat's colour, so the shape reads
+    // without flattening the body. Fades out as the sector brightens.
+    vec2 rp = vUv * uUvScale + uUvOffset;
+    float ra = min(min(texture2D(map, rp + vec2(0.016, 0.0)).a, texture2D(map, rp - vec2(0.016, 0.0)).a),
+                   min(texture2D(map, rp + vec2(0.0, 0.016)).a, texture2D(map, rp - vec2(0.0, 0.016)).a));
+    if (ra < 0.25) c = mix(c, uRimCol, uRim * (1.0 - lightRoom));
+  }
   if (uWound > 0.0) {
     // wound char (ENEMIES): burnt-out blotches rimmed with corruption embers
     // grow as the threat's hp drops — visible damage state under 50% hp
@@ -268,6 +281,8 @@ function worldMaterial(map: THREE.Texture, light = 1, floor = 0.16, tint?: THREE
       uFloor: { value: floor },
       uGain: { value: 1 },
       uRoom: { value: 1 },
+      uRim: { value: 0 },
+      uRimCol: { value: new THREE.Vector3(1, 1, 1) },
       uFlash: { value: 0 },
       uFire: fireUniform,
       uImpact: impactUniform,
@@ -383,6 +398,9 @@ export function spriteSetIdFor(e: Entity): string {
  */
 const WORLD_FLOOR = 0.038;
 
+/** How fully the dark-sector contour takes the threat's colour. */
+const RIM_STRENGTH = 0.85;
+
 interface SpriteState {
   mesh: THREE.Mesh;
   mat: THREE.ShaderMaterial;
@@ -402,6 +420,8 @@ interface SpriteState {
   frame?: string;
   /** Smoothed melee-lunge lift applied to the sprite's base (world units). */
   rise?: number;
+  /** Floor quad under a live threat: contact shadow + pool of its own light. */
+  ground?: THREE.Mesh;
 }
 
 interface Fx {
@@ -459,6 +479,10 @@ export class Renderer {
   private particleMat: THREE.ShaderMaterial;
   private particlePoints: THREE.Points;
   private planeGeo = new THREE.PlaneGeometry(1, 1).translate(0, 0.5, 0);
+  private groundGeo = groundGeometry();
+  /** Debug (look probe): this entity's ground quad stays up while its sprite is hidden,
+   *  so the with/without captures differ by the sprite alone. */
+  debugKeepGround: string | null = null;
   private lastTime = performance.now();
   private time = 0;
   private lastIntegrity = 100;
@@ -1139,8 +1163,11 @@ export class Renderer {
       // monsters keep a much higher floor than walls (and a slight gain) so
       // they read against dark sectors at any range, like Doom's
       st.mat.uniforms.uFloor.value = disguised ? 0.45 : enemy ? (set.floor ?? 0.85) : e.def.kind === 'item' ? 0.45 : 0.2;
-      st.mat.uniforms.uGain.value = disguised ? 1 : enemy ? (set.gain ?? 1.9) : 1;
+      const threat = enemy && !disguised;
+      st.mat.uniforms.uGain.value = threat ? this.threatGain(set) : 1;
       st.mat.uniforms.uRoom.value = lit;
+      st.mat.uniforms.uRim.value = threat ? RIM_STRENGTH : 0;
+      if (threat && set.gib) (st.mat.uniforms.uRimCol.value as THREE.Vector3).set(set.gib[0], set.gib[1], set.gib[2]);
       // engine emits state.tint (red during pain/flash) — apply it to the sprite
       const tint = (e.state.tint as number | undefined) ?? 0xffffff;
       (st.mat.uniforms.uTint.value as THREE.Vector3).set(
@@ -1155,7 +1182,19 @@ export class Renderer {
       const pd = Math.hypot(e.x - this.lastPX, e.y - this.lastPY);
       const shimmer = stealthy && pd <= 6 && pd > 2 && st.moveT > 0;
       st.mat.uniforms.uGhost.value = shimmer ? 0.2 : 0;
-      st.mesh.visible = !this.debugHidden.has(id) && !(stealthy && pd > 2 && !shimmer);
+      const shown = !(stealthy && pd > 2 && !shimmer);
+      st.mesh.visible = !this.debugHidden.has(id) && shown;
+      if (threat) {
+        const ground = (st.ground ??= this.makeGround(set));
+        const spread = set.w * scale * GROUND_SPREAD;
+        ground.scale.set(spread, 1, spread);
+        ground.position.set(e.x, floorH + GROUND_LIFT, e.y);
+        (ground.material as THREE.ShaderMaterial).uniforms.uPool.value = poolStrength(lit);
+        // a hidden rootkit must not be given away by its own shadow
+        ground.visible = shown && !shimmer && (!this.debugHidden.has(id) || this.debugKeepGround === id);
+      } else if (st.ground) {
+        this.dropGround(st);
+      }
       // wound char: corruption blotches ramp in once a threat drops under 50% hp
       const maxHp = typeof e.state.maxHp === 'number' && e.state.maxHp > 0 ? e.state.maxHp : (e.def.hp ?? 1);
       st.mat.uniforms.uWound.value =
@@ -1167,6 +1206,7 @@ export class Renderer {
       if (!seen.has(id) && st.entity && st.entity.alive === false) continue;
       if (!seen.has(id)) {
         this.spriteGroup.remove(st.mesh);
+        this.dropGround(st);
         this.sprites.delete(id);
       }
     }
@@ -1264,6 +1304,34 @@ export class Renderer {
     return 1;
   }
 
+  /**
+   * Dark-sector gain for a threat set: sized to its own median body tone
+   * (threatLight.ts) once the display frame exists; the authored gain until then.
+   */
+  private threatGain(set: SpriteSet): number {
+    const authored = set.gain ?? 1.9;
+    if (set.midPeak === undefined) {
+      const tex = set.frames['walk0_0'] ?? set.frames['walk0'];
+      const im = tex?.image as { data?: ArrayLike<number>; width: number; height: number } | undefined;
+      if (!im?.data || !(im.width > 1) || im.data.length < im.width * im.height * 4) return authored;
+      set.midPeak = midPeak(im.data, im.width, im.height);
+    }
+    return darkGain(authored, set.midPeak);
+  }
+
+  private makeGround(set: SpriteSet): THREE.Mesh {
+    const mesh = new THREE.Mesh(this.groundGeo, groundMaterial(set.gib ?? [0.6, 0.8, 1]));
+    this.spriteGroup.add(mesh);
+    return mesh;
+  }
+
+  private dropGround(st: SpriteState): void {
+    if (!st.ground) return;
+    this.spriteGroup.remove(st.ground);
+    (st.ground.material as THREE.Material).dispose();
+    st.ground = undefined;
+  }
+
   /** Debug: world-Y of each live enemy's opaque top vs the ceiling over its tile. */
   debugSpriteTops(): { id: string; kind: string; top: number; ceil: number; sky: boolean; scale: number }[] {
     const out: { id: string; kind: string; top: number; ceil: number; sky: boolean; scale: number }[] = [];
@@ -1293,6 +1361,7 @@ export class Renderer {
   private retire(st: SpriteState): void {
     const e = st.entity;
     this.spriteGroup.remove(st.mesh);
+    this.dropGround(st);
     if (e) this.sprites.delete(e.def.id);
     if (!e) return;
     if (e.def.kind === 'enemy') {
