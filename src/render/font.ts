@@ -65,18 +65,25 @@ const TINY: Record<string, number[]> = {
 export type FontId = 'small' | 'tiny';
 
 /**
- * Glyphs whose left stem keeps square corners through the EPX smoothing. At 3x5
- * the rounding chamfers D's left corners until it reads as O ("EOR", "OISK"); a
- * square stem with the rounded bowl kept on the right reads as D while O stays
- * round. Metrics are unchanged.
+ * How a glyph's 4x mask is built from its rows. Most glyphs are EPX-smoothed.
+ * - squareStem: at 3x5 the rounding chamfers D's left corners until it reads as O
+ *   ("EOR", "OISK"); a square stem with the rounded bowl kept on the right reads as D
+ *   while O stays round.
+ * - crisp: no smoothing at all. EPX turns the 3x5 '+' into a round blob (so "LOG +1"
+ *   read "LOG •1") and chamfers '[' / ']' into '(' / ')' ("[L]" read "(L)").
+ * Metrics are unchanged either way.
  */
-const SQUARE_STEM: Partial<Record<FontId, ReadonlySet<string>>> = { tiny: new Set(['D']) };
+type GlyphShape = 'smooth' | 'squareStem' | 'crisp';
 
-function hasSquareStem(font: FontId, ch: string): boolean {
-  const set = SQUARE_STEM[font];
-  if (!set) return false;
+const GLYPH_SHAPES: Partial<Record<FontId, Readonly<Record<string, GlyphShape>>>> = {
+  tiny: { D: 'squareStem', '+': 'crisp', '[': 'crisp', ']': 'crisp' },
+};
+
+function glyphShape(font: FontId, ch: string): GlyphShape {
+  const shapes = GLYPH_SHAPES[font];
+  if (!shapes) return 'smooth';
   // a lowercase char with no glyph of its own draws its uppercase form (TINY stays caps)
-  return set.has(ch in FONTS[font].glyphs ? ch : ch.toUpperCase());
+  return shapes[ch in FONTS[font].glyphs ? ch : ch.toUpperCase()] ?? 'smooth';
 }
 
 interface FontSpec {
@@ -122,7 +129,7 @@ function epx(src: Mask): Mask {
   return { bits, w, h };
 }
 
-function maskFromRows(rows: number[], width: number, baseScale: number, squareStem = false): Mask {
+function maskFromRows(rows: number[], width: number, baseScale: number, shape: GlyphShape = 'smooth'): Mask {
   const src: Mask = { w: width * baseScale, h: rows.length * baseScale, bits: new Uint8Array(width * baseScale * rows.length * baseScale) };
   for (let y = 0; y < rows.length; y++) for (let x = 0; x < width; x++) {
     if (!(rows[y] & (1 << (width - 1 - x)))) continue;
@@ -130,8 +137,17 @@ function maskFromRows(rows: number[], width: number, baseScale: number, squareSt
       src.bits[(y * baseScale + sy) * src.w + x * baseScale + sx] = 1;
     }
   }
+  if (shape === 'crisp') return nearest(src, 4);
   const smooth = epx(epx(src));
-  return squareStem ? withSquareStem(smooth, src) : smooth;
+  return shape === 'squareStem' ? withSquareStem(smooth, src) : smooth;
+}
+
+/** Plain k-times pixel upscale (same size as two EPX passes), keeping every corner square. */
+function nearest(src: Mask, k: number): Mask {
+  const w = src.w * k, h = src.h * k;
+  const bits = new Uint8Array(w * h);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) bits[y * w + x] = src.bits[Math.floor(y / k) * src.w + Math.floor(x / k)];
+  return { bits, w, h };
 }
 
 /** Re-square the leftmost source column (two EPX passes scale by 4): a crisp stem, rounded elsewhere. */
@@ -195,12 +211,12 @@ function nativeGlyph(
   baseScale: number,
   ramp: string[],
   bevel = true,
-  squareStem = false,
+  shape: GlyphShape = 'smooth',
 ): HTMLCanvasElement {
-  const cacheKey = `${key}|${rows.join(',')}|${ramp.join(',')}|${bevel}|${squareStem}`;
+  const cacheKey = `${key}|${rows.join(',')}|${ramp.join(',')}|${bevel}|${shape}`;
   const cached = cache.get(cacheKey);
   if (cached) return cached;
-  const mask = maskFromRows(rows, width, baseScale, squareStem);
+  const mask = maskFromRows(rows, width, baseScale, shape);
   const c = document.createElement('canvas');
   c.width = mask.w;
   c.height = mask.h;
@@ -224,7 +240,7 @@ function glyphCanvas(font: FontId, ch: string, color: string): HTMLCanvasElement
   const spec = FONTS[font];
   const rows = glyphRowsFor(font, ch);
   if (!rows) return null;
-  return nativeGlyph(`${font}|${ch}`, rows, spec.w, 1, [color], true, hasSquareStem(font, ch));
+  return nativeGlyph(`${font}|${ch}`, rows, spec.w, 1, [color], true, glyphShape(font, ch));
 }
 
 /** The rendered (pre-colour) pixel mask of a glyph, as drawText rasterises it; for legibility tests. */
@@ -232,7 +248,7 @@ export function glyphMask(font: FontId, raw: string): { bits: Uint8Array; w: num
   const ch = norm(raw);
   const rows = glyphRowsFor(font, ch);
   if (!rows) return undefined;
-  const mask = maskFromRows(rows, FONTS[font].w, 1, hasSquareStem(font, ch));
+  const mask = maskFromRows(rows, FONTS[font].w, 1, glyphShape(font, ch));
   return { bits: mask.bits.slice(), w: mask.w, h: mask.h };
 }
 

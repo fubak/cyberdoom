@@ -90,6 +90,20 @@ function getTickerPattern(g: CanvasRenderingContext2D): CanvasPattern | null {
   return tickerPattern;
 }
 
+/** What the last HUD frame put on screen, for e2e probes (?debug=1 only). */
+export interface HudFrameDebug {
+  objective: { mode: 'none' | 'strip' | 'pinned' | 'overlay'; lines: string[] };
+  prompt: {
+    rows: { key: string; text: string; plate: { x: number; y: number; w: number; h: number; glyphX: number; glyphY: number } | null }[];
+    footer: string | null;
+  };
+  ticker: string[];
+}
+
+function emptyFrame(): HudFrameDebug {
+  return { objective: { mode: 'none', lines: [] }, prompt: { rows: [], footer: null }, ticker: [] };
+}
+
 type ResRow = { id: string; label: string; cur: number; max: number; owned: boolean; active: boolean };
 type GotFx = { k: number; slot: number; blink: boolean } | null;
 
@@ -114,6 +128,18 @@ export class Hud {
   private objIdx = 0;
   private colorBlind = false;
   private reducedFlash = false;
+  /** e2e probe: per-frame record of the drawn objective/prompt/ticker text (null = off). */
+  private frame: HudFrameDebug | null = null;
+
+  /** Start recording what each frame draws (debug builds; see debugFrame). */
+  enableDebugCapture(): void {
+    this.frame ??= emptyFrame();
+  }
+
+  /** The objective line, prompt rows (with key plate geometry) and ticker rows of the last frame. */
+  debugFrame(): HudFrameDebug | null {
+    return this.frame ? structuredClone(this.frame) : null;
+  }
 
   setColorBlind(enabled: boolean): void {
     this.colorBlind = enabled;
@@ -267,6 +293,7 @@ export class Hud {
     if (opts.integrity < this.lastIntegrity) this.ouchT = 0.7;
     this.lastIntegrity = opts.integrity;
     this.cooldown = opts.cooldownFrac;
+    if (this.frame) this.frame = emptyFrame();
 
     // viewmodel sits on top of the 3D view, above the bar (like Doom's weapon)
     g.save();
@@ -305,9 +332,13 @@ export class Hud {
       this.objShowT = 3.5;
     }
     this.lastObjKey = objKey;
-    if (this.tabHeld) this.drawObjectivesOverlay(opts.objectives);
-    else if (this.objShowT > 0 && opts.objectives[this.objIdx]) this.drawObjectiveStrip(opts.objectives, this.objIdx);
-    else {
+    if (this.tabHeld) {
+      if (this.frame) this.frame.objective.mode = 'overlay';
+      this.drawObjectivesOverlay(opts.objectives);
+    } else if (this.objShowT > 0 && opts.objectives[this.objIdx]) {
+      if (this.frame) this.frame.objective.mode = 'strip';
+      this.drawObjectiveStrip(opts.objectives, this.objIdx);
+    } else {
       // the big strip only flashes for a few seconds on a change: between
       // flashes a slim pinned line keeps the open objective on screen, with
       // the (at most 2-message, 3-row) ticker under it
@@ -623,6 +654,7 @@ export class Hud {
     const g = this.g;
     const open = objs.some((o) => !o.done && !o.failed);
     const { head, body } = line;
+    if (this.frame) this.frame.objective = { mode: 'pinned', lines: [`${head} ${body}`] };
     const headW = measureText(head, 'tiny');
     const w = 4 + headW + 5 + measureText(body, 'tiny');
     g.fillStyle = TICKER_PLATE;
@@ -663,6 +695,7 @@ export class Hud {
       this.g.fillStyle = TICKER_PLATE;
       this.g.fillRect(1, y, plateW, 7);
       drawText(this.g, row.line, 2, y + 1, tickerColor(row.kind, this.colorBlind), 'tiny', null);
+      this.frame?.ticker.push(row.line);
       y += 7;
     }
   }
@@ -697,6 +730,7 @@ export class Hud {
     // nav strip (ESC/M/L hints): a dim corner plate at the lower left, tucked
     // just above arsenal's prompt band so the two can never overlap; with no
     // prompt it sits on the corner itself
+    if (this.frame) this.frame.prompt.footer = p.footer ?? null;
     if (p.footer) {
       const w = measureText(p.footer, 'small');
       const ny = viewH - 9 - (shown.length ? shown.length * 10 + 1 : 0);
@@ -719,11 +753,13 @@ export class Hud {
       if (line.key) {
         const kw = measureText(line.key, 'small');
         const plate = keyPlateRect(tx, y, kw);
+        this.frame?.prompt.rows.push({ key: line.key, text: line.text, plate: { ...plate } });
         g.fillStyle = line.ready ? '#ffb428' : '#4a4e58';
         g.fillRect(plate.x, plate.y, plate.w, plate.h);
         drawText(g, line.key, plate.glyphX, plate.glyphY, line.ready ? '#1a1408' : '#9aa0ac', 'small');
         tx += kw + 8;
       }
+      if (!line.key) this.frame?.prompt.rows.push({ key: '', text: line.text, plate: null });
       const col = line.hot ? '#ffffff' : line.ready ? '#e8ecf2' : '#9aa0ac';
       drawText(g, line.text, tx, y, col, 'small', '#000');
       if (line.cost) drawText(g, line.cost, tx + textW + 6, y, '#c89828', 'small', '#000');
@@ -750,6 +786,7 @@ export class Hud {
     const fitted = stripObjectiveLine(o.text, BASE_W - tx - 3);
     const chunky = fitted.font === 'chunky';
     const lines = [fitted.text];
+    if (this.frame) this.frame.objective.lines = [...lines];
     const h = Math.min(OBJ_STRIP_MAX, 11);
     g.fillStyle = getTickerPattern(g) ?? '#000';
     g.fillRect(0, 0, BASE_W, h);

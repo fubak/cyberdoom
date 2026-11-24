@@ -345,6 +345,16 @@ export function mountTitle(host: HTMLElement, actions: TitleActions): void {
   c.addEventListener('click', () => {
     if (showAbout) showAbout = false;
   });
+  // READ THIS! is painted on the canvas; this hidden-but-readable copy gives
+  // screen readers (and the e2e journey) the same text while the panel is up
+  const aboutText = document.createElement('div');
+  aboutText.className = 'cd-sr-only';
+  aboutText.dataset.readThis = '';
+  aboutText.setAttribute('role', 'dialog');
+  aboutText.setAttribute('aria-label', 'Read This!');
+  aboutText.textContent = about.join('\n');
+  aboutText.hidden = true;
+  host.appendChild(aboutText);
   // transparent hit buttons laid over each entry: mouse + automation hooks
   items.forEach((it, i) => {
     const b = document.createElement('button');
@@ -437,6 +447,7 @@ export function mountTitle(host: HTMLElement, actions: TitleActions): void {
     const tag = 'GHOSTLEDGER CAMPAIGN // SY0-701';
     drawText(g, tag, W - 6 - measureText(tag, 'tiny'), H - 8, '#c8a878', 'tiny', '#000');
 
+    if (aboutText.hidden === showAbout) aboutText.hidden = !showAbout;
     if (showAbout) {
       const bw = 300;
       const bh = 14 + about.length * 8;

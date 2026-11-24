@@ -43,6 +43,45 @@ describe('TINY font: D reads as D, not O (EDR / DISK)', () => {
   });
 });
 
+describe("TINY font: the ticker badge 'LOG +1 [L]' reads as written", () => {
+  /** Is the rendered 4x4 cell for source pixel (sx, sy) fully lit? */
+  const cellLit = (m: { bits: Uint8Array; w: number }, sx: number, sy: number) => {
+    let n = 0;
+    for (let y = 0; y < 4; y++) for (let x = 0; x < 4; x++) n += m.bits[(sy * 4 + y) * m.w + sx * 4 + x];
+    return n;
+  };
+
+  it('keeps the 3x5 metrics for + [ ]', () => {
+    for (const ch of ['+', '[', ']']) {
+      const m = glyphMask('tiny', ch)!;
+      expect([m.w, m.h], ch).toEqual([12, 20]);
+    }
+    expect(measureText('LOG +1 [L]', 'tiny')).toBe(39);
+  });
+
+  it("draws '+' as a cross with square arm ends, not a round dot", () => {
+    const plus = glyphMask('tiny', '+')!;
+    // all five lit source pixels render solid; the four diagonal corners stay empty
+    for (const [x, y] of [[1, 1], [0, 2], [1, 2], [2, 2], [1, 3]]) expect(cellLit(plus, x, y), `${x},${y}`).toBe(16);
+    for (const [x, y] of [[0, 1], [2, 1], [0, 3], [2, 3]]) expect(cellLit(plus, x, y), `${x},${y}`).toBe(0);
+    expect(diff(plus, glyphMask('tiny', '·')!)).toBeGreaterThan(40);
+  });
+
+  it("draws '[' and ']' with square corners, distinct from '(' and ')'", () => {
+    const open = glyphMask('tiny', '[')!;
+    const close = glyphMask('tiny', ']')!;
+    // the serif ends of each bracket are solid at the top and bottom rows
+    for (const y of [0, 4]) {
+      expect(cellLit(open, 1, y)).toBe(16);
+      expect(cellLit(open, 2, y)).toBe(16);
+      expect(cellLit(close, 0, y)).toBe(16);
+      expect(cellLit(close, 1, y)).toBe(16);
+    }
+    expect(diff(open, glyphMask('tiny', '(')!)).toBeGreaterThan(20);
+    expect(diff(close, glyphMask('tiny', ')')!)).toBeGreaterThan(20);
+  });
+});
+
 describe('prompt key plates hold the whole key glyph', () => {
   const glyphH = fontHeight('small');
 

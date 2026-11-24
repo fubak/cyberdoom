@@ -91,6 +91,8 @@ export class Dossier {
   private selectedIndex = 0;
   private pageIndex = 0;
   private dirty = true;
+  /** The last draw showed the empty-state copy (e2e probe). */
+  private emptyShown = false;
 
   constructor(
     private getEntries: () => EvidenceEntry[],
@@ -111,6 +113,11 @@ export class Dossier {
 
   get isOpen(): boolean {
     return this._isOpen;
+  }
+
+  /** e2e probe: the empty-state lines on screen at the last draw ([] when entries were shown). */
+  debugEmptyLines(): string[] {
+    return this.emptyShown ? this.emptyLines().filter(Boolean) : [];
   }
 
   get mode(): DossierMode {
@@ -202,6 +209,7 @@ export class Dossier {
     );
 
     this.callHits = [];
+    this.emptyShown = false;
     if (this.mode === 'log') {
       this.drawLog(entries);
     } else {
@@ -310,6 +318,7 @@ export class Dossier {
 
   /** Empty log: the headline, then how to produce an entry with the live keys. */
   private drawEmpty(): void {
+    this.emptyShown = true;
     this.emptyLines().forEach((line, index) => {
       if (!line) return;
       drawText(this.g, line, DOSSIER_X + 9, DOSSIER_Y + 28 + index * 9, index === 0 ? '#e8d8b0' : '#c8b8a0');

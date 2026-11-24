@@ -260,6 +260,9 @@ export function briefing(
     if (mode === 'details') {
       pg.dataset.page = String(page + 1);
       pg.dataset.pages = String(pages.length);
+      // e2e probe: a section heading must never be the last row on a page (keep-with-next)
+      const last = [...(pages[page] ?? [])].reverse().find((line) => line.text.trim());
+      pg.dataset.lastRow = last?.keepWithNext ? 'heading' : 'text';
     }
     pg.appendChild(mode === 'details' ? details(pages) : overview());
     const buttons = h('div', 'cd-brief-actions');
