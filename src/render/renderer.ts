@@ -401,6 +401,13 @@ const WORLD_FLOOR = 0.038;
 /** How fully the dark-sector contour takes the threat's colour. */
 const RIM_STRENGTH = 0.85;
 
+/** Walk cycles per second of animation time (the stride rate). */
+const WALK_CYCLES_PER_S = 1.5;
+/** Share of the wind-up spent in the anticipation frame. */
+const ANTICIPATION_SHARE = 0.35;
+/** Seconds at the end of the recover spent in the settle frame. */
+const SETTLE_TAIL_S = 0.12;
+
 interface SpriteState {
   mesh: THREE.Mesh;
   mat: THREE.ShaderMaterial;
@@ -1392,7 +1399,7 @@ export class Renderer {
     }
   }
 
-  private pickFrame(st: SpriteState, camAngle: number, px: number, py: number): { tex: THREE.Texture } {
+  private pickFrame(st: SpriteState, camAngle: number, px: number, py: number): { tex: THREE.Texture; flip?: boolean } {
     const f = st.set.frames;
     const anim = st.set.anim;
     const t = st.animT;
@@ -1406,19 +1413,36 @@ export class Renderer {
       const facing = st.facing ?? toCam;
       const rel = (toCam - facing) / (Math.PI / 4);
       const rot = ((Math.round(rel) % 8) + 8) % 8;
-      const pick = (k: string) => f[`${k}_${rot}`] ?? f[k];
+      // Views 5-7 are views 3-1 mirrored. They used to be separate textures;
+      // now the same texture is drawn with its UVs flipped.
+      const flip = rot > 4;
+      const view = flip ? 8 - rot : rot;
+      const pick = (k: string) => ({ tex: f[`${k}_${view}`] ?? f[k], flip });
       // two authored flinch poses flicker while the hit flash is up (ENEMIES)
-      if (st.flash > 0.45 && f.pain) return { tex: pick(f.pain2 && Math.floor(t * 12) % 2 === 1 ? 'pain2' : 'pain') };
-      const walk = pick(`walk${Math.floor(t * 6) % (st.set.walkN ?? 4)}`);
-      const stateMode = st.entity?.state.mode;
+      if (st.flash > 0.45 && f.pain) return pick(f.pain2 && Math.floor(t * 12) % 2 === 1 ? 'pain2' : 'pain');
+      // the cycle keeps its length whatever the frame count: more frames, same stride
+      const walkN = st.set.walkN ?? 4;
+      const walk = `walk${Math.floor(t * walkN * WALK_CYCLES_PER_S) % walkN}`;
+      const state = st.entity?.state;
+      const stateMode = state?.mode;
       if (typeof stateMode === 'string') {
-        if (stateMode === 'windup') return { tex: pick('attack0') };
-        if (stateMode === 'recover') return { tex: pick('attack1') };
-        return { tex: walk };
+        if (stateMode === 'windup') {
+          // anticipation first: a crouch-and-pull-back before the raised pose
+          const wu = ((state?.windupT as number | undefined) ?? 0) / Math.max(0.01, (state?.windupDur as number | undefined) ?? 0.4);
+          return pick(wu < ANTICIPATION_SHARE && 'windup' in f ? 'windup' : 'attack0');
+        }
+        if (stateMode === 'recover') {
+          // the strike pose, then an overshoot as it settles
+          const left = (state?.recoverT as number | undefined) ?? 0;
+          return pick(left <= SETTLE_TAIL_S && 'settle' in f ? 'settle' : 'attack1');
+        }
+        // standing still: breathe instead of walking on the spot
+        if (st.moveT <= 0 && 'idle1' in f) return pick(['walk0', 'idle1', 'walk0', 'idle2'][Math.floor(t * 3) % 4]);
+        return pick(walk);
       }
       const dist = Math.hypot(px - st.lastX, py - st.lastY);
-      if (dist < 0.95 && f.attack0) return { tex: pick(Math.floor(t * 5) % 2 === 0 ? 'attack1' : 'attack0') };
-      return { tex: walk };
+      if (dist < 0.95 && f.attack0) return pick(Math.floor(t * 5) % 2 === 0 ? 'attack1' : 'attack0');
+      return pick(walk);
     }
     if (anim === 'person') {
       const moving = st.moveT > 0;
@@ -1530,7 +1554,11 @@ export class Renderer {
         st.flash = 0;
       }
       st.mesh.rotation.set(0, yaw, 0);
-      st.mat.uniforms.map.value = this.pickFrame(st, cameraAngle, cameraX, cameraY).tex;
+      const frame = this.pickFrame(st, cameraAngle, cameraX, cameraY);
+      st.mat.uniforms.map.value = frame.tex;
+      // mirrored facing: u -> 1 - u
+      (st.mat.uniforms.uUvScale.value as THREE.Vector2).set(frame.flip ? -1 : 1, 1);
+      (st.mat.uniforms.uUvOffset.value as THREE.Vector2).set(frame.flip ? 1 : 0, 0);
       if (st.entity) {
         // point-blank: keep the sprite just in front of the near plane, and
         // never taller than ~65% of the view so it still reads as a creature
