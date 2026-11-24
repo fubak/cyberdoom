@@ -248,12 +248,13 @@ export function letterGrade(pct: number): string {
 
 export function gradeMission(o: {
   fieldPct: number;
-  quizPct: number;
+  /** Percent of answered knowledge checks right; null when every one was skipped (grade is field only). */
+  quizPct: number | null;
   won: boolean;
   falsePositives: number;
 }): { field: number; total: number; grade: string; capped: 'fail' | 'false-positive' | null } {
   const field = o.falsePositives > 0 ? Math.min(o.fieldPct, 89) : o.fieldPct;
-  let total = Math.round(field * 0.5 + o.quizPct * 0.5);
+  let total = o.quizPct === null ? Math.round(field) : Math.round(field * 0.5 + o.quizPct * 0.5);
   let capped: 'fail' | 'false-positive' | null = null;
   if (!o.won) {
     total = Math.min(total, 59);
