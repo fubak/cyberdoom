@@ -103,6 +103,8 @@ Append `?debug=1` to expose `window.__cd`:
 - `__cd.evidence()` — collected evidence entries
 - `__cd.toggleLog()` — open/close the evidence log
 - `__cd.probe(kind, dist, withImages?)` / `__cd.stage(kind, dist)` — threat-readability probe / place a staged threat for captures
+- `__cd.openerProbe(withImages?)` — spawn-view legibility (mean luma, black share, ceiling/floor bands; look-gate opener rows)
+- `__cd.reticle()` — current reticle class (`ret-idle` / `ret-target` / `ret-blocked` / `ret-hit`, plus `ret-flash`)
 - `__cd.texInfo()` / `__cd.hurtUniform()` — render internals
 - `__cd.genCompare(keys)` — byte-compare worker-generated pixels vs a local rerun
 - `__cd.audioMeter()` / `__cd.playSfx(name)` — audio debug

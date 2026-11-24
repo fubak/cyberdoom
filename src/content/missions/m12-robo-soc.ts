@@ -803,3 +803,10 @@ m12.script!.triggers!.push({ id: 'sweep-loop-open', after: ['signoff'], kind: 'g
   message: 'Runbook signed off — the sweep return door releases for the exit run.',
   openDoors: ['rf4-sweep-loop'] });
 m12.map.lights = { ...m12.map.lights, ...lightRects([[41, 9, 46, 19, 0.7], [8, 30, 38, 31, 0.55], [44, 4, 45, 7, 0.85], [42, 21, 44, 23, 0.85], [44, 9, 44, 9, 0.35], [43, 19, 43, 19, 0.35]]) };
+// Phase E (P1-12): the opener read as a black void — the noc kit's dark navy
+// walls and deck floor crushed to black past a few tiles. Lift the world light
+// floor, brighten the spawn hall, rim-light the stair/balcony set-piece whose
+// risers were the big black mass, and run a lit floor strip up the route to
+// the SECURE door. Dark pockets and the far rooms keep their gloom.
+m12.map.look = { ...m12.map.look, ambient: 0.07 };
+m12.map.lights = { ...m12.map.lights, ...lightRects([[11, 21, 27, 26, 0.9], [12, 22, 18, 25, 1], [19, 21, 19, 26, 1]]) };

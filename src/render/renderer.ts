@@ -18,6 +18,9 @@ import {
 import { ENEMY_PROFILES } from '../engine/ai';
 import { WALL_H, buildTextures, decalTexture, doorTextureFor, hashStr, lookTheme, textureOr, textureRegistry, variantCount } from './textures';
 import { buildSkyTexture, skyEpisodeForMission } from './sky';
+import { computeSectorLight } from './sectorLight';
+import { cornerJitter, wallCorners, wallFaceLight, type WallLightCtx } from './wallLight';
+import { pickWallFace } from './wallPick';
 import { RES, STATUS_H, VIEW3D_H, VIEW_H, VIEW_W } from './res';
 
 export { VIEW_W, VIEW_H, STATUS_H, VIEW3D_H } from './res';
@@ -247,9 +250,6 @@ const fireUniform = { value: new THREE.Vector4(0, 0, 0, 0) };
 const impactUniform = { value: new THREE.Vector4(0, 0, 0, 0) };
 const impactColUniform = { value: new THREE.Vector3(1, 1, 1) };
 
-/** Wall families flat enough to carry a decal plate overlay. */
-const DECALABLE = new Set(['wall-panel', 'wall-brick', 'wall-tech', 'wall-ribs', 'wall-brick2', 'wall-panel2']);
-
 function worldMaterial(map: THREE.Texture, light = 1, floor = 0.16, tint?: THREE.Vector3, wallLift = 0): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
     vertexShader: WORLD_VS,
@@ -277,6 +277,10 @@ function worldMaterial(map: THREE.Texture, light = 1, floor = 0.16, tint?: THREE
   });
 }
 
+type RGB3 = [number, number, number];
+/** Hue jitter: one triple for the whole quad, or one per corner (seamless walls). */
+type Tint = RGB3 | [RGB3, RGB3, RGB3, RGB3];
+
 class GeoBuilder {
   pos: number[] = [];
   uv: number[] = [];
@@ -285,15 +289,17 @@ class GeoBuilder {
   tint: number[] = [];
   idx: number[] = [];
 
-  /** Quad from 4 corners (CCW from front) with uvs + per-corner shade. `st` = strobe phase id, `tv` = per-face hue jitter. */
-  quad(p: number[][], uv: number[][], s: number[], st = 0, tv: [number, number, number] = [1, 1, 1]): void {
+  /** Quad from 4 corners (CCW from front) with uvs + per-corner shade. `st` = strobe phase id, `tv` = hue jitter (per face, or per corner). */
+  quad(p: number[][], uv: number[][], s: number[], st = 0, tv: Tint = [1, 1, 1]): void {
     const b = this.pos.length / 3;
+    const perCorner = Array.isArray(tv[0]);
     for (let i = 0; i < 4; i++) {
       this.pos.push(p[i][0], p[i][1], p[i][2]);
       this.uv.push(uv[i][0], uv[i][1]);
       this.shade.push(s[i]);
       this.strobe.push(st);
-      this.tint.push(tv[0], tv[1], tv[2]);
+      const t = (perCorner ? (tv as RGB3[])[i] : tv) as RGB3;
+      this.tint.push(t[0], t[1], t[2]);
     }
     this.idx.push(b, b + 1, b + 2, b, b + 2, b + 3);
   }
@@ -632,6 +638,8 @@ export class Renderer {
     // so early tiers glow green, mid reads steel-blue and late alarms red.
     const accentV = new THREE.Vector3(...theme.accent);
     const seed = hashStr(missionId ?? 'cyberdoom');
+    // per-map ambient floor (look.ambient): dark-textured maps keep ceilings/floors legible
+    const worldFloor = Math.max(WORLD_FLOOR, _def.look?.ambient ?? 0);
     this.computeLight(map, _def, entityDefs, missionId);
     const lightAt = (x: number, y: number) => this.tileLight(x, y);
     const builders = new Map<string, { tex: THREE.Texture; b: GeoBuilder }>();
@@ -652,9 +660,9 @@ export class Renderer {
       ty: number,
       nx: number,
       nz: number,
-      shade: number,
+      shade: number | readonly [number, number],
       st = 0,
-      tv?: [number, number, number],
+      tv?: Tint,
       y0 = 0,
       y1 = H,
     ) => {
@@ -664,34 +672,55 @@ export class Renderer {
       const rz = -nx;
       const l = [cx - rx * 0.5, cz - rz * 0.5];
       const r = [cx + rx * 0.5, cz + rz * 0.5];
-      // fake contrast: faces along x read brighter than faces along z
-      const s = shade * (nz !== 0 ? 1.08 : 0.84);
+      // fake contrast: faces along x read brighter than faces along z.
+      // A [left, right] shade pair is the per-edge corner light (wallLight.ts)
+      const o = nz !== 0 ? 1.08 : 0.84;
+      const sl = (typeof shade === 'number' ? shade : shade[0]) * o;
+      const sr = (typeof shade === 'number' ? shade : shade[1]) * o;
       const v0 = y0 / H;
       const v1 = y1 / H;
       b.quad(
         [[l[0], y0, l[1]], [r[0], y0, r[1]], [r[0], y1, r[1]], [l[0], y1, l[1]]],
         [[0, v0], [1, v0], [1, v1], [0, v1]],
-        [s * 0.8, s * 0.8, s, s],
+        [sl * 0.8, sr * 0.8, sr, sl],
         st,
         tv,
       );
     };
     // decal overlays sit a hair off the wall face so they never z-fight
-    const decalFace = (b: GeoBuilder, tx: number, ty: number, nx: number, nz: number, shade: number, st = 0, tv?: [number, number, number]) => {
+    const decalFace = (b: GeoBuilder, tx: number, ty: number, nx: number, nz: number, shade: number | readonly [number, number], st = 0, tv?: Tint) => {
       const cx = tx + 0.5 + nx * (0.5 + 0.014);
       const cz = ty + 0.5 + nz * (0.5 + 0.014);
       const rx = nz;
       const rz = -nx;
       const l = [cx - rx * 0.5, cz - rz * 0.5];
       const r = [cx + rx * 0.5, cz + rz * 0.5];
-      const s = shade * (nz !== 0 ? 1.08 : 0.84);
+      const o = nz !== 0 ? 1.08 : 0.84;
+      const sl = (typeof shade === 'number' ? shade : shade[0]) * o;
+      const sr = (typeof shade === 'number' ? shade : shade[1]) * o;
       b.quad(
         [[l[0], 0, l[1]], [r[0], 0, r[1]], [r[0], H, r[1]], [l[0], H, l[1]]],
         [[0, 0], [1, 0], [1, 1], [0, 1]],
-        [s * 0.8, s * 0.8, s, s],
+        [sl * 0.8, sr * 0.8, sr, sl],
         st,
         tv,
       );
+    };
+    // wall faces take light per edge from the shared grid corner, averaged
+    // within the sector, so collinear neighbours never meet in a hard seam
+    const wallCtx: WallLightCtx = {
+      light: lightAt,
+      solid: (x, y) => {
+        const k = map.cellAt(x, y)?.kind;
+        return k === undefined || k === 'wall' || k === 'door';
+      },
+      sector: (x, y) => map.lightAt(x, y),
+    };
+    const edgeTint = (tx: number, ty: number, dx: number, dz: number): Tint => {
+      const [l, r] = wallCorners(tx, ty, dx, dz);
+      const tl = faceTint(cellHash(l[0], l[1], 29, seed));
+      const tr = faceTint(cellHash(r[0], r[1], 29, seed));
+      return [tl, tr, tr, tl];
     };
 
     const flicker = (x: number, y: number) =>
@@ -723,17 +752,19 @@ export class Renderer {
             // family, then pick one of the baked per-tile variants and a
             // small hue/brightness jitter so no two adjacent tiles match
             const h = (Math.imul(tx * 2 + dx + 1, 73856093) ^ Math.imul(ty * 2 + dz + 1, 19349663) ^ seed) >>> 0;
-            let texId = cell.tex;
-            if (texId === 'wall-panel' && h % 4 === 0) texId = theme.alts[(h >>> 4) % theme.alts.length];
-            else if (texId === 'wall-brick' && h % 6 === 0) texId = 'wall-brick2';
-            const nv = variantCount(texId);
-            if (nv > 1 && (h >>> 16) % nv > 0) texId = `${texId}:v${(h >>> 16) % nv}`;
+            const pick = pickWallFace(cell.tex, h, theme, variantCount);
+            const texId = pick.tex;
             // wall-secret keeps the sector shade but no variant/jitter/tint:
             // the misaligned panel IS the secret-door tell and must stay legible
             const secret = texId === 'wall-secret';
-            const jit = secret ? shade : shade * faceShade(h);
+            const fk = flicker(tx + dx, ty + dz);
+            const [el, er] = wallFaceLight(tx, ty, dx, dz, wallCtx);
+            const [cl, cr] = wallCorners(tx, ty, dx, dz);
+            const jit: [number, number] = secret
+              ? [el * fk, er * fk]
+              : [el * fk * cornerJitter(cl[0], cl[1], seed), er * fk * cornerJitter(cr[0], cr[1], seed)];
             const topH = map.ceilHeightAt(tx + dx, ty + dz);
-            const wallTint: [number, number, number] = secret ? [1, 1, 1] : faceTint(h);
+            const wallTint: Tint = secret ? [1, 1, 1] : edgeTint(tx, ty, dx, dz);
             if (cell.window) {
               // Reinforced glass observation wall: bottom sill + upper lintel + translucent pane
               wallFace(builder(`w:${texId}`, textureOr(texId)), tx, ty, dx, dz, jit, st, wallTint, 0, 0.42);
@@ -743,10 +774,10 @@ export class Renderer {
               wallFace(glassBuilder, tx, ty, dx, dz, Math.max(0.75, shade), 0, [0.55, 0.88, 1.0], 0.42, 0.96);
             } else {
               wallFace(builder(`w:${texId}`, textureOr(texId)), tx, ty, dx, dz, jit, st, wallTint, 0, topH);
-              if (DECALABLE.has(texId.split(':')[0]) && (h >>> 8) % 3 === 0) {
-                const did = theme.decals[(h >>> 12) % theme.decals.length];
+              if (pick.decal) {
+                const did = pick.decal;
                 const dt = decalTexture(did);
-                if (dt) decalFace(builder(`d:${did}`, dt), tx, ty, dx, dz, jit, st, faceTint(h));
+                if (dt) decalFace(builder(`d:${did}`, dt), tx, ty, dx, dz, jit, st, wallTint);
               }
             }
           }
@@ -771,7 +802,7 @@ export class Renderer {
             [[0, 0], [1, 0], [1, 0.1], [0, 0.1]],
             [0.3, 0.3, 0.3, 0.3],
           );
-          const mesh = new THREE.Mesh(b.build(), worldMaterial(tex, 1, WORLD_FLOOR, tintV, 0.055));
+          const mesh = new THREE.Mesh(b.build(), worldMaterial(tex, 1, worldFloor, tintV, 0.055));
           this.levelGroup.add(mesh);
           this.doorMeshes.set(id, mesh);
         }
@@ -817,7 +848,7 @@ export class Renderer {
           for (const [dx, dz] of DIRS) {
             wallFace(lb, tx, ty, dx, dz, L * 0.85, 0, undefined, -skirtDepth, 0);
           }
-          const liftMesh = new THREE.Mesh(lb.build(), worldMaterial(liftTopTex, 1, WORLD_FLOOR, tintV, 0.055));
+          const liftMesh = new THREE.Mesh(lb.build(), worldMaterial(liftTopTex, 1, worldFloor, tintV, 0.055));
           liftMesh.position.y = floorH;
           this.levelGroup.add(liftMesh);
           this.liftMeshes.push({ mesh: liftMesh, tx, ty });
@@ -877,7 +908,7 @@ export class Renderer {
       const wallish = key.startsWith('w:') || key.startsWith('d:') || key === 'doortrak';
       this.levelGroup.add(new THREE.Mesh(
         b.build(),
-        worldMaterial(tex, 1, WORLD_FLOOR, key.startsWith('l:') ? accentV : tintV, wallish ? 0.055 : 0),
+        worldMaterial(tex, 1, worldFloor, key.startsWith('l:') ? accentV : tintV, wallish ? 0.055 : 0),
       ));
     }
     if (glassBuilder.pos.length > 0) {
@@ -1030,157 +1061,15 @@ export class Renderer {
     };
   }
 
-  /**
-   * Sector lighting: the mission's per-tile light is the sector level; within
-   * a sector, ceiling lamps on a 3-tile grid cast pools that fall off toward
-   * near-black between them. Dark sectors (< 0.5) and ~1 in 5 lamps elsewhere
-   * are dead, leaving black patches; the spawn area always stays lit.
-   */
+  /** Sector lighting (see computeSectorLight): per-tile light, strobes and lamp cells. */
   private computeLight(map: WorldMap, def: MapDef, entityDefs?: { x: number; y: number; kind: string }[], missionId?: string): void {
-    const w = map.w;
-    const h = map.h;
-    this.light = new Float32Array(w * h);
-    this.strobe = new Float32Array(w * h);
-    this.strobeW = w;
-    this.strobeCount = 0;
-    this.lamps.clear();
-    this.deadLamps.clear();
-    const src: [number, number, number][] = [];
-    const open = (x: number, y: number) => {
-      const k = map.cellAt(x, y)?.kind;
-      return k !== undefined && k !== 'wall' && k !== 'door';
-    };
-    // Dark pockets: dead-end floor cells (closets, secret nooks, maintenance
-    // stubs) with no authored light override. They get no lamp and drop to
-    // near-dark, so every mission gets real black areas to contrast the lit
-    // corridors. Secret doors count as solid: the closet behind them is dark.
-    const pocket = new Set<string>();
-    const solid = (x: number, y: number) => {
-      const c = map.cellAt(x, y);
-      return !c || c.kind === 'wall' || (c.kind === 'door' && !!c.secret);
-    };
-    // never pocket a gameplay-critical cell: exits and cells holding a
-    // required interactable (console/workstation/npc — sprites that sit at a
-    // low readability floor) must stay readable. Pickup nooks still darken:
-    // items carry a 0.45 floor, the Doom "glow in a dark closet" look.
-    const critical = new Set<string>();
-    for (const e of entityDefs ?? []) {
-      if (e.kind === 'console' || e.kind === 'workstation' || e.kind === 'npc') {
-        critical.add(`${Math.floor(e.x)},${Math.floor(e.y)}`);
-      }
-    }
-    for (let y = 0; y < h; y++) {
-      for (let x = 0; x < w; x++) {
-        if (!open(x, y) || def.lights?.[`${x},${y}`] !== undefined) continue;
-        if (map.cellAt(x, y)?.kind === 'exit' || critical.has(`${x},${y}`)) continue;
-        let walls = 0;
-        for (const [dx, dz] of DIRS) if (solid(x + dx, y + dz)) walls++;
-        if (walls >= 3) pocket.add(`${x},${y}`);
-      }
-    }
-    const sx = def.spawn.x;
-    const sy = def.spawn.y;
-    for (let y = 0; y < h; y++) {
-      for (let x = 0; x < w; x++) {
-        if (map.cellAt(x, y)?.kind === 'exit') src.push([x + 0.5, y + 0.5, 0.8]);
-        if (!open(x, y) || x % 3 !== 1 || y % 3 !== 1) continue;
-        const key = `${x},${y}`;
-        if (pocket.has(key)) continue;
-        const hash = (Math.imul(x, 73856093) ^ Math.imul(y, 19349663)) >>> 0;
-        const nearSpawn = Math.hypot(x + 0.5 - sx, y + 0.5 - sy) < 2.5;
-        if (!nearSpawn && (map.lightAt(x, y) < 0.5 || hash % 5 === 0)) {
-          this.deadLamps.add(key);
-          continue;
-        }
-        this.lamps.add(key);
-        src.push([x + 0.5, y + 0.5, 1]);
-      }
-    }
-    for (let y = 0; y < h; y++) {
-      for (let x = 0; x < w; x++) {
-        let best = 0;
-        for (const [lx, ly, ls] of src) {
-          const d2 = (x + 0.5 - lx) ** 2 + (y + 0.5 - ly) ** 2;
-          if (d2 < 16) best = Math.max(best, ls * Math.exp(-d2 / 3.2));
-        }
-        const base = map.lightAt(x, y);
-        let v = Math.min(1, base * (0.45 + 0.8 * best));
-        // Darkness drama: crush dim sectors toward gloom — Doom's colormap
-        // loses whole bands in shadow, so a 0.3 sector is a shadow, not a
-        // grey room. Continuous below ~0.5 light, identity above. The 0.09
-        // floor (plus the shader's world floor) keeps pocket geometry legible.
-        v *= Math.min(1, 0.45 + 1.1 * v);
-        this.light[y * w + x] = Math.max(0.035, v);
-      }
-    }
-    for (const key of pocket) {
-      const [x, y] = key.split(',').map(Number);
-      this.light[y * w + x] = Math.min(this.light[y * w + x], 0.024);
-      // the open cell at the pocket's mouth dims too, so the threshold into
-      // the nook fades rather than snapping — but the mouth stays lit enough
-      // to read as the light source at the pocket's edge (the Doom doorway).
-      for (const [dx, dz] of DIRS) {
-        const nx = x + dx;
-        const ny = y + dz;
-        if (!open(nx, ny) || pocket.has(`${nx},${ny}`)) continue;
-        const i = ny * w + nx;
-        this.light[i] = Math.min(this.light[i], Math.max(this.light[i] * 0.55, 0.1));
-      }
-    }
-
-    // Doom strobing sectors: 1-2 lit, connected regions blink in sync per
-    // sector (mid and late missions). Lit enough that the blink reads as a
-    // fixture switching off, never touching the spawn approach or exit pads.
-    const missionNum = /^m(\d+)$/i.exec(missionId ?? '')?.[1];
-    if (missionNum === undefined || +missionNum >= 4) {
-      const seen = new Uint8Array(w * h);
-      const comps: { cells: number[]; cx: number; cy: number }[] = [];
-      for (let y = 0; y < h; y++) {
-        for (let x = 0; x < w; x++) {
-          const i = y * w + x;
-          if (seen[i] || !open(x, y) || this.light[i] < 0.55) continue;
-          const cells: number[] = [];
-          const stack = [i];
-          seen[i] = 1;
-          let sx = 0;
-          let sy = 0;
-          while (stack.length) {
-            const j = stack.pop()!;
-            cells.push(j);
-            const jx = j % w;
-            const jy = (j / w) | 0;
-            sx += jx + 0.5;
-            sy += jy + 0.5;
-            for (const [dx, dz] of DIRS) {
-              const nx = jx + dx;
-              const ny = jy + dz;
-              if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
-              const ni = ny * w + nx;
-              if (!seen[ni] && open(nx, ny) && this.light[ni] >= 0.55) {
-                seen[ni] = 1;
-                stack.push(ni);
-              }
-            }
-          }
-          comps.push({ cells, cx: sx / cells.length, cy: sy / cells.length });
-        }
-      }
-      const pick = comps
-        .filter((c) => c.cells.length >= 5 && Math.hypot(c.cx - def.spawn.x, c.cy - def.spawn.y) >= 5)
-        .sort((a, b) => Math.min(a.cells.length, 24) - Math.min(b.cells.length, 24) || a.cx - b.cx || a.cy - b.cy)
-        .slice(0, 2);
-      for (const c of pick) {
-        const phase = ++this.strobeCount;
-        // room-sized patch: the brightest cells of the region (its lamp pool)
-        const core = [...c.cells].sort((a, b) => this.light[b] - this.light[a]).slice(0, 24);
-        for (const j of core) {
-          const jx = j % w;
-          const jy = (j / w) | 0;
-          if (map.cellAt(jx, jy)?.kind === 'exit') continue;
-          this.strobe[j] = phase;
-        }
-      }
-    }
+    const r = computeSectorLight(map, def, entityDefs, missionId);
+    this.light = r.light;
+    this.strobe = r.strobe;
+    this.strobeW = map.w;
+    this.strobeCount = r.strobeCount;
+    this.lamps = r.lamps;
+    this.deadLamps = r.deadLamps;
   }
 
 

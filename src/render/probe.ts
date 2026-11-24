@@ -254,6 +254,86 @@ export async function lightProbe(
   }
 }
 
+export interface OpenerProbeResult {
+  /** Mean luma (0-255) of the whole 3D view at the mission's spawn pose. */
+  mean: number;
+  /** Median luma of the whole view. */
+  median: number;
+  /** Fraction of the view under 16/255 luma (the "pure-black mass" share). */
+  darkFrac: number;
+  /** Mean luma of the top and bottom thirds: ceiling and floor must read. */
+  ceil: number;
+  floor: number;
+  images?: string[];
+}
+
+/**
+ * LOOK: opener probe (debug only). The first frame a player sees: stand at
+ * the map's spawn with the spawn angle, hide every sprite, and measure how
+ * much of the view is a readable space vs a black void. The look gate uses it
+ * for the spawn-view rows (M12 opener: ceiling/floor must not vanish).
+ */
+export async function openerProbe(
+  r: Renderer,
+  map: WorldMap,
+  entities: Entity[],
+  player: Player,
+  withImages = false,
+): Promise<OpenerProbeResult> {
+  r.debugNoFlash = true;
+  r.debugClearFx();
+  r.debugSuppressFx = true;
+  r.debugHidden.clear();
+  for (const e of entities) r.debugHidden.add(e.def.id);
+  try {
+    const sp = map.def.spawn;
+    player.x = sp.x;
+    player.y = sp.y;
+    player.angle = sp.angle;
+    player.vx = 0;
+    player.vy = 0;
+    player.snap();
+    for (let i = 0; i < 3; i++) await frame();
+    const v = await r.captureView();
+    return { ...openerStats(v), ...(withImages ? { images: [toUrl(v)] } : {}) };
+  } finally {
+    r.debugHidden.clear();
+    r.debugSuppressFx = false;
+    r.debugNoFlash = false;
+  }
+}
+
+/** Pure luma statistics behind {@link openerProbe} (unit-testable). */
+export function openerStats(v: { w: number; h: number; data: Uint8Array }): Omit<OpenerProbeResult, 'images'> {
+  const n = v.w * v.h;
+  const ls = new Float32Array(n);
+  let sum = 0;
+  let under = 0;
+  let top = 0;
+  let bot = 0;
+  const third = Math.floor(v.h / 3);
+  for (let y = 0; y < v.h; y++) {
+    for (let x = 0; x < v.w; x++) {
+      const i = y * v.w + x;
+      const l = luma(v.data, i * 4);
+      ls[i] = l;
+      sum += l;
+      if (l < 16) under++;
+      if (y < third) top += l;
+      else if (y >= v.h - third) bot += l;
+    }
+  }
+  ls.sort();
+  const band = Math.max(1, third * v.w);
+  return {
+    mean: +(sum / Math.max(1, n)).toFixed(1),
+    median: Math.round(ls[Math.floor(n / 2)] ?? 0),
+    darkFrac: +(under / Math.max(1, n)).toFixed(3),
+    ceil: +(top / band).toFixed(1),
+    floor: +(bot / band).toFixed(1),
+  };
+}
+
 export function placeThreat(
   map: WorldMap,
   entities: Entity[],

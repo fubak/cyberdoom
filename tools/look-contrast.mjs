@@ -12,6 +12,8 @@
 // frames are ~26% near-black, but a flat grey room with no true dark fails
 // just as a void does.
 // Mid and late missions (m04+) must contain at least one strobing light sector.
+// Opener rows (OPENERS below) check the spawn view itself via __cd.openerProbe():
+// mean luma, sub-16 share, and ceiling/floor band luma (M01 spawn room, M12).
 import { chromium } from '@playwright/test';
 
 const base = (process.argv[2] ?? 'http://localhost:5173').replace(/\/$/, '');
@@ -21,6 +23,18 @@ const base = (process.argv[2] ?? 'http://localhost:5173').replace(/\/$/, '');
 // mid/late mission m04+ gets 2).
 const MISSIONS = ['m01', 'm03', 'm09', 'm11', 'm12'];
 const KINDS = ['worm', 'trojan', 'ransomware', 'rootkit', 'logicbomb', 'rat'];
+// Opener rows: the spawn view (sprites hidden) must read as a space, not a
+// void. Thresholds sit a few luma under the measured post-fix values and
+// above the pre-fix ones, so a regression to the old look fails:
+//  - m01 spawn room (lit office): measured mean 72, darkFrac 0.003.
+//  - m12 opener (Phase E P1-12): before mean 34.9, darkFrac 0.103, ceiling
+//    band 36.2, floor band 32.7 (ceiling/floor vanished); after mean 41.6,
+//    darkFrac 0.023, ceiling 46.4, floor 37.1. (ambient 0.07, not higher:
+//    0.1 lifted the darkest-run darkFrac to 0.111, under the 0.12 gloom gate.)
+const OPENERS = {
+  m01: { mean: 60, darkFrac: 0.02, ceil: 50, floor: 60 },
+  m12: { mean: 38, darkFrac: 0.05, ceil: 40, floor: 34 },
+};
 const DISTS = [6, 10, 15];
 
 const browser = process.env.CDP_URL
@@ -33,6 +47,7 @@ page.on('pageerror', (e) => errors.push(e.message));
 let fail = 0;
 const rows = [];
 const lightRows = [];
+const openerRows = [];
 for (const m of MISSIONS) {
   await page.goto(`${base}/?debug=1&mission=${m}&gender=male`);
   await page.waitForFunction(() => window.__cd?.state().mission != null, null, { timeout: 30000 });
@@ -61,11 +76,19 @@ for (const m of MISSIONS) {
   const sOk = !midLate || strobe.phases >= 1;
   if (!sOk) fail++;
   lightRows.push({ mission: m, near2: lp.near, far10: lp.far, ratio: lp.ratio, dark: lp.dark, darkLight: lp.darkLight, darkFrac: lp.darkFrac, darkP10: lp.darkP10, strobe: strobe.phases, ok: lOk && sOk });
+  const gate = OPENERS[m];
+  if (gate) {
+    const op = await page.evaluate(() => window.__cd.openerProbe());
+    const oOk = op.mean >= gate.mean && op.darkFrac <= gate.darkFrac && op.ceil >= gate.ceil && op.floor >= gate.floor;
+    if (!oOk) fail++;
+    openerRows.push({ mission: m, ...op, gate: JSON.stringify(gate), ok: oOk });
+  }
 }
 console.table(rows);
 console.table(lightRows);
+console.table(openerRows);
 if (errors.length) console.log('page errors:\n' + errors.join('\n'));
-console.log(fail || errors.length ? `FAIL: ${fail} probe(s) below target` : 'PASS: contrast >= 3:1, p10 >= 8, far/near <= 0.7, dark 12-46, darkFrac 0.12-0.28, strobes on m04+');
+console.log(fail || errors.length ? `FAIL: ${fail} probe(s) below target` : 'PASS: contrast >= 3:1, p10 >= 8, far/near <= 0.7, dark 12-46, darkFrac 0.12-0.28, strobes on m04+, opener rows (m01, m12)');
 await page.close();
 if (!process.env.CDP_URL) await browser.close();
 process.exit(fail || errors.length ? 1 : 0);
