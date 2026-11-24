@@ -5,6 +5,7 @@ import { registerGenJob } from './gen';
 import { deferGenJob, genPoolActive, installGenNow } from './genpool';
 import { bevel, grime, noiseFill, packPixels, packTexture, paintRaw, type PaintCtx, type Painter } from './pixel';
 import { RES, TEX } from './res';
+import { finishTexture, grainFor, type FinishKind } from './texFinish';
 import { OFFICE_DECALS, officeTextures } from './texturesOffice';
 
 /**
@@ -30,10 +31,15 @@ let textureJobsDone = false;
  * that needs the texture now goes through ensureTexture(), which runs the job
  * synchronously — identical pixels either way (the pipeline is seeded).
  */
-function makeTexture(id: string, w: number, h: number, painter: Painter, wallGrime = false): void {
+function makeTexture(id: string, w: number, h: number, painter: Painter, wallGrime = false, finish?: FinishKind): void {
   const key = `tex:${id}`;
+  // LOOK: walls and flats get the shared baked finish (texFinish.ts); decals stay as painted
+  const paint = () => {
+    const raw = paintRaw(w, h, id, painter, RES, wallGrime);
+    return finish ? finishTexture(raw, w * RES, h * RES, { kind: finish, grain: grainFor(id) }) : raw;
+  };
   registerGenJob(key, { setId: '$tex', first: true }, () =>
-    packPixels(w * RES, h * RES, paintRaw(w, h, id, painter, RES, wallGrime)));
+    packPixels(w * RES, h * RES, paint()));
   if (jobsOnly) return;
   if (genPoolActive()) {
     const t = new THREE.DataTexture(new Uint8Array(w * RES * h * RES * 4), w * RES, h * RES, THREE.RGBAFormat);
@@ -49,10 +55,10 @@ function makeTexture(id: string, w: number, h: number, painter: Painter, wallGri
       t.mipmaps = res.mipmaps;
       t.needsUpdate = true;
     };
-    if (!deferGenJob(key, install)) install(packPixels(w * RES, h * RES, paintRaw(w, h, id, painter, RES, wallGrime)));
+    if (!deferGenJob(key, install)) install(packPixels(w * RES, h * RES, paint()));
     return;
   }
-  const t = packTexture(w * RES, h * RES, paintRaw(w, h, id, painter, RES, wallGrime));
+  const t = packTexture(w * RES, h * RES, paint());
   textureRegistry.register(id, t);
 }
 
@@ -63,8 +69,8 @@ function ensureTexture(t: THREE.Texture): THREE.Texture {
   return t;
 }
 
-const wall = (id: string, p: Painter) => makeTexture(id, TEX.wallW / RES, TEX.wallH / RES, p, true);
-const flat = (id: string, p: Painter) => makeTexture(id, TEX.flat / RES, TEX.flat / RES, p);
+const wall = (id: string, p: Painter) => makeTexture(id, TEX.wallW / RES, TEX.wallH / RES, p, true, 'wall');
+const flat = (id: string, p: Painter) => makeTexture(id, TEX.flat / RES, TEX.flat / RES, p, false, 'flat');
 
 /**
  * Per-tile variants: the dominant walls/flats get `VARIANTS` extra baked

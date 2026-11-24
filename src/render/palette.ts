@@ -28,6 +28,25 @@ const RAMPS: { n: number; stops: RGB[] }[] = [
   { n: 16, stops: [[20, 4, 14], [200, 40, 120], [255, 180, 220]] }, // magenta (malware)
 ];
 
+/** How far a ramp's mid-darks lean blue and its mid-lights lean red (8-bit units). */
+const BEND = 14;
+/** Ramp position below which entries are not bent. */
+const DARK_KEEP = 0.2;
+
+/**
+ * LOOK: bend a ramp entry cool in the darks and warm in the lights, the way a
+ * painted ramp shifts hue with value. Brightness is held, and the ends of
+ * each ramp are untouched, so black stays black and white stays white.
+ */
+function bend(c: RGB, t: number): RGB {
+  // the darkest fifth of each ramp stays as authored: the gloom gate counts
+  // near-black pixels, and re-hued dark entries change which ones snap there
+  const u = Math.max(0, Math.min(1, (t - DARK_KEEP) / 0.2));
+  const k = (t - 0.5) * 2 * Math.sin(Math.PI * t) * BEND * u * u * (3 - 2 * u);
+  const dl = 0.2126 * k - 0.0722 * k;
+  return [c[0] + k - dl, c[1] - dl, c[2] - k - dl];
+}
+
 function lerp(a: RGB, b: RGB, t: number): RGB {
   return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
 }
@@ -37,8 +56,9 @@ export function buildPalette(): RGB[] {
   for (const r of RAMPS) {
     for (let i = 0; i < r.n; i++) {
       const t = i / (r.n - 1);
-      const c = t < 0.5 ? lerp(r.stops[0], r.stops[1], t * 2) : lerp(r.stops[1], r.stops[2], (t - 0.5) * 2);
-      out.push([Math.round(c[0]), Math.round(c[1]), Math.round(c[2])]);
+      const c = bend(t < 0.5 ? lerp(r.stops[0], r.stops[1], t * 2) : lerp(r.stops[1], r.stops[2], (t - 0.5) * 2), t);
+      const u8 = (v: number) => Math.max(0, Math.min(255, Math.round(v)));
+      out.push([u8(c[0]), u8(c[1]), u8(c[2])]);
     }
   }
   return out.slice(0, 256);
