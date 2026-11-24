@@ -33,6 +33,8 @@ export interface SpriteSet {
   gib?: [number, number, number];
   /** Share of the canvas height (from base) up to the top opaque row; measured lazily by the renderer. */
   topFrac?: number;
+  /** Frames per second for 'flicker' sets (default 3). */
+  fps?: number;
   /** Median peak channel (0..1) of the display frame's body texels; measured lazily by the renderer. */
   midPeak?: number;
 }
@@ -1464,48 +1466,67 @@ export function buildSprites(jobs = false): void {
       p.glow.fillRect(0, 0, 8, 8);
     },
   })));
-  makeSet('fx-scan', 16, 16, 0.34, 'flicker', [0, 1].map((f) => ({
+  // FX: a four-frame pulse with a sparkle that turns a step per frame
+  makeSet('fx-scan', 16, 16, 0.34, 'flicker', [0, 1, 2, 3].map((f) => ({
     key: `f${f}`,
     draw: (p: PaintCtx) => {
-      pxEllipse(p.g, 8, 8, 7 - f, 7 - f, '#18a8d8');
-      pxEllipse(p.g, 8, 8, 5 - f, 5 - f, '#7af8ff');
+      const r = [7, 6, 5, 6][f];
+      pxEllipse(p.g, 8, 8, r, r, '#18a8d8');
+      pxEllipse(p.g, 8, 8, r - 2, r - 2, '#7af8ff');
       pxEllipse(p.g, 8, 8, 2, 2, '#ffffff');
+      const turn = (f / 4) * (Math.PI / 2);
+      p.g.fillStyle = '#ffffff';
+      for (let k = 0; k < 4; k++) {
+        const a = turn + (k * Math.PI) / 2;
+        p.g.fillRect(Math.round(8 + Math.cos(a) * (r - 1)) - 0.5, Math.round(8 + Math.sin(a) * (r - 1)) - 0.5, 1, 1);
+      }
       p.glow.fillStyle = '#fff';
       p.glow.fillRect(0, 0, 16, 16);
     },
   })));
   // Hostile payloads: Doom-imp-fireball scale — a big roaring orb, every
   // lit texel on the glow layer (fullbright) so it reads and can be dodged
-  // in dead-dark corridors.
-  makeSet('fx-payload', 20, 20, 0.62, 'flicker', [0, 1].map((f) => ({
+  // in dead-dark corridors. Six frames: the orb pulses and its flame flecks
+  // orbit it once per cycle.
+  makeSet('fx-payload', 20, 20, 0.62, 'flicker', [0, 1, 2, 3, 4, 5].map((f) => ({
     key: `f${f}`,
     draw: (p: PaintCtx) => {
       const { g } = p;
-      pxEllipse(g, 10, 10, 9 - f, 9 - f, '#7a1c0e');
-      pxEllipse(g, 10, 10, 8 - f, 8 - f, '#c83414');
-      pxEllipse(g, 10, 10, 6 - f, 6 - f, f ? '#ff9a24' : '#ff5522');
-      pxEllipse(g, 10, 10, 4 - f, 4 - f, f ? '#ffe06a' : '#ffb13b');
+      const b = f % 2;
+      pxEllipse(g, 10, 10, 9 - b, 9 - b, '#7a1c0e');
+      pxEllipse(g, 10, 10, 8 - b, 8 - b, '#c83414');
+      pxEllipse(g, 10, 10, 6 - b, 6 - b, b ? '#ff9a24' : '#ff5522');
+      pxEllipse(g, 10, 10, 4 - b, 4 - b, b ? '#ffe06a' : '#ffb13b');
       pxEllipse(g, 10, 10, 2, 2, '#fff2c0');
-      // licking flame flecks that swap frames
-      lit(p, '#ff5522', 10 - 8 + f * 2, 3 + f * 2, 3, 3);
-      lit(p, '#ffb13b', 10 + 5 - f * 3, 13 - f * 2, 2, 2);
+      for (let k = 0; k < 3; k++) {
+        const a = (f / 6) * Math.PI * 2 + k * 2.1;
+        const size = 3 - (k % 2);
+        lit(p, k % 2 ? '#ffb13b' : '#ff5522', Math.round(10 + Math.cos(a) * 7) - 1, Math.round(10 + Math.sin(a) * 7) - 1, size, size);
+      }
       // the whole orb is fullbright
-      pxEllipse(p.glow, 10, 10, 9 - f, 9 - f, '#fff');
+      pxEllipse(p.glow, 10, 10, 9 - b, 9 - b, '#fff');
     },
   })));
-  makeSet('fx-puff', 24, 24, 0.34, 'static', [0, 1, 2].map((f) => ({
+  // Impact: a flash, an expanding ring, then sparks that thin out and cool to green
+  makeSet('fx-puff', 24, 24, 0.34, 'static', [0, 1, 2, 3, 4].map((f) => ({
     key: `f${f}`,
     draw: (p: PaintCtx) => {
-      const r = 4 + f * 3;
+      const r = 3 + f * 2;
+      const size = f < 4 ? 2 : 1;
       for (let a = 0; a < 12; a++) {
-        const t = (a / 12) * Math.PI * 2;
-        const x = Math.round(12 + Math.cos(t) * r);
-        const y = Math.round(12 + Math.sin(t) * r);
-        lit(p, f === 2 ? '#2cff5a' : '#b8ffff', x, y, 2, 2);
+        if (f >= 3 && a % 2) continue;
+        if (f === 4 && a % 4) continue;
+        const t = (a / 12) * Math.PI * 2 + f * 0.26;
+        lit(p, f >= 2 ? '#2cff5a' : '#b8ffff', Math.round(12 + Math.cos(t) * r) - 1, Math.round(12 + Math.sin(t) * r) - 1, size, size);
       }
       if (f === 0) lit(p, '#ffffff', 10, 10, 4, 4);
+      if (f === 1) lit(p, '#b8ffff', 11, 11, 2, 2);
     },
   })));
+  for (const id of ['fx-scan', 'fx-payload']) {
+    const set = spriteSets.get(id);
+    if (set) set.fps = 12;
+  }
 
   // Doom teleport-fog flash where a threat materialises (ambushes, worm
   // copies): a tall searing column that collapses inward, a ground-flash
@@ -1513,20 +1534,22 @@ export function buildSprites(jobs = false): void {
   // The column is authored, not a white pole: a domed top, ragged dithered
   // edges, horizontal scanline bands and interior flecks, so it still reads
   // as an energy effect when the frame edge clips it.
-  makeSet('fx-spawn', 24, 84, 2.1, 'static', [0, 1, 2, 3].map((f) => ({
+  makeSet('fx-spawn', 24, 84, 2.1, 'static', [0, 1, 2, 3, 4, 5, 6, 7].map((f) => ({
     key: `f${f}`,
     draw: (p: PaintCtx) => {
       const { g } = p;
-      const top = 3 + f * 8;
-      const bot = 82 - f * 3;
-      const half = 11 - f * 2;
+      // u runs 0..3 across the eight frames: the same collapse the four-frame column made
+      const u = (f / 7) * 3;
+      const top = Math.round(3 + u * 8);
+      const bot = Math.round(82 - u * 3);
+      const half = Math.max(2, Math.round(11 - u * 2));
       const x0 = 12 - half;
       const x1 = 12 + half;
       // outer fog column: mid cyan with darker edge columns — brightness steps
       // stand in for alpha falloff, so clipped silhouettes read soft, not cut
-      g.fillStyle = f < 2 ? '#3fc4f0' : '#2a88c0';
+      g.fillStyle = u < 1.5 ? '#3fc4f0' : '#2a88c0';
       g.fillRect(x0 + 1, top + 4, half * 2 - 2, bot - top - 4);
-      g.fillStyle = f < 2 ? '#2a88c0' : '#1c5e88';
+      g.fillStyle = u < 1.5 ? '#2a88c0' : '#1c5e88';
       g.fillRect(x0, top + 4, 1, bot - top - 4);
       g.fillRect(x1 - 1, top + 4, 1, bot - top - 4);
       // ragged edge dither: sparse stray texels past the core edges so the
@@ -1548,7 +1571,7 @@ export function buildSprites(jobs = false): void {
       // searing core — bright middle column, fullbright
       lit(p, f === 0 ? '#ffffff' : '#d8f8ff', 12 - half * 0.45, top + 2, half * 0.9, bot - top - 2);
       p.glow.fillStyle = '#fff';
-      p.glow.fillRect(12 - half * 0.6, top + 2, half * 1.2, (bot - top) * (0.72 - f * 0.12));
+      p.glow.fillRect(12 - half * 0.6, top + 2, half * 1.2, (bot - top) * (0.72 - u * 0.12));
       // interior flecks: data shards swirling inside the beam
       for (let i = 0; i < 18; i++) {
         const fx = x0 + 2 + ((i * 7 + f * 11) % Math.max(4, half * 2 - 4));
@@ -1557,7 +1580,7 @@ export function buildSprites(jobs = false): void {
         g.fillRect(fx, fy, 1, i % 2 ? 2 : 1);
       }
       // ground-flash ring
-      lit(p, f < 2 ? '#b8f4ff' : '#5ac8f0', 12 - 11 + f * 3, 80 + f, 22 - f * 6, 2);
+      lit(p, u < 1.5 ? '#b8f4ff' : '#5ac8f0', 1 + Math.round(u * 3), 80 + Math.round(u), 22 - Math.round(u * 6), 2);
       // thrown sparks
       for (let i = 0; i < 14; i++) {
         const sx = ((i * 7 + f * 11) % 22) + 1;

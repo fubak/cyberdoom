@@ -2308,6 +2308,10 @@ class Game {
         if (angle !== undefined) g.player.angle = angle;
         g.player.snap();
       },
+      /** LOOK: play the threat-materialise column at a map position (capture aid). */
+      teleportFx(x: number, y: number) {
+        g.renderer.spawnTeleport(x, y);
+      },
       /** Pull the trigger once (works without pointer lock). */
       fire() {
         g.debugFire = true;
