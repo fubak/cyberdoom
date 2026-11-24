@@ -25,7 +25,8 @@ export interface CdState {
   ammo: Record<string, number>;
   roles: string[];
   inventory: string[];
-  dossier: { open: boolean; mode: string; page: number; entries: number };
+  dossier: { open: boolean; mode: string; page: number; entries: number; emptyLines: string[] };
+  automap: boolean;
   lossReason: string | null;
   callsPending: string[];
   objectives: { id: string; done: boolean; failed: boolean; progress: number }[];

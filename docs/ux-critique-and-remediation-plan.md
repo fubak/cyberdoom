@@ -171,3 +171,38 @@ The review checked each P0 and several P1 findings in source. These **override**
 - **Phase D:** drop #16; character-select skull; typeface unification and contrast; letterbox; add missing options and title access to Options/Controls.
 - **Phase E:** drop #21 clamp/stop-distance; loom tuning as a playtest decision; hit feedback, wall-seam audit, texture variety, M12 lighting.
 - **Phase F/G:** evidence-log empty state; first-time-player Playwright journey; human playtest in a normal browser.
+
+---
+
+## 5. Status (2026-11-23)
+
+All seven phases have landed or are in review. Each PR carries its own unit
+tests; the Playwright suite runs on every PR.
+
+| Phase | PR | What shipped |
+|-------|----|--------------|
+| A — text, keys, glyphs | #134 | 9px key plates so **[E]** keeps its bottom bar (no more "[F] INSPECT HOST"); TINY `D` with a square stem (EDR/DISK, not EOR/OISK); briefing paging ←/→ or A/D with on-screen PREV/NEXT; keep-with-next in `paginate` (no orphan headings, debrief too); automap markers only on explored tiles, "IT OPS" label, clean objective marks every lookalike host (no triage spoiler); README tools/controls/M13; M01 order 1 and curriculum USB copy. |
+| B — onboarding and objectives | #135 | Prompts stay visible while the mouse is free (tool line names the fire key) and `LOOK_HINT` says the keyboard works; first-run M01 control tips through `Arsenal.introduce()` (persisted, skipped for returning players); trimmed tool `control.use` copy; READ THIS! generated from the tool registry and bindings; single-line objective HUD keeping `(n/m)`; briefing objectives shown whole, CONTROLS page, THREAT/SKILL explained. |
+| C — HUD readability | #136 | Owned-only ammo rows with empty/low states; slot strip 1–9 with digits (passive 4 and 7 included); `BADGE:` cell coloured by privilege tier with a one-time denial explanation; timed, named damage alert with distance/bearing and a non-strobing edge tint; ticker priority queue, max 2 messages, no repeats, no ellipsis. |
+| D — menus and options | #137 | Title OPTIONS and CONTROLS (shared with pause); new options: field of view, reduced flashing (1/s flash budget, 0.35x strength); character-select skull moved out of the card, larger preview; pixel-face mission select, threat legend, ≥4.5:1 locked rows; themed letterbox. |
+| E — visuals | #139 | Reticle states by shape and colour (idle / target / blocked / hit) with a rate-limited hit flash; wall light from shared corners (no seams); office wall alternates and decals; M12 opener lighting with `__cd.openerProbe()` look-gate rows for M01 and M12. |
+| F — automap and evidence log | #138 | Automap auto-fit on first open, edge arrows for off-map objectives, door/lock/exit icons; evidence-log empty state that says how to log evidence; `LOG +N [L]` ticker badge; paged TAB objectives overlay. |
+| G — verification | this PR (`fix/phase-g-verify`) | `tests/e2e/first-run.spec.ts`: fresh storage → title (OPTIONS/CONTROLS) → READ THIS! (all nine tools, key controls) → New Game → M01 briefing paging by keys and buttons with no orphan heading on any page → deploy → the four onboarding tips, capture hint while the mouse is free, single-line objective, **[E]** plate checked against **[F]** in HUD pixels, automap (M), empty log (L). New debug hooks: `__cd.hud()`, `state().automap`, `state().dossier.emptyLines`, `?freemouse=1`, and an accessible text copy of READ THIS! (`[data-read-this]`). TINY `+`, `[` and `]` now render crisp, so the badge reads "LOG +1 [L]" instead of "LOG •1 (L)". README controls/tools/options/first-run/limitations updated. |
+
+**Intentionally skipped or withdrawn**
+- **Invert-Y** (#20): the game has no vertical look axis (Doom-style yaw only), so there is nothing to invert.
+- **HUD size / high-contrast HUD option** (#20): not cheap with the fixed 320x200 pixel HUD; colour-blind palette and the shape-coded reticle cover part of the need. Still open.
+- **Title hit areas** (P1-6 / #16): refuted in §3 (pane coordinate scaling); not changed.
+- **Enemy near-plane clamp / 1.8-tile stop distance** (P1-10 / #21): the loom clamp already existed and the stop distance would break worm melee; left as a playtest tuning call on `LOOM_CAP_FRAC` / `LOOM_FILL_FRAC` / `CHASE_BOOST`.
+- **Text size option**, **objective compass ping** (#7) and **M01 tutorial-target narrative rework** (#8 beyond the copy fix): not done.
+
+**Still needs a human (not verifiable in automation)**
+- Real pointer-lock mouse look in a normal desktop browser, a full hand-played M01 win, the debrief quiz and death flow, a laptop-size viewport pass (#31).
+- M05 Change Freeze is still only confirmed winnable by the walkthrough test, not by hand.
+- Enemy variety audit across M02–M11 at 3/6/10 tiles (#26) with `__cd.probe`.
+- Loom tuning (P1-10) and whether M12's darker "SOC at night" look is now right.
+
+**Remaining ideas**
+- A HUD scale / high-contrast toggle once the bar layout is parameterised.
+- An optional objective compass ping on the automap edge arrow's bearing.
+- Screenshot-diff baselines for the first-run journey (it attaches screenshots today but does not diff them).

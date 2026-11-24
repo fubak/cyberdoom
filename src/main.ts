@@ -82,6 +82,12 @@ import { handMods } from './render/viewmodels';
 const FIXED_DT = 1 / 60;
 const params = new URLSearchParams(location.search);
 const DEBUG = params.get('debug') === '1';
+/**
+ * e2e: ?debug=1&freemouse=1 keeps the debug hooks but lets the prompt band
+ * behave as for a player whose mouse is not captured (capture hint, fire key
+ * plate), so the first-run journey can check what a new player sees.
+ */
+const DEBUG_FREE_MOUSE = DEBUG && params.get('freemouse') === '1';
 const clampInputAxis = (value: number): number => Math.max(-1, Math.min(1, value));
 
 /** Per-tool muzzle-flash colour (0-1 rgb) for the world light flood. */
@@ -2004,7 +2010,7 @@ class Game {
     this.prompt.lmbHot = this.simT - this.lastFireT < 0.25;
     const gate = promptGate({
       pointerLocked: this.input.pointerLocked,
-      debug: DEBUG,
+      debug: DEBUG && !DEBUG_FREE_MOUSE,
       ending,
       switching: this.arsenal.switching,
       overlayOpen: this.dossier.isOpen || this.automap.isOpen,
@@ -2192,7 +2198,12 @@ class Game {
 
   private exposeDebug(): void {
     const g = this;
+    g.hud.enableDebugCapture();
     (window as unknown as { __cd: unknown }).__cd = {
+      /** UX: what the last HUD frame drew (objective line, prompt rows + key plates, ticker) in base px. */
+      hud() {
+        return { res: RES, frame: g.hud.debugFrame() };
+      },
       hurtUniform() {
         return g.renderer.debugHurtUniform();
       },
@@ -2218,7 +2229,9 @@ class Game {
             mode: g.dossier.mode,
             page: g.dossier.page,
             entries: g.runtime?.evidence.length ?? 0,
+            emptyLines: g.dossier.debugEmptyLines(),
           },
+          automap: g.automap.isOpen,
           stats: g.runtime?.stats() ?? null,
           roles: g.runtime?.roles ?? [],
           inventory: [...(g.runtime?.inventory ?? [])],

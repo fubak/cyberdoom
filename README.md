@@ -3,7 +3,7 @@
 A Doom-style first-person cybersecurity training game built with Three.js.
 Play an SOC analyst clearing 12 missions that teach CompTIA Security+ SY0-701
 objectives — your weapons are IT tools: keyboard, mouse, USB scanner, badge,
-network tap, EDR console, MFA token, and patch disk.
+network tap, EDR console, MFA token, patch disk, and firewall blaster.
 
 Play: https://fubak.github.io/cyberdoom/ (deployed from `main` by
 `.github/workflows/pages.yml`, which also runs the e2e job on PRs).
@@ -53,6 +53,12 @@ Data-driven, thin typed coupling between areas via `src/core/` contracts
 | 8    | PATCH DISK  | Patch management (vendor security update)                   | Install the security update on a clean workstation at arm's length to close its vulnerability (clean infected hosts first). Limited disks.        |
 | 9    | FIREWALL BLASTER | Network firewall / ingress packet filtering            | Fires a 5-rule packet-filter spread that shreds close-range malware and botnet swarms. Shares scan sessions with the USB scanner; does not clean workstations. |
 
+BADGE (4) and MFA TOKEN (7) are passive: they act when you press **E** at a
+door reader, not on LMB. The slot strip draws every slot 1–9 with its digit
+(owned bright, unowned dim) and the ammo block lists only resources for tools
+you own. The title's **READ THIS!** panel is generated from this registry and
+the live key bindings, so it always lists every tool and control.
+
 ## Missions
 
 Twelve-mission campaign arc (`src/content/curriculum.ts`); all twelve are
@@ -78,23 +84,51 @@ campaign arc and the mission-select list.
 ## Controls
 
 - **WASD** move · **mouse** look (click to capture) · **←→** turn · **Shift** run
-- **LMB** (or **F**) use the current tool · **E/Space** interact (inspect a
-  flagged workstation, open doors, turn items in at a desk)
+- **LMB** (or **F**) use the current tool · **E/Space** interact (read a
+  flagged workstation, open doors, use badge/MFA readers, turn items in at a desk)
 - **1–9 / Numpad / mouse wheel / Q** select tool
-- **Tab** (hold) objective list · **M** automap (**+/−** or wheel zoom,
-  **G** follow / free pan) · **L** evidence log (case files)
+- **Tab** (hold) objective list, paged when long · **M** automap (**+/−** or
+  wheel zoom, **G** follow / free pan) · **L** evidence log (case files)
 - **F5** quicksave · **F9** quickload · **Esc** pause menu / back
-- Briefing: **D** details, **←/→** or **A/D** page, **K** skill level,
-  **Enter** deploy
-- Movement, use, tool and map/log keys can be rebound under Pause → Controls.
+- Briefing: **D** details, **←/→** or **A/D** page (or the on-screen
+  **◀ PREV / NEXT ▶** buttons), **K** skill level, **Enter** deploy. The last
+  details page lists the controls and explains threat level and skill.
+- The keyboard plays without mouse capture: the first click in play only
+  captures the mouse, and until then the HUD says so and the tool prompt
+  names **F** instead of **LMB**.
 - The HUD shows **[LMB]** and **[E]** action prompts for whatever you're
-  aiming at, so you always know what a click or keypress will do.
+  aiming at, so you always know what a click or keypress will do. The
+  reticle changes shape as well as colour: green ring (idle), amber ring
+  with a centre pip (the tool will act on the target), grey dashed ring with
+  a slash (out of range, wrong target or out of ammo), white X (hit).
+- The top line pins the open objective with progress (`OBJ 1/3 …`) on a
+  single line; the full text is on **Tab**, in the pause menu and in the log.
+  New evidence shows a `LOG +N [L]` ticker badge until you open the log.
+
+### Menus and options
+
+- The title menu has **Continue** (when a saved checkpoint exists), **New Game**,
+  **Missions**, **Options**, **Controls** and **Read This!**; the pause menu has Resume, Options, Controls, Restart
+  Mission and Mission Select.
+- **Options**: music and SFX volume, mouse sensitivity, field of view, view
+  bob, colour-blind HUD palette and **reduced flashing** (dims the hurt tint,
+  tool and impact light flashes, and skips the reticle hit flash). Settings persist in `localStorage`.
+- **Controls**: rebind movement, use, tool and map/log keys; every on-screen
+  key hint (help, tips, prompts, log) follows the rebinds.
+
+### First run
+
+The first time you deploy into M01 (no cleared missions, nothing saved), the
+ticker pages four short tips: moving and looking, pressing **E** at a
+workstation, selecting and using tools, and the map/log/objective keys. A
+returning player skips them (`cyberdoom.onboarding.seen` in `localStorage`).
 
 ## Debug hooks (Playwright automation)
 
 Append `?debug=1` to expose `window.__cd`:
 
-- `__cd.state()` → `{ screen, mission, x, y, angle, integrity, tool, owned, ammo, score, dossier, stats, roles, inventory, lossReason, objectives[], entities[] }`
+- `__cd.state()` → `{ screen, mission, x, y, angle, integrity, tool, owned, ammo, score, dossier, automap, stats, roles, inventory, lossReason, objectives[], entities[] }` (`dossier.emptyLines` is the log's empty-state copy while it is on screen)
+- `__cd.hud()` → what the last HUD frame drew: objective line (mode + rows), prompt rows with key-plate geometry, capture footer, ticker rows
 - `__cd.startMission(id, gender)` — skip menus
 - `__cd.teleport(x, y, angle?)` — snaps to a walkable tile
 - `__cd.fire()` — pull the trigger once (no pointer lock needed)
@@ -110,7 +144,8 @@ Append `?debug=1` to expose `window.__cd`:
 - `__cd.audioMeter()` / `__cd.playSfx(name)` — audio debug
 
 Deep link: `/?mission=m01&gender=female` jumps straight into a mission
-(combine with `debug=1`).
+(combine with `debug=1`). Add `freemouse=1` to a debug run to get the prompt
+band a player sees with the mouse not captured (capture hint, **F** key plate).
 
 ## Testing
 
@@ -130,8 +165,12 @@ npm run e2e
 
 `npm run e2e` builds the production bundle with `BASE_PATH=/cyberdoom/` (the
 GitHub Pages base), serves it via `vite preview`, and drives boot, menu
-navigation, deploy→play, the pause menu, and a full M01 win through
-`?debug=1` hooks. Vitest only picks up `tests/**/*.test.ts`, so the specs
+navigation, title Options/Controls, deploy→play, the pause menu, and a full
+M01 win through `?debug=1` hooks. `first-run.spec.ts` walks a new player's
+journey from fresh storage: title, READ THIS!, briefing paging (keys and
+buttons, no orphan headings), deploy, the onboarding tips, the capture hint
+and prompts while the mouse is free, the single-line objective, the E key
+plate (checked against F in HUD pixels), the automap and the empty log. Vitest only picks up `tests/**/*.test.ts`, so the specs
 never run under `npm run test`.
 
 ## Known limitations
@@ -141,3 +180,9 @@ never run under `npm run test`.
   shader-compile frame at deploy. Real-GPU numbers have not been measured.
 - M05 Change Freeze wins in the walkthrough test but has not been confirmed
   winnable by hand.
+- There is no vertical look axis (Doom-style), so there is no invert-Y
+  option. There is no HUD size / high-contrast HUD option yet.
+- Real pointer-lock mouse look, a full hand-played mission and the debrief
+  quiz have not had a human playtest pass since the UX remediation
+  (`docs/ux-critique-and-remediation-plan.md`, Status); automation covers
+  them through `?debug=1` hooks only.
