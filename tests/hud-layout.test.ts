@@ -39,7 +39,7 @@ function worstCase(): BarLayoutInput {
       { label: 'SCAN', cur: 30, max: 30, owned: true, active: true },
       { label: 'PCAP', cur: 12, max: 12, owned: true, active: false },
       { label: 'CELL', cur: 0, max: 3, owned: true, active: false },
-      { label: 'DISK', cur: 3, max: 6, owned: false, active: false },
+      { label: 'DISK', cur: 1, max: 6, owned: true, active: false },
     ],
     objectives: [{ done: true, failed: false }, { done: false, failed: false }],
     progress: { done: 12, total: 14, failed: false },
@@ -97,7 +97,7 @@ describe('statusBarText layout', () => {
   it('resources render as one labelled row each: label left, cur/max right-aligned', () => {
     const texts = statusBarText(worstCase(), false);
     const rows = texts.filter((t) => ['SCAN', 'PCAP', 'CELL', 'DISK'].includes(t.text) && t.x === 220);
-    const values = texts.filter((t) => ['30/30', '12/12', '0/3', '3/6'].includes(t.text));
+    const values = texts.filter((t) => ['30/30', '12/12', '0/3', '1/6'].includes(t.text));
     expect(rows).toHaveLength(4);
     expect(values).toHaveLength(4);
     for (const [i, row] of rows.entries()) {
@@ -109,11 +109,38 @@ describe('statusBarText layout', () => {
     }
   });
 
-  it('passive badge and token slots show no weapon numbers', () => {
+  it('every slot 1-9 shows its digit, passive badge (4) and MFA (7) included', () => {
     const labels = statusBarText(worstCase(), false).map((text) => text.text);
-    expect(labels).not.toContain('4');
-    expect(labels).not.toContain('7');
-    for (const slot of ['1', '2', '3', '5', '6', '8']) expect(labels).toContain(slot);
+    for (let slot = 1; slot <= 9; slot++) expect(labels, `slot ${slot}`).toContain(`${slot}`);
+  });
+
+  it('collapses resource rows for tools the player does not own (no dimmed ghosts)', () => {
+    const input: BarLayoutInput = {
+      ...worstCase(),
+      resources: [
+        { label: 'SCAN', cur: 8, max: 30, owned: true, active: true },
+        { label: 'PCAP', cur: 0, max: 12, owned: false, active: false },
+        { label: 'CELL', cur: 0, max: 9, owned: false, active: false },
+        { label: 'DISK', cur: 2, max: 6, owned: true, active: false },
+      ],
+    };
+    const texts = statusBarText(input, false);
+    const labels = texts.filter((t) => t.x === 220).map((t) => t.text);
+    expect(labels).toEqual(['SCAN', 'DISK']);
+    // DISK moves up into the second row instead of leaving a gap
+    const scan = texts.find((t) => t.text === 'SCAN' && t.x === 220)!;
+    const disk = texts.find((t) => t.text === 'DISK' && t.x === 220)!;
+    expect(disk.y - scan.y).toBeCloseTo(5.5);
+    expect(texts.some((t) => t.text === '0/12' || t.text === '0/9')).toBe(false);
+  });
+
+  it('labels the badge cell "BADGE:" with the role under it, tinted by privilege tier', () => {
+    const texts = statusBarText({ ...worstCase(), credentials: 'staff' }, false);
+    expect(texts.some((t) => t.text === 'BADGE:')).toBe(true);
+    const role = texts.find((t) => t.text === 'STAFF')!;
+    expect(role).toBeTruthy();
+    const admin = statusBarText({ ...worstCase(), credentials: 'admin' }, false).find((t) => t.text === 'ADMIN')!;
+    expect(admin.color).not.toEqual(role.color);
   });
 
   it('shows concise tool mode (no truncated objective text) in the AMMO cell when holding an unlimited tool', () => {

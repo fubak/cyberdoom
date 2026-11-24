@@ -1,9 +1,32 @@
 import { ellipsizeWords, measureBig, measureText, wrapText } from '../render/font';
 import { BASE_H, BASE_STATUS, BASE_W } from '../render/res';
-import { roleLabel } from '../core/roleLabel';
+import { BADGE_CAPTION, badgeRoleText, tierColor } from './roleBadge';
+import { slotCells, slotDigitPos } from './slotStrip';
 
-/** Text colour for resource rows the player does not own yet. */
-const RES_UNOWNED = '#6a7080';
+/** Text colour for an empty resource row (owned, nothing left). */
+export const RES_EMPTY = '#6a7080';
+const RES_LOW_A = '#ff4a2a';
+const RES_LOW_B = '#ffd040';
+
+type ResRowIn = BarLayoutInput['resources'][number];
+
+/** Only resources for tools the player owns get a row (no dimmed ghosts), at most four. */
+export function visibleResources<T extends { owned: boolean }>(rows: readonly T[]): T[] {
+  return rows.filter((r) => r.owned).slice(0, 4);
+}
+
+/** Low = at or under 25% of max (and not empty). */
+export function resourceLow(r: Pick<ResRowIn, 'cur' | 'max'>): boolean {
+  return r.cur > 0 && r.max > 0 && r.cur <= Math.max(1, Math.floor(r.max * 0.25));
+}
+
+/** Row colours: grey when empty, blinking red/gold when low, gold label when held. */
+export function resourceRowStyle(r: ResRowIn, pulse: boolean): { label: string; value: string } {
+  if (r.cur <= 0) return { label: RES_EMPTY, value: RES_EMPTY };
+  const label = r.active ? '#ffd040' : '#c8c0b0';
+  if (resourceLow(r)) return { label, value: pulse ? RES_LOW_A : RES_LOW_B };
+  return { label, value: r.active ? '#fff0a0' : '#ffa818' };
+}
 
 /**
  * LOOK/ARSENAL: pure status-bar text layout in 320x200 base units.
@@ -75,15 +98,15 @@ export interface BarLayoutInput {
   /** READY lamp state for the unlimited-ammo label. */
   ready: boolean;
   credentials: string;
-  /** roleColor(credentials).light — label tint for the CRED panel. */
-  credTint: string;
+  /** Legacy keycard tint; the badge label is coloured by privilege tier instead. */
+  credTint?: string;
   tool: { slot: number };
   /** all eight slot defs in slot order. */
   tools: { id: string; slot: number; passive?: boolean }[];
   /** owned tool ids. */
   owned: string[];
   got?: { k: number; slot: number; blink: boolean } | null;
-  /** Doom RES table rows (max 4 shown). */
+  /** Doom RES table rows; only owned ones are shown (max 4). */
   resources: { label: string; cur: number; max: number; owned: boolean; active: boolean }[];
   objectives: { text?: string; done: boolean; failed: boolean; progress?: number; target?: number }[];
   progress?: { done: number; total: number; failed: boolean };
@@ -143,34 +166,26 @@ export function statusBarText(o: BarLayoutInput, pulse: boolean): BarText[] {
     label((rr ? rr.label : o.ammoName).toUpperCase().slice(0, 6), P_AMMO, by + 20, low ? '#ff5a3a' : undefined!);
   }
 
-  // TOOLS grid digits (Doom ARMS): lit when owned, boxed when held.
-  for (let i = 0; i < 9; i++) {
-    const slot = i + 1;
-    const t = o.tools.find((tt) => tt.slot === slot);
-    if (t?.passive) continue;
-    const owned = !!t && o.owned.includes(t.id);
-    const x = P_TOOLS[0] + 2 + (i % 5) * 9;
-    const y = by + 6 + Math.floor(i / 5) * 10;
-    const active = !!t && t.slot === o.tool.slot;
-    const fresh = !!o.got && o.got.slot === slot && o.got.blink;
-    push(`${slot}`, 'small', x + 2, y + 1, fresh ? '#000' : active ? '#fff0a0' : owned ? '#ffa818' : '#3a3e48', fresh ? null : '#000');
+  // TOOLS grid digits (Doom ARMS): every slot 1-9 has its digit, passive slots too.
+  for (const c of slotCells({ tools: o.tools, owned: o.owned, selectedSlot: o.tool.slot, got: o.got })) {
+    const p = slotDigitPos(c);
+    push(c.digit, 'small', p.x, p.y, c.digitColor, c.digitShadow);
   }
 
-  // CRED: current role under the keycard art.
-  label(roleLabel(o.credentials).slice(0, 7), P_CRED, by + 20, o.credTint);
+  // CRED: "BADGE:" over the keycard art, the role under it, tinted by privilege tier.
+  centered(BADGE_CAPTION, P_CRED, by + 2, 'tiny', '#9aa0ac');
+  label(badgeRoleText(o.credentials, P_CRED[1] - 6), P_CRED, by + 20, tierColor(o.credentials));
 
-  // RESOURCES: Doom's RES table — one LABEL cur/max row per ammo type.
-  // The 3x5 font leaves real whitespace between the four rows (the 5x7
-  // font at 7px pitch reads as one overlapping blob); the held tool's
-  // row is highlighted in gold on a plate.
-  o.resources.slice(0, 4).forEach((r, i) => {
+  // RESOURCES: Doom's RES table — one NAME cur/max row per resource the
+  // player owns a tool for (unowned rows collapse, no dimmed ghosts). The
+  // 3x5 font leaves real whitespace between rows; the held tool's row sits
+  // on a gold plate, an empty row greys out and a low (<=25%) row blinks.
+  visibleResources(o.resources).forEach((r, i) => {
     const ry = resRowY(i) + 1; // tiny glyphs (5px) centred in the 6px row
-    // not-yet-owned rows stay visibly dimmer than owned ones but must still be readable on the dark plate
-    const col = !r.owned ? RES_UNOWNED : r.cur === 0 ? '#ff4a2a' : r.active ? '#fff0a0' : '#ffa818';
-    const lab = r.active ? '#ffd040' : r.owned ? '#c8c0b0' : RES_UNOWNED;
-    push(r.label, 'tiny', P_RES[0] + 4, ry, lab);
+    const style = resourceRowStyle(r, pulse);
+    push(r.label, 'tiny', P_RES[0] + 4, ry, style.label);
     const v = `${r.cur}/${r.max}`;
-    push(v, 'tiny', P_RES[0] + P_RES[1] - 4 - measureText(v, 'tiny'), ry, col);
+    push(v, 'tiny', P_RES[0] + P_RES[1] - 4 - measureText(v, 'tiny'), ry, style.value);
   });
 
   // OBJECTIVES n/m.

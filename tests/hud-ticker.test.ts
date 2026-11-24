@@ -38,15 +38,12 @@ describe('tickerRows', () => {
     expect(visibleWords).toEqual(original.split(/\s+/).slice(0, visibleWords.length));
   });
 
-  it('truncates a ticker row at a whole-word prefix when older text runs out of rows', () => {
+  it('leaves out an older message that no longer fits whole instead of cutting it', () => {
     const original = 'alpha bravo charlie delta echo foxtrot golf hotel of india juliet kilo lima mike november oscar papa quebec romeo sierra tango uniform victor whiskey xray yankee zulu';
     const rows = tickerRows([msg(original), msg('newer')], 2);
-    const clipped = rows.find((row) => row.line.endsWith('…'))!.line;
-    const visible = clipped.slice(0, -1);
-    const visibleWords = visible.split(/\s+/);
-
-    expect(rows).toHaveLength(2);
-    expect(visibleWords).toEqual(original.toUpperCase().split(/\s+/).slice(0, visibleWords.length));
+    expect(rows).toHaveLength(1);
+    expect(rows[0].line).toBe('NEWER');
+    expect(rows.some((row) => row.line.includes('…') || row.line.includes('..'))).toBe(false);
   });
 
   it('renders every word of a 140-char message across its wrapped lines', () => {

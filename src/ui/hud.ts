@@ -1,5 +1,5 @@
 import type { Gender, ToolDef, ToolHint, ViewmodelAnim } from '../core/types';
-import { drawBigText, drawChunky, drawText, ellipsizeWords, measureChunky, measureText, wrapText } from '../render/font';
+import { drawBigText, drawChunky, drawText, measureChunky, measureText, wrapText } from '../render/font';
 import { VIEW_H, VIEW_W } from '../render/renderer';
 import { roleColor } from '../render/textures';
 import { drawToolViewmodel } from '../render/viewmodels';
@@ -17,9 +17,24 @@ import {
   P_TOOLS,
   resRowPlate,
   statusBarText,
+  visibleResources,
   type BarText,
   type Panel,
 } from './barLayout';
+import { slotCells } from './slotStrip';
+import {
+  EMPTY_TICKER,
+  pushTicker,
+  tickerRows,
+  TICKER_MAX_ROWS,
+  tickTicker,
+  type TickerPriority,
+  type TickerState,
+} from './tickerQueue';
+import { noteHit, type DamageAlertState, type DamageHit } from './damageAlert';
+import { drawDamageOverlay, drawSlotStrikes, drawSlotWells } from './hudPaint';
+
+export { tickerPrefix, tickerRows } from './tickerQueue';
 
 /**
  * LOOK: Doom-style 128px native status bar + message ticker + tool viewmodel.
@@ -45,18 +60,6 @@ const MSG_RAMP_CB: Record<string, string[]> = {
   info: ['#ffffff', '#d8e0f0', '#9aa8c0'],
 };
 
-/**
- * Non-color semantic prefix so good/warn/bad messages never rely on color alone.
- * Every glyph must exist in the TINY ticker font: the old warn mark '~' had no
- * tiny glyph and drew as an empty '[ ]' box (read as a '( )' placeholder).
- */
-export function tickerPrefix(kind: string): string {
-  if (kind === 'bad') return '[!] ';
-  if (kind === 'warn') return '[-] ';
-  if (kind === 'good') return '[+] ';
-  return '';
-}
-
 export function tickerColor(kind: string, colorBlind = false): string {
   const table = colorBlind ? MSG_RAMP_CB : MSG_RAMP;
   const ramp = table[kind] ?? table.info;
@@ -66,32 +69,6 @@ export function tickerColor(kind: string, colorBlind = false): string {
 const TICKER_PLATE = 'rgba(4,6,10,0.76)';
 /** Objective strip never exceeds 12% of the 168px 3D view. */
 const OBJ_STRIP_MAX = 20;
-
-function drawPassiveKeycard(g: CanvasRenderingContext2D, id: string, x: number, y: number): void {
-  if (id === 'badge') {
-    g.fillStyle = '#1f5f9b';
-    g.fillRect(x + 2, y + 1, 7, 5);
-    g.fillStyle = '#82c7ff';
-    g.fillRect(x + 2, y + 1, 7, 1);
-    g.fillStyle = '#d8edff';
-    g.fillRect(x + 3, y + 3, 2, 2);
-    g.fillStyle = '#a6d4f5';
-    g.fillRect(x + 6, y + 3, 2, 1);
-    g.fillRect(x + 6, y + 5, 2, 1);
-  } else if (id === 'mfa') {
-    g.fillStyle = '#9a9da5';
-    g.fillRect(x + 1, y + 1, 5, 5);
-    g.fillStyle = '#191b20';
-    g.fillRect(x + 2, y + 1, 4, 4);
-    g.fillStyle = '#c6a23e';
-    g.fillRect(x + 3, y + 2, 2, 2);
-    g.fillStyle = '#626a78';
-    g.fillRect(x + 5, y + 2, 5, 3);
-    g.fillStyle = '#24272d';
-    g.fillRect(x + 5, y + 3, 4, 1);
-    g.fillRect(x + 7, y + 4, 1, 2);
-  }
-}
 
 let tickerPattern: CanvasPattern | null = null;
 
@@ -115,39 +92,11 @@ function getTickerPattern(g: CanvasRenderingContext2D): CanvasPattern | null {
 type ResRow = { id: string; label: string; cur: number; max: number; owned: boolean; active: boolean };
 type GotFx = { k: number; slot: number; blink: boolean } | null;
 
-/**
- * Ticker layout (pure, unit-tested): newest message first, each wrapped to
- * at most 3 tiny lines, at most 4 rows in total. The "xN" collapse count is
- * appended before wrapping so it lands on the last wrapped line. A message
- * that does not fully fit in the remaining rows (only possible for older
- * entries) is cut with an ellipsis on its last shown line.
- */
-export function tickerRows(
-  messages: { text: string; kind: string; t: number; n: number }[],
-  maxRows = 4,
-): { line: string; kind: string; t: number }[] {
-  const blocks: { lines: string[]; kind: string; t: number }[] = [];
-  let rows = 0;
-  for (let i = messages.length - 1; i >= 0 && rows < maxRows; i--) {
-    const m = messages[i];
-    const prefix = tickerPrefix(m.kind);
-    const body = m.n > 1 ? `${m.text.toUpperCase()} X${m.n}` : m.text.toUpperCase();
-    const lines = wrapText(`${prefix}${body}`, 52, 3);
-    const take = Math.min(lines.length, maxRows - rows);
-    const shown = lines.slice(0, take);
-    if (lines.length > take) shown[shown.length - 1] = ellipsizeWords(shown[shown.length - 1], 52);
-    blocks.unshift({ lines: shown, kind: m.kind, t: m.t });
-    rows += take;
-  }
-  const out: { line: string; kind: string; t: number }[] = [];
-  for (const b of blocks) for (const line of b.lines) out.push({ line, kind: b.kind, t: b.t });
-  return out;
-}
-
 export class Hud {
   readonly canvas: HTMLCanvasElement;
   private g: CanvasRenderingContext2D;
-  private messages: { text: string; kind: string; t: number; n: number }[] = [];
+  private ticker: TickerState = EMPTY_TICKER;
+  private damage: DamageAlertState | null = null;
   private bar: HTMLCanvasElement;
   private time = 0;
   private lastIntegrity = 100;
@@ -161,9 +110,15 @@ export class Hud {
   private lastObjKey = '';
   private objIdx = 0;
   private colorBlind = false;
+  private reducedFlash = false;
 
   setColorBlind(enabled: boolean): void {
     this.colorBlind = enabled;
+  }
+
+  /** Dimmer directional hurt tint (wired to a settings toggle when one exists). */
+  setReducedFlash(enabled: boolean): void {
+    this.reducedFlash = enabled;
   }
   private pickup: { text: string; t: number } | null = null;
 
@@ -186,22 +141,23 @@ export class Hud {
     window.addEventListener('blur', () => (this.tabHeld = false));
   }
 
-  pushMessage(text: string, kind = 'info'): void {
-    // a repeat inside the visible window collapses into an "xN" count on the
-    // same line instead of re-firing (sustained-drain spam reads once)
-    const dup = this.messages.find((m) => m.text === text);
-    if (dup) {
-      dup.t = 5;
-      dup.n = Math.min(dup.n + 1, 99);
-      return;
-    }
-    this.messages.push({ text, kind, t: 5, n: 1 });
+  /**
+   * Queue a ticker message. Priority defaults from the kind (good = objective,
+   * bad/warn = alert, info = tip); see tickerQueue.ts for the discipline.
+   */
+  pushMessage(text: string, kind = 'info', priority?: TickerPriority): void {
+    this.ticker = pushTicker(this.ticker, text, kind, priority);
     if (kind === 'good') this.grinT = 1.4;
-    if (this.messages.length > 3) this.messages.shift();
   }
 
+  /** On-screen and queued ticker texts (e2e probe). */
   debugMessages(): string[] {
-    return this.messages.map((message) => message.text);
+    return [...this.ticker.visible, ...this.ticker.pending].map((message) => message.text);
+  }
+
+  /** Player took a hit: refresh the timed source/direction alert and the edge tint. */
+  noteDamage(hit: DamageHit): void {
+    this.damage = noteHit(this.damage, hit, this.time);
   }
 
   /**
@@ -216,7 +172,8 @@ export class Hud {
   }
 
   clearMessages(): void {
-    this.messages = [];
+    this.ticker = EMPTY_TICKER;
+    this.damage = null;
     this.pickup = null;
     this.objShowT = 3.5;
     this.lastObjKey = '';
@@ -233,8 +190,7 @@ export class Hud {
       this.lookT = 0.8 + Math.random() * 1.6;
     }
     if (this.pickup && (this.pickup.t -= dt) <= 0) this.pickup = null;
-    for (const m of this.messages) m.t -= dt;
-    this.messages = this.messages.filter((m) => m.t > 0);
+    this.ticker = tickTicker(this.ticker, dt);
   }
 
   /** Cache warm-up: draw once with every gated path forced on (objective strip). */
@@ -347,11 +303,12 @@ export class Hud {
     else if (this.objShowT > 0 && opts.objectives[this.objIdx]) this.drawObjectiveStrip(opts.objectives, this.objIdx);
     else {
       // the big strip only flashes for a few seconds on a change: between
-      // flashes a slim pinned line keeps the open objective on screen, and
-      // the ticker gives up one row so the block's footprint stays the same
+      // flashes a slim pinned line keeps the open objective on screen, with
+      // the (at most 2-message, 3-row) ticker under it
       const pinned = this.drawPinnedObjective(opts.objectives, opts.progress);
-      this.drawTicker(1 + pinned, pinned > 0 ? 3 : 4);
+      this.drawTicker(1 + pinned, TICKER_MAX_ROWS);
     }
+    drawDamageOverlay(this.g, this.damage, this.time, this.reducedFlash, BASE_W, BASE_H - BASE_STATUS);
     if (opts.prompt) this.drawPrompt(opts.prompt);
     // tool use effects live in the aim space: drawn last so the beam/ring/
     // LED reads on top of the viewmodel and the tool's own screen flash,
@@ -676,20 +633,21 @@ export class Hud {
     if (this.pickup) {
       // pinned pickup lane: gold-edged plate, holds for ~1.9 s, blink-fades out
       const p = this.pickup;
+      // wrapped, never cut: a long pickup line takes a second row
+      const lines = wrapText(p.text.toUpperCase(), 54, Infinity).slice(0, 2);
       if (!(p.t < 0.4 && Math.floor(p.t * 20) % 2 === 0)) {
-        const text = wrapText(p.text.toUpperCase(), 54, 1)[0];
-        const w = measureText(text, 'tiny');
+        const w = lines.reduce((m, l) => Math.max(m, measureText(l, 'tiny')), 0);
         this.g.fillStyle = 'rgba(30,24,6,0.72)';
-        this.g.fillRect(1, y, w + 9, 7);
+        this.g.fillRect(1, y, w + 9, 7 * lines.length);
         this.g.fillStyle = '#ffd040';
-        this.g.fillRect(1, y, 2, 7);
-        drawText(this.g, text, 6, y + 1, '#fff0a0', 'tiny', null);
+        this.g.fillRect(1, y, 2, 7 * lines.length);
+        lines.forEach((l, i) => drawText(this.g, l, 6, y + 1 + i * 7, '#fff0a0', 'tiny', null));
       }
-      y += 9;
+      y += 7 * lines.length + 2;
     }
     // one plate width for the whole block (the widest row) so the feed reads
     // as a single panel instead of a ragged stack of per-line strips
-    const rows = tickerRows(this.messages, maxRows);
+    const rows = tickerRows(this.ticker.visible, maxRows);
     const plateW = rows.reduce((m, r) => Math.max(m, measureText(r.line, 'tiny')), 0) + 3;
     for (const row of rows) {
       if (row.t < 0.4 && Math.floor(row.t * 20) % 2 === 0) {
@@ -902,26 +860,10 @@ export class Hud {
       alarmWell(g, P_AMMO, by, pulse);
     }
 
-    // Active tools use the Doom ARMS wells; passive slots hold reader keycards.
+    // TOOLS: nine uniform Doom ARMS wells (digits come with the bar text below)
     const tools = sortedTools();
-    for (let i = 0; i < 9; i++) {
-      const slot = i + 1;
-      const t = tools.find((tt) => tt.slot === slot);
-      const x = P_TOOLS[0] + 2 + (i % 5) * 9;
-      const y = by + 6 + Math.floor(i / 5) * 10;
-      const passive = !!t?.passive;
-      const owned = !!t && (o.owned ?? []).includes(t.id);
-      const active = !!t && !passive && t.slot === o.tool.slot;
-      const fresh = !!o.got && o.got.slot === slot && o.got.blink;
-      g.fillStyle = fresh ? '#ffd040' : active ? '#3a3010' : '#0c0e12';
-      g.fillRect(x, y, 8, 7);
-      g.fillStyle = active || fresh ? '#ffd040' : '#2a2e38';
-      g.fillRect(x, y, 8, 1);
-      if (passive) {
-        if (owned) drawPassiveKeycard(g, t.id, x - 1, y);
-        continue;
-      }
-    }
+    const cells = slotCells({ tools, owned: o.owned ?? [], selectedSlot: o.tool.slot, got: o.got });
+    drawSlotWells(g, cells);
 
     // FACE
     if (o.face) {
@@ -937,7 +879,7 @@ export class Hud {
     // CRED keycard + current role
     const rc = roleColor(o.credentials);
     const cx = P_CRED[0] + Math.round((P_CRED[1] - 16) / 2);
-    const cy = by + 6;
+    const cy = by + 7; // one unit lower: the "BADGE:" caption sits above it
     g.fillStyle = '#000';
     g.fillRect(cx + 1, cy + 1, 16, 12);
     g.fillStyle = '#d8dce4';
@@ -953,7 +895,7 @@ export class Hud {
     g.fillRect(cx + 9, cy + 9, 4, 1);
 
     // RESOURCES: gold plate behind the held tool's row (Doom RES table)
-    (o.resources ?? []).slice(0, 4).forEach((r, i) => {
+    visibleResources(o.resources ?? []).forEach((r, i) => {
       if (!r.active) return;
       const p = resRowPlate(i);
       g.fillStyle = 'rgba(255,208,64,0.14)';
@@ -980,6 +922,7 @@ export class Hud {
       pulse,
     );
     for (const t of texts) drawBarText(g, t);
+    drawSlotStrikes(g, cells);
   }
 
   /** 26x28 procedural analyst portrait; reacts to damage like Doom's face. */
