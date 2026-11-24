@@ -8,6 +8,8 @@
  * Works on raw RGBA so it runs the same in the browser and under FakeCanvas.
  */
 
+import { boxBlur, softGlow } from './boxBlur';
+
 export type RGB = [number, number, number];
 
 const FALLOFF_TOP = 1.08;
@@ -19,35 +21,6 @@ const CAST_DARK = 0.42;
 const EDGE_REACH = 4;
 const SPILL_BLUR = 14;
 const SPILL_GAIN = 2.2;
-
-/** Separable box blur with clamped edges (running sums). */
-export function boxBlur(src: Float32Array, w: number, h: number, ch: number, rad: number): Float32Array {
-  const tmp = new Float32Array(src.length);
-  const dst = new Float32Array(src.length);
-  const k = 1 / (rad * 2 + 1);
-  const cx = (x: number): number => (x < 0 ? 0 : x >= w ? w - 1 : x);
-  const cy = (y: number): number => (y < 0 ? 0 : y >= h ? h - 1 : y);
-  for (let c = 0; c < ch; c++) {
-    for (let y = 0; y < h; y++) {
-      const row = y * w;
-      let s = 0;
-      for (let d = -rad; d <= rad; d++) s += src[(row + cx(d)) * ch + c];
-      for (let x = 0; x < w; x++) {
-        tmp[(row + x) * ch + c] = s * k;
-        s += src[(row + cx(x + 1 + rad)) * ch + c] - src[(row + cx(x - rad)) * ch + c];
-      }
-    }
-    for (let x = 0; x < w; x++) {
-      let s = 0;
-      for (let d = -rad; d <= rad; d++) s += tmp[(cy(d) * w + x) * ch + c];
-      for (let y = 0; y < h; y++) {
-        dst[(y * w + x) * ch + c] = s * k;
-        s += tmp[(cy(y + 1 + rad) * w + x) * ch + c] - tmp[(cy(y - rad) * w + x) * ch + c];
-      }
-    }
-  }
-  return dst;
-}
 
 /**
  * Light painted viewmodel pixels. `skin` lists the exact skin fills used by
@@ -66,11 +39,15 @@ export function lightViewmodel(src: Uint8ClampedArray, w: number, h: number, ski
   }
   const out = new Uint8ClampedArray(src);
   if (x1 < x0) return out;
-  const bw = x1 - x0 + 1, bh = y1 - y0 + 1;
+  // snap the crop to the art's 4 px texel grid so the quarter-size glow lines up with it
+  x0 &= ~3;
+  y0 &= ~3;
+  const bw = (x1 - x0 + 4) & ~3, bh = (y1 - y0 + 4) & ~3;
+  const cw = Math.min(bw, w - x0), chh = Math.min(bh, h - y0);
   const sub = new Uint8ClampedArray(bw * bh * 4);
-  for (let y = 0; y < bh; y++) sub.set(src.subarray(((y0 + y) * w + x0) * 4, ((y0 + y) * w + x0 + bw) * 4), y * bw * 4);
+  for (let y = 0; y < chh; y++) sub.set(src.subarray(((y0 + y) * w + x0) * 4, ((y0 + y) * w + x0 + cw) * 4), y * bw * 4);
   const lit = lightRegion(sub, bw, bh, skin, y0, h);
-  for (let y = 0; y < bh; y++) out.set(lit.subarray(y * bw * 4, (y + 1) * bw * 4), ((y0 + y) * w + x0) * 4);
+  for (let y = 0; y < chh; y++) out.set(lit.subarray(y * bw * 4, (y * bw + cw) * 4), ((y0 + y) * w + x0) * 4);
   return out;
 }
 
@@ -101,7 +78,7 @@ function lightRegion(src: Uint8ClampedArray, w: number, h: number, skin: readonl
     }
   }
   const cast = anySkin ? boxBlur(skinF, w, h, 1, CAST_BLUR) : null;
-  const spill = anyEmis ? boxBlur(boxBlur(emis, w, h, 3, SPILL_BLUR), w, h, 3, SPILL_BLUR) : null;
+  const spill = anyEmis ? softGlow(emis, w, h, SPILL_BLUR) : null;
   for (let y = 0; y < h; y++) {
     const fall = FALLOFF_TOP - FALLOFF_DROP * Math.pow((y + offY) / fullH, 1.6);
     for (let x = 0; x < w; x++) {
