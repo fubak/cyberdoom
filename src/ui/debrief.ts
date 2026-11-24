@@ -592,7 +592,9 @@ export function debrief(opts: {
       nextAt: opts.won ? undefined : failPages.length - 1,
       canNext: () => true,
       next: opts.won ? () => runCheck(buildFirstCheck(), 'first') : redeploy,
-      extraButton: opts.won ? undefined : { label: 'QUIZ [K]', go: () => runCheck(buildFirstCheck(), 'first') },
+      extraButton: opts.won
+        ? { label: 'SKIP QUIZ [S]', go: () => summary(null) }
+        : { label: 'QUIZ [K]', go: () => runCheck(buildFirstCheck(), 'first') },
       retryButton: !opts.won && opts.retryCheckpoint
         ? {
             checkpointLabel: opts.retryCheckpoint.label,
@@ -600,7 +602,13 @@ export function debrief(opts: {
             go: opts.retryCheckpoint.onRetry,
           }
         : undefined,
-      onKey: opts.won ? undefined : (e) => {
+      onKey: opts.won ? (e) => {
+        if (e.key === 's' || e.key === 'S') {
+          summary(null);
+          return true;
+        }
+        return false;
+      } : (e) => {
         if ((e.key === 'r' || e.key === 'R') && opts.retryCheckpoint) {
           opts.retryCheckpoint.onRetry();
           return true;
@@ -678,7 +686,7 @@ export function debrief(opts: {
           hit: j,
           font: 'chunky',
         })),
-        block(`PRESS 1-${order.length} OR CLICK TO SELECT, ENTER TO CONFIRM.`, C.orange),
+        block(`PRESS 1-${order.length} OR CLICK TO SELECT, ENTER TO CONFIRM.  S SKIPS THIS QUESTION${opts.won ? ', ESC SKIPS THE QUIZ' : ''}.`, C.orange),
       ]).map((lines) => ({ lines }));
       const feedbackPages = () => {
         const chosen = order[picked];
@@ -716,6 +724,14 @@ export function debrief(opts: {
         page = 0;
         render();
       };
+      // Skipping is always allowed: an unanswered question is simply not
+      // credited (it does not queue spaced review, which only a miss does).
+      const skip = () => {
+        if (picked >= 0) return;
+        i++;
+        if (i < items.length) ask();
+        else summary(mode === 'retry' ? items : null);
+      };
       show({
         kicker,
         title: mode === 'retry' ? 'RETRY' : 'KNOWLEDGE CHECK',
@@ -738,6 +754,14 @@ export function debrief(opts: {
             redeploy();
             return true;
           }
+          if (opts.won && e.key === 'Escape') {
+            summary(mode === 'retry' ? items : null);
+            return true;
+          }
+          if (picked < 0 && (e.key === 's' || e.key === 'S')) {
+            skip();
+            return true;
+          }
           const n = Number(e.key);
           if (picked < 0 && n >= 1 && n <= order.length) {
             select(n - 1);
@@ -749,7 +773,7 @@ export function debrief(opts: {
           }
           return false;
         },
-        extraButton: opts.won ? undefined : { label: 'REDEPLOY [ESC]', go: redeploy },
+        extraButton: opts.won ? { label: 'SKIP [S]', go: skip } : { label: 'REDEPLOY [ESC]', go: redeploy },
       });
     };
     if (!items.length) summary(null);

@@ -396,6 +396,56 @@ export class MissionRuntime {
     return false;
   }
 
+  /** Seconds a first E on a final action stays armed for the confirming press. */
+  static readonly CONFIRM_WINDOW = 4;
+  private confirmArmed: { id: string; until: number } | null = null;
+
+  /**
+   * True when using `e` right now commits something the player cannot take
+   * back: a console/host that an `avoid` objective guards, or filing a
+   * pending accusation.
+   * Deliberately says nothing about right vs wrong, so the prompt never leaks
+   * a verdict.
+   */
+  needsConfirm(e: Entity): boolean {
+    if (!e.alive || e.state.sealedBy) return false;
+    const guarded = this.objectives.some(
+      (o) => o.def.kind === 'avoid' && !o.failed && !!o.def.tag && !!e.def.tags?.includes(o.def.tag),
+    );
+    if (e.def.accepts) {
+      const holding = this.entities.some(
+        (c) => this.inventory.has(c.def.id) && c.def.tags?.includes(e.def.accepts!),
+      );
+      return holding && guarded;
+    }
+    if (e.def.kind !== 'console') return false;
+    if (this.pendingAccusation && e.def.tags?.includes('report-console')) return true;
+    return guarded;
+  }
+
+  /** True while a first E on `e` is waiting for its confirming press. */
+  isConfirmArmed(e: Entity): boolean {
+    return this.confirmArmed?.id === e.def.id && this.elapsed <= this.confirmArmed.until;
+  }
+
+  /** First press arms and refuses (returns true); the confirming press passes. */
+  private confirmGate(e: Entity): boolean {
+    // using anything else cancels a pending confirmation
+    if (this.confirmArmed && this.confirmArmed.id !== e.def.id) this.confirmArmed = null;
+    if (!this.needsConfirm(e)) return false;
+    if (this.isConfirmArmed(e)) {
+      this.confirmArmed = null;
+      return false;
+    }
+    this.confirmArmed = { id: e.def.id, until: this.elapsed + MissionRuntime.CONFIRM_WINDOW };
+    const label = e.def.inspect?.label ?? e.def.id;
+    this.message(
+      `CONFIRM: ${label} is a final action. Press E again within ${MissionRuntime.CONFIRM_WINDOW}s to commit, or walk away to cancel.`,
+      'warn',
+    );
+    return true;
+  }
+
   private violateObjective(id: string, points: number): void {
     const objective = this.obj(id);
     if (!objective) return;
@@ -570,6 +620,9 @@ export class MissionRuntime {
         });
         return;
       }
+
+      // Final actions (mission-ending or exclusive choices) need a second E.
+      if (this.confirmGate(e)) return;
 
       // E/Space interacts or inspects — it never performs a scored tool
       // action. On an uninspected workstation the press reads the host's
@@ -906,6 +959,7 @@ export class MissionRuntime {
    */
   interactHint(e: Entity): string | null {
     if (!e.alive) return null;
+    if (this.isConfirmArmed(e) && this.needsConfirm(e)) return 'PRESS E AGAIN TO CONFIRM';
 
     if (e.def.kind === 'workstation' && e.def.tags?.includes('triage')) {
       if (!this.inspected.has(e.def.id)) return `INSPECT FIRST (MOUSE ${mouseTool.slot})`;

@@ -90,6 +90,13 @@ campaign arc and the mission-select list.
 - **Tab** (hold) objective list, paged when long · **M** automap (**+/−** or
   wheel zoom, **G** follow / free pan) · **L** evidence log (case files)
 - **F5** quicksave · **F9** quickload · **Esc** pause menu / back
+- **E** is the primary interact key: doors, consoles, hosts, hand-ins and
+  reports. A mission-ending or irreversible action (e.g. plugging in unknown
+  USB, filing a report) asks for a second **E** within 4 s; the prompt reads
+  PRESS E AGAIN TO CONFIRM. LMB with the keyboard tool still works on
+  consoles but the HUD no longer offers a competing LMB line for them.
+- Debrief quiz: **S** skips a question, **Esc** (or **SKIP QUIZ [S]** on the
+  report) skips the rest. Skipped questions earn no knowledge credit.
 - Briefing: **D** details, **←/→** or **A/D** page (or the on-screen
   **◀ PREV / NEXT ▶** buttons), **K** skill level, **Enter** deploy. The last
   details page lists the controls and explains threat level and skill.

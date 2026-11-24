@@ -74,7 +74,9 @@ function runStep(step: WalkStep, rt: MissionRuntime, map: WorldMap, player: Play
     const entity = rt.byId(step.interact);
     expect(entity?.alive).toBe(true);
     expect(entity && Math.hypot(entity.x - player.x, entity.y - player.y)).toBeLessThanOrEqual(1.5);
-    bus.emit('interact', { entityId: step.interact });
+    // a final action takes a second E, exactly as it does for a player
+    const presses = entity && rt.needsConfirm(entity) ? 2 : 1;
+    for (let n = 0; n < presses; n++) bus.emit('interact', { entityId: step.interact });
     return;
   }
   if ('inspect' in step) {

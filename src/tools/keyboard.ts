@@ -163,6 +163,9 @@ export const keyboardTool: ToolDef = {
       }
       return { text: 'WALK OVER TO PICK UP', ready: false };
     }
+    // Consoles and desks are E's job: the [E] line already names
+    // the action, so LMB does not offer a second, competing prompt for them.
+    if (e.def.kind === 'console') return null;
     return { text: `RUN COMMAND: ${targetNoun(e)}`, ready: true };
   },
 };
