@@ -5,6 +5,7 @@ import type { WorldMap } from '../engine/map';
 import type { Player } from '../engine/player';
 import type { ViewPose } from '../engine/feel';
 import { buildPaletteLut } from './palette';
+import { MAX_POINT_LIGHTS, PAYLOAD_LIGHT, SCAN_LIGHT, SPAWN_LIGHT, fadingLight, pickPointLights, type PointLight } from './pointLights';
 import { GROUND_LIFT, GROUND_SPREAD, groundGeometry, groundMaterial, poolStrength } from './groundFx';
 import { LIT_ROOM_GAIN, darkGain, midPeak } from './threatLight';
 import { genWorkerCount } from './genpool';
@@ -80,6 +81,9 @@ uniform float uFlash;
 uniform vec4 uFire;
 uniform vec4 uImpact;
 uniform vec3 uImpactCol;
+// moving lights (projectiles, spawn columns): xy = map position, z = reach, w = strength
+uniform vec4 uPts[${MAX_POINT_LIGHTS}];
+uniform vec3 uPtCol[${MAX_POINT_LIGHTS}];
 uniform vec3 uTint;
 uniform vec2 uUvScale;
 uniform vec2 uUvOffset;
@@ -190,6 +194,14 @@ void main() {
   }
   vec3 c = mix(min(lit, vec3(1.0)), vec3(1.0), uFlash);
   c = min(c + uFire.rgb * reach * 0.4 + uImpactCol * iboost * 0.45, vec3(1.0));
+  if (t.a > 0.75) {
+    // lit surfaces pick up the colour of glowing things passing by
+    vec3 pt = vec3(0.0);
+    for (int i = 0; i < ${MAX_POINT_LIGHTS}; i++) {
+      pt += uPtCol[i] * (uPts[i].w * smoothstep(uPts[i].z, 0.0, distance(vWorld, uPts[i].xy)));
+    }
+    c = min(c + t.rgb * pt, vec3(1.0));
+  }
   c *= sfl;
   if (uRim > 0.0 && t.a > 0.75) {
     // dark-sector contour: texels on the silhouette edge (the baked outline
@@ -270,6 +282,13 @@ const fireUniform = { value: new THREE.Vector4(0, 0, 0, 0) };
 /** Shared landed-hit bloom: x,y = hit point (world), z = intensity (decays ~100 ms). */
 const impactUniform = { value: new THREE.Vector4(0, 0, 0, 0) };
 const impactColUniform = { value: new THREE.Vector3(1, 1, 1) };
+/** Shared moving point lights, refreshed each frame (see pointLights.ts). */
+const pointUniform = { value: Array.from({ length: MAX_POINT_LIGHTS }, () => new THREE.Vector4(0, 0, 1, 0)) };
+const pointColUniform = { value: Array.from({ length: MAX_POINT_LIGHTS }, () => new THREE.Vector3(0, 0, 0)) };
+/** Glow effects that add their light to the scene instead of covering it. */
+const ADDITIVE_FX = new Set(['fx-scan', 'fx-scan-trail', 'fx-payload', 'fx-puff', 'fx-spawn']);
+const PUFF_FRAMES = ['f0', 'f1', 'f2', 'f3', 'f4'];
+const SPAWN_FRAMES = ['f0', 'f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7'];
 
 function worldMaterial(map: THREE.Texture, light = 1, floor = 0.16, tint?: THREE.Vector3, wallLift = 0): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
@@ -287,6 +306,8 @@ function worldMaterial(map: THREE.Texture, light = 1, floor = 0.16, tint?: THREE
       uFire: fireUniform,
       uImpact: impactUniform,
       uImpactCol: impactColUniform,
+      uPts: pointUniform,
+      uPtCol: pointColUniform,
       uTint: { value: tint ?? new THREE.Vector3(1, 1, 1) },
       uUvScale: { value: new THREE.Vector2(1, 1) },
       uUvOffset: { value: new THREE.Vector2(0, 0) },
@@ -437,6 +458,8 @@ interface Fx {
   vz?: number;
   /** Stops flying and holds the last frame once the chunk lands. */
   landed?: boolean;
+  /** Light this effect casts while it lives; fades out over its duration. */
+  light?: { radius: number; intensity: number; col: [number, number, number] };
 }
 
 export class Renderer {
@@ -956,10 +979,16 @@ export class Renderer {
     }
   }
 
-  private makeSpriteMesh(set: SpriteSet, light: number): { mesh: THREE.Mesh; mat: THREE.ShaderMaterial } {
+  private makeSpriteMesh(set: SpriteSet, light: number, additive = false): { mesh: THREE.Mesh; mat: THREE.ShaderMaterial } {
     // frames[0] by key order — Object.values() would force every lazy getter
     const first = set.frames[Object.keys(set.frames)[0]];
     const mat = worldMaterial(first, light);
+    if (additive) {
+      // glow adds to what is behind it: no dark outline box, and overlapping effects build up
+      mat.blending = THREE.AdditiveBlending;
+      mat.transparent = true;
+      mat.depthWrite = false;
+    }
     const mesh = new THREE.Mesh(this.planeGeo, mat);
     mesh.scale.set(set.w, set.h, 1);
     const shade = new THREE.Float32BufferAttribute(new Float32Array(this.planeGeo.attributes.position.count).fill(1), 1);
@@ -989,7 +1018,7 @@ export class Renderer {
     if (this.debugSuppressFx) return null;
     const set = spriteSets.get(setId);
     if (!set) return null;
-    const { mesh, mat } = this.makeSpriteMesh(set, light);
+    const { mesh, mat } = this.makeSpriteMesh(set, light, ADDITIVE_FX.has(setId));
     mesh.position.set(x, y, z);
     const fx: Fx = { mesh, mat, set, frames, t: 0, dur, ...vel };
     this.fx.push(fx);
@@ -1000,7 +1029,8 @@ export class Renderer {
    *  taller than any threat (fx-spawn draws 2.1 world units, >=1.5x the biggest
    *  monster) and burns ~1 s so an ambush can't be missed (ENEMIES). */
   spawnTeleport(x: number, y: number): void {
-    this.spawnFx('fx-spawn', ['f0', 'f1', 'f2', 'f3'], x, y, 0, 1.05);
+    const fx = this.spawnFx('fx-spawn', SPAWN_FRAMES, x, y, 0, 1.05);
+    if (fx) fx.light = SPAWN_LIGHT;
   }
 
   /** Red padlock overlay on a door or console a ransomware has sealed. */
@@ -1220,7 +1250,7 @@ export class Renderer {
       if (!st) {
         const setId = p.hostile ? 'fx-payload' : 'fx-scan';
         const set = spriteSets.require(setId);
-        const { mesh, mat } = this.makeSpriteMesh(set, 1);
+        const { mesh, mat } = this.makeSpriteMesh(set, 1, true);
         st = {
           mesh, mat, set, setId, lastX: p.x, lastY: p.y, facing: null, moveT: 0, animT: 0, lastHp: 0,
           flash: 0, scale: 1, kind: 'prop', entity: null,
@@ -1246,7 +1276,7 @@ export class Renderer {
       if (live.has(p)) continue;
       this.spriteGroup.remove(st.mesh);
       this.projSprites.delete(p);
-      this.spawnFx('fx-puff', ['f0', 'f1', 'f2'], st.lastX, st.lastY, EYE_H - 0.32, 0.24);
+      this.spawnFx('fx-puff', PUFF_FRAMES, st.lastX, st.lastY, EYE_H - 0.32, 0.24);
     }
   }
 
@@ -1332,6 +1362,27 @@ export class Renderer {
     st.ground = undefined;
   }
 
+  /** Copy this frame's strongest moving lights (projectiles, spawn columns) into the shared uniforms. */
+  private updatePointLights(): void {
+    const sources: PointLight[] = [];
+    // probes measure the world and one sprite: no stray lights between captures
+    if (!this.debugSuppressFx && !this.debugNoFlash) {
+      for (const [p, st] of this.projSprites) {
+        if (!st.mesh.visible) continue;
+        sources.push({ x: p.x, y: p.y, ...(p.hostile ? PAYLOAD_LIGHT : SCAN_LIGHT) });
+      }
+      for (const fx of this.fx) {
+        if (fx.light) sources.push(fadingLight(fx.light, fx.mesh.position.x, fx.mesh.position.z, fx.t, fx.dur));
+      }
+    }
+    const picked = pickPointLights(sources, this.camera.position.x, this.camera.position.z);
+    for (let i = 0; i < MAX_POINT_LIGHTS; i++) {
+      const l = picked[i];
+      pointUniform.value[i].set(l?.x ?? 0, l?.y ?? 0, l?.radius ?? 1, l?.intensity ?? 0);
+      pointColUniform.value[i].set(l?.col[0] ?? 0, l?.col[1] ?? 0, l?.col[2] ?? 0);
+    }
+  }
+
   /** Debug: world-Y of each live enemy's opaque top vs the ceiling over its tile. */
   debugSpriteTops(): { id: string; kind: string; top: number; ceil: number; sky: boolean; scale: number }[] {
     const out: { id: string; kind: string; top: number; ceil: number; sky: boolean; scale: number }[] = [];
@@ -1384,11 +1435,11 @@ export class Renderer {
           this.addStatic(st.setId, e.x, e.y, 0, this.lightAt(e.x, e.y), 'dead', { floor: 0.9, gain: 1.3 });
         }
       } else {
-        this.spawnFx('fx-puff', ['f0', 'f1', 'f2'], e.x, e.y, 0.4, 0.4);
+        this.spawnFx('fx-puff', PUFF_FRAMES, e.x, e.y, 0.4, 0.4);
       }
     } else if (e.def.kind === 'workstation') {
       this.addStatic('workstation', e.x, e.y, 0, this.lightAt(e.x, e.y));
-      this.spawnFx('fx-puff', ['f0', 'f1', 'f2', 'f2'], e.x, e.y, 0.4, 0.4);
+      this.spawnFx('fx-puff', PUFF_FRAMES, e.x, e.y, 0.4, 0.4);
     }
   }
 
@@ -1436,7 +1487,7 @@ export class Renderer {
     }
     if (anim === 'flicker') {
       const keys = Object.keys(f);
-      return { tex: f[keys[Math.floor(t * 3) % keys.length]] };
+      return { tex: f[keys[Math.floor(t * (st.set.fps ?? 3)) % keys.length]] };
     }
     return { tex: Object.values(f)[0] };
   }
@@ -1642,6 +1693,7 @@ export class Renderer {
         this.fx.splice(this.fx.indexOf(fx), 1);
       }
     }
+    this.updatePointLights();
     for (const d of [...this.openingDoors]) {
       d.t += dt;
       d.mesh.position.y = Math.min(1, d.t / 0.55) * WALL_H * 0.97;
