@@ -225,6 +225,7 @@ describe('MissionRuntime', () => {
     }));
     tick(state);
     state.bus.emit('interact', { entityId: 'trap' });
+    state.bus.emit('interact', { entityId: 'trap' });
     expect(state.rt.finished).toBe('lost');
     expect(state.rt.lossReason).toBe('Do not plug in USB');
   });
@@ -266,7 +267,9 @@ describe('MissionRuntime', () => {
     }));
     tick(state);
     state.bus.emit('interact', { entityId: 'trap' });
+    state.bus.emit('interact', { entityId: 'trap' });
     expect(state.rt.finished).toBeNull();
+    state.bus.emit('interact', { entityId: 'trap2' });
     state.bus.emit('interact', { entityId: 'trap2' });
     expect(state.rt.finished).toBe('lost');
     expect(state.rt.lossCause).toEqual({

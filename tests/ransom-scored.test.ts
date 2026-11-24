@@ -11,6 +11,7 @@ describe('M09 ransom outcome', () => {
     const runtime = new MissionRuntime(m09, bus);
 
     bus.emit('interact', { entityId: 'ransom-portal' });
+    bus.emit('interact', { entityId: 'ransom-portal' });
 
     const payment = runtime.scoreLog.find((entry) => entry.objectives.includes('no-pay'));
     expect(payment).toMatchObject({ points: -250, good: false, objectives: ['no-pay'] });
