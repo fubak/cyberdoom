@@ -4,6 +4,7 @@ import { painter, PartCache, type Painter } from '../render/hires';
 import { RES } from '../render/res';
 import { shade } from './pixel';
 import { lightAvatar } from '../render/avatarLight';
+import { EYE_X, EYE_Y, paintBust, paintNose, type FaceLook } from './faceArt';
 
 /**
  * ARSENAL: procedural 24x24-unit analyst portraits (painted at native 4x) with Doom-style face states:
@@ -203,8 +204,6 @@ function paintPortrait(P: Painter, gender: Gender, st: FaceState, base: string, 
   const skDD = shade(sk, 0.62);
   const skL = shade(sk, 1.07);
   const hair = a.hair;
-  const hairM = shade(hair, 1.3);
-  const hairL = shade(hair, 1.75);
   const hairD = shade(hair, 0.7);
   const blood = '#b01210';
   const bloodD = '#5a0606';
@@ -218,89 +217,9 @@ function paintPortrait(P: Painter, gender: Gender, st: FaceState, base: string, 
     for (let y = 0; y < 24; y += 0.5) P.rect(0, y, 24, u, shade(bg, 0.82));
   }
 
-  // long hair + ponytail behind the head
-  if (female) {
-    P.ell(12, 11.5, 7.6, 8.6, hairD);
-    P.poly([[16.5, 8], [20.5, 9.5], [22, 15], [21.4, 21], [19, 22.5], [18.6, 17], [17.4, 13]], hair);
-    for (let i = 0; i < 4; i++) P.line([[18 + i * 0.8, 10 + i * 0.3], [19.2 + i * 0.6, 16], [19.4 + i * 0.4, 21]], i % 2 ? hairM : hairD);
-  }
-
-  // jacket, shirt collar, lanyard
-  P.poly([[0, 24], [0.6, 21], [5.5, 19.2], [18.5, 19.2], [23.4, 21], [24, 24]], a.jacket);
-  P.line([[0.6, 21], [5.5, 19.2], [18.5, 19.2], [23.4, 21]], shade(a.jacket, 1.35), lw(0.4));
-  P.dots(0, 20, 24, 4, shade(a.jacket, 0.82), 0.12, 4);
-  P.poly([[2, 24], [3, 21.6], [4, 24]], shade(a.jacket, 0.7));
-  P.poly([[22, 24], [21, 21.6], [20, 24]], shade(a.jacket, 0.7));
-  P.poly([[8.2, 19.4], [15.8, 19.4], [14, 22.2], [12, 24], [10, 22.2]], '#e8ecf2');
-  P.line([[8.2, 19.4], [10, 22.2], [12, 24]], '#a8b0bc');
-  P.line([[15.8, 19.4], [14, 22.2], [12, 24]], '#a8b0bc');
-  P.poly([[10.8, 20.8], [13.2, 20.8], [12, 24]], a.accent);
-  P.line([[7.4, 19.6], [8.6, 24]], a.accent, lw(0.4));
-  P.line([[16.6, 19.6], [15.4, 24]], a.accent, lw(0.4));
-
-  // neck with jaw shadow
-  P.rect(9.2, 15.5, 5.6, 4.5, skD);
-  P.ell(12, 16.4, 3.4, 1.6, skDD);
-  P.rect(13.4, 15.5, 1.4, 4.5, skDD);
-
-  // ears
-  for (const ex of [5.7, 18.3]) {
-    P.ell(ex, 11.6, 1.1, 1.9, skD);
-    P.ell(ex + (ex < 12 ? 0.2 : -0.2), 11.6, 0.5, 1.1, skDD);
-  }
-
-  // head
-  const head: [number, number][] = female
-    ? [[6.6, 6.5], [7.8, 3.8], [12, 3], [16.2, 3.8], [17.4, 6.5], [17.4, 12.6], [16, 16], [13.6, 18], [10.4, 18], [8, 16], [6.6, 12.6]]
-    : [[6, 6], [7, 3.6], [12, 2.8], [17, 3.6], [18, 6], [18, 13], [16.6, 16.4], [14, 18.2], [10, 18.2], [7.4, 16.4], [6, 13]];
-  P.poly(head, sk);
-  const R = female ? 17.4 : 18;
-  // form shading, light from the upper left
-  P.poly([[R - 1.6, 4.8], [R, 6.2], [R, 12.8], [R - 1.4, 16.2], [14, 18.1], [13.4, 17.9], [R - 1.8, 15.2], [R - 1.2, 11.5], [R - 1.2, 7]], skD);
-  P.dots(R - 2.6, 6, 1.4, 9.4, skD, 0.4, 8);
-  P.dots(R - 3.4, 7, 0.8, 7.6, skD, 0.15, 12);
-  P.poly([[R - 0.8, 7], [R, 7], [R, 12.8], [R - 1.4, 16.2], [R - 1.2, 12]], skDD);
-  P.ell(9.6, 6.2, 2.8, 1.4, skL);
-  P.ell(8.5, 13, 1.1, 1.6, skL);
-  P.dots(7.5, 5, 9, 11, shade(sk, 0.93), 0.03, 17);
-  if (female) {
-    P.ell(8.4, 13.4, 1.1, 0.55, mix(sk, '#d86a78', 0.22));
-    P.ell(15.6, 13.4, 1.1, 0.55, mix(skD, '#d86a78', 0.22));
-  } else if (!st.dead) {
-    // stubble / short beard
-    const stub = mix(sk, hair, 0.28);
-    P.poly([[7, 13.6], [8.4, 14.2], [10.4, 14.4], [12, 14.8], [13.6, 14.4], [15.6, 14.2], [17, 13.6], [16.6, 16.4], [14, 18.2], [10, 18.2], [7.4, 16.4]], stub);
-    P.dots(7, 13.8, 10, 4.4, mix(sk, hair, 0.55), 0.3, 9);
-    P.dots(10.2, 14.5, 3.6, 0.7, mix(sk, hair, 0.7), 0.55, 10);
-  }
-
-  // hair
-  if (female) {
-    P.poly([[5.2, 12.4], [5, 6], [6.6, 3], [9.6, 1.6], [14.4, 1.6], [17.4, 3], [19, 6], [18.6, 10.4], [17.6, 6.6], [15.6, 4.8], [13.2, 5.6], [10.2, 7.8], [7.6, 7.6], [6.8, 12.4]], hair);
-    for (let i = 0; i < 5; i++) P.line([[9 + i * 1.4, 2.2], [8.4 + i * 1.1, 4.8], [7.4 + i * 0.9, 7.2]], i % 2 ? hairM : hairD);
-    P.line([[7.6, 3.2], [10, 2.2], [13.6, 2.2]], hairL, lw(0.3));
-    P.line([[5.6, 7], [5.8, 11.6]], hairM);
-    P.ell(5.6, 14, 0.4, 0.4, a.accent);
-    P.rect(5.4, 13.7, u, u, '#ffffff');
-  } else {
-    P.poly([[5.6, 8.4], [5.8, 4.6], [7.4, 2.6], [10, 1.5], [14, 1.5], [16.6, 2.6], [18.2, 4.6], [18.4, 8.4], [17.4, 6.4], [16, 4.6], [12, 4.1], [8, 4.6], [6.6, 6.4]], hair);
-    P.rect(5.9, 6, 0.9, 4.2, hair);
-    P.rect(17.2, 6, 0.9, 4.2, hair);
-    for (let i = 0; i < 7; i++) P.line([[7.2 + i * 1.5, 2.3 + (i % 2) * 0.3], [7.6 + i * 1.45, 4.3]], i % 2 ? hairM : hairD);
-    P.line([[8, 2.4], [11, 1.8], [13.6, 2]], hairL, lw(0.3));
-    P.dots(5.9, 8, 0.9, 2.2, shade(sk, 0.8), 0.25, 3);
-  }
-
-  // headset: band, ear cup, mic boom + status LED
-  P.line([[4.6, 9.4], [5, 4.6], [7.6, 1.8], [12, 1], [16.4, 1.8], [19, 4.6], [19.4, 8.6]], '#20242c', lw(0.7));
-  P.line([[5.2, 4.6], [7.8, 2], [12, 1.2]], '#4a5160');
-  P.ell(4.5, 11.6, 1.8, 2.6, '#2c313c');
-  P.ell(4.3, 11.4, 1.1, 1.8, '#3a4050');
-  P.rect(3.5, 10.2, u, 2, '#6a7284');
-  P.line([[5.4, 13.6], [6.4, 15.2], [8.4, 16.2]], '#2c313c', lw(0.55));
-  P.ell(9, 16.3, 0.7, 0.55, '#20242c');
-  P.ell(9.1, 16.25, 0.32, 0.3, st.dead ? '#333' : '#39d353');
-  if (!st.dead) P.rect(9, 16.1, u, u, '#d0ffd8');
+  // the head itself: hair, bust, skull, beard and headset (faceArt.ts)
+  const L: FaceLook = { female, dead: st.dead, sk, hair, jacket: a.jacket, accent: a.accent };
+  paintBust(P, L);
 
   // brows — each state gets its own brow: calm, strained (inner lift),
   // hurt (knit down), ouch (clamped), near-dead (slack)
@@ -316,24 +235,27 @@ function paintPortrait(P: Painter, gender: Gender, st: FaceState, base: string, 
   }
 
   // eyes — the lids sag as the tiers climb (Doom's beaten faces lose the wide eyes)
-  const eyeY = 10.7;
+  const eyeY = EYE_Y;
   const iris = female ? '#4a3220' : '#2e1e12';
   const droop = st.dead || st.ouch ? 0 : tier >= 4 ? 0.62 : tier >= 3 ? 0.34 : tier >= 2 ? 0.12 : 0;
   const lid = Math.max(droop, st.blink * 0.95);
   const white = tier >= 4 && !st.dead ? '#e8b8a8' : '#f2f2ee';
-  for (const ex of [9.4, 14.6]) {
+  for (const ex of EYE_X) {
     if (st.dead) {
       P.line([[ex - 1, eyeY - 0.9], [ex + 1, eyeY + 0.9]], '#111', lw(0.35));
       P.line([[ex + 1, eyeY - 0.9], [ex - 1, eyeY + 0.9]], '#111', lw(0.35));
       continue;
     }
-    const ry = st.ouch ? 1.2 : 0.8;
-    P.ell(ex, eyeY - 0.2, 1.9, ry + 0.45, skD);
-    P.ell(ex, eyeY, 1.45, ry, white);
-    P.rect(ex - 1.45, eyeY + ry * 0.4, 2.9, u, '#d8d4cc');
+    // almond eyes: narrower than the old round ones, the white shaded under the lid
+    const ry = st.ouch ? 1.05 : 0.68;
+    P.ell(ex, eyeY - 0.28, 1.42, ry + 0.12, skD);
+    P.ell(ex, eyeY, 1.3, ry, white);
+    P.rect(ex - 1.2, eyeY - ry + 0.1, 2.4, 0.22, '#c4c0c8');
+    P.rect(ex - 1.2, eyeY + ry * 0.45, 2.4, u, '#d8d4cc');
     const ix = ex + st.look * 0.6;
     const ir = Math.min(0.62, ry);
-    P.ell(ix, eyeY + 0.05, 0.62, ir, iris);
+    P.ell(ix, eyeY + 0.05, 0.66, Math.min(0.66, ry), shade(iris, 0.6));
+    P.ell(ix, eyeY + 0.05, 0.52, Math.min(0.52, ir), shade(iris, 1.5));
     P.ell(ix, eyeY + 0.05, 0.3, Math.min(0.3, ir), '#0a0806');
     P.rect(ix - 0.3, eyeY - 0.35, u, u, '#ffffff');
     if (tier >= 4) {
@@ -362,13 +284,7 @@ function paintPortrait(P: Painter, gender: Gender, st: FaceState, base: string, 
   if (!st.dead && tier >= 3) P.ell(14.6, 10.1, 1.7, 0.55, '#6a3a4a');
   if (!st.dead && tier >= 3) P.ell(9.4, 10.1, 1.6, 0.5, '#5a3040');
 
-  // nose
-  P.line([[12.7, 10.6], [13, 12.6], [13.3, 13.6]], skD, lw(0.3));
-  P.ell(12, 13.7, 1.15, 0.7, sk);
-  P.rect(11.6, 13.2, 0.6, u, skL);
-  P.rect(11, 14.15, 0.5, 0.3, skDD);
-  P.rect(12.5, 14.15, 0.5, 0.3, skDD);
-  P.rect(10.9, 14.5, 2.2, u, skD);
+  paintNose(P, L);
 
   // mouth
   const lip = female ? '#a8485a' : shade(sk, 0.62);
