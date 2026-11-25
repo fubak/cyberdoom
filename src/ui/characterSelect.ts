@@ -1,6 +1,6 @@
 import type { Gender } from '../core/types';
 import { ANALYSTS, SKIN_TONES, currentSkin, setSkin, skinTriple } from '../tools/look';
-import { Face, drawPortrait } from '../tools/portrait';
+import { Face, drawAvatar } from '../tools/portrait';
 import { playTool, playVoice } from '../tools/sfx';
 import { keyboardTool } from '../tools/keyboard';
 import { drawBigText, drawChunky, drawText, measureBig, measureChunky, measureText, wrapText } from '../render/font';
@@ -175,17 +175,9 @@ export function characterSelect(onPick: (g: Gender) => void, onBack: () => void,
       const x = CARD_X[gd];
       const y = CARD_Y - (gd === sel ? 2 : 0);
       frame(g, x, y, CARD_W, CARD_H, gd === sel, pulse);
-      // portrait, 2x, in a recessed well, with a key light from the upper left
+      // lit avatar, 2x, in a recessed well; it follows the skin tone picker
       well(g, x + 4, y + 4, 52, 52);
-      drawPortrait(g, x + 6, y + 6, gd, faces[gd].state(100), 2);
-      g.fillStyle = 'rgba(255,236,200,0.10)';
-      g.fillRect(x + 6, y + 6, 48, 10);
-      g.fillStyle = 'rgba(255,236,200,0.06)';
-      g.fillRect(x + 6, y + 16, 48, 8);
-      g.fillStyle = 'rgba(0,4,16,0.16)';
-      g.fillRect(x + 6, y + 40, 48, 6);
-      g.fillStyle = 'rgba(0,4,16,0.30)';
-      g.fillRect(x + 6, y + 46, 48, 8);
+      drawAvatar(g, x + 6, y + 6, gd, faces[gd].state(100), 2);
       const name = a.name.toUpperCase();
       if (measureChunky(name) <= CARD_W - 64) drawChunky(g, name, x + 62, y + 7, gd === sel ? ['#ffffff', '#f0ece4', '#c8c0b0'] : '#9aa0b0');
       else drawText(g, name, x + 62, y + 7, '#f0ece4', 'small');

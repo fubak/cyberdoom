@@ -3,6 +3,7 @@ import { ANALYSTS, currentSkin } from './look';
 import { painter, PartCache, type Painter } from '../render/hires';
 import { RES } from '../render/res';
 import { shade } from './pixel';
+import { lightAvatar } from '../render/avatarLight';
 
 /**
  * ARSENAL: procedural 24x24-unit analyst portraits (painted at native 4x) with Doom-style face states:
@@ -129,9 +130,7 @@ export function drawPortrait(
   skinBase?: string,
 ): void {
   const base = skinBase ?? currentSkin().base;
-  const tier = damageTier(st.integrity);
-  const key = `${gender}|${s}|${base}|${tier}|${st.look}|${st.ouch ? 1 : 0}${st.grin ? 1 : 0}${st.dead ? 1 : 0}|${st.blink > 0.5 ? 1 : 0}${Math.round(st.talk * 2)}`;
-  const c = portraits.get(key, () => {
+  const c = portraits.get(portraitKey(gender, st, s, base), () => {
     const P = painter(FACE_SIZE, FACE_SIZE, s * RES);
     paintPortrait(P, gender, st, base);
     return P.c;
@@ -139,7 +138,52 @@ export function drawPortrait(
   g.drawImage(c, x0, y0, FACE_SIZE * s, FACE_SIZE * s);
 }
 
-function paintPortrait(P: Painter, gender: Gender, st: FaceState, base: string): void {
+/** Everything that changes how a portrait looks, as one cache key. The skin tone is part of it. */
+export function portraitKey(gender: Gender, st: FaceState, s: number, base: string): string {
+  const tier = damageTier(st.integrity);
+  return `${gender}|${s}|${base}|${tier}|${st.look}|${st.ouch ? 1 : 0}${st.grin ? 1 : 0}${st.dead ? 1 : 0}|${st.blink > 0.5 ? 1 : 0}${Math.round(st.talk * 2)}`;
+}
+
+const avatars = new PartCache<HTMLCanvasElement>(96);
+
+/**
+ * LOOK: the analyst as a lit bust for the select screen. The same painter as
+ * the HUD face, drawn on a clear ground, run through the avatar lighting pass
+ * (key light, rim, core shadow, outline) and set on a backdrop in the
+ * analyst's own colour with a glow behind the head.
+ */
+export function drawAvatar(
+  g: CanvasRenderingContext2D,
+  x0: number,
+  y0: number,
+  gender: Gender,
+  st: FaceState,
+  s = 1,
+  skinBase?: string,
+): void {
+  const base = skinBase ?? currentSkin().base;
+  const c = avatars.get(`a|${portraitKey(gender, st, s, base)}`, () => {
+    const k = s * RES;
+    const fig = painter(FACE_SIZE, FACE_SIZE, k);
+    paintPortrait(fig, gender, st, base, true);
+    const img = fig.g.getImageData(0, 0, fig.c.width, fig.c.height);
+    lightAvatar(img.data, fig.c.width, fig.c.height, { k });
+    fig.g.putImageData(img, 0, 0);
+    const out = painter(FACE_SIZE, FACE_SIZE, k);
+    const accent = ANALYSTS[gender].accent;
+    const deep = mix('#06070c', accent, 0.1);
+    // backdrop: dark at the edges, the analyst's colour gathering behind the head
+    out.rect(0, 0, FACE_SIZE, FACE_SIZE, deep);
+    const halo: [number, number, number][] = [[13.5, 12.5, 0.16], [11, 10.5, 0.24], [8.4, 8.4, 0.33], [5.8, 6, 0.42]];
+    for (const [rx, ry, t] of halo) out.ell(12, 9.6, rx, ry, mix('#06070c', accent, t));
+    for (let y = 0; y < FACE_SIZE; y += 1) out.rect(0, y, FACE_SIZE, 1 / k, 'rgba(0,0,0,0.22)');
+    out.g.drawImage(fig.c, 0, 0);
+    return out.c;
+  });
+  g.drawImage(c, x0, y0, FACE_SIZE * s, FACE_SIZE * s);
+}
+
+function paintPortrait(P: Painter, gender: Gender, st: FaceState, base: string, bare = false): void {
   const a = ANALYSTS[gender];
   const female = gender === 'female';
   const u = 1 / P.k;
@@ -169,8 +213,10 @@ function paintPortrait(P: Painter, gender: Gender, st: FaceState, base: string):
 
   // background + CRT scanlines
   const bg = tier >= 4 && !st.dead ? '#3a1414' : '#141826';
-  P.rect(0, 0, 24, 24, bg);
-  for (let y = 0; y < 24; y += 0.5) P.rect(0, y, 24, u, shade(bg, 0.82));
+  if (!bare) {
+    P.rect(0, 0, 24, 24, bg);
+    for (let y = 0; y < 24; y += 0.5) P.rect(0, y, 24, u, shade(bg, 0.82));
+  }
 
   // long hair + ponytail behind the head
   if (female) {

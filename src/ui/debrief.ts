@@ -1,4 +1,5 @@
 import type { EvidenceEntry, Mission, Question, ScoreEvent } from '../core/types';
+import { menuBackdropCanvas } from './menuBackdrop';
 import {
   gradeMission,
   loadMastery,
@@ -180,43 +181,87 @@ interface Hit {
   go: () => void;
 }
 
+/** Panels at least this big get the full plate: shadow, double frame, sheen and rivets. */
+export const PLATE_MIN_W = 120;
+export const PLATE_MIN_H = 60;
+/** Corner rivets sit this far in from the plate edge; body text starts at DB_X, further in. */
+export const PLATE_RIVET_INSET = 3;
+
+/**
+ * A raised panel. Small ones (buttons, chips) get a lit top edge and a dark
+ * bottom edge; big ones are a plate with a drop shadow, a bronze frame inside
+ * a black keyline, a sheen across the top and a rivet in each corner.
+ */
 export function bevel(g: CanvasRenderingContext2D, x: number, y: number, w: number, hh: number, fill: string): void {
+  const plate = w >= PLATE_MIN_W && hh >= PLATE_MIN_H;
+  if (plate) {
+    g.fillStyle = 'rgba(0,0,0,0.45)';
+    g.fillRect(x + 2, y + 2, w + 1, hh + 1);
+    g.fillStyle = '#000';
+    g.fillRect(x - 1, y - 1, w + 2, hh + 2);
+  }
   g.fillStyle = fill;
   g.fillRect(x, y, w, hh);
-  g.fillStyle = '#8a6a48';
+  if (plate) {
+    // sheen: the top of the plate catches the light, the foot falls away
+    g.fillStyle = 'rgba(255,214,150,0.07)';
+    g.fillRect(x + 1, y + 1, w - 2, 5);
+    g.fillStyle = 'rgba(255,214,150,0.04)';
+    g.fillRect(x + 1, y + 6, w - 2, 7);
+    g.fillStyle = 'rgba(0,0,0,0.16)';
+    g.fillRect(x + 1, y + hh - 12, w - 2, 6);
+    g.fillStyle = 'rgba(0,0,0,0.28)';
+    g.fillRect(x + 1, y + hh - 6, w - 2, 5);
+  } else {
+    g.fillStyle = 'rgba(255,220,170,0.10)';
+    g.fillRect(x + 1, y + 1, w - 2, Math.max(1, Math.floor(hh / 2) - 1));
+  }
+  g.fillStyle = plate ? '#b08a56' : '#8a6a48';
   g.fillRect(x, y, w, 1);
   g.fillRect(x, y, 1, hh);
-  g.fillStyle = '#000';
+  g.fillStyle = plate ? '#3a2416' : '#000';
   g.fillRect(x, y + hh - 1, w, 1);
   g.fillRect(x + w - 1, y, 1, hh);
+  if (!plate) return;
+  g.fillStyle = '#e8c890';
+  g.fillRect(x, y, 2, 1);
+  g.fillRect(x, y, 1, 2);
+  // inner keyline, one unit in
+  g.fillStyle = 'rgba(0,0,0,0.5)';
+  g.fillRect(x + 2, y + 2, w - 4, 1);
+  g.fillRect(x + 2, y + 2, 1, hh - 4);
+  g.fillStyle = 'rgba(176,138,86,0.35)';
+  g.fillRect(x + 2, y + hh - 3, w - 4, 1);
+  g.fillRect(x + w - 3, y + 2, 1, hh - 4);
+  // rivets sit in the PLATE_RIVET_INSET margin, clear of body text that starts further in
+  for (const rx of [x + PLATE_RIVET_INSET, x + w - PLATE_RIVET_INSET - 2]) {
+    for (const ry of [y + PLATE_RIVET_INSET, y + hh - PLATE_RIVET_INSET - 2]) {
+      g.fillStyle = '#8a6a48';
+      g.fillRect(rx, ry, 2, 2);
+      g.fillStyle = '#f0d8a8';
+      g.fillRect(rx, ry, 1, 1);
+    }
+  }
 }
 
+/**
+ * Backdrop for the briefing and debrief canvases: the darkened corridor the
+ * other menus sit on (it was a flat brick wall), with the top and foot
+ * shaded so the title and the button row read over it.
+ */
 export function brickBackdrop(): HTMLCanvasElement {
   const c = document.createElement('canvas');
   c.width = DB_W * RES;
   c.height = DB_H * RES;
   const g = c.getContext('2d')!;
+  g.imageSmoothingEnabled = false;
+  g.drawImage(menuBackdropCanvas(), 0, 0, c.width, c.height);
   g.setTransform(RES, 0, 0, RES, 0, 0);
-  g.fillStyle = '#2c140e';
-  g.fillRect(0, 0, DB_W, DB_H);
-  let s = 1337;
-  const rnd = () => (s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
-  for (let y = 0; y < DB_H; y += 16) {
-    const off = (y / 16) % 2 ? 16 : 0;
-    for (let x = -off; x < DB_W; x += 32) {
-      const v = 34 + Math.floor(rnd() * 12);
-      g.fillStyle = `rgb(${v + 8},${Math.floor(v / 2)},${Math.floor(v / 3)})`;
-      g.fillRect(x + 1, y + 1, 30, 14);
-      g.fillStyle = '#4a2418';
-      g.fillRect(x + 1, y + 1, 30, 1);
-    }
-    g.fillStyle = '#140604';
-    g.fillRect(0, y + 15, DB_W, 1);
-    for (let x = -off; x < DB_W; x += 32) g.fillRect(x + 31, y, 1, 16);
-  }
-  for (let i = 0; i < 1600; i++) {
-    g.fillStyle = i % 2 ? '#3e1e14' : '#120604';
-    g.fillRect(Math.floor(rnd() * DB_W), Math.floor(rnd() * DB_H), 1, 1);
+  const shadeRows: [number, number, number][] = [[0, 6, 0.5], [6, 6, 0.38], [12, 8, 0.26], [20, 10, 0.14]];
+  for (const [y, hh, alpha] of shadeRows) {
+    g.fillStyle = `rgba(4,2,4,${alpha})`;
+    g.fillRect(0, y, DB_W, hh);
+    g.fillRect(0, DB_H - y - hh, DB_W, hh);
   }
   return c;
 }

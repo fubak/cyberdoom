@@ -266,7 +266,11 @@
 }
 
 /* Pixel debrief: one fixed 400x250 bitmap-font canvas, letterboxed and scaled. */
-.screen.cd-inter.cd-pixel { padding: 0; justify-content: center; background: #000; overflow: hidden; }
+/* LOOK: the letterbox round the canvas is the same darkened corridor, not black bars */
+.screen.cd-inter.cd-pixel {
+  padding: 0; justify-content: center; overflow: hidden;
+  background: linear-gradient(rgba(2,1,2,.55), rgba(2,1,2,.55)), var(--menu-backdrop, linear-gradient(#000, #000)) center / cover no-repeat, #000;
+}
 .screen.cd-inter.cd-briefing.cd-pixel { justify-content: flex-start; gap: 0; }
 .cd-pixel-canvas {
   width: 100%; height: 100%;
