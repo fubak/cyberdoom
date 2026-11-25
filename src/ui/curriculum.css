@@ -207,11 +207,92 @@
   padding: 2px 0;
   background: transparent;
 }
+/* LOOK: pause, options and controls sit in one gunmetal console frame
+   (menuArt.ts publishes the brushed-steel and screw sprites). */
+.cd-console {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(6px, 1.2vh, 14px);
+  width: min(960px, 94vw);
+  padding: clamp(16px, 2.6vh, 28px) clamp(18px, 2.6vw, 34px);
+  background:
+    var(--menu-screw, none) left 7px top 10px / 15px 15px no-repeat,
+    var(--menu-screw, none) right 7px top 10px / 15px 15px no-repeat,
+    var(--menu-screw, none) left 7px bottom 7px / 15px 15px no-repeat,
+    var(--menu-screw, none) right 7px bottom 7px / 15px 15px no-repeat,
+    linear-gradient(#e0b060 0 0) top / 100% 1px no-repeat,
+    linear-gradient(#a8782c 0 0) top / 100% 4px no-repeat,
+    var(--menu-steel, none) 0 0 / 256px 256px,
+    linear-gradient(180deg, #5c616c 0 20%, #50555f 20% 40%, #454953 40% 60%, #3a3e47 60% 80%, #2e3139 80%);
+  border: 3px solid;
+  border-color: #9aa0ac #17191d #17191d #9aa0ac;
+  box-shadow: 0 0 0 3px #000, 10px 10px 0 rgba(0, 0, 0, .55);
+  image-rendering: pixelated;
+}
 .cd-pause .cd-btn {
   font-size: clamp(14px, 1.5vw, 20px);
-  padding: 7px 26px;
-  min-width: 240px;
+  padding: 7px 26px 7px 30px;
+  min-width: 300px;
+  text-align: left;
+  color: #ffd040;
+  text-shadow: 2px 2px 0 #000;
+  /* a recessed glass key: lit accent bar, scanlines, dark body */
+  background:
+    linear-gradient(#fff0a0 0 0) left top / 6px 2px no-repeat,
+    linear-gradient(#ffd040 0 0) left / 6px 100% no-repeat,
+    repeating-linear-gradient(0deg, rgba(0, 0, 0, .24) 0 2px, transparent 2px 4px),
+    linear-gradient(180deg, #161c26 0 50%, #0b0e14 50%);
+  border: 2px solid;
+  border-color: #000 #6a707c #6a707c #000;
+  box-shadow: 0 0 0 2px #000;
 }
+.cd-pause .cd-btn.alt {
+  color: #f0ece4;
+  background:
+    linear-gradient(#ff9a70 0 0) left top / 6px 2px no-repeat,
+    linear-gradient(#c8502e 0 0) left / 6px 100% no-repeat,
+    repeating-linear-gradient(0deg, rgba(0, 0, 0, .24) 0 2px, transparent 2px 4px),
+    linear-gradient(180deg, #161c26 0 50%, #0b0e14 50%);
+}
+.cd-pause .cd-btn:hover,
+.cd-pause .cd-btn:focus {
+  filter: none;
+  color: #1a1408;
+  text-shadow: none;
+  background:
+    linear-gradient(#ffffff 0 0) left / 6px 100% no-repeat,
+    linear-gradient(#fff4b0 0 0) top / 100% 2px no-repeat,
+    linear-gradient(#a86a08 0 0) bottom / 100% 3px no-repeat,
+    linear-gradient(180deg, #ffd65a 0 50%, #ffb428 50%);
+  outline: 3px solid #fff;
+}
+.cd-pause .cd-btn:disabled {
+  filter: grayscale(1) brightness(.6);
+}
+.cd-options-list .cd-btn { width: min(600px, 86vw); }
+.cd-options-list .cd-btn.cd-setting {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 4.6em;
+  align-items: center;
+  column-gap: 16px;
+}
+.cd-opt-meter { display: flex; gap: 3px; }
+.cd-opt-pip {
+  width: 9px;
+  height: 15px;
+  background: linear-gradient(180deg, #000 0 2px, #1c212b 2px);
+}
+.cd-opt-pip.on { background: linear-gradient(180deg, #fff4b0 0 2px, #ffd040 2px 10px, #a87a10 10px); }
+.cd-opt-meter.toggle .cd-opt-pip { width: 21px; }
+.cd-opt-meter.toggle .cd-opt-pip.on { background: linear-gradient(180deg, #c8ffd0 0 2px, #2ad83a 2px 10px, #0a6a18 10px); }
+.cd-opt-val { text-align: right; color: #ffd040; }
+.cd-btn:hover .cd-opt-val,
+.cd-btn:focus .cd-opt-val { color: #1a1408; }
+.cd-btn:hover .cd-opt-pip,
+.cd-btn:focus .cd-opt-pip { background: rgba(26, 20, 8, .22); }
+.cd-btn:hover .cd-opt-pip.on,
+.cd-btn:focus .cd-opt-pip.on { background: #1a1408; }
 .cd-pause-help {
   list-style: none;
   margin: 4px 0 0;
@@ -221,9 +302,14 @@
   gap: 4px 18px;
   width: min(900px, 94vw);
   text-align: left;
-  background: #0d0806e8;
-  border: 3px solid;
-  border-color: #7a5a40 #2a1a10 #2a1a10 #7a5a40;
+  /* LOOK: dark glass readout with an amber trim, like the HUD plates */
+  background:
+    linear-gradient(#ffd040 0 0) top / 100% 2px no-repeat,
+    repeating-linear-gradient(0deg, rgba(0,0,0,.22) 0 2px, transparent 2px 4px),
+    #06080cf0;
+  border: 2px solid;
+  border-color: #000 #5a606c #5a606c #000;
+  box-shadow: 0 0 0 2px #000;
   color: #f4e6c8;
   font: 700 clamp(13px, 1.4vw, 18px)/1.4 'Courier New', monospace;
 }

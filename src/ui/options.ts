@@ -1,5 +1,6 @@
 import { h, bigButton, pixelTitle } from './briefing';
 import { RAMP } from './debrief';
+import { consoleFrame } from './menuArt';
 import { FOV_STEPS, nextStep, SENS_STEPS, type Settings } from './settings';
 
 /**
@@ -13,8 +14,19 @@ const VIEW_ASPECT = 1280 / 672;
 /** Keyboard-made clicks this soon after mount belong to the key that opened the panel. */
 const OPEN_GUARD_MS = 350;
 
+/** Meter beside an option: `lit` of `of` pips. A toggle is a one-pip meter. */
+export interface OptionMeter {
+  lit: number;
+  of: number;
+  kind: 'steps' | 'toggle';
+}
+
 export interface OptionItem {
   id: string;
+  name: string;
+  value: (s: Settings) => string;
+  meter: (s: Settings) => OptionMeter;
+  /** Full row text, "NAME VALUE": what a screen reader and the tests read. */
   label: (s: Settings) => string;
   next: (s: Settings) => Settings;
 }
@@ -24,48 +36,75 @@ export function horizontalFovDeg(verticalDeg: number, aspect: number): number {
   return Math.round((2 * Math.atan(Math.tan(half) * aspect) * 180) / Math.PI);
 }
 
-const volumeLabel = (name: string, value: number) =>
-  `${name} ${value <= 0.001 ? 'MUTED' : `${Math.round(value * 100)}%`}`;
+/**
+ * Pips for a stepped setting: one per non-zero step, lit up to the current
+ * value. A value between steps lights the steps at or below it.
+ */
+export function stepMeter(steps: readonly number[], value: number): OptionMeter {
+  const levels = [...new Set(steps)].filter((step) => step > 0.001).sort((a, b) => a - b);
+  return { lit: levels.filter((step) => step <= value + 0.001).length, of: levels.length, kind: 'steps' };
+}
+
+const toggleMeter = (on: boolean): OptionMeter => ({ lit: on ? 1 : 0, of: 1, kind: 'toggle' });
+const volumeValue = (value: number) => (value <= 0.001 ? 'MUTED' : `${Math.round(value * 100)}%`);
 const onOff = (value: boolean) => (value ? 'ON' : 'OFF');
 
+type OptionSpec = Omit<OptionItem, 'label'>;
+
+function toggle(id: string, name: string, key: 'viewBob' | 'colorBlind' | 'reducedFlash'): OptionSpec {
+  return {
+    id,
+    name,
+    value: (s) => onOff(s[key]),
+    meter: (s) => toggleMeter(s[key]),
+    next: (s) => ({ ...s, [key]: !s[key] }),
+  };
+}
+
 export function optionItems(): OptionItem[] {
-  return [
+  const specs: OptionSpec[] = [
     {
       id: 'music',
-      label: (s) => volumeLabel('MUSIC', s.musicVol),
+      name: 'MUSIC',
+      value: (s) => volumeValue(s.musicVol),
+      meter: (s) => stepMeter(VOLUME_STEPS, s.musicVol),
       next: (s) => ({ ...s, musicVol: nextStep(VOLUME_STEPS, s.musicVol) }),
     },
     {
       id: 'sfx',
-      label: (s) => volumeLabel('SFX', s.sfxVol),
+      name: 'SFX',
+      value: (s) => volumeValue(s.sfxVol),
+      meter: (s) => stepMeter(VOLUME_STEPS, s.sfxVol),
       next: (s) => ({ ...s, sfxVol: nextStep(VOLUME_STEPS, s.sfxVol) }),
     },
     {
       id: 'sensitivity',
-      label: (s) => `SENSITIVITY x${s.sensitivity.toFixed(2)}`,
+      name: 'SENSITIVITY',
+      value: (s) => `x${s.sensitivity.toFixed(2)}`,
+      meter: (s) => stepMeter(SENS_STEPS, s.sensitivity),
       next: (s) => ({ ...s, sensitivity: nextStep(SENS_STEPS, s.sensitivity) }),
     },
     {
       id: 'fov',
-      label: (s) => `FIELD OF VIEW ${horizontalFovDeg(s.fov, VIEW_ASPECT)}`,
+      name: 'FIELD OF VIEW',
+      value: (s) => String(horizontalFovDeg(s.fov, VIEW_ASPECT)),
+      meter: (s) => stepMeter(FOV_STEPS, s.fov),
       next: (s) => ({ ...s, fov: nextStep(FOV_STEPS, s.fov) }),
     },
-    {
-      id: 'view-bob',
-      label: (s) => `VIEW BOB ${onOff(s.viewBob)}`,
-      next: (s) => ({ ...s, viewBob: !s.viewBob }),
-    },
-    {
-      id: 'color-blind',
-      label: (s) => `COLOR-BLIND ${onOff(s.colorBlind)}`,
-      next: (s) => ({ ...s, colorBlind: !s.colorBlind }),
-    },
-    {
-      id: 'reduced-flash',
-      label: (s) => `REDUCED FLASHING ${onOff(s.reducedFlash)}`,
-      next: (s) => ({ ...s, reducedFlash: !s.reducedFlash }),
-    },
+    toggle('view-bob', 'VIEW BOB', 'viewBob'),
+    toggle('color-blind', 'COLOR-BLIND', 'colorBlind'),
+    toggle('reduced-flash', 'REDUCED FLASHING', 'reducedFlash'),
   ];
+  return specs.map((spec) => ({ ...spec, label: (s) => `${spec.name} ${spec.value(s)}` }));
+}
+
+/** Row content: name, a pip meter and the value. The text reads "NAME VALUE". */
+function optionRowContent(item: OptionItem, s: Settings): Node[] {
+  const meter = item.meter(s);
+  const pips = h('span', `cd-opt-meter ${meter.kind}`);
+  pips.setAttribute('aria-hidden', 'true');
+  for (let i = 0; i < meter.of; i++) pips.appendChild(h('span', i < meter.lit ? 'cd-opt-pip on' : 'cd-opt-pip'));
+  return [h('span', 'cd-opt-name', item.name), document.createTextNode(' '), pips, h('span', 'cd-opt-val', item.value(s))];
 }
 
 export interface OptionsPanelProps {
@@ -81,8 +120,10 @@ export function optionsPanel(props: OptionsPanelProps): HTMLElement {
   screen.setAttribute('aria-modal', 'true');
   screen.setAttribute('aria-label', 'Options');
   screen.dataset.optionsPanel = 'true';
-  screen.appendChild(h('div', 'cd-kicker', props.kicker));
-  screen.appendChild(pixelTitle('h1', 'cd-title', 'OPTIONS', RAMP.red, 4));
+  const frame = consoleFrame();
+  screen.appendChild(frame);
+  frame.appendChild(h('div', 'cd-kicker', props.kicker));
+  frame.appendChild(pixelTitle('h1', 'cd-title', 'OPTIONS', RAMP.red, 4));
 
   const mountedAt = performance.now();
   const fresh = (event: MouseEvent) => event.detail === 0 && performance.now() - mountedAt < OPEN_GUARD_MS;
@@ -90,13 +131,14 @@ export function optionsPanel(props: OptionsPanelProps): HTMLElement {
   const row = h('div', 'cd-brief-actions cd-options-list');
   const buttons: HTMLButtonElement[] = [];
   const entries = optionItems().map((item) => {
-    const button = bigButton(item.label(settings), () => undefined, 'cd-btn alt');
+    const button = bigButton('', () => undefined, 'cd-btn alt cd-setting');
+    button.replaceChildren(...optionRowContent(item, settings));
     button.type = 'button';
     button.dataset.menuItem = item.id;
     return { item, button };
   });
   const refresh = () => {
-    for (const { item, button } of entries) button.textContent = item.label(settings);
+    for (const { item, button } of entries) button.replaceChildren(...optionRowContent(item, settings));
   };
   for (const { item, button } of entries) {
     button.addEventListener('click', (event) => {
@@ -116,7 +158,7 @@ export function optionsPanel(props: OptionsPanelProps): HTMLElement {
   });
   row.appendChild(back);
   buttons.push(back);
-  screen.appendChild(row);
+  frame.appendChild(row);
 
   let selected = 0;
   const focusSelected = () => buttons[selected]?.focus();

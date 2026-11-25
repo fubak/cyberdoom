@@ -1,5 +1,6 @@
 import { h, bigButton, pixelTitle } from './briefing';
 import { RAMP } from './debrief';
+import { consoleFrame } from './menuArt';
 import type { Settings } from './settings';
 import { skillById } from '../missions/difficulty';
 import { keyLabel, resolveBindings, type Action } from '../engine/bindings';
@@ -34,8 +35,10 @@ export function pauseMenu(actions: {
     buttons = [];
     sel = 0;
 
-    s.appendChild(h('div', 'cd-kicker', 'SECTOR HOLD'));
-    s.appendChild(pixelTitle('h1', 'cd-title', 'PAUSED', RAMP.red, 4));
+    const frame = consoleFrame();
+    s.appendChild(frame);
+    frame.appendChild(h('div', 'cd-kicker', 'SECTOR HOLD'));
+    frame.appendChild(pixelTitle('h1', 'cd-title', 'PAUSED', RAMP.red, 4));
 
     const items: { id: string; label: string; go: () => void; alt: boolean }[] = [
       { id: 'resume', label: 'RESUME  [ESC]', go: actions.onResume, alt: false },
@@ -52,7 +55,7 @@ export function pauseMenu(actions: {
       row.appendChild(b);
       return b;
     });
-    s.appendChild(row);
+    frame.appendChild(row);
 
     const help = h('ul', 'cd-pause-help');
     const bindings = resolveBindings(settings.bindings);
@@ -67,7 +70,7 @@ export function pauseMenu(actions: {
     ]) {
       help.appendChild(h('li', '', line));
     }
-    s.appendChild(help);
+    frame.appendChild(help);
     requestAnimationFrame(() => focusSel());
   };
 

@@ -6,6 +6,7 @@ import {
   type Action,
 } from '../engine/bindings';
 import { h, bigButton, pixelTitle } from './briefing';
+import { consoleFrame } from './menuArt';
 import { RAMP } from './debrief';
 
 const ACTIONS = Object.keys(ACTION_LABELS) as Action[];
@@ -20,9 +21,11 @@ export function controlsPanel(
   screen.setAttribute('aria-modal', 'true');
   screen.setAttribute('aria-label', 'Controls');
   screen.dataset.controlsPanel = 'true';
-  screen.appendChild(h('div', 'cd-kicker', 'INPUT CONFIGURATION'));
-  screen.appendChild(pixelTitle('h1', 'cd-title', 'CONTROLS', RAMP.red, 4));
-  screen.appendChild(h('p', 'cd-controls-instruction', 'SELECT AN ACTION TO CHANGE ITS KEY'));
+  const frame = consoleFrame();
+  screen.appendChild(frame);
+  frame.appendChild(h('div', 'cd-kicker', 'INPUT CONFIGURATION'));
+  frame.appendChild(pixelTitle('h1', 'cd-title', 'CONTROLS', RAMP.red, 4));
+  frame.appendChild(h('p', 'cd-controls-instruction', 'SELECT AN ACTION TO CHANGE ITS KEY'));
 
   let bindings = resolveBindings(initial);
   let capture: Action | null = null;
@@ -57,8 +60,8 @@ export function controlsPanel(
     rowButtons.set(action, button);
     buttons.push(button);
   }
-  screen.appendChild(rows);
-  screen.appendChild(note);
+  frame.appendChild(rows);
+  frame.appendChild(note);
 
   const footer = h('div', 'cd-controls-actions');
   const reset = bigButton('RESET DEFAULTS', () => {
@@ -75,7 +78,7 @@ export function controlsPanel(
   back.type = 'button';
   back.dataset.menuItem = 'back';
   footer.append(reset, back);
-  screen.appendChild(footer);
+  frame.appendChild(footer);
   buttons.push(reset, back);
 
   const focusSelected = () => buttons[selected]?.focus();
