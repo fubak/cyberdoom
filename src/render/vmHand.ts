@@ -24,6 +24,13 @@ export interface SkinTones {
   base: string;
   highlight: string;
   nail: string;
+  /** Glint drawn across a polished nail. */
+  gloss?: string;
+}
+
+export interface NailPolish {
+  color: string;
+  gloss: string;
 }
 
 export interface FingerSpec {
@@ -51,7 +58,7 @@ export function mixHex(a: string, b: string, t: number): string {
 }
 
 /** Six working tones from the four-step skin ramp [deep, shadow, base, highlight]. */
-export function skinTones(ramp: readonly [string, string, string, string]): SkinTones {
+export function skinTones(ramp: readonly [string, string, string, string], polish?: NailPolish): SkinTones {
   const [deep, shadow, base, highlight] = ramp;
   const mid = rgb(mixHex(shadow, base, 0.5));
   return {
@@ -60,7 +67,8 @@ export function skinTones(ramp: readonly [string, string, string, string]): Skin
     warm: hex([mid[0] + 22, mid[1] + 2, mid[2] - 6]),
     base,
     highlight,
-    nail: mixHex(highlight, '#ffe2d8', 0.55),
+    nail: polish ? polish.color : mixHex(highlight, '#ffe2d8', 0.55),
+    gloss: polish?.gloss,
   };
 }
 
@@ -128,6 +136,16 @@ export function drawFinger(pen: HandPen, t: SkinTones, spec: FingerSpec): void {
       [tx + ux * r1 * 0.35 + nx * r1 * 0.12, ty + uy * r1 * 0.35 + ny * r1 * 0.12],
       [tx - ux * back + nx * r1 * 0.12, ty - uy * back + ny * r1 * 0.12],
     ]);
+    if (t.gloss) {
+      pen.line(
+        [
+          [tx - ux * back * 0.75 - nx * r1 * 0.55, ty - uy * back * 0.75 - ny * r1 * 0.55],
+          [tx - ux * back * 0.1 - nx * r1 * 0.55, ty - uy * back * 0.1 - ny * r1 * 0.55],
+        ],
+        t.gloss,
+        0.5,
+      );
+    }
   }
   // knuckle
   pen.ell(t.base, kx, ky, r0 * 1.12, r0 * 1.02);

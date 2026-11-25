@@ -23,6 +23,8 @@ export interface SleeveLook {
   jacket: string;
   accent: string;
   seam: string;
+  /** Hand size about the wrist (1 = Ray's hand). Fingertips still land on their keys. */
+  scale?: number;
 }
 
 type FingerId = 0 | 1 | 2 | 3; // index, middle, ring, little
@@ -40,6 +42,8 @@ const GIRTH = [2.25, 2.3, 2.15, 1.9];
 /** Forearm angle off vertical, degrees inward. */
 const FOREARM_DEG = 14;
 const WRIST: Pt = [105.5, 58.2];
+/** Hand-space rows at or below this are the far end of the forearm. */
+const FOREARM_END = -20;
 
 interface HandPose {
   dx: number;
@@ -77,7 +81,11 @@ function drawHand(pen: HandPen, t: SkinTones, look: SleeveLook, mirror: boolean,
   const across: Pt = [Math.cos(rad), -Math.sin(rad)];
   const wx = WRIST[0] + pose.dx, wy = WRIST[1] + pose.dy;
   const flip = (p: Pt): Pt => (mirror ? [160 - p[0], p[1]] : p);
-  const H = (u: number, v: number): Pt => flip([wx + u * across[0] + v * along[0], wy + u * across[1] + v * along[1]]);
+  const s = look.scale ?? 1;
+  const raw = (u: number, v: number): Pt => flip([wx + u * across[0] + v * along[0], wy + u * across[1] + v * along[1]]);
+  const H = (u: number, v: number): Pt => raw(u * s, v * s);
+  // the forearm still has to run off the bottom of the frame, so only its width scales
+  const A = (u: number, v: number): Pt => raw(u * s, v <= FOREARM_END ? v : v * s);
   const poly = (color: string, uv: Pt[]): void => pen.poly(color, uv.map(([u, v]) => H(u, v)));
   // shift a hand-space outline toward the lit (screen upper-left) side by `d` units
   const litShift = (uv: Pt[], d: number): Pt[] => uv.map(([u, v]) => { const q = H(u, v); return [q[0] - d * 0.7, q[1] - d * 0.7]; });
@@ -85,17 +93,18 @@ function drawHand(pen: HandPen, t: SkinTones, look: SleeveLook, mirror: boolean,
   // --- sleeve: forearm runs off the bottom of the frame
   const jacketShade = shade(look.jacket, 0.64);
   const jacketLight = shade(look.jacket, 1.22);
-  poly(jacketShade, [[-8.2, -3.2], [8.6, -3.2], [11, -23], [-10.4, -23]]);
-  poly(look.jacket, [[-7.2, -3.8], [7.4, -3.8], [9.6, -23], [-9.2, -23]]);
+  const arm = (color: string, uv: Pt[]): void => pen.poly(color, uv.map(([u, v]) => A(u, v)));
+  arm(jacketShade, [[-8.2, -3.2], [8.6, -3.2], [11, -23], [-10.4, -23]]);
+  arm(look.jacket, [[-7.2, -3.8], [7.4, -3.8], [9.6, -23], [-9.2, -23]]);
   // the sleeve's lit edge is on the screen-left side of either arm
-  poly(jacketLight, mirror ? [[4.8, -3.8], [7.4, -3.8], [9.6, -23], [6.4, -23]] : [[-7.2, -3.8], [-4.6, -3.8], [-6, -23], [-9.2, -23]]);
+  arm(jacketLight, mirror ? [[4.8, -3.8], [7.4, -3.8], [9.6, -23], [6.4, -23]] : [[-7.2, -3.8], [-4.6, -3.8], [-6, -23], [-9.2, -23]]);
   poly(jacketShade, [[-7.6, -4.6], [7.8, -4.6], [8.2, -7.6], [-8, -7.6]]);
   poly(look.accent, [[-7.6, -5.4], [7.8, -5.4], [8, -6.8], [-7.8, -6.8]]);
-  pen.line([H(0.5, -8), H(1.6, -22)], look.seam, 1);
+  pen.line([A(0.5, -8), A(1.6, -22)], look.seam, 1);
 
   // --- thumb: from the radial side of the wrist to the space bar
   const thumbTip: Pt = [THUMB_HOME[0] + pose.dx * 0.5, THUMB_HOME[1] + pose.dy * 0.6];
-  drawFinger(pen, t, { knuckle: H(-8.6, 3.2), tip: flip(thumbTip), r0: 3, r1: 2.3, bend: mirror ? -0.9 : 0.9, dip: true });
+  drawFinger(pen, t, { knuckle: H(-8.6, 3.2), tip: flip(thumbTip), r0: 3 * s, r1: 2.3 * s, bend: mirror ? -0.9 : 0.9, dip: true });
 
   // --- back of the hand: knuckle arc, ulnar edge, wrist, thenar pad
   const back: Pt[] = [
@@ -111,10 +120,10 @@ function drawHand(pen: HandPen, t: SkinTones, look: SleeveLook, mirror: boolean,
   for (const [ku, kv] of KNUCKLE) pen.line([H(ku * 0.86, kv - 2.6), H(ku * 0.28, 2.4)], t.warm, 0.6);
   // wrist bone on the little-finger side, and the lit web by the thumb
   const bone = H(6.2, -1);
-  pen.ell(t.base, bone[0], bone[1], 1.5, 1.2);
-  pen.ell(t.highlight, bone[0] - 0.4, bone[1] - 0.4, 0.8, 0.6);
+  pen.ell(t.base, bone[0], bone[1], 1.5 * s, 1.2 * s);
+  pen.ell(t.highlight, bone[0] - 0.4, bone[1] - 0.4, 0.8 * s, 0.6 * s);
   const web = H(-8.4, 7.2);
-  pen.ell(t.highlight, web[0], web[1], 1.6, 2.2);
+  pen.ell(t.highlight, web[0], web[1], 1.6 * s, 2.2 * s);
 
   // --- fingers, little finger first so the index sits on top toward the centre
   for (const i of [3, 2, 1, 0] as FingerId[]) {
@@ -124,7 +133,7 @@ function drawHand(pen: HandPen, t: SkinTones, look: SleeveLook, mirror: boolean,
     const rest = flip(home);
     // a raised finger foreshortens toward its knuckle and comes up off the key
     const tip: Pt = [rest[0] + (k[0] - rest[0]) * 0.26 * lift, rest[1] + (k[1] - rest[1]) * 0.26 * lift - 0.7 * lift];
-    const r0 = GIRTH[i] * (1 + 0.06 * lift);
+    const r0 = GIRTH[i] * s * (1 + 0.06 * lift);
     drawFinger(pen, t, { knuckle: k, tip, r0, r1: r0 * 0.82, bend: (mirror ? -1 : 1) * (0.5 + 0.3 * lift), dip: true });
   }
 }
