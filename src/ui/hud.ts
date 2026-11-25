@@ -8,6 +8,7 @@ import { BASE_H, BASE_STATUS, BASE_W, RES } from '../render/res';
 import { keyPlateRect, PROMPT_ROW_PLATE } from './keyPlate';
 import { bossAlertY, drawBossBar } from './bossBar';
 import { drawGlassPlate, drawKeyCap } from './overlayArt';
+import { drawBand, drawLamp, TRIM_AMBER, TRIM_GREEN, TRIM_RED } from './panelArt';
 import { drawPowerBadges } from './powerBadges';
 import { pinnedObjectiveLine, stripObjectiveLine } from './objectiveLine';
 import { layoutObjectivesOverlay, overlayPageAt } from './objectivesOverlay';
@@ -69,25 +70,6 @@ export function tickerColor(kind: string, colorBlind = false): string {
 }
 /** Objective strip never exceeds 12% of the 168px 3D view. */
 const OBJ_STRIP_MAX = 20;
-
-let tickerPattern: CanvasPattern | null = null;
-
-function getTickerPattern(g: CanvasRenderingContext2D): CanvasPattern | null {
-  if (tickerPattern) return tickerPattern;
-  const c = document.createElement('canvas');
-  c.width = 16;
-  c.height = 16;
-  const image = c.getContext('2d')!.createImageData(16, 16);
-  for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
-    const i = (y * 16 + x) * 4;
-    const v = ((x + y) & 1) === 0 ? 0 : 8;
-    image.data[i] = v; image.data[i + 1] = v; image.data[i + 2] = v; image.data[i + 3] = 255;
-  }
-  c.getContext('2d')!.putImageData(image, 0, 0);
-  tickerPattern = g.createPattern(c, 'repeat');
-  tickerPattern?.setTransform(new DOMMatrix().scale(1 / RES, 1 / RES));
-  return tickerPattern;
-}
 
 /** What the last HUD frame put on screen, for e2e probes (?debug=1 only). */
 export interface HudFrameDebug {
@@ -706,20 +688,8 @@ export class Hud {
     const lines = [fitted.text];
     if (this.frame) this.frame.objective.lines = [...lines];
     const h = Math.min(OBJ_STRIP_MAX, 11);
-    g.fillStyle = getTickerPattern(g) ?? '#000';
-    g.fillRect(0, 0, BASE_W, h);
-    g.fillStyle = o.failed ? '#a80c06' : o.done ? '#14a024' : '#a87a10';
-    g.fillRect(0, h - 1, BASE_W, 1);
-    // status lamp
-    g.fillStyle = '#000';
-    g.fillRect(3, 2, 7, 7);
-    g.fillStyle = o.failed ? '#e01e10' : o.done ? '#2ad83a' : '#ffd040';
-    g.fillRect(4, 3, 5, 5);
-    g.fillStyle = 'rgba(255,255,255,0.55)';
-    g.fillRect(4, 3, 5, 1 / RES);
-    g.fillRect(4.5, 3.5, 1.5, 1);
-    g.fillStyle = 'rgba(0,0,0,0.3)';
-    g.fillRect(4, 6.5, 5, 1.5);
+    drawBand(g, { x: 0, y: 0, w: BASE_W, h }, o.failed ? TRIM_RED : o.done ? TRIM_GREEN : TRIM_AMBER);
+    drawLamp(g, 3, 2, 7, o.failed ? 'failed' : o.done ? 'done' : 'open');
     drawChunky(g, head, 13, 2, headRamp);
     lines.forEach((line, i) => {
       const y = chunky ? 2 : 2 + i * 8;
@@ -748,10 +718,11 @@ export class Hud {
     const rows = pages[pageIndex] ?? [];
     const textRows = rows.reduce((n, r) => n + r.lines.length, 0);
     const h = Math.min(maxH, top + textRows * lineH + rows.length + 4);
-    g.fillStyle = getTickerPattern(g) ?? 'rgba(0,0,0,0.85)';
-    g.fillRect(0, 0, BASE_W, h);
-    g.fillStyle = '#a87a10';
-    g.fillRect(0, h - 1, BASE_W, 1);
+    drawBand(g, { x: 0, y: 0, w: BASE_W, h }, TRIM_AMBER);
+    // rule under the title row
+    g.fillStyle = 'rgba(255,208,64,0.3)';
+    g.fillRect(4, top - 2, BASE_W - 8, 1 / RES);
+    const current = objs.findIndex((o) => !o.done && !o.failed);
     drawChunky(g, `OBJECTIVES ${done}/${objs.length}`, 4, 3, MSG_RAMP.warn);
     if (pages.length > 1) {
       const tag = `PAGE ${pageIndex + 1}/${pages.length}`;
@@ -760,12 +731,14 @@ export class Hud {
     let y = top;
     for (const row of rows) {
       const col = row.status === 'failed' ? '#ff5a3a' : row.status === 'done' ? '#5aff6a' : '#f0ece4';
-      if (!row.continued) {
-        g.fillStyle = '#000';
-        g.fillRect(4, y + 1, 5, 5);
-        g.fillStyle = row.status === 'failed' ? '#e01e10' : row.status === 'done' ? '#2ad83a' : '#ffd040';
-        g.fillRect(5, y + 2, 3, 3);
+      if (row.index === current) {
+        // the objective to work on next: a faint amber bed with a lit edge
+        g.fillStyle = 'rgba(255,208,64,0.09)';
+        g.fillRect(1, y - 0.5, BASE_W - 2, row.lines.length * lineH);
+        g.fillStyle = '#ffd040';
+        g.fillRect(1, y - 0.5, 2 / RES, row.lines.length * lineH);
       }
+      if (!row.continued) drawLamp(g, 4, y + 1, 5, row.status);
       row.lines.forEach((line, i) => {
         const w = drawText(g, line, 13, y, col, 'small', '#000');
         if (row.settled && i === 0 && !row.continued) {

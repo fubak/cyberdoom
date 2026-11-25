@@ -19,9 +19,16 @@ import {
   partitionObjectivePoints,
   type AutomapIcon,
 } from './automapView';
+import { drawBand, drawPanel, TRIM_AMBER } from './panelArt';
 import {
+  MAP_FLOOR,
+  paintBackdrop,
   paintDoor,
   paintExit,
+  paintFloor,
+  paintPlayer,
+  paintWall,
+  paintWallEdge,
   paintLegendIcon,
   paintLocked,
   paintObjectiveArrow,
@@ -210,8 +217,7 @@ export class Automap {
 
     g.save();
     g.setTransform(RES, 0, 0, RES, 0, 0);
-    g.fillStyle = '#000';
-    g.fillRect(0, 0, W, H);
+    paintBackdrop(g, W, H, left, top, cellSize);
 
     const exits: [number, number][] = [];
     for (let y = 0; y < mapHeight; y++) {
@@ -225,8 +231,7 @@ export class Automap {
           !secretDoorRevealed(cell.doorId ?? '');
 
         if (secretHidden || cell.kind === 'wall') {
-          g.fillStyle = '#33200f';
-          g.fillRect(px, py, cellSize, cellSize);
+          paintWall(g, px, py, cellSize);
           continue;
         }
         const icon = automapCellIcon(cell);
@@ -237,17 +242,14 @@ export class Automap {
         }
         if (icon === 'door' || icon === 'locked') {
           // dark floor under the icon so the slab reads as a door in a gap
-          g.fillStyle = '#171a1d';
+          g.fillStyle = MAP_FLOOR;
           g.fillRect(px, py, cellSize, cellSize);
           const fill = automapDoorStyle(cell).fill;
           if (icon === 'locked') paintLocked(g, px, py, cellSize, fill);
           else paintDoor(g, px, py, cellSize, fill, doorAxis((nx, ny) => cellAt(nx, ny)?.kind === 'wall', x, y));
           continue;
         }
-        g.fillStyle = '#171a1d';
-        g.fillRect(px, py, cellSize, cellSize);
-        g.strokeStyle = '#c8502e';
-        g.lineWidth = 1.5;
+        paintFloor(g, px, py, cellSize);
         const edges: [number, number, number, number, number, number][] = [
           [x, y - 1, px, py, px + cellSize, py],
           [x + 1, y, px + cellSize, py, px + cellSize, py + cellSize],
@@ -256,10 +258,7 @@ export class Automap {
         ];
         for (const [nx, ny, x1, y1, x2, y2] of edges) {
           if (cellAt(nx, ny)?.kind !== 'wall') continue;
-          g.beginPath();
-          g.moveTo(x1, y1);
-          g.lineTo(x2, y2);
-          g.stroke();
+          paintWallEdge(g, x1, y1, x2, y2);
         }
       }
     }
@@ -292,29 +291,14 @@ export class Automap {
       if (arrow) paintObjectiveArrow(g, avoidBox(arrow, box, frame));
     }
 
-    const centerX = cx + cellSize / 2;
-    const centerY = cy + cellSize / 2;
-    const tipX = centerX + Math.cos(player.angle) * cellSize * 0.42;
-    const tipY = centerY + Math.sin(player.angle) * cellSize * 0.42;
-    const backX = centerX - Math.cos(player.angle) * cellSize * 0.3;
-    const backY = centerY - Math.sin(player.angle) * cellSize * 0.3;
-    const sideX = Math.sin(player.angle) * cellSize * 0.25;
-    const sideY = -Math.cos(player.angle) * cellSize * 0.25;
-    g.fillStyle = '#fff';
-    g.beginPath();
-    g.moveTo(tipX, tipY);
-    g.lineTo(backX + sideX, backY + sideY);
-    g.lineTo(backX - sideX, backY - sideY);
-    g.closePath();
-    g.fill();
+    paintPlayer(g, cx + cellSize / 2, cy + cellSize / 2, player.angle, cellSize);
 
     // Top bar: mission label on left, secrets counter on right.
     const secretsText = overlay?.secretsTotal !== undefined
       ? `SECRETS ${overlay.secrets ?? 0}/${overlay.secretsTotal}`
       : undefined;
     if (label || secretsText || overlay?.objectiveText) {
-      g.fillStyle = 'rgba(0,0,0,0.78)';
-      g.fillRect(0, 0, W, headerH);
+      drawBand(g, { x: 0, y: 0, w: W, h: headerH }, TRIM_AMBER, 'bottom', 0.9);
       if (label) {
         drawText(g, label, 4, 3, '#ffd040', 'small', '#000');
       }
@@ -334,11 +318,7 @@ export class Automap {
 
     // Compact legend box tucked into the top-right below the header.
     const { x: boxX, y: boxY, w: boxW, h: boxH } = legendBox;
-    g.fillStyle = 'rgba(0,0,0,0.76)';
-    g.fillRect(boxX, boxY, boxW, boxH);
-    g.strokeStyle = 'rgba(255,208,64,0.35)';
-    g.lineWidth = 0.75;
-    g.strokeRect(boxX, boxY, boxW, boxH);
+    drawPanel(g, { x: boxX, y: boxY, w: boxW, h: boxH }, TRIM_AMBER);
     for (let i = 0; i < legend.length; i++) {
       const entry = legend[i];
       const ry = boxY + 2 + i * LEGEND_ROW_H;
@@ -346,8 +326,7 @@ export class Automap {
       drawText(g, entry.label, boxX + 11, ry + 1, '#e6e8ec', 'tiny', '#000');
     }
 
-    g.fillStyle = 'rgba(0,0,0,0.8)';
-    g.fillRect(0, H - 16, W, 14);
+    drawBand(g, { x: 0, y: H - FOOTER_H, w: W, h: 14 }, TRIM_AMBER, 'top', 0.9);
     // Footer must never clip: pick the font that fits, ellipsize as last
     // resort. The pan/follow state is a G-key chip instead of a bare word so
     // the hint's own 'G FOLLOW' tail isn't duplicated.
