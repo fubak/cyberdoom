@@ -3,11 +3,12 @@
   justify-content: flex-start;
   gap: 1.6vh;
   padding: 3vh 3vw 4vh;
+  /* LOOK: the darkened title corridor (menuBackdrop.ts) under faint scanlines; the flat fill is the fallback */
   background:
-    repeating-linear-gradient(0deg, rgba(0,0,0,.35) 0 2px, transparent 2px 4px),
-    repeating-linear-gradient(90deg, #2a1410 0 31px, #1d0c09 31px 32px),
-    repeating-linear-gradient(0deg, #2a1410 0 15px, #1d0c09 15px 16px);
-  background-blend-mode: multiply, normal, multiply;
+    repeating-linear-gradient(0deg, rgba(0,0,0,.28) 0 2px, transparent 2px 4px),
+    var(--menu-backdrop, linear-gradient(#1d0c09, #1d0c09)) center / cover no-repeat,
+    #100a08;
+  image-rendering: pixelated;
   font-family: 'Arial Black', Impact, 'Helvetica Neue', sans-serif;
   color: #f0d8a8;
 }

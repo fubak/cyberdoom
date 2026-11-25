@@ -2,11 +2,12 @@ import type { Gender } from '../core/types';
 import { ANALYSTS, SKIN_TONES, currentSkin, setSkin, skinTriple } from '../tools/look';
 import { Face, drawPortrait } from '../tools/portrait';
 import { playTool, playVoice } from '../tools/sfx';
-import { usbTool } from '../tools/usb';
+import { keyboardTool } from '../tools/keyboard';
 import { drawBigText, drawChunky, drawText, measureBig, measureChunky, measureText, wrapText } from '../render/font';
 import { drawSkull } from '../render/title';
 import { drawToolViewmodel } from '../render/viewmodels';
 import { BASE_H, BASE_W, RES, VIEW_H, VIEW_W } from '../render/res';
+import { menuBackdropCanvas } from './menuBackdrop';
 
 /**
  * ARSENAL: character select. Two analysts with distinct procedural portraits,
@@ -32,75 +33,111 @@ const AMBER = ['#fff0a0', '#ffd040', '#ffa818', '#d07808', '#8a4804'];
 /** Selection skull: right edge of the card, under the name and beside the callsign (clear of the hands). */
 const SKULL_INSET_X = 15;
 const SKULL_Y = 17;
-/** Hand preview: the viewmodel is drawn into a 160x110 buffer; this crop holds the USB stick and hand. */
-const PREVIEW_SRC: [number, number, number, number] = [0, 50, 138, 60];
+/** Hand preview: the keyboard viewmodel (both hands in typing posture) is drawn into a 160x110 buffer; this crop holds it. */
+const PREVIEW_SRC: [number, number, number, number] = [0, 0, 138, 60];
+/** Where the full-view viewmodel is shifted so the keyboard lands in that crop. */
+const PREVIEW_SHIFT: [number, number] = [-97, -137];
+
+/** Flat horizontal bands top to bottom: a gradient that stays pixel art. */
+export function bands(g: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, colors: readonly string[]): void {
+  const n = colors.length;
+  for (let i = 0; i < n; i++) {
+    const y0 = y + Math.round((h * i) / n);
+    const y1 = y + Math.round((h * (i + 1)) / n);
+    g.fillStyle = colors[i];
+    g.fillRect(x, y0, w, y1 - y0);
+  }
+}
+
+const HEADER_H = 22;
+const HEADER_STEEL = ['#8a8478', '#7c766a', '#6e685e', '#625c52', '#565048'];
+const PANEL_LIT = ['#1c2230', '#181d2a', '#141924', '#10141e', '#0c1018'];
+const PANEL_DIM = ['#14171e', '#11141a', '#0f1116', '#0c0e13', '#0a0b10'];
+/** Desk the keyboard sits on: dark at the back, catching light toward the viewer. */
+const DESK = ['#06070b', '#080a10', '#0b0e16', '#10141e', '#161b28', '#1c2232'];
 
 function paintBackdrop(): HTMLCanvasElement {
   const c = document.createElement('canvas');
   c.width = VIEW_W;
   c.height = VIEW_H;
   const g = c.getContext('2d')!;
-  const image = g.createImageData(VIEW_W, VIEW_H);
+  g.imageSmoothingEnabled = false;
+  g.drawImage(menuBackdropCanvas(), 0, 0);
+  g.setTransform(RES, 0, 0, RES, 0, 0);
+  const u = 1 / RES;
+  // riveted steel header band, lit from above
+  bands(g, 0, 0, W, HEADER_H, HEADER_STEEL);
   let s = 99;
   const r = () => ((s = (s * 16807) % 2147483647) / 2147483647);
-  for (let y = 0; y < VIEW_H; y++) {
-    for (let x = 0; x < VIEW_W; x++) {
-      const k = y / VIEW_H;
-      const v = Math.floor(r() * 10) - (r() < 0.03 ? 10 : 0);
-      const i = (y * VIEW_W + x) * 4;
-      image.data[i] = Math.max(0, 26 + k * 18 + v);
-      image.data[i + 1] = Math.max(0, 12 + k * 6 + v);
-      image.data[i + 2] = Math.max(0, 12 + v);
-      image.data[i + 3] = 255;
+  for (let i = 0; i < 2600; i++) {
+    g.fillStyle = r() < 0.5 ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.10)';
+    g.fillRect(Math.floor(r() * VIEW_W) * u, Math.floor(r() * HEADER_H * RES) * u, u, u);
+  }
+  g.fillStyle = '#c8c0b0';
+  g.fillRect(0, 0, W, u);
+  g.fillStyle = '#2a2722';
+  g.fillRect(0, HEADER_H - 1, W, 1);
+  g.fillStyle = 'rgba(0,0,0,0.45)';
+  g.fillRect(0, HEADER_H, W, 1);
+  g.fillStyle = 'rgba(0,0,0,0.2)';
+  g.fillRect(0, HEADER_H + 1, W, 1);
+  for (let x = 6; x < W; x += 24) {
+    for (const y of [3, HEADER_H - 5]) {
+      g.fillStyle = '#3a362e';
+      g.fillRect(x - u, y - u, 1 + 2 * u, 1 + 2 * u);
+      g.fillStyle = '#d8d0c0';
+      g.fillRect(x, y, 1, 1);
+      g.fillStyle = '#f8f0e0';
+      g.fillRect(x, y, 2 * u, 2 * u);
     }
   }
-  // riveted steel header band
-  for (let y = 0; y < 22 * RES; y++) {
-    for (let x = 0; x < VIEW_W; x++) {
-      const v = 70 + Math.floor(r() * 14);
-      const i = (y * VIEW_W + x) * 4;
-      image.data[i] = v + 4;
-      image.data[i + 1] = v;
-      image.data[i + 2] = v - 8;
-    }
-  }
-  for (let x = 0; x < VIEW_W; x++) {
-    let i = x * 4;
-    image.data[i] = 0xc8; image.data[i + 1] = 0xc0; image.data[i + 2] = 0xb0;
-    i = ((21 * RES) * VIEW_W + x) * 4;
-    image.data[i] = 0x2a; image.data[i + 1] = 0x27; image.data[i + 2] = 0x22;
-  }
-  for (let x = 4 * RES; x < VIEW_W; x += 24 * RES) {
-    for (const y of [3, 17]) {
-      const i = ((y * RES) * VIEW_W + x) * 4;
-      image.data[i] = 0xf0; image.data[i + 1] = 0xe8; image.data[i + 2] = 0xd8;
-    }
-  }
-  g.putImageData(image, 0, 0);
   return c;
 }
 
 function frame(g: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, lit: boolean, glow: boolean): void {
   const u = 1 / RES;
+  if (lit) {
+    // amber halo round the chosen card, stepped outward
+    for (let i = 4; i >= 1; i--) {
+      g.fillStyle = `rgba(255,176,24,${glow ? 0.1 : 0.06})`;
+      g.fillRect(x - 2 - i, y - 2 - i, w + 4 + 2 * i, h + 4 + 2 * i);
+    }
+  } else {
+    g.fillStyle = 'rgba(0,0,0,0.5)';
+    g.fillRect(x, y + 2, w + 3, h + 3);
+  }
   g.fillStyle = '#000';
   g.fillRect(x - 2, y - 2, w + 4, h + 4);
   g.fillStyle = lit ? (glow ? '#ffd040' : '#c08010') : '#3a3e48';
   g.fillRect(x - 1, y - 1, w + 2, h + 2);
-  g.fillStyle = '#0c0e14';
-  g.fillRect(x, y, w, h);
-  g.fillStyle = '#1a1e28';
+  bands(g, x, y, w, h, lit ? PANEL_LIT : PANEL_DIM);
+  g.fillStyle = 'rgba(255,255,255,0.025)';
   for (let yy = y + 1; yy < y + h; yy += 2) g.fillRect(x, yy, w, 1);
-  g.fillStyle = lit && glow ? '#fff0a0' : '#9aa0b0';
+  g.fillStyle = lit && glow ? '#fff0a0' : lit ? '#c8b070' : '#6a7080';
   g.fillRect(x + u, y + u, w - 2 * u, u);
   g.fillRect(x + u, y + u, u, h - 2 * u);
   g.fillStyle = '#05060a';
   g.fillRect(x + u, y + h - 2 * u, w - 2 * u, 2 * u);
+  g.fillRect(x + w - 2 * u, y + u, 2 * u, h - 2 * u);
   for (const sx of [x + 2, x + w - 4]) {
-    g.fillStyle = '#101218';
-    g.fillRect(sx - u, y + 2 - u, 3 * u, 3 * u);
-    g.fillStyle = '#d8dce4';
-    g.fillRect(sx, y + 2, u, u);
+    for (const sy of [y + 2, y + h - 4]) {
+      g.fillStyle = '#101218';
+      g.fillRect(sx - u, sy - u, 3 * u + 1 - u, 3 * u + 1 - u);
+      g.fillStyle = '#9aa0b0';
+      g.fillRect(sx, sy, 1, 1);
+      g.fillStyle = '#e8ecf4';
+      g.fillRect(sx, sy, 2 * u, 2 * u);
+    }
   }
+}
+
+/** A recessed well: dark lip on top and left, catch-light on the bottom and right. */
+function well(g: CanvasRenderingContext2D, x: number, y: number, w: number, h: number): void {
+  g.fillStyle = '#000';
+  g.fillRect(x, y, w, h);
+  g.fillStyle = '#3a4050';
+  g.fillRect(x, y + h - 1 / RES * 2, w, 2 / RES);
+  g.fillRect(x + w - 2 / RES, y, 2 / RES, h);
 }
 
 export function characterSelect(onPick: (g: Gender) => void, onBack: () => void, initial: Gender = 'male'): HTMLElement {
@@ -138,10 +175,17 @@ export function characterSelect(onPick: (g: Gender) => void, onBack: () => void,
       const x = CARD_X[gd];
       const y = CARD_Y - (gd === sel ? 2 : 0);
       frame(g, x, y, CARD_W, CARD_H, gd === sel, pulse);
-      // portrait, 2x, in a recessed well
-      g.fillStyle = '#000';
-      g.fillRect(x + 4, y + 4, 52, 52);
+      // portrait, 2x, in a recessed well, with a key light from the upper left
+      well(g, x + 4, y + 4, 52, 52);
       drawPortrait(g, x + 6, y + 6, gd, faces[gd].state(100), 2);
+      g.fillStyle = 'rgba(255,236,200,0.10)';
+      g.fillRect(x + 6, y + 6, 48, 10);
+      g.fillStyle = 'rgba(255,236,200,0.06)';
+      g.fillRect(x + 6, y + 16, 48, 8);
+      g.fillStyle = 'rgba(0,4,16,0.16)';
+      g.fillRect(x + 6, y + 40, 48, 6);
+      g.fillStyle = 'rgba(0,4,16,0.30)';
+      g.fillRect(x + 6, y + 46, 48, 8);
       const name = a.name.toUpperCase();
       if (measureChunky(name) <= CARD_W - 64) drawChunky(g, name, x + 62, y + 7, gd === sel ? ['#ffffff', '#f0ece4', '#c8c0b0'] : '#9aa0b0');
       else drawText(g, name, x + 62, y + 7, '#f0ece4', 'small');
@@ -154,17 +198,22 @@ export function characterSelect(onPick: (g: Gender) => void, onBack: () => void,
       hg.save();
       hg.setTransform(RES, 0, 0, RES, 0, 0);
       hg.imageSmoothingEnabled = false;
-      hg.translate(-100, -68);
-      drawToolViewmodel(hg, usbTool, W, 168, 0, gd, 0, t, {
+      hg.translate(PREVIEW_SHIFT[0], PREVIEW_SHIFT[1]);
+      drawToolViewmodel(hg, keyboardTool, W, H, 0, gd, 0, t, {
         sinceUse: 9, sinceConfirm: 9, confirmGood: true, time: t, ammo: 8, skin: skinTriple(),
       });
       hg.restore();
-      g.fillStyle = '#05060a';
-      g.fillRect(x + 4, y + 60, CARD_W - 8, CARD_H - 64);
+      well(g, x + 4, y + 60, CARD_W - 8, CARD_H - 64);
+      bands(g, x + 4, y + 60, CARD_W - 8 - 2 / RES, CARD_H - 64 - 2 / RES, DESK);
       // 1:1 crop (no squash): the hands read at the same scale as in play
       const [sx, sy, sw, sh] = PREVIEW_SRC;
       g.drawImage(hands[gd], sx * RES, sy * RES, sw * RES, sh * RES, x + 4, y + 60, CARD_W - 8, CARD_H - 64);
       if (gd === sel) drawSkull(g, x + CARD_W - SKULL_INSET_X, y + SKULL_Y, pulse);
+      else {
+        // the card not chosen steps back
+        g.fillStyle = 'rgba(4,5,10,0.38)';
+        g.fillRect(x, y, CARD_W, CARD_H);
+      }
     }
     // skin tones
     drawChunky(g, 'SKIN TONE', SKIN_X - 6 - measureChunky('SKIN TONE'), SKIN_Y + 2, '#c8c0b0');
@@ -192,8 +241,10 @@ export function characterSelect(onPick: (g: Gender) => void, onBack: () => void,
     const paintPlate = (x: number, y: number, w: number, h: number, label: string, hot: boolean) => {
       g.fillStyle = '#000';
       g.fillRect(x - 1, y - 1, w + 2, h + 2);
-      g.fillStyle = hot ? '#c02010' : '#3a2418';
-      g.fillRect(x, y, w, h);
+      g.fillStyle = 'rgba(0,0,0,0.5)';
+      g.fillRect(x + 1, y + h + 1, w + 1, 1);
+      g.fillRect(x + w + 1, y + 1, 1, h + 1);
+      bands(g, x, y, w, h, hot ? ['#e03418', '#d02a14', '#c02010', '#a81a0c', '#901408'] : ['#4a3022', '#42291d', '#3a2418', '#301d13', '#26160e']);
       g.fillStyle = hot ? '#ff6a40' : '#8a7060';
       g.fillRect(x + 1 / RES, y + 1 / RES, w - 2 / RES, 1 / RES);
       g.fillStyle = hot ? '#500804' : '#1a100c';
