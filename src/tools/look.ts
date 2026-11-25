@@ -55,6 +55,24 @@ export const ANALYSTS: Record<Gender, AnalystProfile> = {
   },
 };
 
+/** Vega's nail polish, and the glint on it. */
+export const NAIL_POLISH = '#d0244e';
+export const NAIL_POLISH_GLINT = '#ff9ab0';
+/** Bare nail on the painted viewmodel hands. */
+export const NAIL_BARE = '#f2dccb';
+/** Vega's hands are drawn a little smaller than Ray's. */
+export const FEMALE_HAND_SCALE = 0.9;
+/** How far (art units) each painted skin shape is pulled in for the smaller hand. */
+export const FEMALE_HAND_SLIM = 0.45;
+
+export function handScale(gender: Gender): number {
+  return gender === 'female' ? FEMALE_HAND_SCALE : 1;
+}
+
+export function nailColor(gender: Gender): string {
+  return gender === 'female' ? NAIL_POLISH : NAIL_BARE;
+}
+
 const KEY = 'cyberdoom.skin';
 let skinId: string = readSkin();
 

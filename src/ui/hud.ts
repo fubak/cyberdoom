@@ -13,9 +13,6 @@ import {
   P_CRED,
   P_FACE,
   P_INT,
-  P_OBJ,
-  P_RES,
-  P_TOOLS,
   resRowPlate,
   statusBarText,
   visibleResources,
@@ -23,6 +20,7 @@ import {
   type Panel,
 } from './barLayout';
 import { slotCells } from './slotStrip';
+import { paintBarBackground } from './barArt';
 import {
   EMPTY_TICKER,
   pushTicker,
@@ -33,7 +31,7 @@ import {
   type TickerState,
 } from './tickerQueue';
 import { noteHit, type DamageAlertState, type DamageHit } from './damageAlert';
-import { drawDamageOverlay, drawSlotStrikes, drawSlotWells } from './hudPaint';
+import { drawDamageOverlay, drawKeycard, drawSlotStrikes, drawSlotWells, drawStatusLamp } from './hudPaint';
 
 export { tickerPrefix, tickerRows } from './tickerQueue';
 
@@ -797,6 +795,11 @@ export class Hud {
     g.fillRect(3, 2, 7, 7);
     g.fillStyle = o.failed ? '#e01e10' : o.done ? '#2ad83a' : '#ffd040';
     g.fillRect(4, 3, 5, 5);
+    g.fillStyle = 'rgba(255,255,255,0.55)';
+    g.fillRect(4, 3, 5, 1 / RES);
+    g.fillRect(4.5, 3.5, 1.5, 1);
+    g.fillStyle = 'rgba(0,0,0,0.3)';
+    g.fillRect(4, 6.5, 5, 1.5);
     drawChunky(g, head, 13, 2, headRamp);
     lines.forEach((line, i) => {
       const y = chunky ? 2 : 2 + i * 8;
@@ -901,13 +904,7 @@ export class Hud {
       o.ammo !== null && (o.ammo === 0 || (!!rr && rr.max > 0 && o.ammo <= Math.max(1, Math.floor(rr.max * 0.25))));
     const ready = this.cooldown <= 0.01;
     if (o.ammo === null) {
-      const lx = P_AMMO[0] + 15;
-      g.fillStyle = '#000';
-      g.fillRect(lx, by + 7, 16, 12);
-      g.fillStyle = ready ? '#14a024' : '#5a4008';
-      g.fillRect(lx + 1, by + 8, 14, 10);
-      g.fillStyle = ready ? '#8aff9a' : '#ffa818';
-      g.fillRect(lx + 2, by + 9, 12, 3);
+      drawStatusLamp(g, P_AMMO[0] + 13, by + 7, ready);
     } else if (low) {
       alarmWell(g, P_AMMO, by, pulse);
     }
@@ -932,19 +929,7 @@ export class Hud {
     const rc = roleColor(o.credentials);
     const cx = P_CRED[0] + Math.round((P_CRED[1] - 16) / 2);
     const cy = by + 7; // one unit lower: the "BADGE:" caption sits above it
-    g.fillStyle = '#000';
-    g.fillRect(cx + 1, cy + 1, 16, 12);
-    g.fillStyle = '#d8dce4';
-    g.fillRect(cx, cy, 16, 12);
-    g.fillStyle = rc.stripe;
-    g.fillRect(cx, cy + 2, 16, 3);
-    g.fillStyle = rc.light;
-    g.fillRect(cx, cy + 2, 16, 1);
-    g.fillStyle = '#8a90a0';
-    g.fillRect(cx + 2, cy + 6, 5, 5);
-    g.fillStyle = '#3a404c';
-    g.fillRect(cx + 9, cy + 7, 5, 1);
-    g.fillRect(cx + 9, cy + 9, 4, 1);
+    drawKeycard(g, cx, cy, rc.stripe, rc.light);
 
     // RESOURCES: gold plate behind the held tool's row (Doom RES table)
     visibleResources(o.resources ?? []).forEach((r, i) => {
@@ -1122,76 +1107,6 @@ function drawBarText(g: CanvasRenderingContext2D, t: BarText): void {
 function alarmWell(g: CanvasRenderingContext2D, p: Panel, by: number, pulse: boolean): void {
   g.fillStyle = pulse ? '#5a0804' : '#2a0402';
   g.fillRect(p[0] + 5, by + 6, p[1] - 10, BASE_STATUS - 12);
-}
-
-/** Static bar art: bold Doom-grey stone/steel plate, thick bevels, recessed wells. */
-function paintBarBackground(): HTMLCanvasElement {
-  const c = document.createElement('canvas');
-  c.width = VIEW_W;
-  c.height = BASE_STATUS * RES;
-  const g = c.getContext('2d')!;
-  let s = 1337;
-  const r = () => ((s = (s * 16807) % 2147483647) / 2147483647);
-  const image = g.createImageData(VIEW_W, BASE_STATUS * RES);
-  for (let y = 0; y < BASE_STATUS * RES; y++) {
-    for (let x = 0; x < VIEW_W; x++) {
-      const v = 104 + Math.floor(r() * 18) - (r() < 0.04 ? 26 : 0);
-      const i = (y * VIEW_W + x) * 4;
-      image.data[i] = v + 4;
-      image.data[i + 1] = v;
-      image.data[i + 2] = v - 8;
-      image.data[i + 3] = 255;
-    }
-  }
-  g.putImageData(image, 0, 0);
-  g.setTransform(RES, 0, 0, RES, 0, 0);
-  const u = 1 / RES;
-  // outer bevel: one native highlight, two native shadow texels
-  g.fillStyle = '#e4dccc';
-  g.fillRect(0, 0, BASE_W, u);
-  g.fillStyle = '#3a362e';
-  g.fillRect(0, BASE_STATUS - 2 * u, BASE_W, 2 * u);
-  g.fillStyle = '#b8b0a2';
-  g.fillRect(0, u, BASE_W, u);
-  for (const [x, w] of [P_INT, P_AMMO, P_TOOLS, P_FACE, P_CRED, P_RES, P_OBJ]) {
-    // raised ridge between panels
-    g.fillStyle = '#d8d0c0';
-    g.fillRect(x, 2, u, BASE_STATUS - 4);
-    g.fillStyle = '#4a463c';
-    g.fillRect(x + u, 2, u, BASE_STATUS - 4);
-    // recessed well: dark top/left, light bottom/right. The RES column
-    // gets a deeper well so its four labelled rows fill the whole panel.
-    const wx = x + 3;
-    const ww = w - 6;
-    const wt = x === P_RES[0] ? 3 : 4;
-    const wh = x === P_RES[0] ? BASE_STATUS - 4 : BASE_STATUS - 8;
-    g.fillStyle = '#2a2722';
-    g.fillRect(wx, wt, ww, wh);
-    const well = g.createLinearGradient(0, wt, 0, wt + wh);
-    well.addColorStop(0, 'rgba(0,0,0,0.3)');
-    well.addColorStop(0.5, 'rgba(40,36,30,0.08)');
-    well.addColorStop(1, 'rgba(150,140,120,0.12)');
-    g.fillStyle = well;
-    g.fillRect(wx + u, wt + u, ww - 2 * u, wh - 2 * u);
-    g.fillStyle = '#151310';
-    g.fillRect(wx, wt, ww, u);
-    g.fillRect(wx, wt, u, wh);
-    g.fillStyle = '#cfc6b4';
-    g.fillRect(wx, wt + wh - 1, ww, u);
-    g.fillRect(wx + ww - u, wt, u, wh);
-    g.fillStyle = '#8a8476';
-    g.fillRect(wx + u, wt + wh - 2, ww - u, u);
-    // rivets
-    for (const [rx, ry] of [[x + 3, 2], [x + w - 4, 2]]) {
-      g.fillStyle = '#171612';
-      g.fillRect(rx - u, ry - u, 3 * u, 3 * u);
-      g.fillStyle = '#cfc6b4';
-      g.fillRect(rx, ry, u, u);
-      g.fillStyle = '#766e60';
-      g.fillRect(rx + u, ry + u, u, u);
-    }
-  }
-  return c;
 }
 
 export { sortedTools };

@@ -1,11 +1,11 @@
 import type { Gender, ToolDef, ViewmodelAnim } from '../core/types';
 import { fireFlash, fireLamp, hash, usePhase, vmLine } from '../tools/anim';
-import { currentSkin, type SkinTone } from '../tools/look';
+import { currentSkin, FEMALE_HAND_SLIM, handScale, NAIL_POLISH, NAIL_POLISH_GLINT, nailColor, type SkinTone } from '../tools/look';
 import { handLook } from '../tools/shared';
 import { shade } from '../tools/pixel';
 import { outlineNative, painter, type Painter } from './hires';
 import { RES } from './res';
-import { skinTones, type HandPen } from './vmHand';
+import { skinTones, type HandPen, type NailPolish } from './vmHand';
 import { drawTypingHands, keyboardFidget, type KeyboardFidget } from './vmKeyboardHands';
 import { lightViewmodel, type RGB } from './vmLight';
 import { bakeRig } from './handrig';
@@ -53,6 +53,12 @@ type VmHandArt = {
   accent: string;
   ramp: [string, string, string, string];
   seam: string;
+  /** Nail fill: polish for Vega, a bare nail for Ray. */
+  nail: string;
+  polish: NailPolish | undefined;
+  /** Hand size about the wrist, and the matching inset for free-drawn skin shapes. */
+  scale: number;
+  slim: number;
 };
 
 type VmSleeveDraw = {
@@ -69,6 +75,10 @@ function vmHandArt(gender: Gender, skin: SkinTone): VmHandArt {
     accent: look.accent,
     ramp: [shade(skin.shadow, 0.65), skin.shadow, skin.base, skin.highlight],
     seam: '#30201b',
+    nail: nailColor(gender),
+    polish: gender === 'female' ? { color: NAIL_POLISH, gloss: NAIL_POLISH_GLINT } : undefined,
+    scale: handScale(gender),
+    slim: gender === 'female' ? FEMALE_HAND_SLIM : 0,
   };
 }
 
@@ -131,14 +141,14 @@ const hexRgb = (hex: string): RGB => {
  * hand onto the tool, a key-lit upper-left edge and spill from screens and
  * LEDs. Run once per cached art, before any fire-frame tint.
  */
-function litArt(a: Art, ramp: [string, string, string, string]): Art {
+function litArt(a: Art, ramp: [string, string, string, string], polish?: NailPolish): Art {
   const c = document.createElement('canvas');
   c.width = a.c.width;
   c.height = a.c.height;
   const g = c.getContext('2d')!;
   g.drawImage(a.c, 0, 0);
   const img = g.getImageData(0, 0, c.width, c.height);
-  const tones = skinTones(ramp);
+  const tones = skinTones(ramp, polish);
   const skin = [tones.deep, tones.shadow, tones.warm, tones.base, tones.highlight, tones.nail].map(hexRgb);
   img.data.set(lightViewmodel(img.data, c.width, c.height, skin));
   g.putImageData(img, 0, 0);
@@ -276,7 +286,7 @@ function keyboardArt(frame: KeyboardFrame, gender: Gender, skin: SkinTone, fidge
       line: (pts, color, width) => line(pts, color, width),
       ell: (color, x, y, rx, ry) => ellipse(color, x, y, rx, ry),
     };
-    drawTypingHands(pen, skinTones(look.ramp), look, frame, fidget);
+    drawTypingHands(pen, skinTones(look.ramp, look.polish), look, frame, fidget);
   });
 }
 
@@ -310,9 +320,9 @@ function mouseArt(frame: MouseFrame, gender: Gender, skin: SkinTone): Art {
     };
     // skin part: deep rim, shadow body, base face, inset highlight edge
     const flesh = (pts: Pt[], lightEdge?: Pt[]) => {
-      shape(deep, pts);
-      shape(shadow, shrink(pts, 1));
-      shape(base, shrink(pts, 2.2));
+      shape(deep, shrink(pts, look.slim));
+      shape(shadow, shrink(pts, 1 + look.slim));
+      shape(base, shrink(pts, 2.2 + look.slim));
       if (lightEdge) line(lightEdge, highlight, 1.2);
     };
     const idx = (pts: Pt[]): Pt[] => pts.map(([x, y]): Pt => [x, y + (y < 38 ? indexTravel : 0)]);
@@ -365,10 +375,10 @@ function mouseArt(frame: MouseFrame, gender: Gender, skin: SkinTone): Art {
     // index on the left button, middle on the right: two foreshortened segments + nail
     flesh(idx([[39, 41], [39, 33], [40, 27], [42, 23], [46, 22], [48, 25], [48, 32], [48, 41]]), idx([[40, 33], [41, 27], [43, 24]]));
     line(idx([[40, 32], [47, 32]]), shadow, 1);
-    shape('#f2dccb', idx([[42, 24.5], [45, 23.5], [46.5, 26], [43, 27]]));
+    shape(look.nail, idx([[42, 24.5], [45, 23.5], [46.5, 26], [43, 27]]));
     flesh([[54, 41], [54, 32], [55, 26], [57, 22], [61, 21], [63, 24], [63, 31], [63, 41]], [[55, 32], [56, 26], [58, 23]]);
     line([[55, 31], [62, 31]], shadow, 1);
-    shape('#f2dccb', [[57, 23.5], [60, 22.5], [61.5, 25], [58, 26]]);
+    shape(look.nail, [[57, 23.5], [60, 22.5], [61.5, 25], [58, 26]]);
 
     // forearm sleeve over the wrist, out of the bottom-right corner
     const sleevePoint = (x: number, y: number): Pt => [80 + (x - 73.5) * 2.1 + (y - 65) * 1.1, 70 + (y - 65) * 1.4];
@@ -489,7 +499,7 @@ function usbArt(frame: UsbFrame, gender: Gender, skin: SkinTone): Art {
     handLine([[55.1, 47], [56.7, 49], [59.2, 51.2]], ramp[0], 4);
     handLine([[55.5, 46.6], [57.2, 48.7], [59.5, 50.8]], ramp[3], 2);
     handEll(ramp[1], 50.8, 40.5, 2.5, 1.7);
-    handEll(ramp[3], 50.6, 40.2, 1.8, 1.1);
+    handEll(look.polish ? look.nail : ramp[3], 50.6, 40.2, 1.8, 1.1);
 
     // The back of the hand stays broad, with rounded knuckles and a tucked shadow.
     handShape(ramp[2], [[57, 54], [61, 53], [66, 54], [69, 57], [71, 61], [72, 66], [75, 69], [72, 72], [67, 71], [63, 69], [59, 68], [55, 65], [53, 61], [54, 57]]);
@@ -548,9 +558,9 @@ function badgeArt(frame: BadgeFrame, gender: Gender, skin: SkinTone): Art {
       });
     };
     const flesh = (pts: Pt[], lightEdge?: Pt[]) => {
-      shape(deep, pts);
-      shape(shadow, shrink(pts, 1));
-      shape(base, shrink(pts, 2.2));
+      shape(deep, shrink(pts, look.slim));
+      shape(shadow, shrink(pts, 1 + look.slim));
+      shape(base, shrink(pts, 2.2 + look.slim));
       if (lightEdge) line(lightEdge, highlight, 1.2);
     };
     // card corners in perspective (near/bottom edge slightly wider)
@@ -599,7 +609,7 @@ function badgeArt(frame: BadgeFrame, gender: Gender, skin: SkinTone): Art {
 
     // thumb pinching the front lower-right corner
     flesh([[80, 66], [72, 60], [64, 54], [59, 50], [59, 46], [63, 45], [69, 48], [76, 53], [84, 58]], [[60, 46], [64, 45], [70, 48]]);
-    shape('#f2dccb', [[60, 46.5], [63, 45.8], [64.5, 48.5], [61, 49.5]]);
+    shape(look.nail, [[60, 46.5], [63, 45.8], [64.5, 48.5], [61, 49.5]]);
     ellipse(shadow, 69, 54, 2, 1.2);
 
     // jacket sleeve over the wrist, out of the bottom-right corner
@@ -641,9 +651,9 @@ function mfaArt(frame: MfaFrame, gender: Gender, skin: SkinTone): Art {
       });
     };
     const flesh = (pts: Pt[], lightEdge?: Pt[]) => {
-      shape(deep, pts);
-      shape(shadow, shrink(pts, 1));
-      shape(base, shrink(pts, 2.2));
+      shape(deep, shrink(pts, look.slim));
+      shape(shadow, shrink(pts, 1 + look.slim));
+      shape(base, shrink(pts, 2.2 + look.slim));
       if (lightEdge) P.line(lightEdge, highlight, 1.2);
     };
     // rounded finger/thumb capsule from (x0,y0) to a rounded tip at (x1,y1)
@@ -700,7 +710,7 @@ function mfaArt(frame: MfaFrame, gender: Gender, skin: SkinTone): Art {
     const tip: Record<MfaFrame, Pt> = { rest: [54, 47], touch: [46.5, 44], glow: [46, 44.5], release: [53, 41] };
     const [tx, ty] = tip[frame];
     flesh(capsule(68, 64, tx, ty, 6, 4.2), [[64, 55], [tx + 2, ty - 3]]);
-    P.ell(tx - 0.5, ty - 0.8, 2.2, 1.7, '#f2dccb');
+    P.ell(tx - 0.5, ty - 0.8, 2.2, 1.7, look.nail);
     if (lit) P.line([[tx - 4, ty + 3], [tx + 3, ty + 4.5]], '#b8fff0', 1);
 
     // jacket sleeve over the wrist, out of the bottom-right corner
@@ -745,9 +755,9 @@ function patchArt(frame: PatchFrame, gender: Gender, skin: SkinTone): Art {
       });
     };
     const flesh = (pts: Pt[], lightEdge?: Pt[]) => {
-      shape(deep, pts);
-      shape(shadow, shrink(pts, 1));
-      shape(base, shrink(pts, 2.2));
+      shape(deep, shrink(pts, look.slim));
+      shape(shadow, shrink(pts, 1 + look.slim));
+      shape(base, shrink(pts, 2.2 + look.slim));
       if (lightEdge) line(lightEdge, highlight, 1.2);
     };
     const capsule = (x0: number, y0: number, x1: number, y1: number, r0: number, r1: number): Pt[] => {
@@ -800,7 +810,7 @@ function patchArt(frame: PatchFrame, gender: Gender, skin: SkinTone): Art {
     // thumb pinching the near-right corner on top of the disk
     flesh(capsule(80, 72, 63, 52, 6, 4.2), [[74, 62], [64, 50]]);
     const [tx, ty] = T(62.5, 51.2);
-    P.ell(tx, ty, 2.2 * scale, 1.7 * scale, '#f2dccb');
+    P.ell(tx, ty, 2.2 * scale, 1.7 * scale, look.nail);
 
     // jacket sleeve over the wrist, out of the bottom-right corner
     const sp = (x: number, y: number): Pt => T(80 + (x - 73.5) * 2.1 + (y - 65) * 0.9, 77 + (y - 65) * 1.4);
@@ -848,9 +858,9 @@ function tapArt(frame: TapFrame, gender: Gender, skin: SkinTone, detail: string)
       });
     };
     const flesh = (pts: Pt[], lightEdge?: Pt[]) => {
-      shape(deep, pts);
-      shape(shadow, shrink(pts, 1));
-      shape(base, shrink(pts, 2.2));
+      shape(deep, shrink(pts, look.slim));
+      shape(shadow, shrink(pts, 1 + look.slim));
+      shape(base, shrink(pts, 2.2 + look.slim));
       if (lightEdge) P.line(lightEdge, highlight, 1.2);
     };
     const capsule = (x0: number, y0: number, x1: number, y1: number, r0: number, r1: number): Pt[] => {
@@ -944,7 +954,7 @@ function tapArt(frame: TapFrame, gender: Gender, skin: SkinTone, detail: string)
 
     // right thumb pressing the clamp lever, fingers wrapped under the jaw
     flesh(capsule(106, 44 + drop * 0.5, 97, 28 + drop * 0.8, 4, 3.1), [[103, 38], [97, 26.5 + drop * 0.8]]);
-    P.ell(97, 27.6 + drop * 0.8, 1.6, 1.2, '#f2dccb');
+    P.ell(97, 27.6 + drop * 0.8, 1.6, 1.2, look.nail);
     for (const [fy, len] of [[47, 8], [52, 8]] as Pt[]) {
       flesh(capsule(104, fy + 2, 104 - len, fy, 2.7, 2.4), [[104, fy - 1], [98, fy - 2]]);
     }
@@ -981,9 +991,9 @@ function edrArt(frame: EdrFrame, gender: Gender, skin: SkinTone, detail: string)
       });
     };
     const flesh = (pts: Pt[], lightEdge?: Pt[]) => {
-      shape(deep, pts);
-      shape(shadow, shrink(pts, 1));
-      shape(base, shrink(pts, 2.2));
+      shape(deep, shrink(pts, look.slim));
+      shape(shadow, shrink(pts, 1 + look.slim));
+      shape(base, shrink(pts, 2.2 + look.slim));
       if (lightEdge) P.line(lightEdge, highlight, 1.2);
     };
     const capsule = (x0: number, y0: number, x1: number, y1: number, r0: number, r1: number): Pt[] => {
@@ -1055,7 +1065,7 @@ function edrArt(frame: EdrFrame, gender: Gender, skin: SkinTone, detail: string)
 
     // left thumb on the front bezel, fingers wrapped round the left edge
     flesh(capsule(18, 58, 30, 40, 4.4, 3.4), [[20, 52], [29, 39]]);
-    P.ell(30, 40, 1.6, 1.2, '#f2dccb');
+    P.ell(30, 40, 1.6, 1.2, look.nail);
     for (const [fy, len] of [[26, 5], [32, 6]] as Pt[]) {
       flesh(capsule(22, fy + 2, 22 + len, fy, 2.7, 2.4), [[23, fy], [21 + len, fy - 2]]);
     }
@@ -1072,7 +1082,7 @@ function edrArt(frame: EdrFrame, gender: Gender, skin: SkinTone, detail: string)
       flesh(capsule(fx + 6, fy + 4, fx - 1, fy, 3, 2.7), [[fx + 4, fy - 1], [fx - 1, fy - 2]]);
     }
     flesh(capsule(88, 62, tx, ty, 3.8, 2.8), [[85, 57], [tx + 1, ty - 2.4]]);
-    P.ell(tx + 0.2, ty - 0.6, 1.5, 1.1, '#f2dccb');
+    P.ell(tx + 0.2, ty - 0.6, 1.5, 1.1, look.nail);
     flesh(capsule(100, 74, 92, 68, 3.6, 3), [[99, 71], [92, 66]]);
 
     sleeve(true, 20, 80);
@@ -1097,9 +1107,9 @@ function firewallArt(mode: 0 | 1 | 2, gender: Gender, skin: SkinTone): Art {
       });
     };
     const flesh = (pts: Pt[], lightEdge?: Pt[]) => {
-      shape(deep, pts);
-      shape(shadow, shrink(pts, 1));
-      shape(base, shrink(pts, 2.2));
+      shape(deep, shrink(pts, look.slim));
+      shape(shadow, shrink(pts, 1 + look.slim));
+      shape(base, shrink(pts, 2.2 + look.slim));
       if (lightEdge) P.line(lightEdge, highlight, 1.2);
     };
     const capsule = (x0: number, y0: number, x1: number, y1: number, r0: number, r1: number): Pt[] => {
@@ -1178,7 +1188,7 @@ function firewallArt(mode: 0 | 1 | 2, gender: Gender, skin: SkinTone): Art {
       flesh(capsule(24, fy + 2 + k, 28 + len, fy + k, 3.0, 2.5), [[25, fy + k], [27 + len, fy - 1.5 + k]]);
     }
     flesh(capsule(24, 64 + k, 38, 47 + k, 4.4, 3.2), [[26, 58 + k], [37, 46 + k]]);
-    P.ell(38, 47 + k, 1.6, 1.2, '#f2dccb');
+    P.ell(38, 47 + k, 1.6, 1.2, look.nail);
 
     // right hand gripping right rail: curled fingers + thumb over trigger switch
     for (const [fy, len] of [[42, 6], [48, 7], [54, 6]] as Pt[]) {
@@ -1186,7 +1196,7 @@ function firewallArt(mode: 0 | 1 | 2, gender: Gender, skin: SkinTone): Art {
     }
     const thumbY = mode === 1 ? 49 : 47;
     flesh(capsule(100, 64 + k, 86, thumbY + k, 4.4, 3.2), [[98, 58 + k], [87, thumbY - 1 + k]]);
-    P.ell(86, thumbY + k, 1.6, 1.2, '#f2dccb');
+    P.ell(86, thumbY + k, 1.6, 1.2, look.nail);
 
     // analyst sleeves matching chosen character
     sleeve(true, 22, 82);
@@ -1222,7 +1232,8 @@ function art(
     else if (tool.id === 'edr') a = edrArt(edrFrame ?? 'rest', gender, skin, detail || '0');
     else if (tool.id === 'firewall') a = firewallArt(mode, gender, skin);
     else return null;
-    a = litArt(a, vmHandArt(gender, skin).ramp);
+    const hand = vmHandArt(gender, skin);
+    a = litArt(a, hand.ramp, hand.polish);
     if (mode === 2 && tool.id !== 'keyboard') a = tintFlash(a, TOOL_FLASH[tool.id] ?? '255,255,255');
     cache.set(key, a);
   }
