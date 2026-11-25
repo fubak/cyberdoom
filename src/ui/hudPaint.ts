@@ -1,6 +1,7 @@
 import { drawText, measureText } from '../render/font';
 import { alertView, edgeBand, edgeIndicator, type DamageAlertState } from './damageAlert';
 import { RES } from '../render/res';
+import { drawGlassPlate } from './overlayArt';
 import { slotBoxRect, SLOT_H, SLOT_W, type SlotCell } from './slotStrip';
 
 /**
@@ -134,7 +135,7 @@ export function drawSlotStrikes(g: CanvasRenderingContext2D, cells: readonly Slo
 
 const EDGE_RGB = '255,48,24';
 /** The alert sits under the top-left ticker block and above the aim point. */
-const ALERT_Y = 34;
+export const ALERT_Y = 34;
 
 /**
  * Directional hurt tint on the attacker's side of the 3D view plus the timed
@@ -148,6 +149,7 @@ export function drawDamageOverlay(
   reducedFlash: boolean,
   viewW: number,
   viewH: number,
+  alertY = ALERT_Y,
 ): void {
   const edge = edgeIndicator(s, now, reducedFlash);
   if (edge) {
@@ -172,10 +174,7 @@ export function drawDamageOverlay(
   const x = Math.round((viewW - w) / 2);
   g.save();
   g.globalAlpha = alert.alpha;
-  g.fillStyle = 'rgba(40,4,2,0.82)';
-  g.fillRect(x - 4, ALERT_Y - 1, w + 8, h);
-  g.fillStyle = '#ff4a2a';
-  g.fillRect(x - 4, ALERT_Y - 1, 2, h);
-  drawText(g, alert.text, x, ALERT_Y, '#ffd0c0', font, null);
+  drawGlassPlate(g, { x: x - 4, y: alertY - 1, w: w + 8, h }, { fill: 'rgba(40,4,2,0.84)', accent: { color: '#ff4a2a', light: '#ffa080', w: 2 } });
+  drawText(g, alert.text, x, alertY, '#ffd0c0', font, null);
   g.restore();
 }
