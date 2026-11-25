@@ -48,6 +48,7 @@ import { toolForSlot, toolRegistry } from './tools';
 
 import { USB_PLUG_RANGE } from './tools/usb';
 import { characterSelect } from './ui/characterSelect';
+import { installMenuBackdrop } from './ui/menuBackdrop';
 import { applyBack } from './ui/nav';
 import { promptGate } from './ui/promptGate';
 import { bindingLabel, onboardingTips, primaryKey } from './ui/controlsHelp';
@@ -627,7 +628,10 @@ class Game {
     this.dossier.enabled = s === 'play';
     if (this.overlay) this.overlay.remove();
     this.overlay = node;
-    if (node) document.getElementById('viewport')!.appendChild(node);
+    if (node) {
+      installMenuBackdrop();
+      document.getElementById('viewport')!.appendChild(node);
+    }
     this.syncChrome();
   }
 

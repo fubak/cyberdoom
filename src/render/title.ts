@@ -148,8 +148,13 @@ function blitSprite(g: CanvasRenderingContext2D, c: HTMLCanvasElement | null, cx
   g.drawImage(c, Math.round(cx - (c.width / RES * s) / 2), Math.round(footY - ((bottom + 1) / RES) * s), (c.width / RES) * s, (c.height / RES) * s);
 }
 
+/** The corridor alone: the backdrop the other menus sit on. */
+export function paintCorridor(): HTMLCanvasElement {
+  return paintTitlePic(false);
+}
+
 /** Static TITLEPIC: server-room corridor in one-point perspective + the three threats. */
-function paintTitlePic(): HTMLCanvasElement {
+function paintTitlePic(threats = true): HTMLCanvasElement {
   const c = document.createElement('canvas');
   c.width = VIEW_W;
   c.height = VIEW_H;
@@ -234,10 +239,12 @@ function paintTitlePic(): HTMLCanvasElement {
   haze.addColorStop(1, 'rgba(60,0,0,0)');
   g.fillStyle = haze;
   g.fillRect(0, 0, W, H);
-  // the threats, back to front
-  blitSprite(g, spriteCanvas('ransomware', 'attack1_0') ?? spriteCanvas('ransomware', 'walk0'), 160, 128, 1);
-  blitSprite(g, spriteCanvas('trojan', 'walk1_1') ?? spriteCanvas('trojan', 'walk0'), 250, 188, 2);
-  blitSprite(g, spriteCanvas('worm', 'attack1_7') ?? spriteCanvas('worm', 'walk0'), 70, 178, 2);
+  if (threats) {
+    // the threats, back to front
+    blitSprite(g, spriteCanvas('ransomware', 'attack1_0') ?? spriteCanvas('ransomware', 'walk0'), 160, 128, 1);
+    blitSprite(g, spriteCanvas('trojan', 'walk1_1') ?? spriteCanvas('trojan', 'walk0'), 250, 188, 2);
+    blitSprite(g, spriteCanvas('worm', 'attack1_7') ?? spriteCanvas('worm', 'walk0'), 70, 178, 2);
+  }
   // vignette
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {

@@ -253,17 +253,16 @@ canvas.stage {
 }
 
 .cd-mission-select {
+  /* LOOK: the darkened title corridor (menuBackdrop.ts); the list scrolls over it */
   background:
-    repeating-linear-gradient(
-      0deg,
-      rgba(255, 255, 255, 0.015) 0 2px,
-      transparent 2px 6px
-    ),
+    repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.28) 0 2px, transparent 2px 4px),
+    var(--menu-backdrop, linear-gradient(#141010, #141010)) center / cover no-repeat,
     #141010;
+  image-rendering: pixelated;
 }
 .cd-mission-select .menu-bar {
   width: min(920px, 94vw);
-  background: #141010;
+  background: #141010e6;
   border-bottom: 2px solid #50403a;
 }
 .mission-layout {
