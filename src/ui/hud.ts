@@ -6,6 +6,9 @@ import { drawToolViewmodel } from '../render/viewmodels';
 import { sortedTools } from '../tools';
 import { BASE_H, BASE_STATUS, BASE_W, RES } from '../render/res';
 import { keyPlateRect, PROMPT_ROW_PLATE } from './keyPlate';
+import { bossAlertY, drawBossBar } from './bossBar';
+import { drawGlassPlate, drawKeyCap } from './overlayArt';
+import { drawPowerBadges } from './powerBadges';
 import { pinnedObjectiveLine, stripObjectiveLine } from './objectiveLine';
 import { layoutObjectivesOverlay, overlayPageAt } from './objectivesOverlay';
 import {
@@ -64,8 +67,6 @@ export function tickerColor(kind: string, colorBlind = false): string {
   const ramp = table[kind] ?? table.info;
   return ramp[ramp.length - 2];
 }
-/** Backing plate for ticker rows and the pinned objective: dark enough that tiny text holds over lit walls and bright sprites. */
-const TICKER_PLATE = 'rgba(4,6,10,0.76)';
 /** Objective strip never exceeds 12% of the 168px 3D view. */
 const OBJ_STRIP_MAX = 20;
 
@@ -343,90 +344,18 @@ export class Hud {
       const pinned = this.drawPinnedObjective(opts.objectives, opts.progress);
       this.drawTicker(1 + pinned, TICKER_MAX_ROWS);
     }
-    drawDamageOverlay(this.g, this.damage, this.time, this.reducedFlash, BASE_W, BASE_H - BASE_STATUS);
+    const boss = opts.boss && opts.boss.hp > 0 && opts.boss.maxHp > 0 ? opts.boss : null;
+    // with a boss bar up, the damage alert drops to just under it
+    const alertY = boss ? bossAlertY(boss) : undefined;
+    drawDamageOverlay(this.g, this.damage, this.time, this.reducedFlash, BASE_W, BASE_H - BASE_STATUS, alertY);
     if (opts.prompt) this.drawPrompt(opts.prompt);
     // tool use effects live in the aim space: drawn last so the beam/ring/
     // LED reads on top of the viewmodel and the tool's own screen flash,
     // like Doom's tracer + wall impact drawn over the gun sprite
     if (opts.anim) this.drawUseFx(viewTool, opts.anim);
-    this.drawPowerupBadges(opts.armor ?? 0, opts.overclockT ?? 0, opts.airgapT ?? 0);
-    if (opts.boss && opts.boss.hp > 0 && opts.boss.maxHp > 0) {
-      this.drawBossBar(opts.boss);
-    }
+    drawPowerBadges(this.g, opts.armor ?? 0, opts.overclockT ?? 0, opts.airgapT ?? 0);
+    if (boss) drawBossBar(this.g, boss);
     this.drawBar(opts);
-  }
-
-  private drawPowerupBadges(armor: number, overclockT: number, airgapT: number): void {
-    const badges: { label: string; fg: string; border: string }[] = [];
-    if (armor > 0) badges.push({ label: `SHIELD ${Math.round(armor)}`, fg: '#78ecff', border: '#2670a8' });
-    if (overclockT > 0) badges.push({ label: `OVERCLOCK ${Math.ceil(overclockT)}S`, fg: '#ffd65a', border: '#a86e18' });
-    if (airgapT > 0) badges.push({ label: `AIR-GAP ${Math.ceil(airgapT)}S`, fg: '#ffffff', border: '#d8a828' });
-    if (badges.length === 0) return;
-    const g = this.g;
-    let y = 16;
-    for (const b of badges) {
-      const w = measureText(b.label, 'tiny') + 8;
-      const x = BASE_W - w - 4;
-      g.fillStyle = 'rgba(10, 14, 22, 0.82)';
-      g.fillRect(x, y, w, 10);
-      g.fillStyle = b.border;
-      g.fillRect(x, y, 2, 10);
-      drawText(g, b.label, x + 4, y + 2, b.fg, 'tiny', null);
-      y += 12;
-    }
-  }
-
-  private drawBossBar(boss: {
-    name: string;
-    hp: number;
-    maxHp: number;
-    phase?: number;
-    phaseCount?: number;
-    phaseLabel?: string;
-    telegraph?: string | null;
-  }): void {
-    const g = this.g;
-    const barW = 164;
-    const barH = 6;
-    const x = Math.round((BASE_W - barW) / 2);
-    const y = 26;
-    const frac = Math.max(0, Math.min(1, boss.hp / boss.maxHp));
-    const phase = boss.phase ?? 1;
-    const phaseCount = Math.max(1, boss.phaseCount ?? 1);
-    const hasTelegraph = typeof boss.telegraph === 'string' && boss.telegraph.length > 0;
-    const hasPhaseLabel = typeof boss.phaseLabel === 'string' && boss.phaseLabel.length > 0;
-    const hasSub = hasTelegraph || hasPhaseLabel;
-    const boxH = barH + (hasSub ? 21 : 13);
-    g.fillStyle = 'rgba(10, 12, 18, 0.88)';
-    g.fillRect(x - 3, y - 9, barW + 6, boxH);
-    g.fillStyle = hasTelegraph ? '#ffb830' : '#a82430';
-    g.fillRect(x - 3, y - 9, barW + 6, 1);
-    const phaseTag = phaseCount > 1 ? ` P${phase}/${phaseCount}` : '';
-    const label = `${boss.name.toUpperCase()}${phaseTag}  ${Math.ceil(boss.hp)}/${Math.ceil(boss.maxHp)}`;
-    const lw = measureText(label, 'tiny');
-    drawText(g, label, Math.round(BASE_W / 2 - lw / 2), y - 7, hasTelegraph ? '#ffd65a' : '#ff6858', 'tiny', null);
-    g.fillStyle = '#241418';
-    g.fillRect(x, y, barW, barH);
-    const fillCol = phase >= 3 ? '#c840ff' : frac > 0.35 ? '#e03028' : '#ff9820';
-    g.fillStyle = fillCol;
-    g.fillRect(x, y, Math.round(barW * frac), barH);
-    // Phase threshold dividers on the health bar so players anticipate phase shifts.
-    if (phaseCount > 1) {
-      g.fillStyle = '#0a0c12';
-      for (let p = 1; p < phaseCount; p++) {
-        const divX = x + Math.round((barW * p) / phaseCount);
-        g.fillRect(divX, y, 1, barH);
-      }
-    }
-    if (hasTelegraph && boss.telegraph) {
-      const warn = `! ${boss.telegraph.toUpperCase()} !`;
-      const ww = measureText(warn, 'tiny');
-      drawText(g, warn, Math.round(BASE_W / 2 - ww / 2), y + barH + 2, '#ffe066', 'tiny', null);
-    } else if (hasPhaseLabel && boss.phaseLabel) {
-      const sub = boss.phaseLabel.toUpperCase();
-      const sw = measureText(sub, 'tiny');
-      drawText(g, sub, Math.round(BASE_W / 2 - sw / 2), y + barH + 2, '#b8b8c8', 'tiny', null);
-    }
   }
 
   /**
@@ -655,10 +584,7 @@ export class Hud {
     if (this.frame) this.frame.objective = { mode: 'pinned', lines: [`${head} ${body}`] };
     const headW = measureText(head, 'tiny');
     const w = 4 + headW + 5 + measureText(body, 'tiny');
-    g.fillStyle = TICKER_PLATE;
-    g.fillRect(1, 1, w + 3, 7);
-    g.fillStyle = '#a87a10';
-    g.fillRect(1, 1, 2, 7);
+    drawGlassPlate(g, { x: 1, y: 1, w: w + 3, h: 7 }, { accent: { color: '#a87a10', light: '#ffd040', w: 2 } });
     drawText(g, head, 5, 2, '#ffd040', 'tiny', null);
     drawText(g, body, 5 + headW + 5, 2, open ? '#f0ece4' : '#5aff6a', 'tiny', null);
     return 8;
@@ -673,10 +599,7 @@ export class Hud {
       const lines = wrapText(p.text.toUpperCase(), 54, Infinity).slice(0, 2);
       if (!(p.t < 0.4 && Math.floor(p.t * 20) % 2 === 0)) {
         const w = lines.reduce((m, l) => Math.max(m, measureText(l, 'tiny')), 0);
-        this.g.fillStyle = 'rgba(30,24,6,0.72)';
-        this.g.fillRect(1, y, w + 9, 7 * lines.length);
-        this.g.fillStyle = '#ffd040';
-        this.g.fillRect(1, y, 2, 7 * lines.length);
+        drawGlassPlate(this.g, { x: 1, y, w: w + 9, h: 7 * lines.length }, { fill: 'rgba(30,24,6,0.78)', accent: { color: '#d8a828', light: '#fff0a0', w: 2 } });
         lines.forEach((l, i) => drawText(this.g, l, 6, y + 1 + i * 7, '#fff0a0', 'tiny', null));
       }
       y += 7 * lines.length + 2;
@@ -685,17 +608,17 @@ export class Hud {
     // as a single panel instead of a ragged stack of per-line strips
     const rows = tickerRows(this.ticker.visible, maxRows);
     const plateW = rows.reduce((m, r) => Math.max(m, measureText(r.line, 'tiny')), 0) + 3;
-    for (const row of rows) {
+    rows.forEach((row, i) => {
       if (row.t < 0.4 && Math.floor(row.t * 20) % 2 === 0) {
         y += 7;
-        continue;
+        return;
       }
-      this.g.fillStyle = TICKER_PLATE;
-      this.g.fillRect(1, y, plateW, 7);
+      // one panel: only the first row is lit on top, only the last is shadowed
+      drawGlassPlate(this.g, { x: 1, y, w: plateW, h: 7 }, { top: i === 0, bottom: i === rows.length - 1 });
       drawText(this.g, row.line, 2, y + 1, tickerColor(row.kind, this.colorBlind), 'tiny', null);
       this.frame?.ticker.push(row.line);
       y += 7;
-    }
+    });
   }
 
   /**
@@ -732,8 +655,7 @@ export class Hud {
     if (p.footer) {
       const w = measureText(p.footer, 'small');
       const ny = viewH - 9 - (shown.length ? shown.length * 10 + 1 : 0);
-      g.fillStyle = 'rgba(6,8,12,0.74)';
-      g.fillRect(0, ny, w + 8, 9);
+      drawGlassPlate(g, { x: 0, y: ny, w: w + 8, h: 9 }, { fill: 'rgba(6,8,12,0.76)' });
       drawText(g, p.footer, 4, ny + 1, '#aab3c2', 'small', null);
     }
     if (!lines.length) return;
@@ -745,15 +667,13 @@ export class Hud {
       const costW = line.cost ? 6 + measureText(line.cost, 'small') : 0;
       const w = keyW + (keyW ? 4 : 0) + textW + costW;
       const x = 4;
-      g.fillStyle = 'rgba(6,8,12,0.72)';
-      g.fillRect(x - 3, y + PROMPT_ROW_PLATE.dy, w + 6, PROMPT_ROW_PLATE.h);
+      drawGlassPlate(g, { x: x - 3, y: y + PROMPT_ROW_PLATE.dy, w: w + 6, h: PROMPT_ROW_PLATE.h }, { fill: 'rgba(6,8,12,0.76)' });
       let tx = x;
       if (line.key) {
         const kw = measureText(line.key, 'small');
         const plate = keyPlateRect(tx, y, kw);
         this.frame?.prompt.rows.push({ key: line.key, text: line.text, plate: { ...plate } });
-        g.fillStyle = line.ready ? '#ffb428' : '#4a4e58';
-        g.fillRect(plate.x, plate.y, plate.w, plate.h);
+        drawKeyCap(g, plate, line.ready);
         drawText(g, line.key, plate.glyphX, plate.glyphY, line.ready ? '#1a1408' : '#9aa0ac', 'small');
         tx += kw + 8;
       }

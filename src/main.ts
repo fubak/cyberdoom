@@ -23,6 +23,7 @@ import { SHOW_HANDS, TOOL_FLASH } from './render/viewmodels';
 import { bakeRig } from './render/handrig';
 import { POSES, TOOL_HANDS } from './render/handposes';
 import { currentSkin } from './tools/look';
+import { bossEngaged } from './ui/bossBar';
 import { Hud } from './ui/hud';
 import { Automap } from './ui/automap';
 import { setupPresentation } from './ui/present';
@@ -1348,7 +1349,7 @@ class Game {
       const ars = this.arsenal;
       const integrity = this.player.integrity;
       const activeBoss = this.runtime.entities.find(
-        (e) => e.alive && e.state.awake && ENEMY_PROFILES[e.def.threat ?? e.def.sprite]?.boss,
+        (e) => e.alive && bossEngaged(e.state) && ENEMY_PROFILES[e.def.threat ?? e.def.sprite]?.boss,
       );
       this.hud.draw({
         integrity,
@@ -2323,6 +2324,10 @@ class Game {
       /** LOOK: set integrity (HUD / low-HP portrait / hurt-tint captures). */
       setIntegrity(v: number) {
         if (g.player) g.player.integrity = Math.max(1, Math.min(100, v));
+      },
+      /** Grant a pickup resource ('armor', 'overclock', 'airgap', ...) through the real pickup path. */
+      grant(resource: string, amount: number) {
+        return g.applyResourceGrant(resource, amount);
       },
       /** Take a real hit (dir -1/0/1 = attacker left/center/right): runs the
        *  same hurtPlayer path as enemy damage — integrity loss, pain wash,
